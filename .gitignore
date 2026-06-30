@@ -1,0 +1,15 @@
+**/.env
+**/.env.*
+!**/.env.example
+
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+
+**/midscene_run/
+**/reports/
+**/*.log
+
+showui-aloha/Aloha_Learn/projects/
+showui-aloha/Aloha_Act/trace_data/

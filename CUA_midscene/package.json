@@ -1,0 +1,24 @@
+{
+  "name": "cua_midscene",
+  "version": "1.0.0",
+  "description": "Midscene computer-use experiments for local desktop automation.",
+  "type": "module",
+  "scripts": {
+    "aloha:air": "tsx src/aloha-air-tickets.ts",
+    "check": "tsx src/check-env.ts",
+    "google": "tsx src/google-search.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@midscene/computer": "^1.10.0",
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.68"
+  }
+}
