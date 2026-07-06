@@ -334,18 +334,6 @@ Respond with JSON only. If your first attempt is not valid JSON, immediately re-
             with open(output_trace_path, "w", encoding="utf-8") as f:
                 json.dump({"trajectory": traj}, f, ensure_ascii=False, indent=2)
 
-            try:
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                grandparent_dir = os.path.dirname(script_dir)
-                trace_data_dir = os.path.join(grandparent_dir, "Aloha_Act", "trace_data")
-                os.makedirs(trace_data_dir, exist_ok=True)
-                alt_path = os.path.join(trace_data_dir, os.path.basename(output_trace_path))
-                with open(alt_path, "w", encoding="utf-8") as f2:
-                    json.dump({"trajectory": traj}, f2, ensure_ascii=False, indent=2)
-                print(f"Trace also saved to: {alt_path}")
-            except Exception as e:
-                print(f"Warning: Failed to save copy to trace_data folder: {e}")          
-
 
 if __name__ == "__main__":
     import argparse

@@ -1,236 +1,59 @@
-<p align="center">
-  <img src="assets/branding/hero_banner.png" width="90%" alt="ShowUI-Aloha Hero Banner">
-</p>
+# ShowUI-Aloha Learn
 
-<h1 align="center">ShowUI-Aloha — Human-Taught Computer-Use Agent</h1>
+本目录保留 ShowUI-Aloha 中与教学录制处理相关的 Learn 能力，用于把录制资源转换为结构化操作日志和 trace。
 
-<p align="center">
-Teach your computer once. Aloha learns the workflow and executes new task variants.<br>
-<strong>Recorder → Learner → Planner → Actor → Executor</strong>
-</p>
+在当前 CUA 项目中，ShowUI-Aloha 不作为最终执行器，也不承担回放流程。主执行器是 `../CUA_midscene` 中的 Midscene computer use。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/OSWorld-361_Tasks_Tested-blue">
-  <img src="https://img.shields.io/badge/Success_Rate-60.1%25-brightgreen">
-  <img src="https://img.shields.io/badge/Platforms-Windows_|_macOS-purple">
-  <img src="https://img.shields.io/badge/License-Apache--2.0-lightgrey">
-</p>
+## 当前保留的能力
 
----
+- 读取录制产生的视频和输入日志。
+- 解析鼠标、键盘、窗口切换等原始事件。
+- 从录制视频中抽取关键截图和局部 crop。
+- 调用 OpenAI 兼容接口生成语义化 trace。
 
-## 🌟 What is ShowUI-Aloha?
+## 已移除的能力
 
-**ShowUI-Aloha** is a human-taught computer-use agent designed for real Windows and macOS desktops.
+原上游项目中的 `Aloha_Act`、Actor、Executor、回放入口和执行演示视频已从本仓库删除。
 
-Aloha:
+后续如果需要执行 trace，应先把 Learn 阶段产物转换为 Midscene 可理解的 computer use 流程，再交由 Midscene 执行。
 
-- Records human demonstrations (screen + mouse + keyboard)
-- Learns semantic action traces from those demonstrations
-- Plans new tasks based on the learned workflow
-- Executes reliably with OS-level clicks, drags, typing, scrolling, and hotkeys
+## 环境配置
 
-Aloha learns through **abstraction, not memorization**: one demonstration generalizes to an entire task family.
+复制环境变量示例：
 
-<p align="center">
-  <img src="assets/diagrams/pipeline_4_step.png" width="92%" alt="Aloha 4-Step Pipeline">
-</p>
-
----
-
-## 💼 Why This Matters
-
-- Evaluated on all 361 OSWorld-Style tasks  
-- 217 tasks solved end-to-end (strict binary metric)  
-- Works on Windows and macOS  
-- Modular: Recorder / Learner / Actor / Executor  
-- Fully open-source and extensible  
-
----
-
-## 🎬 Demo Gallery
-
-<p align="center">
-<table>
-<tr>
-<td align="center">
-  <img src="assets/demos/air.gif" width="95%">
-  <br><b>Air-ticket booking</b>
-</td>
-<td align="center">
-  <img src="assets/demos/excel.gif" width="95%">
-  <br><b>Excel: matrix transpose</b>
-</td>
-<td align="center">
-  <img src="assets/demos/ppt.gif" width="95%">
-  <br><b>PowerPoint batch background editing</b>
-</td>
-</tr>
-</table>
-</p>
-
-<p align="center">
-  <img src="assets/demos/git.gif" width="75%">
-  <br><b>Github Reposit Editing</b>
-</p>
-
----
-
-## 📈 OSWorld Benchmark Snapshot
-
-<p align="center">
-  <img src="assets/benchmarks/osworld_bar_chart.png" width="90%">
-</p>
-
-<p align="center">
-  <img src="assets/benchmarks/baseline_comparison_chart.png" width="85%">
-</p>
-
----
-
-## 🧩 Architecture Overview
-
-<p align="center">
-  <img src="assets/diagrams/architecture_diagram.png" width="92%">
-</p>
-
----
-
-## ⚙️ Installation & Setup
-
-### Requirements
-
-- Windows 10+ or macOS  
-- Python 3.10+  
-- At least one VLM API key (OpenAI / Claude)
-
----
-
-### 1. Clone the repository
-
-git clone https://github.com/showlab/ShowUI-Aloha
-cd ShowUI-Aloha
-
----
-
-### 2. Create a virtual environment
-
-`python -m venv .venv`  
-(Windows) `.venv\Scripts\activate`  
-(macOS/Linux) `source .venv/bin/activate`
-`pip install -r requirements.txt`
-
----
-
-### 3. Add API keys
-
-Create `config/api_keys.json`:
-
-```json
-{
-  "openai": { "api_key": "YOUR_OPENAI_KEY" },
-  "claude": { "api_key": "YOUR_CLAUDE_KEY" }
-}
+```powershell
+Copy-Item .env.example .env
 ```
 
----
+`.env` 中配置 OpenAI 兼容接口：
 
-### 4. Install the Recorder
-
-Download from Releases:
-
-- Aloha.Screen.Recorder.exe 
-- Aloha.Screen.Recorder-arm64.dmg 
-
-Recommended project folder for recorder:
-
-`aloha/Aloha_Learn/projects/`
-
----
-
-## ▶️ End-to-End Usage
-
-### Step 1 — Record a demonstration
-
-1. Start the Recorder  
-2. Perform your workflow  
-3. Stop recording and name the project  
-
-Outputs appear under:
-
-`Aloha_Learn/projects/{project_name}/`
-
----
-
-### Step 2 — Parse into a trace
-
-`python Aloha_Learn/parser.py {project_name}`
-
-Produces:
-
-`Aloha_Learn/projects/{project_name}_trace.json`
-
----
-
-### Step 3 — Execute via Actor + Executor
-
-Place trace in:
-
-`Aloha_Act/trace_data/{trace_id}.json`
-
-Run:
-
-`python Aloha_Act/scripts/aloha_run.py --task "Your task" --trace_id "{trace_id}"`
-
----
-
-## 🧾 Trace Format Example
-
-```json
-{
-  "trajectory": [
-    {
-      "step_idx": 1,
-      "caption": {
-        "observation": "Cropped image shows The cropped image shows a semitransparent red X over a line of code in a text editor. The full-screen image reveals a code editor with a JavaScript file open, displaying code related to ffmpeg process setup and execution.",
-        "think": "The user intends to interact with this specific line of code, possibly to edit or highlight it for further action.",
-        "action": "Click on the line of code under the red X.",
-        "expectation": "The line of code will be selected or the cursor will be placed at the clicked position, allowing for editing or further interaction."
-      }
-    },
-    {
-      "step_idx": 2,
-      "caption": {
-        "observation": "Cropped image shows The cropped image shows a semitransparent red path starting from a line of code and moving diagonally downward. The full-screen image reveals a code editor with a JavaScript file open, displaying code related to ffmpeg process setup and execution.",
-        "think": "The user is likely selecting a block of code or adjusting the view within the editor.",
-        "action": "Click-and-hold on the starting line of code, drag along the shown path to the lower part of the editor, then release.",
-        "expectation": "A block of code will be selected from the starting point to the endpoint of the drag path."
-      }
-    }
-  ]
-}
+```text
+OPENAI_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
+OPENAI_MODEL=minimax-m3
+OPENAI_API_KEY=replace-me
+ALOHA_TRACE_TEMPERATURE=0.2
 ```
 
+真实 `.env` 不会提交到 git。
 
----
+## 运行 Learn 流程
 
-## 🔭 Roadmap
+安装依赖：
 
-- Better fine-grained element targeting  
-- More robust drag-based text editing  
-- Few-shot generalization 
-- Linux Adaptation
+```powershell
+uv sync
+```
 
----
+基于示例录制生成结构化日志和 trace：
 
-## 📚 Citation
+```powershell
+uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
+```
 
-<pre> ```bibtex @article{showui_aloha, title = {ShowUI-Aloha: Human-Taught GUI Agent}, author = {Zhang, Yichun and Guo, Xiangwu and Goh, Yauhong and Hu, Jessica and Chen, Zhiheng and Wang, Xin and Gao, Difei and Shou, Mike Zheng}, journal = {arXiv:2601.07181}, year = {2026} } ``` </pre>
----
+生成物会落在对应 project 目录下，主要包括：
 
-## 🪪 License
+- `{project}_processed_log.json`
+- `{project}_processed_log_sc.json`
+- `{project}_trace.json`
 
-Apache-2.0 License.
-
-<p align="center">
-  <img src="assets/branding/footer_logo.png" width="160">
-</p>
+这些产物当前用于分析和后续转换实验，不作为最终执行入口。
