@@ -32,3 +32,9 @@
 - [x] 5.2 为 runner 增加最小验证，确认不受支持 strategy 会清晰失败
 - [x] 5.3 更新根 README 和 `CUA_midscene/README.md`，说明 ShowUI-Aloha、Midscene converter、runner 和项目产物目录的关系
 - [x] 5.4 运行 TypeScript 类型检查，确认新增代码通过 `npm run typecheck`
+
+## 6. 中文 Trace 生成约束
+
+- [x] 6.1 更新 ShowUI-Aloha Learn 默认 prompt，要求 trace caption 字段值使用中文
+- [x] 6.2 更新 trace 生成时的最终提示，保持 JSON 字段名不变但要求字段值中文化
+- [x] 6.3 验证 prompt JSON 可解析，并确认 Python trace generator 语法检查通过

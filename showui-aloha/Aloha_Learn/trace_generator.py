@@ -163,7 +163,9 @@ Overall Task: {overall_task}
 
 {delta}
 
-Respond with JSON only. If your first attempt is not valid JSON, immediately re-emit a corrected JSON."""
+只输出 JSON。JSON 字段名必须保持为 Observation、Think、Action、Expectation。
+这四个字段的字段值必须使用中文；只有界面原文、品牌名、按钮名、机场名、URL、快捷键和专有名词可以保留英文。
+如果第一次输出不是有效 JSON，请立即重新输出修正后的 JSON。"""
 
     def _action_delta(self, act_str: str, action: Dict[str, Any], deltas_cfg: Dict[str, str], modifier_guide: str) -> str:
         a = (act_str or "").lower()
