@@ -21,10 +21,10 @@
 
 ## 4. 通用 Midscene Runner
 
-- [ ] 4.1 新增 runner 入口，读取 `midscene-flow.json` 并初始化 Midscene computer use agent
-- [ ] 4.2 实现 `keyboard`、`input`、`tap`、`act`、`wait` strategy 到 Midscene 操作的映射
-- [ ] 4.3 遇到 `manual-review` 或不受支持 strategy 时 fail fast，并输出 step id 与原因
-- [ ] 4.4 将 Midscene report 归档到项目级 reports 或已配置 run directory
+- [x] 4.1 新增 runner 入口，读取 `midscene-flow.json` 并初始化 Midscene computer use agent
+- [x] 4.2 实现 `keyboard`、`input`、`tap`、`act`、`wait` strategy 到 Midscene 操作的映射
+- [x] 4.3 遇到 `manual-review` 或不受支持 strategy 时 fail fast，并输出 step id 与原因
+- [x] 4.4 将 Midscene report 归档到项目级 reports 或已配置 run directory
 
 ## 5. 验证与文档
 
