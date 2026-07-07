@@ -6,10 +6,10 @@
 
 ## 2. Midscene Flow IR 定义
 
-- [ ] 2.1 在 `CUA_midscene/src/` 中定义 `midscene-flow.json` 对应的 TypeScript 类型
-- [ ] 2.2 定义 flow 顶层字段：`schemaVersion`、`project`、`goal`、`source`、`steps`
-- [ ] 2.3 定义 step 字段：稳定 `id`、源 trace 引用、intent、evidence、route、fallback
-- [ ] 2.4 定义受支持 route strategy：`keyboard`、`input`、`tap`、`act`、`wait`、`manual-review`
+- [x] 2.1 在 `CUA_midscene/src/` 中定义 `midscene-flow.json` 对应的 TypeScript 类型
+- [x] 2.2 定义 flow 顶层字段：`schemaVersion`、`project`、`goal`、`source`、`steps`
+- [x] 2.3 定义 step 字段：稳定 `id`、源 trace 引用、intent、evidence、route、fallback
+- [x] 2.4 定义受支持 route strategy：`keyboard`、`input`、`tap`、`act`、`wait`、`manual-review`
 
 ## 3. Trace 到 Flow 的 Converter
 
