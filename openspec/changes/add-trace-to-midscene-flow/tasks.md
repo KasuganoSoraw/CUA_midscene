@@ -1,0 +1,34 @@
+## 1. 项目目录与样例资产
+
+- [ ] 1.1 在 `CUA_midscene/projects/<project-name>/` 下建立 source、ir、generated、reports 的项目产物目录约定
+- [ ] 1.2 创建第一个样例项目目录，并放置或引用 ShowUI-Aloha air-ticket 示例 trace、processed log 和截图资源
+- [ ] 1.3 为样例项目补充 README，说明 source、IR、生成产物和报告的职责边界
+
+## 2. Midscene Flow IR 定义
+
+- [ ] 2.1 在 `CUA_midscene/src/` 中定义 `midscene-flow.json` 对应的 TypeScript 类型
+- [ ] 2.2 定义 flow 顶层字段：`schemaVersion`、`project`、`goal`、`source`、`steps`
+- [ ] 2.3 定义 step 字段：稳定 `id`、源 trace 引用、intent、evidence、route、fallback
+- [ ] 2.4 定义受支持 route strategy：`keyboard`、`input`、`tap`、`act`、`wait`、`manual-review`
+
+## 3. Trace 到 Flow 的 Converter
+
+- [ ] 3.1 新增 converter 入口，读取 ShowUI-Aloha trace 并输出项目级 `ir/midscene-flow.json`
+- [ ] 3.2 将 trace caption 中的 observation、think、action、expectation 映射到 flow step 的 intent 和 evidence
+- [ ] 3.3 实现第一版保守路由规则，将明确 typing、click、wait 等行为映射到对应 route strategy
+- [ ] 3.4 对无法确定的步骤输出 `manual-review`，并保留原始 trace 证据
+- [ ] 3.5 在转换前校验 source artifact 路径存在，失败时给出清晰错误
+
+## 4. 通用 Midscene Runner
+
+- [ ] 4.1 新增 runner 入口，读取 `midscene-flow.json` 并初始化 Midscene computer use agent
+- [ ] 4.2 实现 `keyboard`、`input`、`tap`、`act`、`wait` strategy 到 Midscene 操作的映射
+- [ ] 4.3 遇到 `manual-review` 或不受支持 strategy 时 fail fast，并输出 step id 与原因
+- [ ] 4.4 将 Midscene report 归档到项目级 reports 或已配置 run directory
+
+## 5. 验证与文档
+
+- [ ] 5.1 为 converter 增加最小验证，确认样例 trace 可以生成符合结构的 `midscene-flow.json`
+- [ ] 5.2 为 runner 增加最小验证，确认不受支持 strategy 会清晰失败
+- [ ] 5.3 更新根 README 和 `CUA_midscene/README.md`，说明 ShowUI-Aloha、Midscene converter、runner 和项目产物目录的关系
+- [ ] 5.4 运行 TypeScript 类型检查，确认新增代码通过 `npm run typecheck`
