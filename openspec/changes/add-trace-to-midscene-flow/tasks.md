@@ -45,3 +45,11 @@
 - [x] 7.2 在 converter 输出的 `midscene-flow.json` 中写入 trace 生成、flow 转换和 flow 执行命令
 - [x] 7.3 在项目 README 中说明 trace 生成使用模型、flow 转换不使用模型、runner 执行使用 Midscene 视觉模型
 - [x] 7.4 将命令记录改为分阶段语义，明确 `flow:convert:air` 是转换命令，`flow:run:air` 是执行命令
+- [x] 7.5 从核心 IR 类型和 `midscene-flow.json` 中移除模型使用字段，仅在文档中说明模型使用边界
+
+## 8. 目录清理
+
+- [x] 8.1 删除早期未按当前结构组织的 `google-search.ts` 与 `aloha-air-tickets.ts`
+- [x] 8.2 清理 `package.json` 中对应的 `google` 与 `aloha:air` 脚本入口
+- [x] 8.3 更新 README 与 OpenSpec design，移除旧实验脚本引用
+- [x] 8.4 移除 `.env.example` 中已无对应脚本使用的 `GOOGLE_SEARCH_QUERY`

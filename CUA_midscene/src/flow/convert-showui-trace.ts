@@ -225,19 +225,6 @@ async function convert(options: ConvertOptions): Promise<string> {
       traceToFlowConversion: 'npm run flow:convert:air',
       flowExecution: options.flowExecutionCommand ?? 'npm run flow:run:air',
     },
-    modelUsage: {
-      recordingPreparation: 'no-model',
-      traceGeneration: 'uses-model',
-      traceToFlowConversion: 'no-model',
-      flowExecution: 'uses-model',
-      notes: [
-        '录制准备阶段只是放置录制资源，不调用模型。',
-        'ShowUI-Aloha Learn 生成 showui-trace.json 时会调用配置的 OpenAI 兼容模型。',
-        '当前 trace 到 midscene-flow.json 的转换为确定性规则映射，不调用模型。',
-        'npm run flow:run:air 是执行 Midscene flow 的命令，不是 trace 转换命令。',
-        'runner 执行 flow 时会通过 Midscene computer use 调用视觉模型完成 aiInput、aiTap、aiAct、aiWaitFor 等操作。',
-      ],
-    },
     steps: trace.trajectory.map((step, index) => buildStep(step, processedSteps[index])),
   };
 

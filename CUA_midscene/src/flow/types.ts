@@ -14,7 +14,6 @@ export interface MidsceneFlow {
   goal: string;
   source: MidsceneFlowSource;
   commands?: MidsceneFlowCommands;
-  modelUsage?: MidsceneFlowModelUsage;
   steps: MidsceneFlowStep[];
 }
 
@@ -30,14 +29,6 @@ export interface MidsceneFlowCommands {
   traceGeneration?: string;
   traceToFlowConversion: string;
   flowExecution?: string;
-}
-
-export interface MidsceneFlowModelUsage {
-  recordingPreparation: 'uses-model' | 'no-model' | 'unknown';
-  traceGeneration: 'uses-model' | 'no-model' | 'unknown';
-  traceToFlowConversion: 'uses-model' | 'no-model';
-  flowExecution: 'uses-model' | 'no-model' | 'depends-on-route';
-  notes?: string[];
 }
 
 export interface MidsceneFlowStep {

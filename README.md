@@ -19,12 +19,7 @@ CUA/
 
 `CUA_midscene` 是本项目的主执行器目录，负责使用 `@midscene/computer` 操作真实桌面应用。
 
-当前已经包含两个实验脚本：
-
-- `src/google-search.ts`：打开本地 Chrome，并搜索 `GUI agent`。
-- `src/aloha-air-tickets.ts`：根据 ShowUI-Aloha 示例 trace 的语义线索，尝试生成 Midscene computer use 执行流程。
-
-后续企业网管系统的自动化执行会优先沉淀在这个目录下。Midscene 是主执行器，负责感知屏幕、定位元素、点击、输入和处理失败后的视觉回退。
+当前该目录不再保留早期手写实验脚本。后续企业网管系统的自动化执行会优先沉淀在这个目录下。Midscene 是主执行器，负责感知屏幕、定位元素、点击、输入和处理失败后的视觉回退。
 
 `CUA_midscene/projects/<project-name>/` 用于保存单个业务流程的全部产物：
 
@@ -96,7 +91,7 @@ Copy-Item showui-aloha\.env.example showui-aloha\.env
 
 这些本地环境文件已经被 `.gitignore` 忽略。
 
-## 运行 Midscene 实验
+## 运行 Midscene 转换与执行实验
 
 进入 Midscene 目录：
 
@@ -109,18 +104,6 @@ npm install
 
 ```powershell
 npm run check
-```
-
-运行 Chrome 搜索实验：
-
-```powershell
-npm run google
-```
-
-运行基于 ShowUI-Aloha 示例语义线索的 Midscene 实验：
-
-```powershell
-npm run aloha:air
 ```
 
 将 ShowUI-Aloha trace 转换为 Midscene flow：
@@ -141,7 +124,7 @@ npm run flow:run:air
 
 当前样例 flow 的第一步会被标记为 `manual-review`，runner 会在执行前 fail fast，避免把不明确的空白区域点击自动化。
 
-注意：这些脚本使用的是 Midscene 的 computer use 能力，操作真实桌面上的 Chrome。它们不依赖 browser-use，也不通过浏览器调试协议直接控制网页。
+注意：执行阶段使用的是 Midscene 的 computer use 能力，操作真实桌面应用。它不依赖 browser-use，也不通过浏览器调试协议直接控制网页。
 
 ## 运行 ShowUI-Aloha Learn 实验
 
@@ -166,9 +149,9 @@ uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 
 - 初始化 Midscene computer use 实验工程。
 - 配置火山 Ark OpenAI 兼容接口。
-- 跑通本地 Chrome 搜索实验。
 - 引入 ShowUI-Aloha，并跑通 learn 阶段的 trace 生成。
-- 初步尝试根据 trace 语义线索编写 Midscene 执行脚本。
+- 初步打通 ShowUI-Aloha trace 到 Midscene flow 的转换链路。
+- 新增通用 runner，能够读取 `midscene-flow.json` 并在不明确步骤上 fail fast。
 
 待实现：
 
