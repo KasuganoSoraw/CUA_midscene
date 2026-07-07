@@ -59,3 +59,8 @@
 - [x] 9.1 将 Midscene npm scripts 改为 `flow:convert` 和 `flow:run` 参数驱动入口
 - [x] 9.2 更新 flow 命令元数据，记录带 `--project` 的转换与执行命令
 - [x] 9.3 更新所有 README，说明新项目通过替换 `--project <project-name>` 复用同一套命令
+
+## 10. 录制键盘输入解析
+
+- [x] 10.1 修复 ShowUI-Aloha Learn 对 `NUMPAD_0` 至 `NUMPAD_9` 的解析，确保小键盘数字合并为 `Type` 动作
+- [x] 10.2 增加回归测试，覆盖网管录制中通过小键盘输入 `47405` 的场景

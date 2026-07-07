@@ -137,6 +137,12 @@ class LogProcessor:
             accelerated_deletions = int(accelerated_time * base_rate * 2)  # 2x speed
             return base_deletions + accelerated_deletions
 
+    def normalize_typing_key(self, key):
+        """Normalize recorder key names that should become typed characters."""
+        if key.startswith("NUMPAD_") and key[-1:].isdigit():
+            return key[-1]
+        return key
+
     def merge_keyboard_events(self, actions, time_threshold=5.0):
         """Merge consecutive keyboard events into typing actions with backspace handling"""
         merged_actions = []
@@ -210,6 +216,7 @@ class LogProcessor:
             # Handle regular key press events
             elif "Key Press:" in message:
                 key = message.replace("Key Press:", "").strip()
+                normalized_key = self.normalize_typing_key(key)
                 
                 if key in special_keys:
                     # Flush current typing before ENTER
@@ -266,7 +273,7 @@ class LogProcessor:
                         "current_software": current_window
                     })
                         
-                elif len(key) == 1:
+                elif len(normalized_key) == 1:
                     # Check time gap
                     if last_timestamp and (timestamp - last_timestamp) > time_threshold and buffer:
                         merged_message = "".join(buffer)
@@ -279,7 +286,7 @@ class LogProcessor:
                         merged_actions.append(merged_action)
                         buffer = []
                     
-                    buffer.append(key)
+                    buffer.append(normalized_key)
                     last_timestamp = timestamp
             
             # Handle shift+key combinations (but not shift+backspace which is handled above)
