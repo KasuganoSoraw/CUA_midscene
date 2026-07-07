@@ -44,7 +44,7 @@
 - [x] 7.1 在 Midscene flow 类型中记录生成命令和各阶段模型使用情况
 - [x] 7.2 在 converter 输出的 `midscene-flow.json` 中写入 trace 生成、flow 转换和 flow 执行命令
 - [x] 7.3 在项目 README 中说明 trace 生成使用模型、flow 转换不使用模型、runner 执行使用 Midscene 视觉模型
-- [x] 7.4 将命令记录改为分阶段语义，明确 `flow:convert:air` 是转换命令，`flow:run:air` 是执行命令
+- [x] 7.4 将命令记录改为分阶段语义，明确转换命令和执行命令的职责边界
 - [x] 7.5 从核心 IR 类型和 `midscene-flow.json` 中移除模型使用字段，仅在文档中说明模型使用边界
 
 ## 8. 目录清理
@@ -53,3 +53,9 @@
 - [x] 8.2 清理 `package.json` 中对应的 `google` 与 `aloha:air` 脚本入口
 - [x] 8.3 更新 README 与 OpenSpec design，移除旧实验脚本引用
 - [x] 8.4 移除 `.env.example` 中已无对应脚本使用的 `GOOGLE_SEARCH_QUERY`
+
+## 9. 通用命令体系
+
+- [x] 9.1 将 Midscene npm scripts 改为 `flow:convert` 和 `flow:run` 参数驱动入口
+- [x] 9.2 更新 flow 命令元数据，记录带 `--project` 的转换与执行命令
+- [x] 9.3 更新所有 README，说明新项目通过替换 `--project <project-name>` 复用同一套命令

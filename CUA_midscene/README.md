@@ -52,15 +52,22 @@ npm run check
 将样例 ShowUI-Aloha trace 转换为 Midscene flow：
 
 ```bash
-npm run flow:convert:air
+npm run flow:convert -- --project air-tickets-demo --goal "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
 ```
 
 执行样例 Midscene flow：
 
 ```bash
-npm run flow:run:air
+npm run flow:run -- --project air-tickets-demo
 ```
 
-注意：`flow:run:air` 是执行命令，不是 trace 转换命令。trace 到 `midscene-flow.json` 的转换命令是 `flow:convert:air`。
+新项目沿用同一套命令体系，只替换项目名和目标：
+
+```bash
+npm run flow:convert -- --project <project-name> --goal "<目标描述>"
+npm run flow:run -- --project <project-name>
+```
+
+注意：`flow:run` 是执行命令，不是 trace 转换命令。trace 到 `midscene-flow.json` 的转换命令是 `flow:convert`。
 
 当前样例 flow 中存在 `manual-review` 步骤，runner 会在执行前 fail fast。这是预期行为：不明确的录制动作不能被静默转换为实际桌面操作。

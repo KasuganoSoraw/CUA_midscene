@@ -109,7 +109,7 @@ npm run check
 将 ShowUI-Aloha trace 转换为 Midscene flow：
 
 ```powershell
-npm run flow:convert:air
+npm run flow:convert -- --project air-tickets-demo --goal "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
 ```
 
 这一步当前不调用模型，只做确定性规则映射。模型调用发生在 ShowUI-Aloha Learn 生成 trace 阶段，以及 Midscene runner 实际执行 flow 阶段。
@@ -117,10 +117,10 @@ npm run flow:convert:air
 使用通用 runner 执行 Midscene flow：
 
 ```powershell
-npm run flow:run:air
+npm run flow:run -- --project air-tickets-demo
 ```
 
-注意：`flow:run:air` 是执行 flow，不是转换 trace。整体链路中，`flow:convert:air` 才是 trace 到 `midscene-flow.json` 的转换命令。
+注意：`flow:run` 是执行 flow，不是转换 trace。整体链路中，`flow:convert` 才是 trace 到 `midscene-flow.json` 的转换命令。新增项目时不需要再新增 npm script，只需要替换 `--project <project-name>`；如果目标说明变化，同时传入新的 `--goal`。
 
 当前样例 flow 的第一步会被标记为 `manual-review`，runner 会在执行前 fail fast，避免把不明确的空白区域点击自动化。
 

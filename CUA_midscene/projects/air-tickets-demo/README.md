@@ -39,7 +39,7 @@ uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 
 ```powershell
 cd CUA_midscene
-npm run flow:convert:air
+npm run flow:convert -- --project air-tickets-demo --goal "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
 ```
 
 这一步当前不调用模型，只进行确定性规则映射：读取 `source/showui-trace.json` 和 `source/processed-log-sc.json`，输出 `ir/midscene-flow.json`。
@@ -48,12 +48,12 @@ npm run flow:convert:air
 
 ```powershell
 cd CUA_midscene
-npm run flow:run:air
+npm run flow:run -- --project air-tickets-demo
 ```
 
 这一步会通过 Midscene computer use 调用视觉模型执行 `aiInput`、`aiTap`、`aiAct`、`aiWaitFor` 等操作。当前样例包含 `manual-review` 步骤，runner 会在执行前 fail fast。
 
-注意：`npm run flow:run:air` 是执行命令，不是 trace 转换命令。trace 转换为 Midscene flow 的命令是 `npm run flow:convert:air`。
+注意：`npm run flow:run -- --project air-tickets-demo` 是执行命令，不是 trace 转换命令。trace 转换为 Midscene flow 的命令是 `npm run flow:convert -- --project air-tickets-demo --goal "..."`。
 
 原始录制视频较大，不在该项目目录重复复制。当前来源为：
 

@@ -32,9 +32,23 @@ interface ConvertOptions {
   project: string;
   goal: string;
   projectRoot: string;
+  conversionCommand: string;
   recordingPreparationCommand?: string;
   traceGenerationCommand?: string;
   flowExecutionCommand?: string;
+}
+
+function quoteCommandValue(value: string): string {
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function buildConversionCommand(project: string, goal: string): string {
+  const args = [`--project ${project}`];
+  if (goal) {
+    args.push(`--goal ${quoteCommandValue(goal)}`);
+  }
+
+  return `npm run flow:convert -- ${args.join(' ')}`;
 }
 
 function parseArgs(argv: string[]): ConvertOptions {
@@ -56,14 +70,33 @@ function parseArgs(argv: string[]): ConvertOptions {
     throw new Error('必须提供 --project <project-name>');
   }
 
+  const goal = options.get('goal') ?? '';
+
   return {
     project,
-    goal: options.get('goal') ?? '',
+    goal,
     projectRoot: options.get('project-root') ?? path.join('projects', project),
+    conversionCommand: buildConversionCommand(project, goal),
     recordingPreparationCommand: options.get('recording-preparation-command'),
     traceGenerationCommand: options.get('trace-generation-command'),
     flowExecutionCommand: options.get('flow-execution-command'),
   };
+}
+
+function defaultRecordingPreparationCommand(project: string): string {
+  if (project === 'air-tickets-demo') {
+    return '将 ShowUI-Aloha 录制视频和输入日志放入 showui-aloha\\Aloha_Learn\\projects\\air_tickets\\inputs';
+  }
+
+  return `将该项目的录制视频和输入日志放入对应 ShowUI-Aloha Learn project，并将生成产物复制到 CUA_midscene\\projects\\${project}\\source`;
+}
+
+function defaultTraceGenerationCommand(project: string): string {
+  if (project === 'air-tickets-demo') {
+    return 'uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets';
+  }
+
+  return `未记录；请通过 --trace-generation-command 提供 ${project} 的 ShowUI-Aloha trace 生成命令`;
 }
 
 async function readJsonFile<T>(filePath: string): Promise<T> {
@@ -216,14 +249,10 @@ async function convert(options: ConvertOptions): Promise<string> {
       screenshotsDir: path.posix.join('source', 'screenshots'),
     },
     commands: {
-      recordingPreparation:
-        options.recordingPreparationCommand ??
-        '将 ShowUI-Aloha 录制视频和输入日志放入 showui-aloha\\Aloha_Learn\\projects\\air_tickets\\inputs',
-      traceGeneration:
-        options.traceGenerationCommand ??
-        'uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets',
-      traceToFlowConversion: 'npm run flow:convert:air',
-      flowExecution: options.flowExecutionCommand ?? 'npm run flow:run:air',
+      recordingPreparation: options.recordingPreparationCommand ?? defaultRecordingPreparationCommand(options.project),
+      traceGeneration: options.traceGenerationCommand ?? defaultTraceGenerationCommand(options.project),
+      traceToFlowConversion: options.conversionCommand,
+      flowExecution: options.flowExecutionCommand ?? `npm run flow:run -- --project ${options.project}`,
     },
     steps: trace.trajectory.map((step, index) => buildStep(step, processedSteps[index])),
   };
