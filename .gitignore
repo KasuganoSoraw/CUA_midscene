@@ -11,4 +11,6 @@
 **/reports/
 **/*.log
 
+.codex/
+
 showui-aloha/Aloha_Learn/projects/
