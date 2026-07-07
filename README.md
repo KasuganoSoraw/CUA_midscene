@@ -11,6 +11,7 @@
 ```text
 CUA/
 ├── CUA_midscene/      # 主执行器：Midscene computer use 实验
+│   └── projects/      # 按业务流程组织的 trace、IR、生成脚本和报告
 └── showui-aloha/      # 教学录制侧：从录制资源生成结构化日志和 trace
 ```
 
@@ -24,6 +25,13 @@ CUA/
 - `src/aloha-air-tickets.ts`：根据 ShowUI-Aloha 示例 trace 的语义线索，尝试生成 Midscene computer use 执行流程。
 
 后续企业网管系统的自动化执行会优先沉淀在这个目录下。Midscene 是主执行器，负责感知屏幕、定位元素、点击、输入和处理失败后的视觉回退。
+
+`CUA_midscene/projects/<project-name>/` 用于保存单个业务流程的全部产物：
+
+- `source/`：ShowUI-Aloha Learn 生成的 trace、processed log 和截图。
+- `ir/`：转换后的 Midscene flow，例如 `midscene-flow.json`。
+- `generated/`：后续从 flow 派生出的 Midscene 脚本。
+- `reports/`：该流程执行产生的报告或报告引用。
 
 ### showui-aloha
 
@@ -114,6 +122,20 @@ npm run google
 ```powershell
 npm run aloha:air
 ```
+
+将 ShowUI-Aloha trace 转换为 Midscene flow：
+
+```powershell
+npm run flow:convert:air
+```
+
+使用通用 runner 执行 Midscene flow：
+
+```powershell
+npm run flow:run:air
+```
+
+当前样例 flow 的第一步会被标记为 `manual-review`，runner 会在执行前 fail fast，避免把不明确的空白区域点击自动化。
 
 注意：这些脚本使用的是 Midscene 的 computer use 能力，操作真实桌面上的 Chrome。它们不依赖 browser-use，也不通过浏览器调试协议直接控制网页。
 

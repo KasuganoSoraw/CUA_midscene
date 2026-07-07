@@ -28,7 +28,7 @@
 
 ## 5. 验证与文档
 
-- [ ] 5.1 为 converter 增加最小验证，确认样例 trace 可以生成符合结构的 `midscene-flow.json`
-- [ ] 5.2 为 runner 增加最小验证，确认不受支持 strategy 会清晰失败
-- [ ] 5.3 更新根 README 和 `CUA_midscene/README.md`，说明 ShowUI-Aloha、Midscene converter、runner 和项目产物目录的关系
-- [ ] 5.4 运行 TypeScript 类型检查，确认新增代码通过 `npm run typecheck`
+- [x] 5.1 为 converter 增加最小验证，确认样例 trace 可以生成符合结构的 `midscene-flow.json`
+- [x] 5.2 为 runner 增加最小验证，确认不受支持 strategy 会清晰失败
+- [x] 5.3 更新根 README 和 `CUA_midscene/README.md`，说明 ShowUI-Aloha、Midscene converter、runner 和项目产物目录的关系
+- [x] 5.4 运行 TypeScript 类型检查，确认新增代码通过 `npm run typecheck`

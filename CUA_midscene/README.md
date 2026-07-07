@@ -28,3 +28,29 @@ npm run google
 `npm run google` starts the local Chrome application, then uses Midscene desktop keyboard input and visual grounding to navigate to Google, search `GUI agent`, and assert that results are visible. It does not use Playwright, Puppeteer, CDP, browser-use, or any browser automation protocol.
 
 On Windows, run the terminal/Codex as Administrator if Midscene can move the cursor but clicks or key presses do not affect Chrome.
+
+## Project flows
+
+`projects/<project-name>/` stores workflow-specific artifacts. The first sample is `projects/air-tickets-demo/`.
+
+```text
+projects/<project-name>/
+  source/      # ShowUI-Aloha trace, processed logs, screenshots
+  ir/          # Midscene flow IR, for example midscene-flow.json
+  generated/   # future generated run.ts scripts
+  reports/     # execution reports or report references
+```
+
+Convert the sample ShowUI-Aloha trace into a Midscene flow:
+
+```bash
+npm run flow:convert:air
+```
+
+Run the generic flow runner:
+
+```bash
+npm run flow:run:air
+```
+
+The runner fails fast on `manual-review` steps before desktop execution. This is intentional: ambiguous recorded actions must be reviewed or given explicit fallback instructions before Midscene operates the computer.
