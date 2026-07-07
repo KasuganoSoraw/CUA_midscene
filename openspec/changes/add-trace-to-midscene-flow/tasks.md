@@ -13,11 +13,11 @@
 
 ## 3. Trace 到 Flow 的 Converter
 
-- [ ] 3.1 新增 converter 入口，读取 ShowUI-Aloha trace 并输出项目级 `ir/midscene-flow.json`
-- [ ] 3.2 将 trace caption 中的 observation、think、action、expectation 映射到 flow step 的 intent 和 evidence
-- [ ] 3.3 实现第一版保守路由规则，将明确 typing、click、wait 等行为映射到对应 route strategy
-- [ ] 3.4 对无法确定的步骤输出 `manual-review`，并保留原始 trace 证据
-- [ ] 3.5 在转换前校验 source artifact 路径存在，失败时给出清晰错误
+- [x] 3.1 新增 converter 入口，读取 ShowUI-Aloha trace 并输出项目级 `ir/midscene-flow.json`
+- [x] 3.2 将 trace caption 中的 observation、think、action、expectation 映射到 flow step 的 intent 和 evidence
+- [x] 3.3 实现第一版保守路由规则，将明确 typing、click、wait 等行为映射到对应 route strategy
+- [x] 3.4 对无法确定的步骤输出 `manual-review`，并保留原始 trace 证据
+- [x] 3.5 在转换前校验 source artifact 路径存在，失败时给出清晰错误
 
 ## 4. 通用 Midscene Runner
 

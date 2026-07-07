@@ -6,6 +6,7 @@
   "scripts": {
     "aloha:air": "tsx src/aloha-air-tickets.ts",
     "check": "tsx src/check-env.ts",
+    "flow:convert:air": "tsx src/flow/convert-showui-trace.ts --project air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\"",
     "google": "tsx src/google-search.ts",
     "typecheck": "tsc --noEmit"
   },

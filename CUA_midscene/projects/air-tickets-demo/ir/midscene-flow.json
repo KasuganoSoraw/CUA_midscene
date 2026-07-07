@@ -1,0 +1,403 @@
+{
+  "schemaVersion": "0.1",
+  "project": "air-tickets-demo",
+  "goal": "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索",
+  "source": {
+    "tracePath": "source/showui-trace.json",
+    "processedLogPath": "source/processed-log.json",
+    "processedLogWithScreenshotsPath": "source/processed-log-sc.json",
+    "screenshotsDir": "source/screenshots"
+  },
+  "steps": [
+    {
+      "id": "step-001",
+      "sourceTrace": {
+        "stepIndex": 1,
+        "rawAction": "LClick at"
+      },
+      "intent": "The user is clicking on a blank region of the Chrome browser's tab strip area. Since this is a thin horizontal bar in the tab strip with no visible tab or control under the X, the click targets an empty section of the tab bar, possibly to deselect/focus the tab area, interact with the tab strip region, or as an initial positioning click before further interaction with the browser.",
+      "evidence": {
+        "observation": "Cropped image shows The crop shows a semitransparent red 'X' centered on a thin, light blue-gray horizontal bar, with no visible text or icon labels in the cropped area. The full screen reveals a Google Chrome browser window open to the Google homepage. The X is positioned on the browser's tab strip, in an empty area to the right of the active 'New Tab' tab and to the left of the tab strip's right side. An electron-screen-recorder overlay with a red recording dot is visible in the top-right corner of the screen. The Windows taskbar at the bottom shows the Start button, search bar, and several pinned application icons.",
+        "thought": "The user is clicking on a blank region of the Chrome browser's tab strip area. Since this is a thin horizontal bar in the tab strip with no visible tab or control under the X, the click targets an empty section of the tab bar, possibly to deselect/focus the tab area, interact with the tab strip region, or as an initial positioning click before further interaction with the browser.",
+        "action": "Click on the empty tab strip area of the Chrome browser window, to the right of the active 'New Tab'.",
+        "expectation": "The click registers on the tab strip region, which may result in a focus change within the Chrome window or no visible change since the area is blank. The active tab ('New Tab') may remain selected, and the Google homepage stays visible.",
+        "screenshot": "source/screenshots/0.329s.jpg",
+        "crop": "source/screenshots/0.329s.crop.jpg"
+      },
+      "route": {
+        "strategy": "manual-review",
+        "reason": "该点击目标疑似为空白区域或非语义控件，不能安全自动执行。"
+      },
+      "fallback": {
+        "strategy": "fail",
+        "reason": "该点击目标疑似为空白区域或非语义控件，不能安全自动执行。"
+      }
+    },
+    {
+      "id": "step-002",
+      "sourceTrace": {
+        "stepIndex": 2,
+        "rawAction": "Type: QATAR AIRWAYS"
+      },
+      "intent": "The user is actively typing a search query in the Chrome omnibox to look up the Qatar Airways website. The text 'qatar airways' has been entered and Chrome is displaying autocomplete suggestions. The next action in the sequence is to type 'QATAR AIRWAYS' (the literal string to be typed), continuing to populate the omnibox for a Google search.",
+      "evidence": {
+        "observation": "Cropped image shows The cropped view centers on the Chrome browser's address/omnibox at the top of the window, where the text 'qatar airways' is currently entered (with the 's' at the end highlighted/selected in blue). Below the omnibox, a Google search suggestions dropdown is expanded, showing a list of search suggestions: the top entry 'qatar airways - Google Search', followed by a 'Qatar Airways' official site suggestion (with a small Qatar Airways logo), and further related queries such as 'qatar airwa', 'qatar airways singapore', 'qatar airways flights', 'qatar airways manage booking', 'qatar airways careers', 'qatar airways johor bahru', 'qatar airways check in', and 'qatar airways news'. The full-screen context confirms a Google Chrome window on a 'New Tab' page with the New Tab page content visible (shortcuts, Web Store, Add shortcut link, Customize Chrome button) below the suggestions, and the Windows taskbar pinned apps at the bottom. An electron-screen-recorder overlay with a red recording dot is in the top-right corner.",
+        "thought": "The user is actively typing a search query in the Chrome omnibox to look up the Qatar Airways website. The text 'qatar airways' has been entered and Chrome is displaying autocomplete suggestions. The next action in the sequence is to type 'QATAR AIRWAYS' (the literal string to be typed), continuing to populate the omnibox for a Google search.",
+        "action": "Type 'QATAR AIRWAYS' into the Chrome omnibox (address/search bar) at the top of the browser window, appending to or completing the existing 'qatar airways' query.",
+        "expectation": "The omnibox text will update to 'QATAR AIRWAYS qatar airways' (or be replaced/completed with 'QATAR AIRWAYS' as a new search), and the Google suggestions dropdown will refresh to reflect the new query, likely surfacing 'QATAR AIRWAYS' as the top search and the Qatar Airways official site as a primary suggestion.",
+        "screenshot": "source/screenshots/4.430s.jpg",
+        "crop": "source/screenshots/4.430s.crop.jpg"
+      },
+      "route": {
+        "strategy": "input",
+        "target": "Type 'QATAR AIRWAYS' into the Chrome omnibox (address/search bar) at the top of the browser window, appending to or completing the existing 'qatar airways' query",
+        "value": "QATAR AIRWAYS",
+        "mode": "replace"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Type 'QATAR AIRWAYS' into the Chrome omnibox (address/search bar) at the top of the browser window, appending to or completing the existing 'qatar airways' query."
+      }
+    },
+    {
+      "id": "step-003",
+      "sourceTrace": {
+        "stepIndex": 3,
+        "rawAction": "Press ENTER"
+      },
+      "intent": "The user has typed 'qatar airways' into the Chrome omnibox and the omnibox is currently focused with the text caret at the end. The Google search suggestions dropdown is visible, and the first highlighted suggestion is 'qatar airways - Google Search'. The next logical action is to press ENTER to submit this query and perform a Google search, which will navigate to the Google search results page for 'qatar airways' (or to the first suggestion).",
+      "evidence": {
+        "observation": "Cropped image shows The cropped image shows a mostly blank white/light gray area with a thin light blue-gray horizontal bar at the top (which appears to be the lower edge of Chrome's omnibox area) and a semitransparent red 'X' marker centered in the otherwise empty white space below it. The full-screen context reveals Google Chrome with the 'New Tab' page open. The omnibox at the top of the browser contains the text 'qatar airways' with a vertical text caret at the end, indicating it is focused and active. Below the omnibox, a Google search suggestions dropdown is expanded, listing entries: 'qatar airways - Google Search' (highlighted in a light gray pill), 'Qatar Airways' (with the Qatar Airways logo), and further suggestions such as 'qatar airways singapore', 'qatar airways flights', 'qatar airways manage booking', 'qatar airways careers', 'qatar airways johor bahru', 'qatar airways check in', 'qatar airways news', and 'qatar airways business class'. The New Tab page content (shortcuts, Web Store, Add shortcut, Customize Chrome button) is partially visible below the dropdown. The Windows taskbar at the bottom shows pinned apps and the system tray (time 8:54 AM, 9/12/2025, 26°C Mostly cloudy). An electron screen recorder overlay is in the top-right corner.",
+        "thought": "The user has typed 'qatar airways' into the Chrome omnibox and the omnibox is currently focused with the text caret at the end. The Google search suggestions dropdown is visible, and the first highlighted suggestion is 'qatar airways - Google Search'. The next logical action is to press ENTER to submit this query and perform a Google search, which will navigate to the Google search results page for 'qatar airways' (or to the first suggestion).",
+        "action": "Press ENTER to submit the current omnibox query 'qatar airways' and trigger a Google search.",
+        "expectation": "Chrome will navigate away from the New Tab page and load the Google search results page for the query 'qatar airways' (using the top highlighted 'qatar airways - Google Search' suggestion), the suggestions dropdown will close, and the omnibox will show the search results URL or the query 'qatar airways' as a Google search.",
+        "screenshot": "source/screenshots/4.824s.jpg",
+        "crop": "source/screenshots/4.824s.crop.jpg"
+      },
+      "route": {
+        "strategy": "keyboard",
+        "keyName": "Enter"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Press ENTER to submit the current omnibox query 'qatar airways' and trigger a Google search."
+      }
+    },
+    {
+      "id": "step-004",
+      "sourceTrace": {
+        "stepIndex": 4,
+        "rawAction": "LClick at"
+      },
+      "intent": "The red X is positioned directly on the top sponsored search result 'Qatar Airways Official Website' from qatarairways.com. Given the user's prior steps of typing 'qatar airways' into Chrome and submitting a Google search, the logical next action is to click this top sponsored link to navigate to the official Qatar Airways website. This is a click on a hyperlink (object) in the search results canvas.",
+      "evidence": {
+        "observation": "Cropped image shows a semitransparent red 'X' marker centered on a Google search result entry. Visible text in the crop includes the URL fragment 'irways.com' and breadcrumb 'www.qatarairways.com › sg' (preceded by the Qatar Airways oryx logo), followed by the blue title 'rways Official Website' (truncated 'Qatar Airways Official Website') and the description 'Official Website — Explore the wo...', 'spitality. Explore 4000+ entertainm', 'ine.'. The full-screen context shows the Google search results page for the query 'qatar airways' in Chrome. The top result is a Sponsored entry from qatarairways.com titled 'Qatar Airways Official Website' with sitelinks below it (Book Your Flight Tickets Today, Special fares from SGD788, Book and Fly, Join Privilege Club & Fly, 25 Kg+ Baggage Allowance). A second organic result from qatarairways.com (Singapore variant) appears further down. The right-hand knowledge panel displays a 'Qatar Airways' summary from Wikipedia with company details (Hubs, CEO, Headquarters, Founded, Alliance, Destinations, Employees). The omnibox at the top shows the search URL and 'qatar airways' is in the search bar. The Windows taskbar is visible at the bottom with various pinned app icons.",
+        "thought": "The red X is positioned directly on the top sponsored search result 'Qatar Airways Official Website' from qatarairways.com. Given the user's prior steps of typing 'qatar airways' into Chrome and submitting a Google search, the logical next action is to click this top sponsored link to navigate to the official Qatar Airways website. This is a click on a hyperlink (object) in the search results canvas.",
+        "action": "Click the 'Qatar Airways Official Website' sponsored search result link (from qatarairways.com) to navigate to the official Qatar Airways website.",
+        "expectation": "Chrome will navigate away from the Google search results page and load the Qatar Airways official website (www.qatarairways.com), opening the airline's homepage or landing region. The Google search results page will no longer be visible, and the omnibox will update to show the qatarairways.com URL.",
+        "screenshot": "source/screenshots/6.853s.jpg",
+        "crop": "source/screenshots/6.853s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'Qatar Airways Official Website' sponsored search result link (from qatarairways.com) to navigate to the official Qatar Airways website"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'Qatar Airways Official Website' sponsored search result link (from qatarairways.com) to navigate to the official Qatar Airways website."
+      }
+    },
+    {
+      "id": "step-005",
+      "sourceTrace": {
+        "stepIndex": 5,
+        "rawAction": "LClick at"
+      },
+      "intent": "The red X is placed directly on the 'From' input field of the flight booking widget on the Qatar Airways homepage. The user has just landed on the Qatar Airways official site and is starting the flight booking flow. Clicking the 'From' field will focus it, allowing the user to type a departure city/airport (most likely Singapore, given the /en-sg/ regional URL and the SGD currency shown in the banner). This is a click on a UI input control (a form text field).",
+      "evidence": {
+        "observation": "Cropped image shows a close-up of the Qatar Airways flight booking widget with a semitransparent red 'X' marker centered on the 'From' text input field. Above the field, a 'Return' radio option is selected (filled purple dot) alongside unselected 'One way' and 'Multi-city' options. Below the field, a 'Book using Avios' checkbox is visible. The full-screen context reveals the Qatar Airways homepage (qatarairways.com/en-sg/homepage.html) loaded in Chrome, with a header banner reading 'Escape for less – Discover Europe and Americas from SGD788' over a collage of European landmarks (Eiffel Tower, Sagrada Familia, Arc de Triomphe). The top navigation includes Qatar Airways logo, 'oneworld' badge, and menu items: Explore, Book, Experience, Privilege Club, Help, language selector (EN), search icon, and Log in | Sign up. The booking widget is set to the 'Book a flight' tab, with 'Return' selected, pre-filled values 'Departure 12 Sep 2025', 'Return 19 Sep 2025', and '1 Passenger Economy'. A purple 'Search flights' button is on the right. The Windows taskbar is visible at the bottom.",
+        "thought": "The red X is placed directly on the 'From' input field of the flight booking widget on the Qatar Airways homepage. The user has just landed on the Qatar Airways official site and is starting the flight booking flow. Clicking the 'From' field will focus it, allowing the user to type a departure city/airport (most likely Singapore, given the /en-sg/ regional URL and the SGD currency shown in the banner). This is a click on a UI input control (a form text field).",
+        "action": "Click the 'From' text input field in the 'Book a flight' widget to focus it and prepare to enter a departure city.",
+        "expectation": "The 'From' input field will become focused (active cursor appears inside it, field may be highlighted), and an airport/city autocomplete dropdown may appear, ready to accept a typed departure location such as Singapore (SIN).",
+        "screenshot": "source/screenshots/9.212s.jpg",
+        "crop": "source/screenshots/9.212s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'From' text input field in the 'Book a flight' widget to focus it and prepare to enter a departure city"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'From' text input field in the 'Book a flight' widget to focus it and prepare to enter a departure city."
+      }
+    },
+    {
+      "id": "step-006",
+      "sourceTrace": {
+        "stepIndex": 6,
+        "rawAction": "LClick at"
+      },
+      "intent": "The red X is placed directly on the 'Accept all' button of the cookie consent dialog. Before the user can interact with the flight booking widget on the Qatar Airways site, this consent overlay must be dismissed. Clicking 'Accept all' is the quickest way to accept the cookies and clear the banner, allowing the user to proceed with the flight booking flow that was started in the previous step (clicking the 'From' field).",
+      "evidence": {
+        "observation": "Cropped image shows The cropped image shows a close-up of a burgundy/maroon pill-shaped button with white text reading 'Accept all'. A semitransparent red 'X' marker is centered directly on this button. The full-screen context reveals the Qatar Airways homepage (qatarairways.com/en-sg/homepage.html) loaded in Chrome, partially dimmed by a cookie consent overlay at the bottom of the viewport. The consent banner contains explanatory text: 'We use cookies to tailor your experience to your needs, bringing you special offers, unique features and much more. By selecting 'Agree', you consent to usage of cookies. You can also change your preferences at any time using the 'Cookie consent' link in the footer, then clearing your browser.' To the left of the 'Accept all' button is an outlined 'Cookie preferences' button. Behind the overlay, the Qatar Airways booking widget is visible (Book a flight tab, Return selected, From/To fields, dates 12 Sep 2025 / 19 Sep 2025, 1 Passenger Economy), along with the hero banner 'Escape for less – Discover Europe and Americas from SGD788'. The Windows taskbar is visible at the bottom.",
+        "thought": "The red X is placed directly on the 'Accept all' button of the cookie consent dialog. Before the user can interact with the flight booking widget on the Qatar Airways site, this consent overlay must be dismissed. Clicking 'Accept all' is the quickest way to accept the cookies and clear the banner, allowing the user to proceed with the flight booking flow that was started in the previous step (clicking the 'From' field).",
+        "action": "Click the 'Accept all' button on the cookie consent banner to accept cookies and dismiss the overlay.",
+        "expectation": "The cookie consent banner will close/disappear, revealing the full Qatar Airways homepage and flight booking widget beneath it. The page will no longer be dimmed, and the user will be able to freely interact with the 'From' input field and other booking controls.",
+        "screenshot": "source/screenshots/10.854s.jpg",
+        "crop": "source/screenshots/10.854s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'Accept all' button on the cookie consent banner to accept cookies and dismiss the overlay"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'Accept all' button on the cookie consent banner to accept cookies and dismiss the overlay."
+      }
+    },
+    {
+      "id": "step-007",
+      "sourceTrace": {
+        "stepIndex": 7,
+        "rawAction": "LClick at"
+      },
+      "intent": "The red X is placed directly on the 'From' input field of the flight booking widget. After the cookie consent banner was accepted in the previous step, the booking widget is now fully accessible. The user needs to specify a departure city, most likely Singapore given the /en-sg/ regional URL and the SGD currency shown. Clicking the 'From' field will focus it, allowing the user to type a departure city/airport. This is a click on a UI control (a form text input field) within the booking widget canvas.",
+      "evidence": {
+        "observation": "Cropped image shows a close-up of the Qatar Airways flight booking widget with a semitransparent red 'X' marker centered on the 'From' text input field. Above the field, the 'Return' radio option is selected (filled purple dot) alongside unselected 'One way' and 'Multi-city' options. Below the field, a 'Book using Avios' checkbox is visible. The full-screen context reveals the Qatar Airways homepage (qatarairways.com/en-sg/homepage.html) loaded in Chrome, with the cookie consent banner now dismissed. The hero banner reads 'Escape for less – Discover Europe and Americas from SGD788' over a collage of European landmarks (Eiffel Tower, Sagrada Familia, Arc de Triomphe). The booking widget is set to the 'Book a flight' tab, with 'Return' selected, pre-filled values 'Departure 12 Sep 2025', 'Return 19 Sep 2025', and '1 Passenger Economy'. A purple 'Search flights' button is on the right. The Windows taskbar is visible at the bottom.",
+        "thought": "The red X is placed directly on the 'From' input field of the flight booking widget. After the cookie consent banner was accepted in the previous step, the booking widget is now fully accessible. The user needs to specify a departure city, most likely Singapore given the /en-sg/ regional URL and the SGD currency shown. Clicking the 'From' field will focus it, allowing the user to type a departure city/airport. This is a click on a UI control (a form text input field) within the booking widget canvas.",
+        "action": "Click the 'From' text input field in the 'Book a flight' widget to focus it and prepare to enter a departure city.",
+        "expectation": "The 'From' input field will become focused (active cursor appears inside it, field may be highlighted), and an airport/city autocomplete dropdown may appear, ready to accept a typed departure location such as Singapore (SIN).",
+        "screenshot": "source/screenshots/11.824s.jpg",
+        "crop": "source/screenshots/11.824s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'From' text input field in the 'Book a flight' widget to focus it and prepare to enter a departure city"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'From' text input field in the 'Book a flight' widget to focus it and prepare to enter a departure city."
+      }
+    },
+    {
+      "id": "step-008",
+      "sourceTrace": {
+        "stepIndex": 8,
+        "rawAction": "Type: SINGAPORE"
+      },
+      "intent": "The user has focused the 'From' field and is typing 'SINGAPORE' to specify Singapore as the departure city, which aligns with the /en-sg/ regional URL and SGD pricing context. The dropdown currently shows cities starting with 'Sa' because the autocomplete is matching the partial input 'Singap'. As the user continues typing the rest of 'ORE', the dropdown should filter further and present Singapore (SIN) as the top suggestion. This is a Type action into the input field, not a click on a dropdown item.",
+      "evidence": {
+        "observation": "Cropped image shows the 'From' text input field in the Qatar Airways 'Book a flight' widget with the partial text 'Singap' already entered and a blinking text cursor at the end. Below the field, an autocomplete dropdown is open listing matching cities: 'Sacramento, United States of America – Sacramento Executive Airport (SAC)', 'Sacramento, United States of America – Sacramento International Airport (SMF)', 'Samarinda, Indonesia – Aji Pangeran Tumenggung Airport (AAP)', 'Sao Paulo, Brazil – Sao Paulo (SAO)', 'Sao Paulo, Brazil – Guarulhos - Governador André Franco Montoro International Airport (GRU)', and 'Sao Jose do Rio Preto, Brazil – Prof. Eribelto Manoel Reino State Airport (SJP)'. Each entry has a location pin or airplane icon on the left and an airport code on the right. The full-screen context reveals the Qatar Airways homepage (qatarairways.com/en-sg/homepage.html) loaded in Chrome. The 'Book a flight' tab is active with 'Return' selected, dates '12 Sep 2025' / '19 Sep 2025', and '1 Passenger Economy'. The 'To' field is empty. Below the booking widget, content cards for 'Explore our offers', '17 weekly flights to Dublin from 2 December 2025', 'Dine and earn Avios with our partners', and 'Elevate your experience' are visible. The Windows taskbar is at the bottom.",
+        "thought": "The user has focused the 'From' field and is typing 'SINGAPORE' to specify Singapore as the departure city, which aligns with the /en-sg/ regional URL and SGD pricing context. The dropdown currently shows cities starting with 'Sa' because the autocomplete is matching the partial input 'Singap'. As the user continues typing the rest of 'ORE', the dropdown should filter further and present Singapore (SIN) as the top suggestion. This is a Type action into the input field, not a click on a dropdown item.",
+        "action": "Type 'SINGAPORE' into the 'From' text input field of the flight booking widget to specify Singapore as the departure city.",
+        "expectation": "The 'From' field will display the full text 'SINGAPORE' and the autocomplete dropdown will filter to show Singapore Changi Airport (SIN) and possibly Seletar Airport (XSP) as matching options, allowing the user to select Singapore as the departure location for the flight search.",
+        "screenshot": "source/screenshots/14.684s.jpg",
+        "crop": "source/screenshots/14.684s.crop.jpg"
+      },
+      "route": {
+        "strategy": "input",
+        "target": "Type 'SINGAPORE' into the 'From' text input field of the flight booking widget to specify Singapore as the departure city",
+        "value": "SINGAPORE",
+        "mode": "replace"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Type 'SINGAPORE' into the 'From' text input field of the flight booking widget to specify Singapore as the departure city."
+      }
+    },
+    {
+      "id": "step-009",
+      "sourceTrace": {
+        "stepIndex": 9,
+        "rawAction": "LClick at"
+      },
+      "intent": "The red X is placed on the 'Singapore, Singapore - Singapore Changi Airport (SIN)' option in the autocomplete dropdown. After typing 'Singapore' into the 'From' field, the dropdown has filtered to show Singapore Changi Airport as the matching suggestion. The user needs to click this option to confirm Singapore as the departure city, which is consistent with the /en-sg/ regional URL and the overall flight booking task. This is a click on a UI control (an autocomplete dropdown item) within the booking widget canvas.",
+      "evidence": {
+        "observation": "Cropped image shows a close-up of the Qatar Airways flight booking autocomplete dropdown with a semitransparent red 'X' marker centered on the suggestion 'Singapore, Singapore - Singapore Changi Airport', which is displayed with an airplane icon on the left and the airport code 'SIN' on the right. The 'From' input field above shows the text 'Singapore' that the user has typed. The full-screen context reveals the Qatar Airways homepage (qatarairways.com/en-sg/homepage.html) loaded in Chrome. The 'Book a flight' widget has 'Return' selected, 'From' filled with 'Singapore', 'To' empty, Departure 12 Sep 2025, Return 19 Sep 2025, and 1 Passenger Economy. The autocomplete dropdown shows a single matching result. The Windows taskbar is visible at the bottom with various pinned application icons.",
+        "thought": "The red X is placed on the 'Singapore, Singapore - Singapore Changi Airport (SIN)' option in the autocomplete dropdown. After typing 'Singapore' into the 'From' field, the dropdown has filtered to show Singapore Changi Airport as the matching suggestion. The user needs to click this option to confirm Singapore as the departure city, which is consistent with the /en-sg/ regional URL and the overall flight booking task. This is a click on a UI control (an autocomplete dropdown item) within the booking widget canvas.",
+        "action": "Click the 'Singapore, Singapore - Singapore Changi Airport (SIN)' option in the autocomplete dropdown below the 'From' field to set Singapore as the departure location.",
+        "expectation": "The autocomplete dropdown will close, the 'From' field will be populated with 'Singapore' (or 'Singapore, Singapore - Singapore Changi Airport'), and the field's value will be confirmed as the departure city. The booking widget will then be ready for the user to enter the destination into the 'To' field.",
+        "screenshot": "source/screenshots/16.530s.jpg",
+        "crop": "source/screenshots/16.530s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'Singapore, Singapore - Singapore Changi Airport (SIN)' option in the autocomplete dropdown below the 'From' field to set Singapore as the departure location"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'Singapore, Singapore - Singapore Changi Airport (SIN)' option in the autocomplete dropdown below the 'From' field to set Singapore as the departure location."
+      }
+    },
+    {
+      "id": "step-010",
+      "sourceTrace": {
+        "stepIndex": 10,
+        "rawAction": "Type: LOS "
+      },
+      "intent": "The user is in the 'To' field of the flight booking widget, having already confirmed 'Singapore SIN' as the departure. The current visible text in the 'To' field is 'Lo' and the dropdown is filtered to show London options. The raw action 'Type: LOS' indicates the user is typing the string 'LOS' into this field, which will replace/extend the current 'Lo' text and re-filter the autocomplete dropdown to match results starting with 'LOS' (such as Los Angeles airports, Lomé, etc.). The destination typing is part of the flight search workflow continuing after the From-field confirmation.",
+      "evidence": {
+        "observation": "Cropped image shows The cropped image shows a close-up of the Qatar Airways 'Book a flight' widget. The 'To' text input field is focused (highlighted with a purple border) and currently contains the partial text 'Lo' with a blinking text cursor at the end. Below the field, an autocomplete dropdown is open listing London-related destinations: 'London, United Kingdom – London (LON)' with a location-pin icon, 'London, United Kingdom – London Gatwick Airport (LGW)' with an airplane icon, 'London, United Kingdom – London Heathrow Airport (LHR)' with an airplane icon, 'London, United Kingdom – London City Airport (LCY)' with an airplane icon, 'London, United Kingdom – London Euston Railway Station (QQU)' with a train icon, and 'London, United Kingdom – London Luton Airport (LTN)' with an airplane icon. The 'From' field to the left is filled with 'Singapore SIN'. To the right are 'Departure 12 Sep 2025', 'Return 19 Sep 2025', and '1 Passenger Economy'. The full-screen context shows the Qatar Airways homepage (qatarairways.com/en-sg/homepage.html) loaded in Chrome. The booking widget has 'Book a flight' active with 'Return' selected (filled purple radio dot), the unselected 'One way' and 'Multi-city' options, and a 'Book using Avios' checkbox below. A purple 'Search flights' button is on the right. The Windows taskbar is visible at the bottom.",
+        "thought": "The user is in the 'To' field of the flight booking widget, having already confirmed 'Singapore SIN' as the departure. The current visible text in the 'To' field is 'Lo' and the dropdown is filtered to show London options. The raw action 'Type: LOS' indicates the user is typing the string 'LOS' into this field, which will replace/extend the current 'Lo' text and re-filter the autocomplete dropdown to match results starting with 'LOS' (such as Los Angeles airports, Lomé, etc.). The destination typing is part of the flight search workflow continuing after the From-field confirmation.",
+        "action": "Type 'LOS' into the 'To' text input field of the flight booking widget to specify a destination starting with 'LOS'.",
+        "expectation": "The 'To' field will display 'LOS' and the autocomplete dropdown will re-filter to show airports and cities starting with 'LOS' (such as Los Angeles – Los Angeles International Airport (LAX), Los Angeles, United States of America – Los Angeles International Airport, and possibly other matches), allowing the user to select a Los Angeles destination for the flight search.",
+        "screenshot": "source/screenshots/22.955s.jpg",
+        "crop": "source/screenshots/22.955s.crop.jpg"
+      },
+      "route": {
+        "strategy": "input",
+        "target": "Type 'LOS' into the 'To' text input field of the flight booking widget to specify a destination starting with 'LOS'",
+        "value": "LOS",
+        "mode": "replace"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Type 'LOS' into the 'To' text input field of the flight booking widget to specify a destination starting with 'LOS'."
+      }
+    },
+    {
+      "id": "step-011",
+      "sourceTrace": {
+        "stepIndex": 11,
+        "rawAction": "LClick at"
+      },
+      "intent": "The user previously typed 'LOS' into the 'To' field, and the autocomplete dropdown now shows Los Angeles (LAX) as the top suggestion along with San Carlos Bariloche and San Martin De Los An. The red X is placed precisely on the 'Los Angeles, United States of America – Los Angeles / Tom Bradley International Airport (LAX)' option. Clicking this option will confirm Los Angeles (LAX) as the destination, mirroring the earlier step where the user selected Singapore Changi Airport for the 'From' field. This is a click on a UI control (autocomplete dropdown item) within the booking widget canvas, intended to lock in the destination city before proceeding to the flight search.",
+      "evidence": {
+        "observation": "Cropped image shows a close-up of the Qatar Airways 'To' field autocomplete dropdown. The 'To' text input field contains 'Los' with a blinking text cursor. A semitransparent red 'X' is centered on the first dropdown suggestion 'Los Angeles, United States of America – Los Angeles / Tom Bradley International Airport' (airport code LAX on the right), which has an airplane icon on the left. Below it, a second suggestion 'San Carlos Bariloche, Argentina – San Carlos De Barilochey Airport' is partially visible. The full-screen context shows the Qatar Airways homepage booking widget with 'Book a flight' active, 'Return' selected, 'From' filled with 'Singapore SIN', 'To' containing 'Los', Departure 12 Sep 2025, Return 19 Sep 2025, and 1 Passenger Economy. The autocomplete dropdown displays three matching Los-typed destinations. The page also shows 'Start planning your next trip' with content cards for 'Explore our offers', '17 weekly flights to Dublin from 2 December 2025', 'Dine and earn Avios with our partners', and 'Elevate your experience'.",
+        "thought": "The user previously typed 'LOS' into the 'To' field, and the autocomplete dropdown now shows Los Angeles (LAX) as the top suggestion along with San Carlos Bariloche and San Martin De Los An. The red X is placed precisely on the 'Los Angeles, United States of America – Los Angeles / Tom Bradley International Airport (LAX)' option. Clicking this option will confirm Los Angeles (LAX) as the destination, mirroring the earlier step where the user selected Singapore Changi Airport for the 'From' field. This is a click on a UI control (autocomplete dropdown item) within the booking widget canvas, intended to lock in the destination city before proceeding to the flight search.",
+        "action": "Click the 'Los Angeles, United States of America – Los Angeles / Tom Bradley International Airport (LAX)' option in the autocomplete dropdown below the 'To' field to set Los Angeles (LAX) as the destination location.",
+        "expectation": "The autocomplete dropdown will close, the 'To' field will be populated with 'Los Angeles, United States of America – Los Angeles / Tom Bradley International Airport' (LAX), and the booking widget will be fully populated with Singapore SIN as origin and Los Angeles LAX as destination, ready for the user to click 'Search flights'.",
+        "screenshot": "source/screenshots/24.818s.jpg",
+        "crop": "source/screenshots/24.818s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'Los Angeles, United States of America – Los Angeles / Tom Bradley International Airport (LAX)' option in the autocomplete dropdown below the 'To' field to set Los Angeles (LAX) as the destination location"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'Los Angeles, United States of America – Los Angeles / Tom Bradley International Airport (LAX)' option in the autocomplete dropdown below the 'To' field to set Los Angeles (LAX) as the destination location."
+      }
+    },
+    {
+      "id": "step-012",
+      "sourceTrace": {
+        "stepIndex": 12,
+        "rawAction": "LClick at"
+      },
+      "intent": "The semitransparent red 'X' is precisely centered on the 'One way' radio button label in the trip-type selector. The booking widget currently has 'Return' selected with both departure (12 Sep) and return (19 Sep) dates populated for a Singapore → Los Angeles search. The user is now clicking the 'One way' radio button, which is a UI control change that will switch the trip type from a round-trip to a one-way journey. This is consistent with a flight search workflow adjustment where the user has decided they only need a one-way ticket rather than a return. Clicking this radio will toggle the selection, hide the 'Return' date field, and clear any return-date value.",
+      "evidence": {
+        "observation": "Cropped image shows a close-up of the Qatar Airways booking widget trip-type selector. The 'Book a flight' tab is active at the top with a purple airplane icon. Three radio options are visible: 'Return' (currently selected, shown with a filled purple dot), 'One way' (with a semitransparent red 'X' centered on it, indicating the click target), and 'Multi-city' (further right, unselected). Below the radio row, the 'From' field is filled with 'Singapore SIN' and the top of the 'To' field is just becoming visible. The full-screen context shows the Qatar Airways homepage (qatarairways.com/en-sg/homepage.html) in Chrome. The booking widget is now fully populated with 'From: Singapore SIN', 'To: Los Angeles LAX', 'Departure 12 Sep 2025' (highlighted in purple), 'Return 19 Sep 2025' (highlighted in purple), and '1 Passenger Economy'. An open date-picker overlay is displayed over the page showing the September 2025 and October 2025 calendars with the 12th of September and 19th of September highlighted as selected. A 'Book using Avios' checkbox is visible on the left and a purple 'Search flights' button on the right. The 'Start planning your next trip' content area is visible below.",
+        "thought": "The semitransparent red 'X' is precisely centered on the 'One way' radio button label in the trip-type selector. The booking widget currently has 'Return' selected with both departure (12 Sep) and return (19 Sep) dates populated for a Singapore → Los Angeles search. The user is now clicking the 'One way' radio button, which is a UI control change that will switch the trip type from a round-trip to a one-way journey. This is consistent with a flight search workflow adjustment where the user has decided they only need a one-way ticket rather than a return. Clicking this radio will toggle the selection, hide the 'Return' date field, and clear any return-date value.",
+        "action": "Click the 'One way' radio button in the trip-type selector of the 'Book a flight' widget to change the trip type from 'Return' to 'One way'.",
+        "expectation": "The 'One way' radio button becomes selected (filled purple dot), the 'Return' radio deselects, the 'Return' date field is hidden or cleared from the booking widget, the open date-picker overlay adjusts to show only a single departure-date selection, and the widget reflects a one-way search from Singapore (SIN) to Los Angeles (LAX) on 12 Sep 2025 with 1 Economy passenger.",
+        "screenshot": "source/screenshots/26.861s.jpg",
+        "crop": "source/screenshots/26.861s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'One way' radio button in the trip-type selector of the 'Book a flight' widget to change the trip type from 'Return' to 'One way'"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'One way' radio button in the trip-type selector of the 'Book a flight' widget to change the trip type from 'Return' to 'One way'."
+      }
+    },
+    {
+      "id": "step-013",
+      "sourceTrace": {
+        "stepIndex": 13,
+        "rawAction": "LClick at"
+      },
+      "intent": "The semitransparent red 'X' is precisely centered on the 'Departure 12 Sep 2025' date value within the booking widget. The trip type was just changed from 'Return' to 'One way' in the previous step, and the return-date field is no longer present. The user is now clicking on the Departure date field, which is a click on a UI control (a date input field) within the booking widget canvas. This action will open a date-picker overlay that allows the user to view or change the selected departure date (12 September 2025) for the one-way flight search from Singapore (SIN) to Los Angeles (LAX). The immediate UI response will be the opening of the date-picker calendar overlay focused on the departure date selection.",
+      "evidence": {
+        "observation": "Cropped image shows a close-up of a 'Departure' field in the Qatar Airways booking widget, displaying the date value '12 Sep 2025' in bold dark text beneath a small 'Departure' label. A semitransparent red 'X' is centered on the date value, marking it as the click target. The full-screen image shows the Qatar Airways homepage in Chrome (qatarairways.com/en-sg/homepage.html). The 'Book a flight' widget is active at the top with 'One way' now selected (filled purple radio dot, while 'Return' and 'Multi-city' are unselected). The widget fields are populated with: 'From: Singapore SIN', 'To: Los Angeles LAX', 'Departure 12 Sep 2025' (no return date field is visible, consistent with one-way mode), and 'Passengers / Class: 1 Passenger Economy'. Below the fields are a 'Book using Avios' checkbox, an '+ Add promo code' link, and a purple 'Search flights' button. The page below shows the 'Start planning your next trip' section with four content cards: 'Explore our offers', '17 weekly flights to Dublin from 2 December 2025', 'Dine and earn Avios with our partners', and 'Elevate your experience'. The Windows taskbar is visible at the bottom with system tray showing 26°C, ENG, 8:54 AM, 9/12/2025.",
+        "thought": "The semitransparent red 'X' is precisely centered on the 'Departure 12 Sep 2025' date value within the booking widget. The trip type was just changed from 'Return' to 'One way' in the previous step, and the return-date field is no longer present. The user is now clicking on the Departure date field, which is a click on a UI control (a date input field) within the booking widget canvas. This action will open a date-picker overlay that allows the user to view or change the selected departure date (12 September 2025) for the one-way flight search from Singapore (SIN) to Los Angeles (LAX). The immediate UI response will be the opening of the date-picker calendar overlay focused on the departure date selection.",
+        "action": "Click the 'Departure 12 Sep 2025' date field in the 'Book a flight' widget to open the date picker and adjust the departure date for the one-way flight.",
+        "expectation": "A date-picker overlay (calendar) opens on top of or below the Departure field, showing two consecutive months (likely September 2025 and October 2025), with 12 September 2025 highlighted as the currently selected one-way departure date. The 'Return' date selection is absent since 'One way' is active, allowing the user to pick a new single departure date for the Singapore → Los Angeles search.",
+        "screenshot": "source/screenshots/27.861s.jpg",
+        "crop": "source/screenshots/27.861s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'Departure 12 Sep 2025' date field in the 'Book a flight' widget to open the date picker and adjust the departure date for the one-way flight"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'Departure 12 Sep 2025' date field in the 'Book a flight' widget to open the date picker and adjust the departure date for the one-way flight."
+      }
+    },
+    {
+      "id": "step-014",
+      "sourceTrace": {
+        "stepIndex": 14,
+        "rawAction": "LClick at"
+      },
+      "intent": "The semitransparent red 'X' is precisely centered on the date '15' in the September 2025 calendar, which is highlighted in purple with the price '1,453' displayed below it. The current departure date shown in the widget is '12 Sep 2025' (priced at 1,556). The user is clicking on September 15, likely because it offers a cheaper fare (1,453 vs 1,556). Since 'One way' is the selected trip type, only the departure date needs to be chosen. This is a click on a date cell within the date-picker canvas (an object/control within the calendar widget), intended to change the departure date from September 12 to September 15 for the Singapore → Los Angeles one-way flight.",
+      "evidence": {
+        "observation": "Cropped image shows a close-up of a date-picker calendar displaying September 2025 and October 2025. The semitransparent red 'X' is centered on the date '15' in the September 2025 calendar (Monday column), which is highlighted with a solid purple background and white text, and shows the price '1,453' beneath it. Surrounding dates visible include 8, 9, 10, 11, 12 (currently selected, with price 1,556), 13, 14 in the same week, and the following week shows 22, 23 with prices 1,252 and 1,257. A left navigation arrow is visible to the left of the calendar. The full-screen image shows the Qatar Airways booking widget in Chrome with 'Book a flight' active, 'One way' selected (filled purple radio dot), 'From: Singapore SIN', 'To: Los Angeles LAX', 'Departure 12 Sep 2025' (highlighted in purple with purple border), and '1 Passenger Economy'. The open date-picker overlay shows the September 2025 and October 2025 calendars with day-of-week headers (Mon-Sun) and dates with their corresponding prices below in small text. At the bottom of the picker are a 'My dates are flexible' checkbox, 'From SGD 1556.9 per adult' text, a 'Clear all' button, and a purple 'Continue' button. The page below shows 'Start planning your next trip' content cards.",
+        "thought": "The semitransparent red 'X' is precisely centered on the date '15' in the September 2025 calendar, which is highlighted in purple with the price '1,453' displayed below it. The current departure date shown in the widget is '12 Sep 2025' (priced at 1,556). The user is clicking on September 15, likely because it offers a cheaper fare (1,453 vs 1,556). Since 'One way' is the selected trip type, only the departure date needs to be chosen. This is a click on a date cell within the date-picker canvas (an object/control within the calendar widget), intended to change the departure date from September 12 to September 15 for the Singapore → Los Angeles one-way flight.",
+        "action": "Click the date '15' in the September 2025 calendar of the date-picker overlay to change the departure date from 12 September 2025 to 15 September 2025 for the one-way flight from Singapore (SIN) to Los Angeles (LAX).",
+        "expectation": "The date '15' becomes the new selected departure date in the calendar (solid purple background with white text), the previous selection '12' deselects, the 'Departure' field in the booking widget updates from '12 Sep 2025' to '15 Sep 2025', and the displayed fare updates to 'From SGD 1453.9 per adult' (or the equivalent 1,453 price). The date-picker remains open with the updated selection, ready for the user to click 'Continue' or further adjust.",
+        "screenshot": "source/screenshots/30.414s.jpg",
+        "crop": "source/screenshots/30.414s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "date '15' in the September 2025 calendar of the date-picker overlay to change the departure date from 12 September 2025 to 15 September 2025 for the one-way flight from Singapore (SIN) to Los Angeles (LAX)"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the date '15' in the September 2025 calendar of the date-picker overlay to change the departure date from 12 September 2025 to 15 September 2025 for the one-way flight from Singapore (SIN) to Los Angeles (LAX)."
+      }
+    },
+    {
+      "id": "step-015",
+      "sourceTrace": {
+        "stepIndex": 15,
+        "rawAction": "LClick at"
+      },
+      "intent": "The semitransparent red 'X' is precisely centered on the 'Continue' button within the date-picker overlay. The user has already changed the departure date from 12 Sep 2025 to 15 Sep 2025 (the cheaper fare of SGD 1,453.9 vs the original 1,556) for the one-way Singapore → Los Angeles flight. Clicking 'Continue' is the natural next step to confirm the new date selection, close the calendar overlay, and proceed toward the flight search results. This is a click on a UI control (an action button) within the date-picker widget.",
+      "evidence": {
+        "observation": "Cropped image shows a close-up of a pill-shaped, solid magenta/purple button labeled 'Continue' in white text. A semitransparent red 'X' is centered directly on the word 'Continue', marking it as the click target. To the left of the button, the right edge of a white 'My dates are flexible' checkbox is partially visible. The full-screen image shows the Qatar Airways 'Book a flight' widget in Chrome with the date-picker overlay still open. The 'One way' radio is selected (filled purple dot), and the fields show 'From: Singapore SIN', 'To: Los Angeles LAX', 'Departure 15 Sep 2025' (highlighted in purple with purple border), and '1 Passenger Economy'. The open calendar overlay shows September 2025 and October 2025 with September 15 highlighted in solid purple (white text), and at the bottom it reads 'From SGD 1453.9 per adult' next to a 'Clear all' button and the purple 'Continue' button (with a red recording dot at the top-right of the screen). The 'Start planning your next trip' content cards (Explore our offers, 17 weekly flights to Dublin from 2 December 2025, etc.) are visible behind the overlay.",
+        "thought": "The semitransparent red 'X' is precisely centered on the 'Continue' button within the date-picker overlay. The user has already changed the departure date from 12 Sep 2025 to 15 Sep 2025 (the cheaper fare of SGD 1,453.9 vs the original 1,556) for the one-way Singapore → Los Angeles flight. Clicking 'Continue' is the natural next step to confirm the new date selection, close the calendar overlay, and proceed toward the flight search results. This is a click on a UI control (an action button) within the date-picker widget.",
+        "action": "Click the 'Continue' button in the date-picker overlay to confirm the new departure date (15 September 2025) and proceed with the one-way flight search from Singapore (SIN) to Los Angeles (LAX).",
+        "expectation": "The date-picker overlay closes, the 'Departure' field in the booking widget retains '15 Sep 2025' as the selected one-way departure date, and the booking widget becomes ready to submit (or auto-advances) the flight search for the Singapore → Los Angeles route with 1 Economy passenger at the updated fare of SGD 1,453.9 per adult.",
+        "screenshot": "source/screenshots/31.726s.jpg",
+        "crop": "source/screenshots/31.726s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'Continue' button in the date-picker overlay to confirm the new departure date (15 September 2025) and proceed with the one-way flight search from Singapore (SIN) to Los Angeles (LAX)"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'Continue' button in the date-picker overlay to confirm the new departure date (15 September 2025) and proceed with the one-way flight search from Singapore (SIN) to Los Angeles (LAX)."
+      }
+    },
+    {
+      "id": "step-016",
+      "sourceTrace": {
+        "stepIndex": 16,
+        "rawAction": "LClick at"
+      },
+      "intent": "The semitransparent red 'X' is precisely centered on the 'Search flights' button in the booking widget. All required fields are now populated: trip type 'One way', From 'Singapore SIN', To 'Los Angeles LAX', Departure '15 Sep 2025', and '1 Passenger Economy'. The date-picker overlay was closed in the previous step after confirming the new departure date. The user is now submitting the search by clicking the 'Search flights' button, which is a UI control (an action button) within the booking widget canvas. This will trigger the flight search query for the configured one-way itinerary.",
+      "evidence": {
+        "observation": "Cropped image shows a close-up of a pill-shaped, solid magenta/burgundy button labeled 'Search flights' in white text. A semitransparent red 'X' is centered directly on the button, marking it as the click target. Above the button, the lower portion of the 'Passengers / Class' field is visible, showing the text 'Passenger Economy' with a small downward chevron, indicating a dropdown. The full-screen image shows the Qatar Airways homepage in Chrome with the 'Book a flight' widget active at the top. The widget has 'One way' selected (filled purple radio dot), with 'From: Singapore SIN', 'To: Los Angeles LAX', 'Departure 15 Sep 2025', and '1 Passenger Economy' populated. Below the fields are a 'Book using Avios' checkbox, an '+ Add promo code' link, and the purple 'Search flights' button (with a red recording dot at the top-right of the screen). The page below shows the 'Start planning your next trip' section with four content cards. The Windows taskbar is visible at the bottom.",
+        "thought": "The semitransparent red 'X' is precisely centered on the 'Search flights' button in the booking widget. All required fields are now populated: trip type 'One way', From 'Singapore SIN', To 'Los Angeles LAX', Departure '15 Sep 2025', and '1 Passenger Economy'. The date-picker overlay was closed in the previous step after confirming the new departure date. The user is now submitting the search by clicking the 'Search flights' button, which is a UI control (an action button) within the booking widget canvas. This will trigger the flight search query for the configured one-way itinerary.",
+        "action": "Click the 'Search flights' button in the 'Book a flight' widget to submit the one-way flight search from Singapore (SIN) to Los Angeles (LAX) for 1 Economy passenger departing on 15 September 2025.",
+        "expectation": "The browser navigates to the Qatar Airways flight search results page (or a loading/intermediate page), displaying available one-way flights from Singapore (SIN) to Los Angeles (LAX) for 15 September 2025 with fares and schedules. The booking widget on the homepage is replaced by or transitions to the results listing for the searched itinerary.",
+        "screenshot": "source/screenshots/33.400s.jpg",
+        "crop": "source/screenshots/33.400s.crop.jpg"
+      },
+      "route": {
+        "strategy": "tap",
+        "target": "'Search flights' button in the 'Book a flight' widget to submit the one-way flight search from Singapore (SIN) to Los Angeles (LAX) for 1 Economy passenger departing on 15 September 2025"
+      },
+      "fallback": {
+        "strategy": "vision",
+        "instruction": "Click the 'Search flights' button in the 'Book a flight' widget to submit the one-way flight search from Singapore (SIN) to Los Angeles (LAX) for 1 Economy passenger departing on 15 September 2025."
+      }
+    }
+  ]
+}
