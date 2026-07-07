@@ -32,6 +32,8 @@ interface ConvertOptions {
   project: string;
   goal: string;
   projectRoot: string;
+  traceGenerationCommand?: string;
+  flowExecutionCommand?: string;
 }
 
 function parseArgs(argv: string[]): ConvertOptions {
@@ -57,6 +59,8 @@ function parseArgs(argv: string[]): ConvertOptions {
     project,
     goal: options.get('goal') ?? '',
     projectRoot: options.get('project-root') ?? path.join('projects', project),
+    traceGenerationCommand: options.get('trace-generation-command'),
+    flowExecutionCommand: options.get('flow-execution-command'),
   };
 }
 
@@ -208,6 +212,23 @@ async function convert(options: ConvertOptions): Promise<string> {
       processedLogPath: path.posix.join('source', 'processed-log.json'),
       processedLogWithScreenshotsPath: path.posix.join('source', 'processed-log-sc.json'),
       screenshotsDir: path.posix.join('source', 'screenshots'),
+    },
+    commands: {
+      traceGeneration:
+        options.traceGenerationCommand ??
+        'uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets',
+      flowConversion: `npm run flow:convert:air`,
+      flowExecution: options.flowExecutionCommand ?? 'npm run flow:run:air',
+    },
+    modelUsage: {
+      traceGeneration: 'uses-model',
+      flowConversion: 'no-model',
+      flowExecution: 'uses-model',
+      notes: [
+        'ShowUI-Aloha Learn 生成 showui-trace.json 时会调用配置的 OpenAI 兼容模型。',
+        '当前 trace 到 midscene-flow.json 的转换为确定性规则映射，不调用模型。',
+        'runner 执行 flow 时会通过 Midscene computer use 调用视觉模型完成 aiInput、aiTap、aiAct、aiWaitFor 等操作。',
+      ],
     },
     steps: trace.trajectory.map((step, index) => buildStep(step, processedSteps[index])),
   };

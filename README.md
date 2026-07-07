@@ -129,6 +129,8 @@ npm run aloha:air
 npm run flow:convert:air
 ```
 
+这一步当前不调用模型，只做确定性规则映射。模型调用发生在 ShowUI-Aloha Learn 生成 trace 阶段，以及 Midscene runner 实际执行 flow 阶段。
+
 使用通用 runner 执行 Midscene flow：
 
 ```powershell

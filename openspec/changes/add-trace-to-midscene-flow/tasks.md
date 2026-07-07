@@ -38,3 +38,9 @@
 - [x] 6.1 更新 ShowUI-Aloha Learn 默认 prompt，要求 trace caption 字段值使用中文
 - [x] 6.2 更新 trace 生成时的最终提示，保持 JSON 字段名不变但要求字段值中文化
 - [x] 6.3 验证 prompt JSON 可解析，并确认 Python trace generator 语法检查通过
+
+## 7. 生成命令与模型使用记录
+
+- [x] 7.1 在 Midscene flow 类型中记录生成命令和各阶段模型使用情况
+- [x] 7.2 在 converter 输出的 `midscene-flow.json` 中写入 trace 生成、flow 转换和 flow 执行命令
+- [x] 7.3 在项目 README 中说明 trace 生成使用模型、flow 转换不使用模型、runner 执行使用 Midscene 视觉模型

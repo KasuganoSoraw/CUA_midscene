@@ -8,6 +8,21 @@
     "processedLogWithScreenshotsPath": "source/processed-log-sc.json",
     "screenshotsDir": "source/screenshots"
   },
+  "commands": {
+    "traceGeneration": "uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets",
+    "flowConversion": "npm run flow:convert:air",
+    "flowExecution": "npm run flow:run:air"
+  },
+  "modelUsage": {
+    "traceGeneration": "uses-model",
+    "flowConversion": "no-model",
+    "flowExecution": "uses-model",
+    "notes": [
+      "ShowUI-Aloha Learn 生成 showui-trace.json 时会调用配置的 OpenAI 兼容模型。",
+      "当前 trace 到 midscene-flow.json 的转换为确定性规则映射，不调用模型。",
+      "runner 执行 flow 时会通过 Midscene computer use 调用视觉模型完成 aiInput、aiTap、aiAct、aiWaitFor 等操作。"
+    ]
+  },
   "steps": [
     {
       "id": "step-001",

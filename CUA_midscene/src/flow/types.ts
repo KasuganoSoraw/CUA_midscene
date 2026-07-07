@@ -13,6 +13,8 @@ export interface MidsceneFlow {
   project: string;
   goal: string;
   source: MidsceneFlowSource;
+  commands?: MidsceneFlowCommands;
+  modelUsage?: MidsceneFlowModelUsage;
   steps: MidsceneFlowStep[];
 }
 
@@ -21,6 +23,19 @@ export interface MidsceneFlowSource {
   processedLogPath?: string;
   processedLogWithScreenshotsPath?: string;
   screenshotsDir?: string;
+}
+
+export interface MidsceneFlowCommands {
+  traceGeneration?: string;
+  flowConversion: string;
+  flowExecution?: string;
+}
+
+export interface MidsceneFlowModelUsage {
+  traceGeneration: 'uses-model' | 'no-model' | 'unknown';
+  flowConversion: 'uses-model' | 'no-model';
+  flowExecution: 'uses-model' | 'no-model' | 'depends-on-route';
+  notes?: string[];
 }
 
 export interface MidsceneFlowStep {

@@ -16,6 +16,35 @@
 - `source/processed-log-sc.json`：带截图引用的结构化操作日志。
 - `source/screenshots/`：ShowUI-Aloha Learn 抽取的全屏截图与 crop。
 
+## 生成命令与模型使用
+
+生成 ShowUI-Aloha trace：
+
+```powershell
+cd showui-aloha
+uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
+```
+
+这一步会调用 `showui-aloha/.env` 中配置的 OpenAI 兼容模型，用于从截图和操作日志生成语义 trace。
+
+生成 Midscene flow：
+
+```powershell
+cd CUA_midscene
+npm run flow:convert:air
+```
+
+这一步当前不调用模型，只进行确定性规则映射：读取 `source/showui-trace.json` 和 `source/processed-log-sc.json`，输出 `ir/midscene-flow.json`。
+
+执行 Midscene flow：
+
+```powershell
+cd CUA_midscene
+npm run flow:run:air
+```
+
+这一步会通过 Midscene computer use 调用视觉模型执行 `aiInput`、`aiTap`、`aiAct`、`aiWaitFor` 等操作。当前样例包含 `manual-review` 步骤，runner 会在执行前 fail fast。
+
 原始录制视频较大，不在该项目目录重复复制。当前来源为：
 
 ```text
