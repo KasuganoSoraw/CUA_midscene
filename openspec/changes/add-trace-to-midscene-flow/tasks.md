@@ -1,8 +1,8 @@
 ## 1. 项目目录与样例资产
 
-- [ ] 1.1 在 `CUA_midscene/projects/<project-name>/` 下建立 source、ir、generated、reports 的项目产物目录约定
-- [ ] 1.2 创建第一个样例项目目录，并放置或引用 ShowUI-Aloha air-ticket 示例 trace、processed log 和截图资源
-- [ ] 1.3 为样例项目补充 README，说明 source、IR、生成产物和报告的职责边界
+- [x] 1.1 在 `CUA_midscene/projects/<project-name>/` 下建立 source、ir、generated、reports 的项目产物目录约定
+- [x] 1.2 创建第一个样例项目目录，并放置或引用 ShowUI-Aloha air-ticket 示例 trace、processed log 和截图资源
+- [x] 1.3 为样例项目补充 README，说明 source、IR、生成产物和报告的职责边界
 
 ## 2. Midscene Flow IR 定义
 
