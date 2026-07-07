@@ -26,14 +26,16 @@ export interface MidsceneFlowSource {
 }
 
 export interface MidsceneFlowCommands {
+  recordingPreparation?: string;
   traceGeneration?: string;
-  flowConversion: string;
+  traceToFlowConversion: string;
   flowExecution?: string;
 }
 
 export interface MidsceneFlowModelUsage {
+  recordingPreparation: 'uses-model' | 'no-model' | 'unknown';
   traceGeneration: 'uses-model' | 'no-model' | 'unknown';
-  flowConversion: 'uses-model' | 'no-model';
+  traceToFlowConversion: 'uses-model' | 'no-model';
   flowExecution: 'uses-model' | 'no-model' | 'depends-on-route';
   notes?: string[];
 }

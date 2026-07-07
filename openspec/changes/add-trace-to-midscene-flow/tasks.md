@@ -44,3 +44,4 @@
 - [x] 7.1 在 Midscene flow 类型中记录生成命令和各阶段模型使用情况
 - [x] 7.2 在 converter 输出的 `midscene-flow.json` 中写入 trace 生成、flow 转换和 flow 执行命令
 - [x] 7.3 在项目 README 中说明 trace 生成使用模型、flow 转换不使用模型、runner 执行使用 Midscene 视觉模型
+- [x] 7.4 将命令记录改为分阶段语义，明确 `flow:convert:air` 是转换命令，`flow:run:air` 是执行命令

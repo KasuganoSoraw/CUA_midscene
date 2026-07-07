@@ -18,6 +18,14 @@
 
 ## 生成命令与模型使用
 
+准备录制资源：
+
+```powershell
+将 ShowUI-Aloha 录制视频和输入日志放入 showui-aloha\Aloha_Learn\projects\air_tickets\inputs
+```
+
+这一步只是整理录制输入，不调用模型。
+
 生成 ShowUI-Aloha trace：
 
 ```powershell
@@ -44,6 +52,8 @@ npm run flow:run:air
 ```
 
 这一步会通过 Midscene computer use 调用视觉模型执行 `aiInput`、`aiTap`、`aiAct`、`aiWaitFor` 等操作。当前样例包含 `manual-review` 步骤，runner 会在执行前 fail fast。
+
+注意：`npm run flow:run:air` 是执行命令，不是 trace 转换命令。trace 转换为 Midscene flow 的命令是 `npm run flow:convert:air`。
 
 原始录制视频较大，不在该项目目录重复复制。当前来源为：
 

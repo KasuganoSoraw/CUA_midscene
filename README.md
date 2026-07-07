@@ -137,6 +137,8 @@ npm run flow:convert:air
 npm run flow:run:air
 ```
 
+注意：`flow:run:air` 是执行 flow，不是转换 trace。整体链路中，`flow:convert:air` 才是 trace 到 `midscene-flow.json` 的转换命令。
+
 当前样例 flow 的第一步会被标记为 `manual-review`，runner 会在执行前 fail fast，避免把不明确的空白区域点击自动化。
 
 注意：这些脚本使用的是 Midscene 的 computer use 能力，操作真实桌面上的 Chrome。它们不依赖 browser-use，也不通过浏览器调试协议直接控制网页。

@@ -32,6 +32,7 @@ interface ConvertOptions {
   project: string;
   goal: string;
   projectRoot: string;
+  recordingPreparationCommand?: string;
   traceGenerationCommand?: string;
   flowExecutionCommand?: string;
 }
@@ -59,6 +60,7 @@ function parseArgs(argv: string[]): ConvertOptions {
     project,
     goal: options.get('goal') ?? '',
     projectRoot: options.get('project-root') ?? path.join('projects', project),
+    recordingPreparationCommand: options.get('recording-preparation-command'),
     traceGenerationCommand: options.get('trace-generation-command'),
     flowExecutionCommand: options.get('flow-execution-command'),
   };
@@ -214,19 +216,25 @@ async function convert(options: ConvertOptions): Promise<string> {
       screenshotsDir: path.posix.join('source', 'screenshots'),
     },
     commands: {
+      recordingPreparation:
+        options.recordingPreparationCommand ??
+        '将 ShowUI-Aloha 录制视频和输入日志放入 showui-aloha\\Aloha_Learn\\projects\\air_tickets\\inputs',
       traceGeneration:
         options.traceGenerationCommand ??
         'uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets',
-      flowConversion: `npm run flow:convert:air`,
+      traceToFlowConversion: 'npm run flow:convert:air',
       flowExecution: options.flowExecutionCommand ?? 'npm run flow:run:air',
     },
     modelUsage: {
+      recordingPreparation: 'no-model',
       traceGeneration: 'uses-model',
-      flowConversion: 'no-model',
+      traceToFlowConversion: 'no-model',
       flowExecution: 'uses-model',
       notes: [
+        '录制准备阶段只是放置录制资源，不调用模型。',
         'ShowUI-Aloha Learn 生成 showui-trace.json 时会调用配置的 OpenAI 兼容模型。',
         '当前 trace 到 midscene-flow.json 的转换为确定性规则映射，不调用模型。',
+        'npm run flow:run:air 是执行 Midscene flow 的命令，不是 trace 转换命令。',
         'runner 执行 flow 时会通过 Midscene computer use 调用视觉模型完成 aiInput、aiTap、aiAct、aiWaitFor 等操作。',
       ],
     },
