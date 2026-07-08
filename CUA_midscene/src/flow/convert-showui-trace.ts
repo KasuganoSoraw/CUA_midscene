@@ -118,36 +118,56 @@ function extractQuotedValue(action: string): string | undefined {
   return match?.[1];
 }
 
+function extractChineseInputValue(action: string): string | undefined {
+  const match = action.match(/(?:输入|键入|录入)(?:文本|文字|内容)?\s*([^。；，,.;]+)/);
+  return match?.[1]?.trim();
+}
+
 function targetFromAction(action: string): string {
   return action
     .replace(/^Click\s+/i, '')
+    .replace(/^点击\s*/i, '')
     .replace(/^the\s+/i, '')
     .replace(/\.$/, '')
+    .replace(/。$/, '')
     .trim();
 }
 
-function routeStep(action: string, expectation: string): MidsceneFlowRoute {
-  if (/press\s+enter/i.test(action)) {
+function routeStep(action: string, expectation: string, rawAction: string | undefined): MidsceneFlowRoute {
+  if (/press\s+enter/i.test(rawAction ?? action) || /(?:按|按下).*(?:enter|回车)/i.test(action)) {
     return { strategy: 'keyboard', keyName: 'Enter' };
   }
 
-  if (/^type\s+/i.test(action)) {
+  if (/^type\s*:/i.test(rawAction ?? '')) {
     return {
       strategy: 'input',
       target: targetFromAction(action),
-      value: extractQuotedValue(action) ?? action.replace(/^Type\s+/i, '').trim(),
+      value: (rawAction ?? '').replace(/^Type\s*:\s*/i, '').trim(),
       mode: 'replace',
     };
   }
 
-  if (/^click\s+/i.test(action)) {
+  if (/^click\s+/i.test(action) || /^点击/.test(action)) {
     if (/date-picker|calendar|dropdown|button|field|option|radio|search result|link/i.test(action)) {
+      return { strategy: 'tap', target: targetFromAction(action) };
+    }
+
+    if (/日期|日历|下拉|按钮|输入框|字段|选项|建议项|单选|搜索结果|链接/.test(action)) {
       return { strategy: 'tap', target: targetFromAction(action) };
     }
 
     return {
       strategy: 'act',
       instruction: action,
+    };
+  }
+
+  if (/^type\s+/i.test(action) || /(?:输入|键入|录入)/.test(action)) {
+    return {
+      strategy: 'input',
+      target: targetFromAction(action),
+      value: extractQuotedValue(action) ?? extractChineseInputValue(action) ?? action.replace(/^Type\s+/i, '').trim(),
+      mode: 'replace',
     };
   }
 
@@ -184,7 +204,7 @@ function buildStep(traceStep: ShowuiTraceStep, processedStep: ProcessedLogStep |
   const observation = caption.observation ?? '';
   const action = caption.action ?? '';
   const expectation = caption.expectation ?? '';
-  const route = routeStep(action, expectation);
+  const route = routeStep(action, expectation, processedStep?.action);
   const evidence: MidsceneFlowEvidence = {
     observation,
     thought: caption.think,
