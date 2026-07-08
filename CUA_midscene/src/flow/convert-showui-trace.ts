@@ -8,6 +8,7 @@ import {
   type MidsceneFlowStep,
   type MidsceneTraceOperation,
 } from './types.js';
+import { deriveInputLocatePrompt } from './input-locate-prompt.js';
 
 interface ShowuiTrace {
   trajectory: ShowuiTraceStep[];
@@ -27,6 +28,7 @@ interface ShowuiTraceStep {
 interface ShowuiTraceOperation {
   type?: string;
   prompt?: string;
+  locatePrompt?: string;
   value?: string;
   key?: string;
   condition?: string;
@@ -148,6 +150,7 @@ function normalizeTraceOperation(operation: ShowuiTraceOperation | undefined): M
 
   const type = operation.type.trim().toLowerCase();
   const prompt = operation.prompt?.trim();
+  const locatePrompt = operation.locatePrompt?.trim();
   const value = operation.value?.trim();
   const key = operation.key?.trim();
   const condition = operation.condition?.trim();
@@ -157,7 +160,7 @@ function normalizeTraceOperation(operation: ShowuiTraceOperation | undefined): M
   }
 
   if (type === 'input' && prompt && value) {
-    return { type: 'input', prompt, value };
+    return { type: 'input', prompt, locatePrompt: locatePrompt ?? deriveInputLocatePrompt(prompt), value };
   }
 
   if (type === 'keyboard' && key) {
@@ -181,6 +184,7 @@ function routeFromOperation(operation: MidsceneTraceOperation | undefined): Mids
       return {
         strategy: 'input',
         prompt: operation.prompt,
+        locatePrompt: operation.locatePrompt ?? deriveInputLocatePrompt(operation.prompt),
         value: operation.value,
         mode: 'replace',
         inputMethod: 'keyboard-action',
@@ -201,6 +205,7 @@ function routeStep(action: string, expectation: string, rawAction: string | unde
     return {
       strategy: 'input',
       prompt: action,
+      locatePrompt: deriveInputLocatePrompt(action),
       value: (rawAction ?? '').replace(/^Type\s*:\s*/i, '').trim(),
       mode: 'replace',
       inputMethod: 'keyboard-action',
@@ -226,6 +231,7 @@ function routeStep(action: string, expectation: string, rawAction: string | unde
     return {
       strategy: 'input',
       prompt: action,
+      locatePrompt: deriveInputLocatePrompt(action),
       value: extractQuotedValue(action) ?? extractChineseInputValue(action) ?? action.replace(/^Type\s+/i, '').trim(),
       mode: 'replace',
       inputMethod: 'keyboard-action',

@@ -34,6 +34,7 @@
 - **WHEN** trace step 包含结构化 `caption.operation`
 - **THEN** converter SHALL 优先使用 `operation.type` 选择 Midscene 执行动作
 - **AND** converter SHALL 将 `operation.prompt` 作为对应 Midscene 动作的 prompt 来源
+- **AND** 当 `operation.type` 为 `input` 时，converter SHALL 将 `operation.locatePrompt` 作为目标输入框定位来源
 - **AND** converter SHALL NOT 通过扫描 `caption.action` 中的自然语言关键词作为主路径生成 route
 
 ### Requirement: Flow step 保留源证据
@@ -50,7 +51,8 @@
 
 #### Scenario: 确定性文本输入被路由
 - **WHEN** trace step 明确表示向已知字段输入文本
-- **THEN** 转换后的 step SHALL 使用 `input` strategy，并携带字段意图和文本值
+- **THEN** 转换后的 step SHALL 使用 `input` strategy，并携带完整动作 prompt、目标输入框 locatePrompt 和文本值
+- **AND** `locatePrompt` SHALL 只描述输入框目标，不包含要输入的文本值，也不包含“输入/键入/录入”等动作词
 
 #### Scenario: 语义点击被路由
 - **WHEN** trace step 明确表示点击一个可见 UI 目标
@@ -76,6 +78,7 @@
 #### Scenario: Runner 使用键盘事件执行文本输入
 - **WHEN** runner 执行 `input` strategy
 - **THEN** 它 SHALL 调用 Midscene 自定义 `KeyboardTypeText` action
+- **AND** runner SHALL 将 input route 的 `locatePrompt` 传给 `KeyboardTypeText` 的 `locate` 字段
 - **AND** `KeyboardTypeText` SHALL 通过 `locate` 字段复用 Midscene 定位管线来定位目标输入区域
 - **AND** 它 SHALL 通过键盘事件输入文本
 - **AND** 它 SHALL NOT 使用依赖剪贴板粘贴的 `aiInput` 作为 input route 的执行路径

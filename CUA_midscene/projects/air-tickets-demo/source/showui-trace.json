@@ -23,6 +23,7 @@
         "operation": {
           "type": "input",
           "prompt": "在 Chrome 地址栏/搜索栏中输入 {{value}}",
+          "locatePrompt": "Chrome 地址栏/搜索栏",
           "value": "QATAR AIRWAYS"
         }
       }
@@ -103,6 +104,7 @@
         "operation": {
           "type": "input",
           "prompt": "在 Book a flight 预订组件的 From（出发地）输入框中输入 {{value}}",
+          "locatePrompt": "Book a flight 预订组件的 From（出发地）输入框",
           "value": "SINGAPORE"
         }
       }
@@ -130,6 +132,7 @@
         "operation": {
           "type": "input",
           "prompt": "在 Book a flight 预订组件的 To（目的地）输入框中继续输入 {{value}}，以进一步过滤到 Los/Lagos 等匹配项",
+          "locatePrompt": "Book a flight 预订组件的 To（目的地）输入框",
           "value": "LOS"
         }
       }

@@ -70,6 +70,7 @@ export interface MidsceneTraceClickOperation {
 export interface MidsceneTraceInputOperation {
   type: 'input';
   prompt: string;
+  locatePrompt?: string;
   value: string;
 }
 
@@ -106,6 +107,7 @@ export interface MidsceneKeyboardRoute {
 export interface MidsceneInputRoute {
   strategy: 'input';
   prompt: string;
+  locatePrompt: string;
   value: string;
   mode?: 'replace' | 'append' | 'typeOnly';
   inputMethod?: 'keyboard-action';

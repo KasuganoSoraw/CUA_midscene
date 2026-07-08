@@ -48,7 +48,7 @@ CUA/
     ↓
 ShowUI-Aloha Learn
     ↓
-结构化操作日志 / trace（含 operation prompt）
+结构化操作日志 / trace（含 operation prompt、locatePrompt）
     ↓
 转换为 Midscene flow IR
     ↓
@@ -122,9 +122,9 @@ npm run flow:run -- --project air-tickets-demo
 
 注意：`flow:run` 是执行 flow，不是转换 trace。整体链路中，`flow:convert` 才是 trace 到 `midscene-flow.json` 的转换命令。新增项目时不需要再新增 npm script，只需要替换 `--project <project-name>`；如果目标说明变化，同时传入新的 `--goal`。
 
-当前样例 flow 会保留 trace 中的 `operation.prompt`，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
+当前样例 flow 会保留 trace 中的 `operation.prompt`。对于文本输入，trace 还必须提供只描述输入框目标的 `operation.locatePrompt`，converter 会把它写入 input route，runner 按 route 顺序执行。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
 
-执行阶段的文本输入不使用 Midscene 内置 `aiInput`。runner 会调用自定义 `KeyboardTypeText` action，并通过该 action 的 `locate` 字段复用 Midscene 定位管线，再用键盘事件逐键输入，避免在堡垒机或远程桌面中依赖外部剪贴板。
+执行阶段的文本输入不使用 Midscene 内置 `aiInput`。runner 会调用自定义 `KeyboardTypeText` action，把 input route 的 `locatePrompt` 传给该 action 的 `locate` 字段复用 Midscene 定位管线，再用键盘事件逐键输入，避免在堡垒机或远程桌面中依赖外部剪贴板。
 
 注意：执行阶段使用的是 Midscene 的 computer use 能力，操作真实桌面应用。它不依赖 browser-use，也不通过浏览器调试协议直接控制网页。
 
@@ -152,7 +152,7 @@ uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 - 初始化 Midscene computer use 实验工程。
 - 配置火山 Ark OpenAI 兼容接口。
 - 引入 ShowUI-Aloha，并跑通 learn 阶段的 trace 生成。
-- 初步打通 ShowUI-Aloha trace 到 Midscene flow 的转换链路，converter 优先消费 trace 中的 `operation.prompt`。
+- 初步打通 ShowUI-Aloha trace 到 Midscene flow 的转换链路，converter 优先消费 trace 中的 `operation.prompt`，并在 input route 中使用 `operation.locatePrompt` 定位输入框。
 - 新增通用 runner，能够读取 `midscene-flow.json` 并按 route 调用 Midscene computer use。
 - 将 input route 改为 Midscene 自定义 `KeyboardTypeText` action 执行，避免剪贴板输入。
 

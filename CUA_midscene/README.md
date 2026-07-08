@@ -1,6 +1,6 @@
 # CUA Midscene
 
-该目录是 CUA 项目的主执行器与转换工具目录，负责把 ShowUI-Aloha Learn 产物转换为 Midscene flow，并通过 Midscene computer use 执行。转换时优先消费 trace 中的 `operation.prompt`，将其作为 Midscene 动作 prompt。
+该目录是 CUA 项目的主执行器与转换工具目录，负责把 ShowUI-Aloha Learn 产物转换为 Midscene flow，并通过 Midscene computer use 执行。转换时优先消费 trace 中的 `operation.prompt`，将其作为 Midscene 动作 prompt；对于 input 操作，还会消费 `operation.locatePrompt` 作为输入框定位 prompt。
 
 这里不使用 browser-use、Playwright、Puppeteer 或 CDP。后续面向堡垒机、远程桌面和企业内网页系统的执行能力，都应围绕 Midscene computer use 展开。
 
@@ -37,8 +37,8 @@ projects/<project-name>/
 `src/` 保存工具链代码，当前主要包括：
 
 - `src/flow/types.ts`：Midscene flow IR 类型定义。
-- `src/flow/convert-showui-trace.ts`：将 ShowUI-Aloha trace 转换为 `midscene-flow.json`，优先把 `caption.operation.prompt` 映射为 route prompt。
-- `src/flow/run-midscene-flow.ts`：读取 `midscene-flow.json`，并通过 route prompt 调用 Midscene computer use。
+- `src/flow/convert-showui-trace.ts`：将 ShowUI-Aloha trace 转换为 `midscene-flow.json`，优先把 `caption.operation.prompt` 映射为 route prompt，并把 input 的 `caption.operation.locatePrompt` 映射为 route locatePrompt。
+- `src/flow/run-midscene-flow.ts`：读取 `midscene-flow.json`，并通过 route prompt / locatePrompt 调用 Midscene computer use。
 - `src/flow/keyboard-type-action.ts`：注册 Midscene 自定义 `KeyboardTypeText` action，通过键盘事件输入文本，不使用剪贴板。
 - `src/env.ts`、`src/check-env.ts`：本地环境检查。
 
@@ -71,12 +71,12 @@ npm run flow:run -- --project <project-name>
 
 注意：`flow:run` 是执行命令，不是 trace 转换命令。trace 到 `midscene-flow.json` 的转换命令是 `flow:convert`。
 
-当前样例 flow 会保留 trace 中的 `operation.prompt`，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
+当前样例 flow 会保留 trace 中的 `operation.prompt`。对于文本输入，trace 还必须提供只描述输入框目标的 `operation.locatePrompt`，converter 会把它写入 input route。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
 
 文本输入的执行方式：
 
 - `input` route 不调用 Midscene 内置 `aiInput`，因为该能力在 computer use 底层可能依赖剪贴板粘贴。
-- runner 会调用自定义 `KeyboardTypeText` action，并通过该 action 的 `locate` 字段复用 Midscene 定位管线。
+- runner 会调用自定义 `KeyboardTypeText` action，并把 route 的 `locatePrompt` 传给该 action 的 `locate` 字段复用 Midscene 定位管线。
 - `KeyboardTypeText` 当前只承诺 ASCII 键盘输入；遇到中文或未支持字符会直接失败，不做剪贴板兜底。
 
 验证键盘输入映射：

@@ -61,6 +61,39 @@ class RetryTraceGenerator(TraceGenerator):
 
 
 class TraceGeneratorOperationTest(unittest.TestCase):
+    def test_sanitize_operation_preserves_input_locate_prompt(self):
+        previous_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                prompt_path = root / "default_prompt.json"
+                prompt_path.write_text(json.dumps({"Base Prompt": ""}, ensure_ascii=False), encoding="utf-8")
+
+                generator = StubTraceGenerator(default_prompt_path=str(prompt_path), api_provider="openai")
+
+                self.assertEqual(
+                    {
+                        "type": "input",
+                        "prompt": "在 Chrome 地址栏/搜索栏中输入 {{value}}",
+                        "locatePrompt": "Chrome 地址栏/搜索栏",
+                        "value": "QATAR AIRWAYS",
+                    },
+                    generator._sanitize_operation(
+                        {
+                            "type": "Input",
+                            "prompt": " 在 Chrome 地址栏/搜索栏中输入 {{value}} ",
+                            "locatePrompt": " Chrome 地址栏/搜索栏 ",
+                            "value": " QATAR AIRWAYS ",
+                        }
+                    ),
+                )
+        finally:
+            if previous_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = previous_key
+
     def test_generate_trace_preserves_operation_field(self):
         previous_key = os.environ.get("OPENAI_API_KEY")
         os.environ["OPENAI_API_KEY"] = "test-key"

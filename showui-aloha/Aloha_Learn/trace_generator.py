@@ -91,7 +91,7 @@ class TraceGenerator:
             op_type = "unknown"
 
         sanitized: Dict[str, Any] = {"type": op_type}
-        for key in ("prompt", "value", "key", "condition"):
+        for key in ("prompt", "locatePrompt", "value", "key", "condition"):
             value = operation.get(key)
             if isinstance(value, str) and value.strip():
                 sanitized[key] = value.strip()

@@ -89,7 +89,7 @@ function describeRoute(step: MidsceneFlowStep): string {
     case 'keyboard':
       return `${step.id} keyboard ${route.keyName}`;
     case 'input':
-      return `${step.id} input KeyboardTypeText ${renderPrompt(route.prompt, route.value)} = ${route.value}`;
+      return `${step.id} input KeyboardTypeText locate "${route.locatePrompt}" -> ${renderPrompt(route.prompt, route.value)} = ${route.value}`;
     case 'tap':
       return `${step.id} tap ${route.prompt}`;
     case 'act':
@@ -113,7 +113,7 @@ async function executeStep(agent: ComputerAgent, step: MidsceneFlowStep): Promis
       return;
     case 'input':
       await agent.callActionInActionSpace('KeyboardTypeText', {
-        locate: { prompt: renderPrompt(route.prompt, route.value) },
+        locate: { prompt: route.locatePrompt },
         value: route.value,
         mode: route.mode ?? 'replace',
       });

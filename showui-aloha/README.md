@@ -9,7 +9,7 @@
 - 读取录制产生的视频和输入日志。
 - 解析鼠标、键盘、窗口切换等原始事件。
 - 从录制视频中抽取关键截图和局部 crop。
-- 调用 OpenAI 兼容接口生成语义化 trace，并为每一步输出面向 Midscene 的最小 `operation` 动作结构。
+- 调用 OpenAI 兼容接口生成语义化 trace，并为每一步输出面向 Midscene 的最小 `operation` 动作结构；input 操作需要同时输出完整动作 `prompt` 和只用于定位输入框的 `locatePrompt`。
 
 ## 已移除的能力
 
@@ -56,4 +56,4 @@ uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 - `{project}_processed_log_sc.json`
 - `{project}_trace.json`
 
-这些产物当前用于分析和后续转换实验，不作为最终执行入口。其中 trace 会包含面向 Midscene 的最小 `operation` 动作结构，后续由 `CUA_midscene` 转换为 `midscene-flow.json`。
+这些产物当前用于分析和后续转换实验，不作为最终执行入口。其中 trace 会包含面向 Midscene 的最小 `operation` 动作结构，后续由 `CUA_midscene` 转换为 `midscene-flow.json`。对于 input 操作，`operation.prompt` 表示完整输入动作，`operation.locatePrompt` 表示目标输入框，两者不能混用。
