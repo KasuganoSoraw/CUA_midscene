@@ -11,7 +11,7 @@
 
 ## Source 产物
 
-- `source/showui-trace.json`：ShowUI-Aloha Learn 生成的语义 trace。
+- `source/showui-trace.json`：ShowUI-Aloha Learn 生成的语义 trace，包含 Observation、Think、Action、Expectation 和面向 Midscene 的 `operation` 动作结构。
 - `source/processed-log.json`：录制输入日志经过合并后的结构化操作日志。
 - `source/processed-log-sc.json`：带截图引用的结构化操作日志。
 - `source/screenshots/`：ShowUI-Aloha Learn 抽取的全屏截图与 crop。
@@ -42,7 +42,7 @@ cd CUA_midscene
 npm run flow:convert -- --project air-tickets-demo --goal "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
 ```
 
-这一步当前不调用模型，只进行确定性规则映射：读取 `source/showui-trace.json` 和 `source/processed-log-sc.json`，输出 `ir/midscene-flow.json`。
+这一步当前不调用模型，只进行确定性映射：读取 `source/showui-trace.json` 中的 `operation.prompt` 和 `source/processed-log-sc.json` 中的截图引用，输出 `ir/midscene-flow.json`。
 
 执行 Midscene flow：
 
@@ -51,7 +51,7 @@ cd CUA_midscene
 npm run flow:run -- --project air-tickets-demo
 ```
 
-这一步会通过 Midscene computer use 调用视觉模型执行 `aiInput`、`aiTap`、`aiAct`、`aiWaitFor` 等操作。当前样例会保留录制中的 click、type、keyboard 等动作，并按 route 顺序执行。
+这一步会通过 Midscene computer use 调用视觉模型执行 `aiInput`、`aiTap`、`aiAct`、`aiWaitFor` 等操作。当前样例会使用 flow 中的 route prompt，并按 route 顺序执行。
 
 注意：`npm run flow:run -- --project air-tickets-demo` 是执行命令，不是 trace 转换命令。trace 转换为 Midscene flow 的命令是 `npm run flow:convert -- --project air-tickets-demo --goal "..."`。
 

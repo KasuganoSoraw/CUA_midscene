@@ -39,7 +39,7 @@ CUA/
 - 生成结构化操作日志。
 - 生成可供后续模型理解的 trace，并在 trace 中输出面向 Midscene 的最小 `operation` 动作结构。
 
-本项目暂不计划把 ShowUI-Aloha 作为最终执行器。后续会基于它生成的结构化日志和 trace，转换成 Midscene 可用的 computer use 操作脚本或中间表示。这部分转换能力目前待实现。
+本项目暂不计划把 ShowUI-Aloha 作为最终执行器。当前已具备从 ShowUI-Aloha trace 转换为 Midscene flow IR 的初版能力，后续会继续基于这些结构化信息生成更快的固化脚本，并在脚本失败时回退到 Midscene 视觉操作。
 
 ## 总体流程设想
 
@@ -50,7 +50,7 @@ ShowUI-Aloha Learn
     ↓
 结构化操作日志 / trace（含 operation prompt）
     ↓
-转换为 Midscene 可执行流程（待实现）
+转换为 Midscene flow IR
     ↓
 Midscene computer use 执行
     ↓
@@ -122,7 +122,7 @@ npm run flow:run -- --project air-tickets-demo
 
 注意：`flow:run` 是执行 flow，不是转换 trace。整体链路中，`flow:convert` 才是 trace 到 `midscene-flow.json` 的转换命令。新增项目时不需要再新增 npm script，只需要替换 `--project <project-name>`；如果目标说明变化，同时传入新的 `--goal`。
 
-当前样例 flow 会保留录制中的 click、type、keyboard 等动作，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的非点击步骤仍会被标记为 `manual-review` 并 fail fast。
+当前样例 flow 会保留 trace 中的 `operation.prompt`，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
 
 注意：执行阶段使用的是 Midscene 的 computer use 能力，操作真实桌面应用。它不依赖 browser-use，也不通过浏览器调试协议直接控制网页。
 
@@ -151,12 +151,10 @@ uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 - 配置火山 Ark OpenAI 兼容接口。
 - 引入 ShowUI-Aloha，并跑通 learn 阶段的 trace 生成。
 - 初步打通 ShowUI-Aloha trace 到 Midscene flow 的转换链路，converter 优先消费 trace 中的 `operation.prompt`。
-- 新增通用 runner，能够读取 `midscene-flow.json` 并在不明确步骤上 fail fast。
+- 新增通用 runner，能够读取 `midscene-flow.json` 并按 route 调用 Midscene computer use。
 
 待实现：
 
-- 定义 ShowUI-Aloha trace 到 Midscene computer use 的中间表示。
-- 自动把录制产生的结构化日志转换成 Midscene 执行流程。
 - 将一次成功执行的流程固化为更快的脚本化步骤。
 - 在脚本失败时自动回退到 Midscene 视觉操作。
 - 面向华为网管系统沉淀可复用的任务模板和失败恢复策略。

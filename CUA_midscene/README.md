@@ -37,8 +37,8 @@ projects/<project-name>/
 `src/` 保存工具链代码，当前主要包括：
 
 - `src/flow/types.ts`：Midscene flow IR 类型定义。
-- `src/flow/convert-showui-trace.ts`：将 ShowUI-Aloha trace 转换为 `midscene-flow.json`。
-- `src/flow/run-midscene-flow.ts`：读取 `midscene-flow.json` 并通过 Midscene computer use 执行。
+- `src/flow/convert-showui-trace.ts`：将 ShowUI-Aloha trace 转换为 `midscene-flow.json`，优先把 `caption.operation.prompt` 映射为 route prompt。
+- `src/flow/run-midscene-flow.ts`：读取 `midscene-flow.json`，并通过 route prompt 调用 Midscene computer use。
 - `src/env.ts`、`src/check-env.ts`：本地环境检查。
 
 ## 常用命令
@@ -70,4 +70,4 @@ npm run flow:run -- --project <project-name>
 
 注意：`flow:run` 是执行命令，不是 trace 转换命令。trace 到 `midscene-flow.json` 的转换命令是 `flow:convert`。
 
-当前样例 flow 会保留录制中的 click、type、keyboard 等动作，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的非点击步骤仍会被标记为 `manual-review` 并 fail fast。
+当前样例 flow 会保留 trace 中的 `operation.prompt`，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。

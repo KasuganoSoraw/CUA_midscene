@@ -15,7 +15,7 @@
 
 原上游项目中的 `Aloha_Act`、Actor、Executor、回放入口和执行演示视频已从本仓库删除。
 
-后续如果需要执行 trace，应先把 Learn 阶段产物转换为 Midscene 可理解的 computer use 流程，再交由 Midscene 执行。
+后续如果需要执行 trace，应先把 Learn 阶段产物转换为 Midscene flow IR，再交由 `CUA_midscene` 的通用 runner 执行。
 
 ## 环境配置
 
@@ -56,4 +56,4 @@ uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 - `{project}_processed_log_sc.json`
 - `{project}_trace.json`
 
-这些产物当前用于分析和后续转换实验，不作为最终执行入口。
+这些产物当前用于分析和后续转换实验，不作为最终执行入口。其中 trace 会包含面向 Midscene 的最小 `operation` 动作结构，后续由 `CUA_midscene` 转换为 `midscene-flow.json`。
