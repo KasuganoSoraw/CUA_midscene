@@ -37,7 +37,7 @@ CUA/
 - 读取录制产生的视频和输入日志。
 - 抽取截图、鼠标、键盘等操作信息。
 - 生成结构化操作日志。
-- 生成可供后续模型理解的 trace。
+- 生成可供后续模型理解的 trace，并在 trace 中输出面向 Midscene 的最小 `operation` 动作结构。
 
 本项目暂不计划把 ShowUI-Aloha 作为最终执行器。后续会基于它生成的结构化日志和 trace，转换成 Midscene 可用的 computer use 操作脚本或中间表示。这部分转换能力目前待实现。
 
@@ -48,7 +48,7 @@ CUA/
     ↓
 ShowUI-Aloha Learn
     ↓
-结构化操作日志 / trace
+结构化操作日志 / trace（含 operation prompt）
     ↓
 转换为 Midscene 可执行流程（待实现）
     ↓
@@ -150,7 +150,7 @@ uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 - 初始化 Midscene computer use 实验工程。
 - 配置火山 Ark OpenAI 兼容接口。
 - 引入 ShowUI-Aloha，并跑通 learn 阶段的 trace 生成。
-- 初步打通 ShowUI-Aloha trace 到 Midscene flow 的转换链路。
+- 初步打通 ShowUI-Aloha trace 到 Midscene flow 的转换链路，converter 优先消费 trace 中的 `operation.prompt`。
 - 新增通用 runner，能够读取 `midscene-flow.json` 并在不明确步骤上 fail fast。
 
 待实现：

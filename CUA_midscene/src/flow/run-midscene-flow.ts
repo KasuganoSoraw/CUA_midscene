@@ -88,16 +88,20 @@ function describeRoute(step: MidsceneFlowStep): string {
     case 'keyboard':
       return `${step.id} keyboard ${route.keyName}`;
     case 'input':
-      return `${step.id} input ${route.target} = ${route.value}`;
+      return `${step.id} input ${renderPrompt(route.prompt, route.value)} = ${route.value}`;
     case 'tap':
-      return `${step.id} tap ${route.target}`;
+      return `${step.id} tap ${route.prompt}`;
     case 'act':
-      return `${step.id} act ${route.instruction}`;
+      return `${step.id} act ${route.prompt}`;
     case 'wait':
       return `${step.id} wait ${route.condition}`;
     case 'manual-review':
       return `${step.id} manual-review ${route.reason}`;
   }
+}
+
+function renderPrompt(prompt: string, value: string): string {
+  return prompt.replaceAll('{{value}}', value);
 }
 
 async function executeStep(agent: ComputerAgent, step: MidsceneFlowStep): Promise<void> {
@@ -107,16 +111,16 @@ async function executeStep(agent: ComputerAgent, step: MidsceneFlowStep): Promis
       await agent.callActionInActionSpace('KeyboardPress', { keyName: route.keyName });
       return;
     case 'input':
-      await agent.aiInput(route.target, { value: route.value, mode: route.mode ?? 'replace' });
+      await agent.aiInput(renderPrompt(route.prompt, route.value), { value: route.value, mode: route.mode ?? 'replace' });
       return;
     case 'tap':
-      await agent.aiTap(route.target);
+      await agent.aiTap(route.prompt);
       return;
     case 'act':
-      await agent.aiAct(route.instruction);
+      await agent.aiAct(route.prompt);
       return;
     case 'wait':
-      await agent.aiWaitFor(route.condition, { timeoutMs: route.timeoutMs ?? 15000 });
+      await agent.aiWaitFor(route.prompt ?? route.condition, { timeoutMs: route.timeoutMs ?? 15000 });
       return;
     case 'manual-review':
       throw new Error(`step ${step.id} 需要人工审查：${route.reason}`);

@@ -81,7 +81,24 @@ class TraceGenerator:
         except:
             return {}
 
-    def _sanitize_caption(self, cap: Dict[str, str]) -> Dict[str, str]:
+    def _sanitize_operation(self, operation: Any) -> Dict[str, Any]:
+        """Keep the minimal structured operation used by downstream runners."""
+        if not isinstance(operation, dict):
+            return {"type": "unknown"}
+
+        op_type = str(operation.get("type") or "unknown").strip().lower()
+        if op_type not in {"click", "input", "keyboard", "wait", "unknown"}:
+            op_type = "unknown"
+
+        sanitized: Dict[str, Any] = {"type": op_type}
+        for key in ("prompt", "value", "key", "condition"):
+            value = operation.get(key)
+            if isinstance(value, str) and value.strip():
+                sanitized[key] = value.strip()
+
+        return sanitized
+
+    def _sanitize_caption(self, cap: Dict[str, Any]) -> Dict[str, Any]:
         """Clean LLM output: strip coordinates, enforce crop-first observation."""
         patterns = [
             r"\bcoordinates?\b.*?\[[^\]]*\]",
@@ -99,6 +116,8 @@ class TraceGenerator:
         for k in ("observation", "think", "action", "expectation"):
             cap[k] = scrub(cap.get(k, ""))
 
+        cap["operation"] = self._sanitize_operation(cap.get("operation"))
+
         if re.search(r"\brelease\b.*\b(title\s*bar|top[-\s]*left)\b", cap.get("action", ""), re.I):
             cap["action"] = "Click the control shown in the cropped image"
             cap["think"] = "The cropped image shows a single actionable control; clicking it fulfills the intent."
@@ -107,6 +126,11 @@ class TraceGenerator:
             cap["observation"] = ("Cropped image shows " + cap.get("observation", "")).strip()
 
         return cap
+
+    def _caption_needs_retry(self, cap: Dict[str, Any]) -> bool:
+        operation = cap.get("operation")
+        operation_type = operation.get("type") if isinstance(operation, dict) else "unknown"
+        return not cap.get("action") or operation_type == "unknown"
 
     def _coerce_release_to_click(self, items: List[Dict[str, Any]],
                                  ms_window: int = 500, px_window: int = 32) -> List[Dict[str, Any]]:
@@ -163,8 +187,8 @@ Overall Task: {overall_task}
 
 {delta}
 
-只输出 JSON。JSON 字段名必须保持为 Observation、Think、Action、Expectation。
-这四个字段的字段值必须使用中文；只有界面原文、品牌名、按钮名、机场名、URL、快捷键和专有名词可以保留英文。
+只输出 JSON。JSON 字段名必须保持为 Observation、Think、Action、Expectation、Operation。
+前四个字段的字段值必须使用中文；Operation.prompt 也应使用中文，只有界面原文、品牌名、按钮名、机场名、URL、快捷键和专有名词可以保留英文。
 如果第一次输出不是有效 JSON，请立即重新输出修正后的 JSON。"""
 
     def _action_delta(self, act_str: str, action: Dict[str, Any], deltas_cfg: Dict[str, str], modifier_guide: str) -> str:
@@ -311,7 +335,8 @@ Overall Task: {overall_task}
                     "Observation": cap.get("observation", ""),
                     "Think": cap.get("think", ""),
                     "Action": cap.get("action", ""),
-                    "Expectation": cap.get("expectation", "")
+                    "Expectation": cap.get("expectation", ""),
+                    "Operation": cap.get("operation", {"type": "unknown"})
                 })
 
             prompt = self._prompt(it, overall_task, step_idx, recent)
@@ -325,9 +350,31 @@ Overall Task: {overall_task}
                 "observation": self._val(data, "Observation", "observation", default=""),
                 "think": self._val(data, "Think", "think", default=""),
                 "action": self._val(data, "Action", "action", default=""),
-                "expectation": self._val(data, "Expectation", "expectation", default="")
+                "expectation": self._val(data, "Expectation", "expectation", default=""),
+                "operation": self._val(data, "Operation", "operation", default={"type": "unknown"})
             }
             cap = self._sanitize_caption(cap)
+
+            if self._caption_needs_retry(cap):
+                retry_prompt = (
+                    f"{prompt}\n\n"
+                    "上一次输出缺少有效 Action 或 Operation。请重新输出完整 JSON，必须包含非空 Action，"
+                    "并且 Operation.type 不能是 unknown，除非原始动作确实无法判断。"
+                )
+                if self.api_provider == "claude":
+                    txt = self._call_claude(retry_prompt, crop_b64, full_b64)
+                else:
+                    txt = self._call_openai(retry_prompt, crop_b64, full_b64)
+
+                data = self._extract_json(txt)
+                cap = {
+                    "observation": self._val(data, "Observation", "observation", default=""),
+                    "think": self._val(data, "Think", "think", default=""),
+                    "action": self._val(data, "Action", "action", default=""),
+                    "expectation": self._val(data, "Expectation", "expectation", default=""),
+                    "operation": self._val(data, "Operation", "operation", default={"type": "unknown"})
+                }
+                cap = self._sanitize_caption(cap)
 
             traj.append({"step_idx": step_idx, "caption": cap})
             step_idx += 1

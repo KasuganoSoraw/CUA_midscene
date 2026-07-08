@@ -30,6 +30,12 @@
 - **AND** flow SHALL 包含 `schemaVersion`、`project`、`source` 和 `steps`
 - **AND** 每个 step SHALL 包含稳定 `id`、源 trace 引用、intent、evidence、route strategy 和 fallback 信息
 
+#### Scenario: Trace operation 转换为 Midscene prompt
+- **WHEN** trace step 包含结构化 `caption.operation`
+- **THEN** converter SHALL 优先使用 `operation.type` 选择 Midscene 执行动作
+- **AND** converter SHALL 将 `operation.prompt` 作为对应 Midscene 动作的 prompt 来源
+- **AND** converter SHALL NOT 通过扫描 `caption.action` 中的自然语言关键词作为主路径生成 route
+
 ### Requirement: Flow step 保留源证据
 系统 SHALL 在每个 Midscene flow step 中保留足够的源上下文，用于解释该 step 为什么存在以及如何被推导出来。
 

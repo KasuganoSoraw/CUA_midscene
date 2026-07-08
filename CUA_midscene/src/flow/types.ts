@@ -50,8 +50,44 @@ export interface MidsceneFlowEvidence {
   thought?: string;
   action: string;
   expectation?: string;
+  operation?: MidsceneTraceOperation;
   screenshot?: string;
   crop?: string;
+}
+
+export type MidsceneTraceOperation =
+  | MidsceneTraceClickOperation
+  | MidsceneTraceInputOperation
+  | MidsceneTraceKeyboardOperation
+  | MidsceneTraceWaitOperation
+  | MidsceneTraceUnknownOperation;
+
+export interface MidsceneTraceClickOperation {
+  type: 'click';
+  prompt: string;
+}
+
+export interface MidsceneTraceInputOperation {
+  type: 'input';
+  prompt: string;
+  value: string;
+}
+
+export interface MidsceneTraceKeyboardOperation {
+  type: 'keyboard';
+  prompt?: string;
+  key: string;
+}
+
+export interface MidsceneTraceWaitOperation {
+  type: 'wait';
+  prompt?: string;
+  condition: string;
+}
+
+export interface MidsceneTraceUnknownOperation {
+  type: 'unknown';
+  prompt?: string;
 }
 
 export type MidsceneFlowRoute =
@@ -69,23 +105,24 @@ export interface MidsceneKeyboardRoute {
 
 export interface MidsceneInputRoute {
   strategy: 'input';
-  target: string;
+  prompt: string;
   value: string;
   mode?: 'replace' | 'append' | 'typeOnly';
 }
 
 export interface MidsceneTapRoute {
   strategy: 'tap';
-  target: string;
+  prompt: string;
 }
 
 export interface MidsceneActRoute {
   strategy: 'act';
-  instruction: string;
+  prompt: string;
 }
 
 export interface MidsceneWaitRoute {
   strategy: 'wait';
+  prompt?: string;
   condition: string;
   timeoutMs?: number;
 }

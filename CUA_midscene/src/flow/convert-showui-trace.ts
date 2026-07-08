@@ -6,6 +6,7 @@ import {
   type MidsceneFlowEvidence,
   type MidsceneFlowRoute,
   type MidsceneFlowStep,
+  type MidsceneTraceOperation,
 } from './types.js';
 
 interface ShowuiTrace {
@@ -19,7 +20,16 @@ interface ShowuiTraceStep {
     think?: string;
     action?: string;
     expectation?: string;
+    operation?: ShowuiTraceOperation;
   };
+}
+
+interface ShowuiTraceOperation {
+  type?: string;
+  prompt?: string;
+  value?: string;
+  key?: string;
+  condition?: string;
 }
 
 interface ProcessedLogStep {
@@ -133,6 +143,49 @@ function targetFromAction(action: string): string {
     .trim();
 }
 
+function normalizeTraceOperation(operation: ShowuiTraceOperation | undefined): MidsceneTraceOperation | undefined {
+  if (!operation?.type) return undefined;
+
+  const type = operation.type.trim().toLowerCase();
+  const prompt = operation.prompt?.trim();
+  const value = operation.value?.trim();
+  const key = operation.key?.trim();
+  const condition = operation.condition?.trim();
+
+  if (type === 'click' && prompt) {
+    return { type: 'click', prompt };
+  }
+
+  if (type === 'input' && prompt && value) {
+    return { type: 'input', prompt, value };
+  }
+
+  if (type === 'keyboard' && key) {
+    return { type: 'keyboard', prompt, key };
+  }
+
+  if (type === 'wait' && condition) {
+    return { type: 'wait', prompt, condition };
+  }
+
+  return { type: 'unknown', prompt };
+}
+
+function routeFromOperation(operation: MidsceneTraceOperation | undefined): MidsceneFlowRoute | undefined {
+  if (!operation || operation.type === 'unknown') return undefined;
+
+  switch (operation.type) {
+    case 'click':
+      return { strategy: 'tap', prompt: operation.prompt };
+    case 'input':
+      return { strategy: 'input', prompt: operation.prompt, value: operation.value, mode: 'replace' };
+    case 'keyboard':
+      return { strategy: 'keyboard', keyName: operation.key };
+    case 'wait':
+      return { strategy: 'wait', prompt: operation.prompt, condition: operation.condition, timeoutMs: 15000 };
+  }
+}
+
 function routeStep(action: string, expectation: string, rawAction: string | undefined): MidsceneFlowRoute {
   if (/press\s+enter/i.test(rawAction ?? action) || /(?:按|按下).*(?:enter|回车)/i.test(action)) {
     return { strategy: 'keyboard', keyName: 'Enter' };
@@ -141,7 +194,7 @@ function routeStep(action: string, expectation: string, rawAction: string | unde
   if (/^type\s*:/i.test(rawAction ?? '')) {
     return {
       strategy: 'input',
-      target: targetFromAction(action),
+      prompt: action,
       value: (rawAction ?? '').replace(/^Type\s*:\s*/i, '').trim(),
       mode: 'replace',
     };
@@ -149,23 +202,23 @@ function routeStep(action: string, expectation: string, rawAction: string | unde
 
   if (/^click\s+/i.test(action) || /^点击/.test(action)) {
     if (/date-picker|calendar|dropdown|button|field|option|radio|search result|link/i.test(action)) {
-      return { strategy: 'tap', target: targetFromAction(action) };
+      return { strategy: 'tap', prompt: targetFromAction(action) };
     }
 
     if (/日期|日历|下拉|按钮|输入框|字段|选项|建议项|单选|搜索结果|链接/.test(action)) {
-      return { strategy: 'tap', target: targetFromAction(action) };
+      return { strategy: 'tap', prompt: targetFromAction(action) };
     }
 
     return {
       strategy: 'act',
-      instruction: action,
+      prompt: action,
     };
   }
 
   if (/^type\s+/i.test(action) || /(?:输入|键入|录入)/.test(action)) {
     return {
       strategy: 'input',
-      target: targetFromAction(action),
+      prompt: action,
       value: extractQuotedValue(action) ?? extractChineseInputValue(action) ?? action.replace(/^Type\s+/i, '').trim(),
       mode: 'replace',
     };
@@ -174,6 +227,7 @@ function routeStep(action: string, expectation: string, rawAction: string | unde
   if (/visible|loaded|navigate|will navigate/i.test(expectation)) {
     return {
       strategy: 'wait',
+      prompt: expectation,
       condition: expectation,
       timeoutMs: 15000,
     };
@@ -195,7 +249,7 @@ function buildFallback(route: MidsceneFlowRoute, action: string) {
 
   return {
     strategy: 'vision' as const,
-    instruction: action,
+    instruction: 'prompt' in route && route.prompt ? route.prompt : action,
   };
 }
 
@@ -204,12 +258,14 @@ function buildStep(traceStep: ShowuiTraceStep, processedStep: ProcessedLogStep |
   const observation = caption.observation ?? '';
   const action = caption.action ?? '';
   const expectation = caption.expectation ?? '';
-  const route = routeStep(action, expectation, processedStep?.action);
+  const operation = normalizeTraceOperation(caption.operation);
+  const route = routeFromOperation(operation) ?? routeStep(action, expectation, processedStep?.action);
   const evidence: MidsceneFlowEvidence = {
     observation,
     thought: caption.think,
     action,
     expectation,
+    operation,
     screenshot: normalizeSourceScreenshotPath(processedStep?.screenshot_full),
     crop: normalizeSourceScreenshotPath(processedStep?.screenshot_crop),
   };
