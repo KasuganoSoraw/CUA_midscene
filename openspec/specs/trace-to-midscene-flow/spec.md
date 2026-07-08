@@ -50,10 +50,14 @@
 - **WHEN** trace step 明确表示点击一个可见 UI 目标
 - **THEN** 转换后的 step SHALL 使用 `tap` 或 `act` strategy，并携带自然语言目标指令
 
-#### Scenario: 模糊步骤被标记为需审查
-- **WHEN** converter 无法有把握地将 trace step 映射到受支持的执行策略
+#### Scenario: 点击动作保留执行路径
+- **WHEN** trace step 明确表示一次 click 动作
+- **THEN** converter SHALL 将该 step 路由为可执行的 `tap` 或 `act` strategy
+- **AND** converter SHALL NOT 仅根据 trace 文本中的空白区域、无图标或无文字等描述将 click 动作改写为 `manual-review`
+
+#### Scenario: 无法映射的非点击步骤被标记为需审查
+- **WHEN** converter 无法有把握地将非点击 trace step 映射到受支持的执行策略
 - **THEN** 转换后的 step SHALL 使用 `manual-review` strategy 或等价的非静默失败标记
-- **AND** runner SHALL NOT 在没有明确 fallback 指令时把该 step 执行为任意点击
 
 ### Requirement: 通用 runner 消费 Midscene flow IR
 系统 SHALL 提供一个 Midscene runner，在生成 TypeScript 脚本成为必要路径之前，直接消费 `midscene-flow.json`。

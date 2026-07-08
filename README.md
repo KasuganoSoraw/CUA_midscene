@@ -122,7 +122,7 @@ npm run flow:run -- --project air-tickets-demo
 
 注意：`flow:run` 是执行 flow，不是转换 trace。整体链路中，`flow:convert` 才是 trace 到 `midscene-flow.json` 的转换命令。新增项目时不需要再新增 npm script，只需要替换 `--project <project-name>`；如果目标说明变化，同时传入新的 `--goal`。
 
-当前样例 flow 的第一步会被标记为 `manual-review`，runner 会在执行前 fail fast，避免把不明确的空白区域点击自动化。
+当前样例 flow 会保留录制中的 click、type、keyboard 等动作，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的非点击步骤仍会被标记为 `manual-review` 并 fail fast。
 
 注意：执行阶段使用的是 Midscene 的 computer use 能力，操作真实桌面应用。它不依赖 browser-use，也不通过浏览器调试协议直接控制网页。
 

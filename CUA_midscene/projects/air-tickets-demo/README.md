@@ -51,7 +51,7 @@ cd CUA_midscene
 npm run flow:run -- --project air-tickets-demo
 ```
 
-这一步会通过 Midscene computer use 调用视觉模型执行 `aiInput`、`aiTap`、`aiAct`、`aiWaitFor` 等操作。当前样例包含 `manual-review` 步骤，runner 会在执行前 fail fast。
+这一步会通过 Midscene computer use 调用视觉模型执行 `aiInput`、`aiTap`、`aiAct`、`aiWaitFor` 等操作。当前样例会保留录制中的 click、type、keyboard 等动作，并按 route 顺序执行。
 
 注意：`npm run flow:run -- --project air-tickets-demo` 是执行命令，不是 trace 转换命令。trace 转换为 Midscene flow 的命令是 `npm run flow:convert -- --project air-tickets-demo --goal "..."`。
 

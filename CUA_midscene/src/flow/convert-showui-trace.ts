@@ -126,12 +126,7 @@ function targetFromAction(action: string): string {
     .trim();
 }
 
-function isBlankOrUnsafeClick(action: string, observation: string): boolean {
-  const text = `${action}\n${observation}`.toLowerCase();
-  return text.includes('blank region') || text.includes('empty tab strip') || text.includes('no visible text or icon');
-}
-
-function routeStep(action: string, observation: string, expectation: string): MidsceneFlowRoute {
+function routeStep(action: string, expectation: string): MidsceneFlowRoute {
   if (/press\s+enter/i.test(action)) {
     return { strategy: 'keyboard', keyName: 'Enter' };
   }
@@ -146,13 +141,6 @@ function routeStep(action: string, observation: string, expectation: string): Mi
   }
 
   if (/^click\s+/i.test(action)) {
-    if (isBlankOrUnsafeClick(action, observation)) {
-      return {
-        strategy: 'manual-review',
-        reason: '该点击目标疑似为空白区域或非语义控件，不能安全自动执行。',
-      };
-    }
-
     if (/date-picker|calendar|dropdown|button|field|option|radio|search result|link/i.test(action)) {
       return { strategy: 'tap', target: targetFromAction(action) };
     }
@@ -196,7 +184,7 @@ function buildStep(traceStep: ShowuiTraceStep, processedStep: ProcessedLogStep |
   const observation = caption.observation ?? '';
   const action = caption.action ?? '';
   const expectation = caption.expectation ?? '';
-  const route = routeStep(action, observation, expectation);
+  const route = routeStep(action, expectation);
   const evidence: MidsceneFlowEvidence = {
     observation,
     thought: caption.think,

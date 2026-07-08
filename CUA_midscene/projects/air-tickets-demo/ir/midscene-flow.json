@@ -31,12 +31,12 @@
         "crop": "source/screenshots/0.329s.crop.jpg"
       },
       "route": {
-        "strategy": "manual-review",
-        "reason": "该点击目标疑似为空白区域或非语义控件，不能安全自动执行。"
+        "strategy": "act",
+        "instruction": "Click on the empty tab strip area of the Chrome browser window, to the right of the active 'New Tab'."
       },
       "fallback": {
-        "strategy": "fail",
-        "reason": "该点击目标疑似为空白区域或非语义控件，不能安全自动执行。"
+        "strategy": "vision",
+        "instruction": "Click on the empty tab strip area of the Chrome browser window, to the right of the active 'New Tab'."
       }
     },
     {

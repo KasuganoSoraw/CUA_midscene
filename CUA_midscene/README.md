@@ -70,4 +70,4 @@ npm run flow:run -- --project <project-name>
 
 注意：`flow:run` 是执行命令，不是 trace 转换命令。trace 到 `midscene-flow.json` 的转换命令是 `flow:convert`。
 
-当前样例 flow 中存在 `manual-review` 步骤，runner 会在执行前 fail fast。这是预期行为：不明确的录制动作不能被静默转换为实际桌面操作。
+当前样例 flow 会保留录制中的 click、type、keyboard 等动作，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的非点击步骤仍会被标记为 `manual-review` 并 fail fast。
