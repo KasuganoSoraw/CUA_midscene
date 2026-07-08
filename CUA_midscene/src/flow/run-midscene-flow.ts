@@ -154,8 +154,12 @@ async function run(options: RunOptions): Promise<void> {
     groupDescription: flow.goal || `执行 Midscene flow：${flow.project}`,
     customActions: [keyboardTypeText.action],
   });
+  const keyboard = agent.interface.inputPrimitives?.keyboard;
+  if (!keyboard?.keyboardPress) {
+    throw new Error('当前 Midscene computer interface 不支持底层 keyboardPress 输入');
+  }
   keyboardTypeText.setPressKey(async (keyName, target) => {
-    await agent.callActionInActionSpace('KeyboardPress', { keyName, locate: target });
+    await keyboard.keyboardPress(keyName, { target });
   });
 
   try {
