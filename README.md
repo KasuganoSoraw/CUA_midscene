@@ -124,7 +124,7 @@ npm run flow:run -- --project air-tickets-demo
 
 当前样例 flow 会保留 trace 中的 `operation.prompt`，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
 
-执行阶段的文本输入不使用 Midscene 内置 `aiInput`。runner 会先用 Midscene 视觉能力聚焦输入目标，再调用自定义 `KeyboardTypeText` action 通过键盘事件逐键输入，避免在堡垒机或远程桌面中依赖外部剪贴板。
+执行阶段的文本输入不使用 Midscene 内置 `aiInput`。runner 会调用自定义 `KeyboardTypeText` action，并通过该 action 的 `locate` 字段复用 Midscene 定位管线，再用键盘事件逐键输入，避免在堡垒机或远程桌面中依赖外部剪贴板。
 
 注意：执行阶段使用的是 Midscene 的 computer use 能力，操作真实桌面应用。它不依赖 browser-use，也不通过浏览器调试协议直接控制网页。
 

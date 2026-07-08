@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { textToKeyboardSequence } from './keyboard-type-action.js';
+import { createKeyboardTypeTextAction, textToKeyboardSequence } from './keyboard-type-action.js';
 
 assert.deepEqual(textToKeyboardSequence('47405'), ['4', '7', '4', '0', '5']);
 
@@ -41,6 +41,27 @@ assert.deepEqual(textToKeyboardSequence('abc_123@example.com'), [
   'm',
 ]);
 
-assert.throws(() => textToKeyboardSequence('中文'), /不支持字符 "中"/);
+assert.throws(() => textToKeyboardSequence('中文'), /ASCII/);
 
-console.log('KeyboardTypeText 映射测试通过');
+const keyboardTypeText = createKeyboardTypeTextAction();
+const target = { center: [10, 20], rect: { left: 1, top: 2, width: 30, height: 40 } };
+const pressedKeys: Array<{ keyName: string; hasTarget: boolean }> = [];
+
+keyboardTypeText.setPressKey(async (keyName, pressedTarget) => {
+  pressedKeys.push({ keyName, hasTarget: pressedTarget === target });
+});
+
+await keyboardTypeText.action.call({
+  locate: target as never,
+  value: 'A',
+  mode: 'replace',
+  keyDelayMs: 0,
+});
+
+assert.deepEqual(pressedKeys, [
+  { keyName: 'Control+A', hasTarget: true },
+  { keyName: 'Backspace', hasTarget: false },
+  { keyName: 'Shift+A', hasTarget: false },
+]);
+
+console.log('KeyboardTypeText 测试通过');

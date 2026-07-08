@@ -112,8 +112,8 @@ async function executeStep(agent: ComputerAgent, step: MidsceneFlowStep): Promis
       await agent.callActionInActionSpace('KeyboardPress', { keyName: route.keyName });
       return;
     case 'input':
-      await agent.aiTap(renderPrompt(route.prompt, route.value));
       await agent.callActionInActionSpace('KeyboardTypeText', {
+        locate: { prompt: renderPrompt(route.prompt, route.value) },
         value: route.value,
         mode: route.mode ?? 'replace',
       });
@@ -154,8 +154,8 @@ async function run(options: RunOptions): Promise<void> {
     groupDescription: flow.goal || `执行 Midscene flow：${flow.project}`,
     customActions: [keyboardTypeText.action],
   });
-  keyboardTypeText.setPressKey(async (keyName) => {
-    await agent.callActionInActionSpace('KeyboardPress', { keyName });
+  keyboardTypeText.setPressKey(async (keyName, target) => {
+    await agent.callActionInActionSpace('KeyboardPress', { keyName, locate: target });
   });
 
   try {

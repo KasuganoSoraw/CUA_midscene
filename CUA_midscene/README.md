@@ -76,7 +76,7 @@ npm run flow:run -- --project <project-name>
 文本输入的执行方式：
 
 - `input` route 不调用 Midscene 内置 `aiInput`，因为该能力在 computer use 底层可能依赖剪贴板粘贴。
-- runner 会先用 `aiTap` 根据 route prompt 聚焦输入目标，再调用自定义 `KeyboardTypeText` action。
+- runner 会调用自定义 `KeyboardTypeText` action，并通过该 action 的 `locate` 字段复用 Midscene 定位管线。
 - `KeyboardTypeText` 当前只承诺 ASCII 键盘输入；遇到中文或未支持字符会直接失败，不做剪贴板兜底。
 
 验证键盘输入映射：

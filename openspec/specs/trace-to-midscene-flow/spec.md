@@ -75,8 +75,9 @@
 
 #### Scenario: Runner 使用键盘事件执行文本输入
 - **WHEN** runner 执行 `input` strategy
-- **THEN** 它 SHALL 先使用 Midscene 视觉能力聚焦目标输入区域
-- **AND** 它 SHALL 调用 Midscene 自定义 `KeyboardTypeText` action 通过键盘事件输入文本
+- **THEN** 它 SHALL 调用 Midscene 自定义 `KeyboardTypeText` action
+- **AND** `KeyboardTypeText` SHALL 通过 `locate` 字段复用 Midscene 定位管线来定位目标输入区域
+- **AND** 它 SHALL 通过键盘事件输入文本
 - **AND** 它 SHALL NOT 使用依赖剪贴板粘贴的 `aiInput` 作为 input route 的执行路径
 - **AND** 当输入文本包含当前键盘映射不支持的字符时，它 SHALL 给出清晰错误并停止执行
 

@@ -1,14 +1,20 @@
-import type { DeviceAction } from '@midscene/core';
+import {
+  getMidsceneLocationSchema,
+  z,
+  type DeviceAction,
+  type LocateResultElement,
+} from '@midscene/core';
 
-export type KeyboardTypeMode = 'replace' | 'append' | 'typeOnly';
+export type KeyboardTypeMode = 'replace' | 'append' | 'typeOnly' | 'clear';
 
 export interface KeyboardTypeTextParam {
   value: string;
+  locate?: LocateResultElement;
   mode?: KeyboardTypeMode;
   keyDelayMs?: number;
 }
 
-type PressKey = (keyName: string) => Promise<void>;
+type PressKey = (keyName: string, target?: LocateResultElement) => Promise<void>;
 
 export interface KeyboardTypeTextActionBundle {
   action: DeviceAction<KeyboardTypeTextParam, void>;
@@ -16,6 +22,18 @@ export interface KeyboardTypeTextActionBundle {
 }
 
 const DEFAULT_KEY_DELAY_MS = 50;
+
+const keyboardTypeTextParamSchema = z.object({
+  value: z
+    .union([z.string(), z.number()])
+    .transform((value) => String(value))
+    .describe('The ASCII text to input without using clipboard paste.'),
+  locate: getMidsceneLocationSchema()
+    .describe('The position of the target input field. If there is no content, locate the center of the input field.')
+    .optional(),
+  mode: z.enum(['replace', 'clear', 'typeOnly', 'append']).default('replace'),
+  keyDelayMs: z.number().optional(),
+});
 
 const shiftedSymbols: Record<string, string> = {
   '~': '`',
@@ -88,8 +106,13 @@ async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function pressWithDelay(pressKey: PressKey, keyName: string, keyDelayMs: number): Promise<void> {
-  await pressKey(keyName);
+async function pressWithDelay(
+  pressKey: PressKey,
+  keyName: string,
+  keyDelayMs: number,
+  target?: LocateResultElement,
+): Promise<void> {
+  await pressKey(keyName, target);
   await delay(keyDelayMs);
 }
 
@@ -111,18 +134,28 @@ export function createKeyboardTypeTextAction(): KeyboardTypeTextActionBundle {
         throw new Error('KeyboardTypeText 参数 value 必须是字符串');
       }
 
-      const mode = param.mode ?? 'replace';
+      const mode = param.mode === 'append' ? 'typeOnly' : (param.mode ?? 'replace');
       const keyDelayMs = param.keyDelayMs ?? DEFAULT_KEY_DELAY_MS;
+      let shouldFocusTarget = Boolean(param.locate);
 
       if (mode === 'replace') {
-        await pressWithDelay(pressKey, 'Control+A', keyDelayMs);
+        await pressWithDelay(pressKey, 'Control+A', keyDelayMs, param.locate);
+        shouldFocusTarget = false;
         await pressWithDelay(pressKey, 'Backspace', keyDelayMs);
       }
 
+      if (mode === 'clear') {
+        await pressWithDelay(pressKey, 'Control+A', keyDelayMs, param.locate);
+        await pressWithDelay(pressKey, 'Backspace', keyDelayMs);
+        return;
+      }
+
       for (const keyName of textToKeyboardSequence(param.value)) {
-        await pressWithDelay(pressKey, keyName, keyDelayMs);
+        await pressWithDelay(pressKey, keyName, keyDelayMs, shouldFocusTarget ? param.locate : undefined);
+        shouldFocusTarget = false;
       }
     },
+    paramSchema: keyboardTypeTextParamSchema as unknown as DeviceAction<KeyboardTypeTextParam, void>['paramSchema'],
   };
 
   return {
