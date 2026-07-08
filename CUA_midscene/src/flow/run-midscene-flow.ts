@@ -7,6 +7,8 @@ import type { MidsceneFlow, MidsceneFlowRoute, MidsceneFlowStep } from './types.
 
 type ComputerAgent = Awaited<ReturnType<typeof agentForComputer>>;
 
+const READINESS_WAIT_TIMEOUT_MS = 15000;
+
 interface RunOptions {
   project: string;
   flowPath: string;
@@ -105,6 +107,19 @@ function renderPrompt(prompt: string, value: string): string {
   return prompt.replaceAll('{{value}}', value);
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isLocateFailure(error: unknown): boolean {
+  const message = errorMessage(error);
+  return /failed to locate element|failed to locate|No prompt or id or position or locatedPixelBbox to locate/i.test(message);
+}
+
+function readinessPromptFromPreviousStep(previousStep: MidsceneFlowStep | undefined): string | undefined {
+  return previousStep?.evidence.expectation?.trim();
+}
+
 async function executeStep(agent: ComputerAgent, step: MidsceneFlowStep): Promise<void> {
   const route = step.route;
   switch (route.strategy) {
@@ -129,6 +144,26 @@ async function executeStep(agent: ComputerAgent, step: MidsceneFlowStep): Promis
       return;
     case 'manual-review':
       throw new Error(`step ${step.id} 需要人工审查：${route.reason}`);
+  }
+}
+
+async function executeStepWithReadinessRetry(
+  agent: ComputerAgent,
+  step: MidsceneFlowStep,
+  previousStep: MidsceneFlowStep | undefined,
+): Promise<void> {
+  try {
+    await executeStep(agent, step);
+    return;
+  } catch (error) {
+    const readinessPrompt = readinessPromptFromPreviousStep(previousStep);
+    if (!isLocateFailure(error) || !readinessPrompt) {
+      throw error;
+    }
+
+    console.warn(`step ${step.id} 首次定位失败，等待上一动作完成状态后重试一次：${readinessPrompt}`);
+    await agent.aiWaitFor(readinessPrompt, { timeoutMs: READINESS_WAIT_TIMEOUT_MS });
+    await executeStep(agent, step);
   }
 }
 
@@ -163,9 +198,11 @@ async function run(options: RunOptions): Promise<void> {
   });
 
   try {
-    for (const step of flow.steps) {
+    for (let index = 0; index < flow.steps.length; index += 1) {
+      const step = flow.steps[index];
+      const previousStep = flow.steps[index - 1];
       console.log(`执行 ${describeRoute(step)}`);
-      await executeStep(agent, step);
+      await executeStepWithReadinessRetry(agent, step, previousStep);
     }
   } finally {
     await agent.destroy();

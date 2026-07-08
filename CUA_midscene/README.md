@@ -73,6 +73,8 @@ npm run flow:run -- --project <project-name>
 
 当前样例 flow 会保留 trace 中的 `operation.prompt`。对于文本输入，trace 还必须提供只描述输入框目标的 `operation.locatePrompt`，converter 会把它写入 input route。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
 
+runner 会处理一类明确的时序问题：如果某个 step 首次定位失败，它会读取上一个 step 的 `evidence.expectation`，用 `aiWaitFor` 等待上一动作完成后的界面状态，然后只重试当前 step 一次。该机制不跳过错误、不做无限重试，也不替代真实执行逻辑；等待失败或重试失败都会继续暴露错误。
+
 文本输入的执行方式：
 
 - `input` route 不调用 Midscene 内置 `aiInput`，因为该能力在 computer use 底层可能依赖剪贴板粘贴。

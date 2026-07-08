@@ -75,6 +75,13 @@
 - **THEN** 它 SHALL 将这些 step 路由到对应 Midscene computer use 操作
 - **AND** 它 SHALL 使用已配置 run directory 生成 Midscene 执行报告
 
+#### Scenario: Runner 在定位失败后等待上一状态并重试
+- **WHEN** runner 执行某个 step 时首次遇到定位失败
+- **AND** 上一个 step 的 `evidence.expectation` 可用
+- **THEN** runner SHALL 调用 `aiWaitFor` 等待上一个 step 的 expectation 成立
+- **AND** runner SHALL 只重试当前 step 一次
+- **AND** 如果等待失败或重试仍失败，runner SHALL 继续暴露错误而不是静默跳过
+
 #### Scenario: Runner 使用键盘事件执行文本输入
 - **WHEN** runner 执行 `input` strategy
 - **THEN** 它 SHALL 调用 Midscene 自定义 `KeyboardTypeText` action
