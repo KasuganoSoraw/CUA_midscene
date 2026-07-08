@@ -39,6 +39,7 @@ projects/<project-name>/
 - `src/flow/types.ts`：Midscene flow IR 类型定义。
 - `src/flow/convert-showui-trace.ts`：将 ShowUI-Aloha trace 转换为 `midscene-flow.json`，优先把 `caption.operation.prompt` 映射为 route prompt。
 - `src/flow/run-midscene-flow.ts`：读取 `midscene-flow.json`，并通过 route prompt 调用 Midscene computer use。
+- `src/flow/keyboard-type-action.ts`：注册 Midscene 自定义 `KeyboardTypeText` action，通过键盘事件输入文本，不使用剪贴板。
 - `src/env.ts`、`src/check-env.ts`：本地环境检查。
 
 ## 常用命令
@@ -71,3 +72,15 @@ npm run flow:run -- --project <project-name>
 注意：`flow:run` 是执行命令，不是 trace 转换命令。trace 到 `midscene-flow.json` 的转换命令是 `flow:convert`。
 
 当前样例 flow 会保留 trace 中的 `operation.prompt`，并由 runner 按 route 顺序执行。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
+
+文本输入的执行方式：
+
+- `input` route 不调用 Midscene 内置 `aiInput`，因为该能力在 computer use 底层可能依赖剪贴板粘贴。
+- runner 会先用 `aiTap` 根据 route prompt 聚焦输入目标，再调用自定义 `KeyboardTypeText` action。
+- `KeyboardTypeText` 当前只承诺 ASCII 键盘输入；遇到中文或未支持字符会直接失败，不做剪贴板兜底。
+
+验证键盘输入映射：
+
+```bash
+npm run test:keyboard-type
+```

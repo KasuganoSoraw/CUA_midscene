@@ -178,7 +178,13 @@ function routeFromOperation(operation: MidsceneTraceOperation | undefined): Mids
     case 'click':
       return { strategy: 'tap', prompt: operation.prompt };
     case 'input':
-      return { strategy: 'input', prompt: operation.prompt, value: operation.value, mode: 'replace' };
+      return {
+        strategy: 'input',
+        prompt: operation.prompt,
+        value: operation.value,
+        mode: 'replace',
+        inputMethod: 'keyboard-action',
+      };
     case 'keyboard':
       return { strategy: 'keyboard', keyName: operation.key };
     case 'wait':
@@ -197,6 +203,7 @@ function routeStep(action: string, expectation: string, rawAction: string | unde
       prompt: action,
       value: (rawAction ?? '').replace(/^Type\s*:\s*/i, '').trim(),
       mode: 'replace',
+      inputMethod: 'keyboard-action',
     };
   }
 
@@ -221,6 +228,7 @@ function routeStep(action: string, expectation: string, rawAction: string | unde
       prompt: action,
       value: extractQuotedValue(action) ?? extractChineseInputValue(action) ?? action.replace(/^Type\s+/i, '').trim(),
       mode: 'replace',
+      inputMethod: 'keyboard-action',
     };
   }
 

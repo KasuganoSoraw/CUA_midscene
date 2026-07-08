@@ -7,6 +7,7 @@
     "check": "tsx src/check-env.ts",
     "flow:convert": "tsx src/flow/convert-showui-trace.ts",
     "flow:run": "tsx src/flow/run-midscene-flow.ts",
+    "test:keyboard-type": "tsx src/flow/keyboard-type-action.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],

@@ -2,6 +2,7 @@ import { agentForComputer } from '@midscene/computer';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from '../env.js';
+import { createKeyboardTypeTextAction } from './keyboard-type-action.js';
 import type { MidsceneFlow, MidsceneFlowRoute, MidsceneFlowStep } from './types.js';
 
 type ComputerAgent = Awaited<ReturnType<typeof agentForComputer>>;
@@ -88,7 +89,7 @@ function describeRoute(step: MidsceneFlowStep): string {
     case 'keyboard':
       return `${step.id} keyboard ${route.keyName}`;
     case 'input':
-      return `${step.id} input ${renderPrompt(route.prompt, route.value)} = ${route.value}`;
+      return `${step.id} input KeyboardTypeText ${renderPrompt(route.prompt, route.value)} = ${route.value}`;
     case 'tap':
       return `${step.id} tap ${route.prompt}`;
     case 'act':
@@ -111,7 +112,11 @@ async function executeStep(agent: ComputerAgent, step: MidsceneFlowStep): Promis
       await agent.callActionInActionSpace('KeyboardPress', { keyName: route.keyName });
       return;
     case 'input':
-      await agent.aiInput(renderPrompt(route.prompt, route.value), { value: route.value, mode: route.mode ?? 'replace' });
+      await agent.aiTap(renderPrompt(route.prompt, route.value));
+      await agent.callActionInActionSpace('KeyboardTypeText', {
+        value: route.value,
+        mode: route.mode ?? 'replace',
+      });
       return;
     case 'tap':
       await agent.aiTap(route.prompt);
@@ -142,10 +147,15 @@ async function run(options: RunOptions): Promise<void> {
   warnIfNodeVersionIsOld();
   checkRequiredModelEnv();
 
+  const keyboardTypeText = createKeyboardTypeTextAction();
   const agent = await agentForComputer({
     generateReport: true,
     groupName: `midscene-flow-${flow.project}`,
     groupDescription: flow.goal || `执行 Midscene flow：${flow.project}`,
+    customActions: [keyboardTypeText.action],
+  });
+  keyboardTypeText.setPressKey(async (keyName) => {
+    await agent.callActionInActionSpace('KeyboardPress', { keyName });
   });
 
   try {

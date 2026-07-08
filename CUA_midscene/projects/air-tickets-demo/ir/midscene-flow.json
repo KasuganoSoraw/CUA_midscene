@@ -67,7 +67,8 @@
         "strategy": "input",
         "prompt": "在 Chrome 地址栏/搜索栏中输入 {{value}}",
         "value": "QATAR AIRWAYS",
-        "mode": "replace"
+        "mode": "replace",
+        "inputMethod": "keyboard-action"
       },
       "fallback": {
         "strategy": "vision",
@@ -239,7 +240,8 @@
         "strategy": "input",
         "prompt": "在 Book a flight 预订组件的 From（出发地）输入框中输入 {{value}}",
         "value": "SINGAPORE",
-        "mode": "replace"
+        "mode": "replace",
+        "inputMethod": "keyboard-action"
       },
       "fallback": {
         "strategy": "vision",
@@ -298,7 +300,8 @@
         "strategy": "input",
         "prompt": "在 Book a flight 预订组件的 To（目的地）输入框中继续输入 {{value}}，以进一步过滤到 Los/Lagos 等匹配项",
         "value": "LOS",
-        "mode": "replace"
+        "mode": "replace",
+        "inputMethod": "keyboard-action"
       },
       "fallback": {
         "strategy": "vision",

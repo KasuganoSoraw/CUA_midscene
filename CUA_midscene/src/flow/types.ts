@@ -108,6 +108,7 @@ export interface MidsceneInputRoute {
   prompt: string;
   value: string;
   mode?: 'replace' | 'append' | 'typeOnly';
+  inputMethod?: 'keyboard-action';
 }
 
 export interface MidsceneTapRoute {
