@@ -42,7 +42,7 @@ cd CUA_midscene
 npm run flow:convert -- --project air-tickets-demo --goal "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
 ```
 
-这一步当前不调用模型，只进行确定性映射：读取 `source/showui-trace.json` 中的 `operation.prompt`、input 操作的 `operation.locatePrompt`，以及 `source/processed-log-sc.json` 中的截图引用，输出 `ir/midscene-flow.json`。
+这一步当前不调用模型，只进行确定性映射：读取 `source/showui-trace.json` 中的 `operation.prompt`、input 操作的 `operation.locatePrompt`，以及 `source/processed-log-sc.json` 中的截图引用和时间戳，输出 `ir/midscene-flow.json`。相邻录制动作的时间差会转换为每个 step 的 `timing.waitBeforeMs`，供 runner 执行前等待使用。
 
 执行 Midscene flow：
 
@@ -51,7 +51,7 @@ cd CUA_midscene
 npm run flow:run -- --project air-tickets-demo
 ```
 
-这一步会通过 Midscene computer use 调用视觉模型执行 `aiTap`、`aiAct`、`aiWaitFor` 等操作。对于 `input` route，runner 会调用自定义 `KeyboardTypeText` action，并把 route 的 `locatePrompt` 传给该 action 的 `locate` 字段复用 Midscene 定位管线，再用键盘事件逐键输入；该路径不使用 Midscene 内置 `aiInput`，也不依赖剪贴板粘贴。
+这一步会通过 Midscene computer use 调用视觉模型执行 `aiTap`、`aiAct`、显式 `aiWaitFor` 等操作。runner 会先读取当前 step 的 `timing.waitBeforeMs` 做确定性等待，再执行 route。对于 `input` route，runner 会调用自定义 `KeyboardTypeText` action，并把 route 的 `locatePrompt` 传给该 action 的 `locate` 字段复用 Midscene 定位管线，再用键盘事件逐键输入；该路径不使用 Midscene 内置 `aiInput`，也不依赖剪贴板粘贴。
 
 注意：`npm run flow:run -- --project air-tickets-demo` 是执行命令，不是 trace 转换命令。trace 转换为 Midscene flow 的命令是 `npm run flow:convert -- --project air-tickets-demo --goal "..."`。
 

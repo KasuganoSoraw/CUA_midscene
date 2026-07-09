@@ -28,7 +28,7 @@
 - **WHEN** converter 收到一个具名项目的有效 ShowUI-Aloha trace
 - **THEN** 它 SHALL 写入 `CUA_midscene/projects/<project-name>/ir/midscene-flow.json`
 - **AND** flow SHALL 包含 `schemaVersion`、`project`、`source` 和 `steps`
-- **AND** 每个 step SHALL 包含稳定 `id`、源 trace 引用、intent、evidence、route strategy 和 fallback 信息
+- **AND** 每个 step SHALL 包含稳定 `id`、源 trace 引用、intent、timing、evidence、route strategy 和 fallback 信息
 
 #### Scenario: Trace operation 转换为 Midscene prompt
 - **WHEN** trace step 包含结构化 `caption.operation`
@@ -45,6 +45,12 @@
 - **THEN** flow step SHALL 包含原始 trace step index 或 identifier
 - **AND** 它 SHALL 包含用于推导该 step 的 trace observation、action 或 expectation
 - **AND** 当相关 screenshot 或 crop 路径可用时，它 SHALL 引用这些路径
+
+#### Scenario: 录制步骤间隔转换为执行前等待
+- **WHEN** processed log 中相邻步骤包含有效 `timestamp`
+- **THEN** converter SHALL 计算相邻步骤的录制时间差
+- **AND** converter SHALL 将该时间差写入 step 的 `timing.recordedGapMs`
+- **AND** converter SHALL 写入经过下限忽略和上限截断后的 `timing.waitBeforeMs`
 
 ### Requirement: Flow step 被路由到执行策略
 系统 SHALL 在执行前将每个转换后的 step 分类为明确的 Midscene 执行策略。
@@ -75,12 +81,11 @@
 - **THEN** 它 SHALL 将这些 step 路由到对应 Midscene computer use 操作
 - **AND** 它 SHALL 使用已配置 run directory 生成 Midscene 执行报告
 
-#### Scenario: Runner 在定位失败后等待上一状态并重试
-- **WHEN** runner 执行某个 step 时首次遇到定位失败
-- **AND** 上一个 step 的 `evidence.expectation` 可用
-- **THEN** runner SHALL 调用 `aiWaitFor` 等待上一个 step 的 expectation 成立
-- **AND** runner SHALL 只重试当前 step 一次
-- **AND** 如果等待失败或重试仍失败，runner SHALL 继续暴露错误而不是静默跳过
+#### Scenario: Runner 按 IR timing 执行前等待
+- **WHEN** runner 执行包含 `timing.waitBeforeMs` 的 flow step
+- **THEN** runner SHALL 在执行该 step 的 route 前等待指定毫秒数
+- **AND** runner SHALL NOT 在定位失败后默认调用 `aiWaitFor` 进行兜底重试
+- **AND** `aiWaitFor` SHALL 只来自显式 `wait` strategy 或后续明确标记的页面跳转等待策略
 
 #### Scenario: Runner 使用键盘事件执行文本输入
 - **WHEN** runner 执行 `input` strategy

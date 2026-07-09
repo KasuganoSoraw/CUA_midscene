@@ -35,10 +35,14 @@ interface ShowuiTraceOperation {
 }
 
 interface ProcessedLogStep {
+  timestamp?: number;
   action?: string;
   screenshot_full?: string;
   screenshot_crop?: string;
 }
+
+const MIN_RECORDED_WAIT_MS = 200;
+const MAX_RECORDED_WAIT_MS = 3000;
 
 interface ConvertOptions {
   project: string;
@@ -267,7 +271,34 @@ function buildFallback(route: MidsceneFlowRoute, action: string) {
   };
 }
 
-function buildStep(traceStep: ShowuiTraceStep, processedStep: ProcessedLogStep | undefined): MidsceneFlowStep {
+function clampRecordedWaitMs(recordedGapMs: number): number {
+  if (recordedGapMs < MIN_RECORDED_WAIT_MS) return 0;
+  return Math.min(recordedGapMs, MAX_RECORDED_WAIT_MS);
+}
+
+function buildTiming(processedStep: ProcessedLogStep | undefined, previousProcessedStep: ProcessedLogStep | undefined) {
+  if (typeof processedStep?.timestamp !== 'number' || typeof previousProcessedStep?.timestamp !== 'number') {
+    return undefined;
+  }
+
+  const recordedGapMs = Math.max(0, Math.round((processedStep.timestamp - previousProcessedStep.timestamp) * 1000));
+  const waitBeforeMs = clampRecordedWaitMs(recordedGapMs);
+  if (waitBeforeMs <= 0) {
+    return { recordedGapMs };
+  }
+
+  return {
+    recordedGapMs,
+    waitBeforeMs,
+    waitReason: 'recorded-step-gap' as const,
+  };
+}
+
+function buildStep(
+  traceStep: ShowuiTraceStep,
+  processedStep: ProcessedLogStep | undefined,
+  previousProcessedStep: ProcessedLogStep | undefined,
+): MidsceneFlowStep {
   const caption = traceStep.caption;
   const observation = caption.observation ?? '';
   const action = caption.action ?? '';
@@ -289,8 +320,10 @@ function buildStep(traceStep: ShowuiTraceStep, processedStep: ProcessedLogStep |
     sourceTrace: {
       stepIndex: traceStep.step_idx,
       rawAction: processedStep?.action,
+      timestampSec: processedStep?.timestamp,
     },
     intent: caption.think ?? action,
+    timing: buildTiming(processedStep, previousProcessedStep),
     evidence,
     route,
     fallback: buildFallback(route, action),
@@ -332,7 +365,7 @@ async function convert(options: ConvertOptions): Promise<string> {
       traceToFlowConversion: options.conversionCommand,
       flowExecution: options.flowExecutionCommand ?? `npm run flow:run -- --project ${options.project}`,
     },
-    steps: trace.trajectory.map((step, index) => buildStep(step, processedSteps[index])),
+    steps: trace.trajectory.map((step, index) => buildStep(step, processedSteps[index], processedSteps[index - 1])),
   };
 
   await mkdir(path.dirname(outputPath), { recursive: true });

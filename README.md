@@ -126,7 +126,7 @@ npm run flow:run -- --project air-tickets-demo
 
 执行阶段的文本输入不使用 Midscene 内置 `aiInput`。runner 会调用自定义 `KeyboardTypeText` action，把 input route 的 `locatePrompt` 传给该 action 的 `locate` 字段复用 Midscene 定位管线，再用键盘事件逐键输入，避免在堡垒机或远程桌面中依赖外部剪贴板。
 
-当某个 step 首次定位失败时，runner 会读取上一个 step 的 `evidence.expectation`，用 `aiWaitFor` 等待上一动作完成后的界面状态，然后只重试当前 step 一次。该机制只处理动作完成后界面尚未稳定的时序问题；如果等待失败或重试仍失败，会继续暴露错误。
+converter 会根据 `processed-log-sc.json` 中相邻动作的 `timestamp` 生成 `timing.waitBeforeMs`，runner 在执行每个 step 前按该时间做确定性等待。当前等待时间会忽略极短间隔，并对长间隔设置上限，避免把录制中的人为停顿完整带入执行。runner 不再在定位失败后默认调用 `aiWaitFor` 重试；`aiWaitFor` 只应来自显式 `wait` route 或后续明确标记的页面跳转场景。
 
 注意：执行阶段使用的是 Midscene 的 computer use 能力，操作真实桌面应用。它不依赖 browser-use，也不通过浏览器调试协议直接控制网页。
 

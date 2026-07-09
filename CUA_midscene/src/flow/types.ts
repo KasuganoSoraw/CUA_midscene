@@ -35,6 +35,7 @@ export interface MidsceneFlowStep {
   id: string;
   sourceTrace: MidsceneFlowSourceTrace;
   intent: string;
+  timing?: MidsceneFlowTiming;
   evidence: MidsceneFlowEvidence;
   route: MidsceneFlowRoute;
   fallback: MidsceneFlowFallback;
@@ -43,6 +44,13 @@ export interface MidsceneFlowStep {
 export interface MidsceneFlowSourceTrace {
   stepIndex: number;
   rawAction?: string;
+  timestampSec?: number;
+}
+
+export interface MidsceneFlowTiming {
+  recordedGapMs?: number;
+  waitBeforeMs?: number;
+  waitReason?: 'recorded-step-gap';
 }
 
 export interface MidsceneFlowEvidence {
