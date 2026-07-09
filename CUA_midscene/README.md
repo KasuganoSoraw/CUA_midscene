@@ -73,7 +73,7 @@ npm run flow:run -- --project <project-name>
 
 当前样例 flow 会保留 trace 中的 `operation.prompt`。对于文本输入，trace 还必须提供只描述输入框目标的 `operation.locatePrompt`，converter 会把它写入 input route。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
 
-converter 会根据 `processed-log-sc.json` 中相邻动作的 `timestamp` 生成 `timing.waitBeforeMs`，runner 在执行每个 step 前按该时间做确定性等待。当前等待时间会忽略极短间隔，并对长间隔设置上限，避免把录制中的人为停顿完整带入执行。runner 不再在定位失败后默认调用 `aiWaitFor` 重试；`aiWaitFor` 只应来自显式 `wait` route 或后续明确标记的页面跳转场景。
+converter 会根据 `processed-log-sc.json` 中相邻动作的 `timestamp` 生成 `timing.waitBeforeMs`，runner 在执行每个 step 前按该时间做确定性等待。当前等待时间会忽略极短间隔，并将长间隔最多截断为 30 秒，避免把录制中的异常长停顿完整带入执行。runner 不再在定位失败后默认调用 `aiWaitFor` 重试；`aiWaitFor` 只应来自显式 `wait` route 或后续明确标记的页面跳转场景。
 
 文本输入的执行方式：
 

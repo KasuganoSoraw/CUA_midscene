@@ -42,7 +42,7 @@ interface ProcessedLogStep {
 }
 
 const MIN_RECORDED_WAIT_MS = 200;
-const MAX_RECORDED_WAIT_MS = 3000;
+const MAX_RECORDED_WAIT_MS = 30000;
 
 interface ConvertOptions {
   project: string;

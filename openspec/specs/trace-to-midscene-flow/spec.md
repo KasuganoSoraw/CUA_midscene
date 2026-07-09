@@ -50,7 +50,7 @@
 - **WHEN** processed log 中相邻步骤包含有效 `timestamp`
 - **THEN** converter SHALL 计算相邻步骤的录制时间差
 - **AND** converter SHALL 将该时间差写入 step 的 `timing.recordedGapMs`
-- **AND** converter SHALL 写入经过下限忽略和上限截断后的 `timing.waitBeforeMs`
+- **AND** converter SHALL 写入经过下限忽略和 30 秒上限截断后的 `timing.waitBeforeMs`
 
 ### Requirement: Flow step 被路由到执行策略
 系统 SHALL 在执行前将每个转换后的 step 分类为明确的 Midscene 执行策略。

@@ -54,7 +54,7 @@
       "intent": "上一步已经点击聚焦了 Chrome 的地址栏/搜索栏，当前步骤是向该输入框中输入文字'QATAR AIRWAYS'。从局部图可以看到文本'qatar airways'已经出现在地址栏中，并触发了 Google 搜索建议下拉，说明输入操作已经完成。需要在地址栏中输入完整的'QATAR AIRWAYS'作为搜索关键词，浏览器据此提供自动补全和搜索建议，准备下一步执行搜索。",
       "timing": {
         "recordedGapMs": 4101,
-        "waitBeforeMs": 3000,
+        "waitBeforeMs": 4101,
         "waitReason": "recorded-step-gap"
       },
       "evidence": {
@@ -339,7 +339,7 @@
       "intent": "上一步已经在 From 输入框中完成 'SINGAPORE' 键入并点击确认 Singapore Changi Airport（SIN）候选项，出发地字段已锁定为 'Singapore SIN'，焦点随之释放。Step 9 之后 To 输入框已通过点击或 Tab 切换获得了焦点，并开始键入 'Lo'，自动补全下拉列表已根据 'Lo' 过滤，把所有以 London 开头的候选（LON/LGW/LHR/LCY/QQU/LTN）推到列表顶部。本步的 action 是继续在 To 输入框中追加输入 'LOS'，意图是把目的地从模糊的 'Lo'（被 London 系列独占）进一步精确到 Los（典型为 Los Angeles, United States of America 的 Los Angeles International Airport，机场代码 LAX，IATA 城市码 LAX/QQU 等；也可能是其他 'Los' 开头的城市），从而让自动补全列表重新过滤、把 Lagos / Los Angeles / 等匹配项推到顶部，供下一步点击确认。输入的是追加在已有 'Lo' 之后的三字母前缀，不是替换。",
       "timing": {
         "recordedGapMs": 6425,
-        "waitBeforeMs": 3000,
+        "waitBeforeMs": 6425,
         "waitReason": "recorded-step-gap"
       },
       "evidence": {

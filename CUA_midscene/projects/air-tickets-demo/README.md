@@ -42,7 +42,7 @@ cd CUA_midscene
 npm run flow:convert -- --project air-tickets-demo --goal "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
 ```
 
-这一步当前不调用模型，只进行确定性映射：读取 `source/showui-trace.json` 中的 `operation.prompt`、input 操作的 `operation.locatePrompt`，以及 `source/processed-log-sc.json` 中的截图引用和时间戳，输出 `ir/midscene-flow.json`。相邻录制动作的时间差会转换为每个 step 的 `timing.waitBeforeMs`，供 runner 执行前等待使用。
+这一步当前不调用模型，只进行确定性映射：读取 `source/showui-trace.json` 中的 `operation.prompt`、input 操作的 `operation.locatePrompt`，以及 `source/processed-log-sc.json` 中的截图引用和时间戳，输出 `ir/midscene-flow.json`。相邻录制动作的时间差会转换为每个 step 的 `timing.waitBeforeMs`，供 runner 执行前等待使用；极短间隔会被忽略，长间隔最多截断为 30 秒。
 
 执行 Midscene flow：
 
