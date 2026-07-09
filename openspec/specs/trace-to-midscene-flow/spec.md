@@ -21,6 +21,12 @@
 - **AND** 它 SHALL 在 `CUA_midscene` 下写入 Midscene 专属产物
 - **AND** 它 SHALL NOT 依赖 `Aloha_Act`、ShowUI-Aloha Actor、ShowUI-Aloha Executor 或 ShowUI-Aloha replay 代码
 
+#### Scenario: Trace prompt 约束 Midscene 定位描述
+- **WHEN** ShowUI-Aloha Learn 生成 trace
+- **THEN** trace 生成 prompt SHALL 要求 `operation.prompt` 包含目标视觉特征、所在区域、相对锚点和动作意图中的至少 3 类信息
+- **AND** 对 `input` 操作，`operation.locatePrompt` SHALL 只描述目标输入框本身，但也应包含足量视觉定位信息
+- **AND** 系统 SHALL NOT 为该定位增强新增额外 operation schema 字段
+
 ### Requirement: Converter 生成 Midscene flow IR
 系统 SHALL 将 ShowUI-Aloha trace 数据转换为结构化 `midscene-flow.json` 产物，并供 Midscene 工具消费。
 
