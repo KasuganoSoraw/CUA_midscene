@@ -50,7 +50,7 @@ export interface MidsceneFlowSourceTrace {
 export interface MidsceneFlowTiming {
   recordedGapMs?: number;
   waitBeforeMs?: number;
-  waitReason?: 'recorded-step-gap';
+  waitReason?: 'recorded-step-gap' | 'manual-calibration';
 }
 
 export interface MidsceneFlowEvidence {
