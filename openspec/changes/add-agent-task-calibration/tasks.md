@@ -4,6 +4,7 @@
 - [x] 1.2 实现项目文件读取、基础 IR 指纹、结构验证和确定性合并
 - [x] 1.3 实现重复 `--input` 与 `--inputs` 文件解析、默认值和稀疏覆盖
 - [x] 1.4 增加 resolver 单元测试，覆盖未知参数、失效 step、非法 route 和过期指纹
+- [x] 1.5 将 flow 生产代码按 contracts、conversion、task、execution 拆分，并把测试迁移到顶层 tests 目录
 
 ## 2. Converter 与项目迁移
 
@@ -13,10 +14,10 @@
 
 ## 3. 通用 CLI 与 runner
 
-- [ ] 3.1 实现 `project:list`、`flow:validate` 和 `flow:inspect` 命令及 JSON 输出
-- [ ] 3.2 实现 `calibration:validate` 和 `calibration:apply`，应用后更新 overrides 并归档 proposal
-- [ ] 3.3 修改 `flow:run` 使用共享 resolver、支持输入参数并保存 resolved flow 快照
-- [ ] 3.4 更新 npm scripts 并验证 inspect 与 run 构建相同 resolved flow
+- [x] 3.1 实现 `project:list`、`flow:validate` 和 `flow:inspect` 命令及 JSON 输出
+- [x] 3.2 实现 `calibration:validate` 和 `calibration:apply`，应用后更新 overrides 并归档 proposal
+- [x] 3.3 修改 `flow:run` 使用共享 resolver、支持输入参数并保存 resolved flow 快照
+- [x] 3.4 更新 npm scripts 并验证 inspect 与 run 构建相同 resolved flow
 
 ## 4. Agent Skill 与文档
 

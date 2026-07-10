@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { deriveInputLocatePrompt } from './input-locate-prompt.js';
+import { deriveInputLocatePrompt } from '../../../src/flow/conversion/input-locate-prompt.js';
 
 assert.equal(
   deriveInputLocatePrompt('在 Chrome 地址栏/搜索栏中输入 {{value}}'),

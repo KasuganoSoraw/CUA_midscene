@@ -1,86 +1,40 @@
 import { agentForComputer } from '@midscene/computer';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from '../env.js';
+import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from '../../env.js';
 import { createKeyboardTypeTextAction } from './keyboard-type-action.js';
-import type { MidsceneFlow, MidsceneFlowRoute, MidsceneFlowStep } from './types.js';
+import {
+  assertAllowedTaskArgs,
+  loadRuntimeInputs,
+  parseTaskArgs,
+  type ParsedTaskArgs,
+} from '../task/cli-args.js';
+import { resolveProjectFlow, taskProjectPaths, writeResolvedFlowSnapshot } from '../task/resolver.js';
+import type { MidsceneFlowStep } from '../contracts/types.js';
 
 type ComputerAgent = Awaited<ReturnType<typeof agentForComputer>>;
 
 interface RunOptions {
   project: string;
-  flowPath: string;
+  projectRoot?: string;
+  flowPath?: string;
   dryRun: boolean;
+  args: ParsedTaskArgs;
 }
 
 function parseArgs(argv: string[]): RunOptions {
-  const options = new Map<string, string | boolean>();
-  for (let i = 0; i < argv.length; i += 1) {
-    const current = argv[i];
-    if (current === '--dry-run') {
-      options.set('dry-run', true);
-      continue;
-    }
-
-    if (!current.startsWith('--')) continue;
-    const key = current.slice(2);
-    const value = argv[i + 1];
-    if (!value || value.startsWith('--')) {
-      throw new Error(`参数 --${key} 缺少值`);
-    }
-    options.set(key, value);
-    i += 1;
-  }
-
-  const project = options.get('project');
-  if (typeof project !== 'string') {
+  const args = parseTaskArgs(argv, ['dry-run']);
+  assertAllowedTaskArgs(args, ['project', 'project-root', 'flow', 'inputs'], ['dry-run'], true);
+  const project = args.values.get('project');
+  if (!project) {
     throw new Error('必须提供 --project <project-name>');
   }
 
-  const defaultFlowPath = path.join('projects', project, 'ir', 'midscene-flow.json');
-  const flowPath = options.get('flow');
-
   return {
     project,
-    flowPath: typeof flowPath === 'string' ? flowPath : defaultFlowPath,
-    dryRun: options.get('dry-run') === true,
+    projectRoot: args.values.get('project-root'),
+    flowPath: args.values.get('flow'),
+    dryRun: args.flags.has('dry-run'),
+    args,
   };
-}
-
-async function readFlow(flowPath: string): Promise<MidsceneFlow> {
-  try {
-    return JSON.parse(await readFile(flowPath, 'utf8')) as MidsceneFlow;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`读取 Midscene flow 失败：${flowPath}\n${message}`);
-  }
-}
-
-function assertSupportedRoute(step: MidsceneFlowStep): void {
-  switch (step.route.strategy) {
-    case 'keyboard':
-    case 'input':
-    case 'tap':
-    case 'act':
-    case 'wait':
-      return;
-    case 'manual-review':
-      throw new Error(`step ${step.id} 需要人工审查：${step.route.reason}`);
-    default: {
-      const unknown = step.route as MidsceneFlowRoute;
-      throw new Error(`step ${step.id} 使用了不受支持的策略：${String(unknown.strategy)}`);
-    }
-  }
-}
-
-function validateFlow(flow: MidsceneFlow): void {
-  if (!flow.schemaVersion || !flow.project || !Array.isArray(flow.steps)) {
-    throw new Error('无效 Midscene flow：缺少 schemaVersion、project 或 steps');
-  }
-
-  for (const step of flow.steps) {
-    assertSupportedRoute(step);
-  }
 }
 
 function describeRoute(step: MidsceneFlowStep): string {
@@ -150,11 +104,19 @@ async function executeStep(agent: ComputerAgent, step: MidsceneFlowStep): Promis
 }
 
 async function run(options: RunOptions): Promise<void> {
-  const flow = await readFlow(options.flowPath);
-  validateFlow(flow);
+  const inputs = await loadRuntimeInputs(options.args);
+  const resolved = await resolveProjectFlow({
+    project: options.project,
+    projectRoot: options.projectRoot,
+    flowPath: options.flowPath,
+    inputs,
+  });
+  const flow = resolved.flow;
 
   if (options.dryRun) {
-    console.log(`Midscene flow dry-run 通过：${options.flowPath}`);
+    console.log(`Midscene flow dry-run 通过：${resolved.sources.baseFlowPath}`);
+    console.log(`已确认校准 step：${resolved.sources.appliedOverrideSteps.join(', ') || '无'}`);
+    console.log(`本次输入：${JSON.stringify(resolved.inputs)}`);
     for (const step of flow.steps) {
       console.log(describeRoute(step));
     }
@@ -163,6 +125,10 @@ async function run(options: RunOptions): Promise<void> {
 
   warnIfNodeVersionIsOld();
   checkRequiredModelEnv();
+
+  const paths = taskProjectPaths(options.project, options.projectRoot, options.flowPath);
+  const snapshotPath = await writeResolvedFlowSnapshot(resolved, paths.reportsDir);
+  console.log(`已保存 resolved flow 快照：${snapshotPath}`);
 
   const keyboardTypeText = createKeyboardTypeTextAction();
   const agent = await agentForComputer({

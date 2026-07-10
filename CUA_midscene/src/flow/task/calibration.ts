@@ -10,7 +10,7 @@ import {
   validateOverrides,
   validateProjectConfig,
   validateRoute,
-} from './task-resolver.js';
+} from './resolver.js';
 import {
   CALIBRATION_PROPOSAL_SCHEMA_VERSION,
   type CalibrationHistoryRecord,
@@ -18,8 +18,8 @@ import {
   type FlowOverrides,
   type FlowStepPatch,
   type TaskProjectConfig,
-} from './task-types.js';
-import type { MidsceneFlowStep } from './types.js';
+} from '../contracts/task-types.js';
+import type { MidsceneFlowStep } from '../contracts/types.js';
 
 export interface CalibrationOptions {
   project: string;
@@ -67,7 +67,7 @@ export async function validateCalibrationProposal(options: CalibrationOptions): 
   const proposalPath = path.join(paths.proposalsDir, proposalFileName(options.proposal));
   const [proposal, resolved, config, overrides, base] = await Promise.all([
     readJsonFile<CalibrationProposal>(proposalPath),
-    resolveProjectFlow({ project: options.project, projectRoot: paths.projectRoot }),
+    resolveProjectFlow({ project: options.project, projectRoot: paths.projectRoot, executable: false }),
     readJsonFile<TaskProjectConfig>(paths.projectConfigPath),
     readJsonFile<FlowOverrides>(paths.overridesPath),
     readFlowWithFingerprint(paths.flowPath),

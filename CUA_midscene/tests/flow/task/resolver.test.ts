@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -7,14 +7,15 @@ import {
   fingerprintFlowContent,
   resolveProjectFlow,
   validateOverrides,
-} from './task-resolver.js';
+  writeResolvedFlowSnapshot,
+} from '../../../src/flow/task/resolver.js';
 import {
   FLOW_OVERRIDES_SCHEMA_VERSION,
   TASK_PROJECT_SCHEMA_VERSION,
   type FlowOverrides,
   type TaskProjectConfig,
-} from './task-types.js';
-import { MIDSCENE_FLOW_SCHEMA_VERSION, type MidsceneFlow } from './types.js';
+} from '../../../src/flow/contracts/task-types.js';
+import { MIDSCENE_FLOW_SCHEMA_VERSION, type MidsceneFlow } from '../../../src/flow/contracts/types.js';
 
 const project = 'resolver-test';
 const flow: MidsceneFlow = {
@@ -95,6 +96,10 @@ try {
   });
   assert.equal(sparse.flow.steps[0].route.strategy === 'input' && sparse.flow.steps[0].route.value, '47405');
   assert.equal(sparse.flow.steps[1].route.strategy === 'tap' && sparse.flow.steps[1].route.prompt, '页面顶部工具栏右侧的蓝色搜索按钮');
+  const originalFlowBeforeSnapshot = await readFile(path.join(root, 'ir', 'midscene-flow.json'), 'utf8');
+  const snapshotPath = await writeResolvedFlowSnapshot(sparse, path.join(root, 'reports'));
+  assert.match(snapshotPath, /resolved-flow\.json$/);
+  assert.equal(await readFile(path.join(root, 'ir', 'midscene-flow.json'), 'utf8'), originalFlowBeforeSnapshot);
 
   await assert.rejects(
     resolveProjectFlow({ project, projectRoot: root, inputs: { unknown: 'value' } }),

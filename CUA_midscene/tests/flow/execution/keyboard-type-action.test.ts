@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createKeyboardTypeTextAction, textToKeyboardSequence } from './keyboard-type-action.js';
+import { createKeyboardTypeTextAction, textToKeyboardSequence } from '../../../src/flow/execution/keyboard-type-action.js';
 
 assert.deepEqual(textToKeyboardSequence('47405'), ['4', '7', '4', '0', '5']);
 

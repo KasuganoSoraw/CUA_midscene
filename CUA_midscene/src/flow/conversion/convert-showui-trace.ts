@@ -7,9 +7,9 @@ import {
   type MidsceneFlowRoute,
   type MidsceneFlowStep,
   type MidsceneTraceOperation,
-} from './types.js';
+} from '../contracts/types.js';
 import { deriveInputLocatePrompt } from './input-locate-prompt.js';
-import { createEmptyOverrides, createInitialProjectConfig } from './task-resolver.js';
+import { createEmptyOverrides, createInitialProjectConfig } from '../task/resolver.js';
 
 interface ShowuiTrace {
   trajectory: ShowuiTraceStep[];

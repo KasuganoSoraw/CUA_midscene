@@ -7,6 +7,25 @@ export interface ParsedTaskArgs {
   inputAssignments: string[];
 }
 
+export function assertAllowedTaskArgs(
+  args: ParsedTaskArgs,
+  allowedValues: string[],
+  allowedFlags: string[],
+  allowInputs = false,
+): void {
+  const valueSet = new Set(allowedValues);
+  const flagSet = new Set(allowedFlags);
+  for (const key of args.values.keys()) {
+    if (!valueSet.has(key)) throw new Error(`当前命令不支持参数 --${key}`);
+  }
+  for (const flag of args.flags) {
+    if (!flagSet.has(flag)) throw new Error(`当前命令不支持标记 --${flag}`);
+  }
+  if (!allowInputs && args.inputAssignments.length > 0) {
+    throw new Error('当前命令不支持 --input');
+  }
+}
+
 export function parseTaskArgs(argv: string[], booleanFlags: string[] = []): ParsedTaskArgs {
   const values = new Map<string, string>();
   const flags = new Set<string>();

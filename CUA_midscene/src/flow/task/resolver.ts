@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { MidsceneFlow, MidsceneFlowRoute, MidsceneFlowStep } from './types.js';
+import type { MidsceneFlow, MidsceneFlowRoute, MidsceneFlowStep } from '../contracts/types.js';
 import {
   FLOW_OVERRIDES_SCHEMA_VERSION,
   RESOLVED_FLOW_SCHEMA_VERSION,
@@ -11,13 +11,14 @@ import {
   type ResolvedFlowResult,
   type ResolvedFlowSnapshot,
   type TaskProjectConfig,
-} from './task-types.js';
+} from '../contracts/task-types.js';
 
 export interface ResolveProjectOptions {
   project: string;
   projectRoot?: string;
   flowPath?: string;
   inputs?: Record<string, string>;
+  executable?: boolean;
 }
 
 export interface TaskProjectPaths {
@@ -295,7 +296,7 @@ export async function resolveProjectFlow(options: ResolveProjectOptions): Promis
     readJsonFile<FlowOverrides>(paths.overridesPath),
   ]);
 
-  validateFlow(baseFlow);
+  validateFlow(baseFlow, false);
   if (baseFlow.project !== options.project) {
     throw new Error(`请求项目 ${options.project} 与 flow 项目 ${baseFlow.project} 不一致`);
   }
@@ -304,7 +305,7 @@ export async function resolveProjectFlow(options: ResolveProjectOptions): Promis
 
   const calibratedFlow = applyOverrides(baseFlow, overrides);
   const resolved = applyInputs(calibratedFlow, config, options.inputs ?? {});
-  validateFlow(resolved.flow);
+  validateFlow(resolved.flow, options.executable ?? true);
 
   return {
     flow: resolved.flow,

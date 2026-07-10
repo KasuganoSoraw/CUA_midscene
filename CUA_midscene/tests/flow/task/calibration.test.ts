@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { applyCalibrationProposal, validateCalibrationProposal } from './calibration.js';
-import { fingerprintFlowContent, resolveProjectFlow } from './task-resolver.js';
+import { applyCalibrationProposal, validateCalibrationProposal } from '../../../src/flow/task/calibration.js';
+import { fingerprintFlowContent, resolveProjectFlow } from '../../../src/flow/task/resolver.js';
 import {
   CALIBRATION_PROPOSAL_SCHEMA_VERSION,
   FLOW_OVERRIDES_SCHEMA_VERSION,
@@ -11,8 +11,8 @@ import {
   type CalibrationProposal,
   type FlowOverrides,
   type TaskProjectConfig,
-} from './task-types.js';
-import { MIDSCENE_FLOW_SCHEMA_VERSION, type MidsceneFlow } from './types.js';
+} from '../../../src/flow/contracts/task-types.js';
+import { MIDSCENE_FLOW_SCHEMA_VERSION, type MidsceneFlow } from '../../../src/flow/contracts/types.js';
 
 const project = 'calibration-test';
 const flow: MidsceneFlow = {
