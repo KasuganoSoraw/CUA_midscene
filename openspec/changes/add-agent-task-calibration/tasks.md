@@ -7,9 +7,9 @@
 
 ## 2. Converter 与项目迁移
 
-- [ ] 2.1 修改 converter，在项目配置不存在时从 input routes 初始化输入定义且不覆盖已有配置
-- [ ] 2.2 为 `air-tickets-demo` 建立 config、calibration、generated、reports 目录契约和示例配置
-- [ ] 2.3 验证重新转换基础 IR 不会覆盖任务配置或校准
+- [x] 2.1 修改 converter，在项目配置不存在时从 input routes 初始化输入定义且不覆盖已有配置
+- [x] 2.2 为 `air-tickets-demo` 建立 config、calibration、generated、reports 目录契约和示例配置
+- [x] 2.3 验证重新转换基础 IR 不会覆盖任务配置或校准
 
 ## 3. 通用 CLI 与 runner
 

@@ -9,6 +9,7 @@ import {
   type MidsceneTraceOperation,
 } from './types.js';
 import { deriveInputLocatePrompt } from './input-locate-prompt.js';
+import { createEmptyOverrides, createInitialProjectConfig } from './task-resolver.js';
 
 interface ShowuiTrace {
   trajectory: ShowuiTraceStep[];
@@ -121,6 +122,17 @@ async function readJsonFile<T>(filePath: string): Promise<T> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`读取 JSON 失败：${filePath}\n${message}`);
+  }
+}
+
+async function writeJsonIfMissing(filePath: string, value: unknown): Promise<boolean> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  try {
+    await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw error;
   }
 }
 
@@ -371,7 +383,20 @@ async function convert(options: ConvertOptions): Promise<string> {
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${JSON.stringify(flow, null, 2)}\n`, 'utf8');
 
+  const projectConfigPath = path.join(projectRoot, 'config', 'project.json');
+  const overridesPath = path.join(projectRoot, 'config', 'flow-overrides.json');
+  const projectConfigCreated = await writeJsonIfMissing(projectConfigPath, createInitialProjectConfig(flow));
+  const overridesCreated = await writeJsonIfMissing(overridesPath, createEmptyOverrides(flow.project));
+  await Promise.all([
+    mkdir(path.join(projectRoot, 'calibration', 'proposals'), { recursive: true }),
+    mkdir(path.join(projectRoot, 'calibration', 'history'), { recursive: true }),
+    mkdir(path.join(projectRoot, 'generated'), { recursive: true }),
+    mkdir(path.join(projectRoot, 'reports'), { recursive: true }),
+  ]);
+
   console.log(`已生成 Midscene flow：${outputPath}`);
+  console.log(`${projectConfigCreated ? '已初始化' : '已保留'}项目配置：${projectConfigPath}`);
+  console.log(`${overridesCreated ? '已初始化' : '已保留'}校准配置：${overridesPath}`);
   console.log(`源 trace：${tracePath}`);
   console.log(`源日志：${processedLogPath}`);
   console.log(`截图目录：${screenshotsDir}`);
