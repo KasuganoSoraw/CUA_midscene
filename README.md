@@ -11,8 +11,10 @@
 ```text
 CUA/
 ├── CUA_midscene/      # 主执行器：Midscene computer use 实验
-│   └── projects/      # 按业务流程组织的 trace、IR、生成脚本和报告
-└── showui-aloha/      # 教学录制侧：从录制资源生成结构化日志和 trace
+│   └── projects/      # 可由 Agent 调用的业务任务包
+├── showui-aloha/      # 教学录制侧：从录制资源生成结构化日志和 trace
+├── skills/            # 仓库内维护的 Codex Skill 源文件
+└── openspec/          # 需求规格与变更记录
 ```
 
 ### CUA_midscene
@@ -24,9 +26,11 @@ CUA/
 `CUA_midscene/projects/<project-name>/` 用于保存单个业务流程的全部产物：
 
 - `source/`：ShowUI-Aloha Learn 生成的 trace、processed log 和截图。
-- `ir/`：转换后的 Midscene flow，例如 `midscene-flow.json`。
+- `ir/`：可重新生成的基础 Midscene flow，例如 `midscene-flow.json`。
+- `config/`：任务说明、录制默认输入和已经确认的人工校准。
+- `calibration/`：Agent 待确认的校准建议及已应用历史。
 - `generated/`：后续从 flow 派生出的 Midscene 脚本。
-- `reports/`：该流程执行产生的报告或报告引用。
+- `reports/`：执行报告及本次 resolved flow 快照，不提交 Git。
 
 ### showui-aloha
 
@@ -50,11 +54,13 @@ ShowUI-Aloha Learn
     ↓
 结构化操作日志 / trace（含 operation prompt、locatePrompt）
     ↓
-转换为 Midscene flow IR
+转换为基础 Midscene flow IR
+    ↓
+已确认校准 + 本次参数
+    ↓
+resolved flow
     ↓
 Midscene computer use 执行
-    ↓
-失败时回退到视觉理解和重新规划
 ```
 
 这个拆分的核心原因是速度和稳定性：
@@ -120,6 +126,25 @@ npm run flow:convert -- --project air-tickets-demo --goal "将 Qatar Airways 订
 npm run flow:run -- --project air-tickets-demo
 ```
 
+列出任务、验证和检查最终执行内容：
+
+```powershell
+npm run project:list -- --json
+npm run flow:validate -- --project air-tickets-demo
+npm run flow:inspect -- --project air-tickets-demo --input step-002-value="GOOGLE"
+```
+
+调用输入采用稀疏覆盖：只传本次需要改变的 input id，其余输入继续使用 `config/project.json` 中的录制默认值。`flow:inspect` 和 `flow:run` 共用同一个确定性 resolver，合并顺序固定为基础 IR、已确认校准、本次输入；该过程不调用模型。
+
+Agent 发现长期流程错误时，应先在 `calibration/proposals/` 生成修改建议并展示差异。只有用户明确确认后才能执行：
+
+```powershell
+npm run calibration:validate -- --project air-tickets-demo --proposal <proposal-id>
+npm run calibration:apply -- --project air-tickets-demo --proposal <proposal-id> --confirmed
+```
+
+待确认 proposal 不参与执行。人工可以直接编辑 `config/flow-overrides.json`，但必须随后运行 `flow:validate`。
+
 注意：`flow:run` 是执行 flow，不是转换 trace。整体链路中，`flow:convert` 才是 trace 到 `midscene-flow.json` 的转换命令。新增项目时不需要再新增 npm script，只需要替换 `--project <project-name>`；如果目标说明变化，同时传入新的 `--goal`。
 
 当前样例 flow 会保留 trace 中的 `operation.prompt`。对于文本输入，trace 还必须提供只描述输入框目标的 `operation.locatePrompt`，converter 会把它写入 input route，runner 按 route 顺序执行。真正无法映射为可执行策略的步骤会被标记为 `manual-review` 并 fail fast。
@@ -157,12 +182,23 @@ uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 - 初步打通 ShowUI-Aloha trace 到 Midscene flow 的转换链路，converter 优先消费 trace 中的 `operation.prompt`，并在 input route 中使用 `operation.locatePrompt` 定位输入框。
 - 新增通用 runner，能够读取 `midscene-flow.json` 并按 route 调用 Midscene computer use。
 - 将 input route 改为 Midscene 自定义 `KeyboardTypeText` action 执行，避免剪贴板输入。
+- 将项目扩展为基础 IR、已确认校准、本次参数和 resolved flow 分层的可调用任务包。
+- 提供项目发现、验证、检查、校准审批和参数化运行 CLI。
+- 提供仓库内 `cua-midscene` Codex Skill，约束 Agent 区分创建、校准和调用。
 
 待实现：
 
 - 将一次成功执行的流程固化为更快的脚本化步骤。
-- 在脚本失败时自动回退到 Midscene 视觉操作。
+- 设计明确且可审计的失败诊断与视觉恢复流程；当前不自动修改任务或失败后重试。
 - 面向华为网管系统沉淀可复用的任务模板和失败恢复策略。
+
+## 安装 Agent Skill
+
+Skill 源文件由仓库中的 `skills/cua-midscene/` 维护。本机安装副本位于 `$CODEX_HOME/skills` 或 `~/.codex/skills`，不纳入 Git：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-cua-midscene-skill.ps1
+```
 
 ## 版本管理说明
 

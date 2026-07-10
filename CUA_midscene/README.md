@@ -28,18 +28,23 @@ Midscene computer use 需要可用于屏幕理解的视觉模型 family。如果
 
 ```text
 projects/<project-name>/
-  source/      # ShowUI-Aloha trace、processed log、截图
-  ir/          # Midscene flow IR，例如 midscene-flow.json
-  generated/   # 后续生成的 run.ts 等脚本产物
-  reports/     # 执行报告或报告引用
+  source/                    # ShowUI-Aloha trace、processed log、截图
+  ir/midscene-flow.json      # converter 自动生成的基础 IR
+  config/project.json        # 任务说明、输入定义和录制默认值
+  config/flow-overrides.json # 已确认校准
+  calibration/proposals/     # Agent 待确认建议
+  calibration/history/       # 已应用建议历史
+  generated/                 # 后续生成的脚本产物
+  reports/                   # 执行报告和 resolved flow 快照
 ```
 
-`src/` 保存工具链代码，当前主要包括：
+`src/flow/` 按功能域保存生产代码，测试统一放在 `tests/flow/`：
 
-- `src/flow/types.ts`：Midscene flow IR 类型定义。
-- `src/flow/convert-showui-trace.ts`：将 ShowUI-Aloha trace 转换为 `midscene-flow.json`，优先把 `caption.operation.prompt` 映射为 route prompt，并把 input 的 `caption.operation.locatePrompt` 映射为 route locatePrompt。
-- `src/flow/run-midscene-flow.ts`：读取 `midscene-flow.json`，并通过 route prompt / locatePrompt 调用 Midscene computer use。
-- `src/flow/keyboard-type-action.ts`：注册 Midscene 自定义 `KeyboardTypeText` action，通过键盘事件输入文本，不使用剪贴板。
+- `src/flow/contracts/`：Midscene flow 和任务包 JSON 契约。
+- `src/flow/conversion/`：ShowUI-Aloha trace 到基础 IR 的转换。
+- `src/flow/task/`：项目发现、参数解析、校准和 resolved flow 构建。
+- `src/flow/execution/`：Midscene runner 与 `KeyboardTypeText` action。
+- `tests/flow/`：按相同功能域组织的测试。
 - `src/env.ts`、`src/check-env.ts`：本地环境检查。
 
 ## 常用命令
@@ -61,6 +66,26 @@ npm run flow:convert -- --project air-tickets-demo --goal "将 Qatar Airways 订
 ```bash
 npm run flow:run -- --project air-tickets-demo
 ```
+
+发现、验证和检查任务：
+
+```bash
+npm run project:list -- --json
+npm run flow:validate -- --project air-tickets-demo
+npm run flow:inspect -- --project air-tickets-demo
+npm run flow:inspect -- --project air-tickets-demo --input step-002-value="GOOGLE"
+```
+
+`--input` 可以重复，也可以使用 `--inputs <json-file>`。未传入的 input 使用 `config/project.json` 中的默认值。
+
+校准建议必须先验证、由用户确认，再应用：
+
+```bash
+npm run calibration:validate -- --project air-tickets-demo --proposal <proposal-id>
+npm run calibration:apply -- --project air-tickets-demo --proposal <proposal-id> --confirmed
+```
+
+resolver 只应用 `config/flow-overrides.json` 中已经确认的校准，不读取待确认 proposal。基础 IR、校准和本次输入按固定顺序合并，全程不调用模型。runner 在实际初始化 Midscene 前把 resolved flow 写入 `reports/<run-id>/resolved-flow.json`。
 
 新项目沿用同一套命令体系，只替换项目名和目标：
 
