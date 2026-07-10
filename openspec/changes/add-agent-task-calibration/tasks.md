@@ -27,7 +27,7 @@
 
 ## 5. 完整验证与提交
 
-- [ ] 5.1 运行 typecheck、现有键盘/输入定位测试和新增任务解析测试
-- [ ] 5.2 运行 air-tickets-demo 的 convert、validate、inspect 和 dry-run 验证
-- [ ] 5.3 运行 Skill 校验和 OpenSpec 全量校验
-- [ ] 5.4 按任务契约、CLI、Skill/文档拆分中文小步提交并推送
+- [x] 5.1 运行 typecheck、现有键盘/输入定位测试和新增任务解析测试
+- [x] 5.2 运行 air-tickets-demo 的 convert、validate、inspect 和 dry-run 验证
+- [x] 5.3 运行 Skill 校验和 OpenSpec 全量校验
+- [x] 5.4 按任务契约、CLI、Skill/文档拆分中文小步提交并推送
