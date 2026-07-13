@@ -30,6 +30,17 @@ class ResolveProjectOptions:
 
 
 @dataclass(frozen=True)
+class ConvertOptions:
+    project: str
+    goal: str
+    project_root: Path
+    conversion_command: str
+    recording_preparation_command: str | None = None
+    trace_generation_command: str | None = None
+    flow_execution_command: str | None = None
+
+
+@dataclass(frozen=True)
 class ResolvedFlowResult:
     flow: MidsceneFlow
     sources: ResolvedFlowSources

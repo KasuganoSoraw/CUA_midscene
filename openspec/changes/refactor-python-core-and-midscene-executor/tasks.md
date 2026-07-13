@@ -14,11 +14,11 @@
 
 ## 3. Trace 转换迁移
 
-- [ ] 3.1 将 input locate prompt 派生与测试迁移到 Python，保持现有中文 prompt 处理语义
-- [ ] 3.2 将 trace 到基础 Midscene flow 的转换逻辑迁移到 Python，并通过 Pydantic 模型输出 IR
-- [ ] 3.3 保持录制时间差、30 秒上限、operation route、source 和 evidence 的现有转换语义
-- [ ] 3.4 验证重复转换只覆盖基础 IR，不覆盖已有 project 配置和已确认校准
-- [ ] 3.5 使用 `air-tickets-demo` 对照迁移前后关键 IR 字段，并记录任何有意差异
+- [x] 3.1 将 input locate prompt 派生与测试迁移到 Python，保持现有中文 prompt 处理语义
+- [x] 3.2 将 trace 到基础 Midscene flow 的转换逻辑迁移到 Python，并通过 Pydantic 模型输出 IR
+- [x] 3.3 保持录制时间差、30 秒上限、operation route、source 和 evidence 的现有转换语义
+- [x] 3.4 验证重复转换只覆盖基础 IR，不覆盖已有 project 配置和已确认校准
+- [x] 3.5 使用 `air-tickets-demo` 对照迁移前后关键 IR 字段，并记录任何有意差异
 
 ## 4. 任务解析、校准与 CLI 迁移
 
