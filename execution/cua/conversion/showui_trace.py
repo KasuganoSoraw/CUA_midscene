@@ -31,7 +31,7 @@ from cua.models.flow import (
     TraceWaitOperation,
     WaitRoute,
 )
-from cua.models.task import FlowOverrides, TaskInputBinding, TaskInputDefinition, TaskProjectConfig
+from cua.task.resolver import create_empty_overrides, create_initial_project_config
 
 MIN_RECORDED_WAIT_MS = 200
 MAX_RECORDED_WAIT_MS = 30_000
@@ -296,32 +296,6 @@ def build_step(
         route=route,
         fallback=build_fallback(route, action),
     )
-
-
-def create_initial_project_config(flow: MidsceneFlow) -> TaskProjectConfig:
-    inputs: dict[str, TaskInputDefinition] = {}
-    for step in flow.steps:
-        if step.route.strategy != "input":
-            continue
-        input_id = f"{step.id}-value"
-        inputs[input_id] = TaskInputDefinition(
-            type="string",
-            label=f"{step.route.locate_prompt}输入值",
-            description=step.route.prompt,
-            default=step.route.value,
-            binding=TaskInputBinding(step_id=step.id, field="route.value"),
-        )
-    return TaskProjectConfig(
-        project=flow.project,
-        title=flow.project,
-        description=flow.goal,
-        goal=flow.goal,
-        inputs=inputs,
-    )
-
-
-def create_empty_overrides(project: str) -> FlowOverrides:
-    return FlowOverrides(project=project, steps={})
 
 
 def default_recording_preparation_command(project: str) -> str:

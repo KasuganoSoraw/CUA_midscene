@@ -22,10 +22,10 @@
 
 ## 4. 任务解析、校准与 CLI 迁移
 
-- [ ] 4.1 迁移项目路径发现、JSON 读取、基础 IR 指纹和 route/flow/config/override 验证
-- [ ] 4.2 迁移基础 IR、已确认校准和本次输入的确定性合并及 resolved flow 快照写入
-- [ ] 4.3 迁移稀疏 `--input`、`--inputs` 参数解析，覆盖未知参数、重复参数和默认值测试
-- [ ] 4.4 迁移 calibration proposal validate/apply/history，保持指纹、允许字段和 `--confirmed` 约束
+- [x] 4.1 迁移项目路径发现、JSON 读取、基础 IR 指纹和 route/flow/config/override 验证
+- [x] 4.2 迁移基础 IR、已确认校准和本次输入的确定性合并及 resolved flow 快照写入
+- [x] 4.3 迁移稀疏 `--input`、`--inputs` 参数解析，覆盖未知参数、重复参数和默认值测试
+- [x] 4.4 迁移 calibration proposal validate/apply/history，保持指纹、允许字段和 `--confirmed` 约束
 - [ ] 4.5 实现 `cua project`、`cua flow` 和 `cua calibration` 子命令及机器可读输出
 - [ ] 4.6 验证 pending proposal 不影响执行，inspect 与 run 使用同一 resolved flow 构建逻辑
 
