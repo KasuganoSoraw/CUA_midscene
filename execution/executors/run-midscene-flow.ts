@@ -1,40 +1,87 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { agentForComputer } from '@midscene/computer';
+import type { Ajv2020 as Ajv2020Class } from 'ajv/dist/2020.js';
+import type { FormatsPlugin } from 'ajv-formats';
 import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
 import { createKeyboardTypeTextAction } from './keyboard-type-action.js';
-import {
-  assertAllowedTaskArgs,
-  loadRuntimeInputs,
-  parseTaskArgs,
-  type ParsedTaskArgs,
-} from '../src/flow/task/cli-args.js';
-import { resolveProjectFlow, taskProjectPaths, writeResolvedFlowSnapshot } from '../src/flow/task/resolver.js';
-import type { MidsceneFlowStep } from '../src/flow/contracts/types.js';
+import type { MidsceneFlowStep, ResolvedFlowSnapshot } from './generated/resolved-flow.js';
 
 type ComputerAgent = Awaited<ReturnType<typeof agentForComputer>>;
 
 interface RunOptions {
-  project: string;
-  projectRoot?: string;
-  flowPath?: string;
+  resolvedFlowPath: string;
+  resultPath: string;
   dryRun: boolean;
-  args: ParsedTaskArgs;
 }
 
-function parseArgs(argv: string[]): RunOptions {
-  const args = parseTaskArgs(argv, ['dry-run']);
-  assertAllowedTaskArgs(args, ['project', 'project-root', 'flow', 'inputs'], ['dry-run'], true);
-  const project = args.values.get('project');
-  if (!project) {
-    throw new Error('必须提供 --project <project-name>');
-  }
+interface ExecutorResult {
+  schemaVersion: '0.1';
+  status: 'succeeded' | 'failed';
+  project?: string;
+  resolvedFlowPath: string;
+  dryRun: boolean;
+  stepCount?: number;
+  completedStepIds: string[];
+  finishedAt: string;
+  error?: string;
+}
 
+const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const resolvedFlowSchemaPath = path.join(executionRoot, 'schemas', 'resolved-flow.schema.json');
+const require = createRequire(import.meta.url);
+const Ajv2020 = require('ajv/dist/2020') as typeof Ajv2020Class;
+const addFormats = require('ajv-formats') as FormatsPlugin;
+
+function parseArgs(argv: string[]): RunOptions {
+  const values = new Map<string, string>();
+  let dryRun = false;
+  for (let index = 0; index < argv.length; index += 1) {
+    const current = argv[index];
+    if (current === '--dry-run') {
+      if (dryRun) throw new Error('参数 --dry-run 不能重复提供');
+      dryRun = true;
+      continue;
+    }
+    if (current !== '--resolved-flow' && current !== '--result') {
+      throw new Error(`无法识别参数：${current}`);
+    }
+    if (values.has(current)) throw new Error(`参数 ${current} 不能重复提供`);
+    const value = argv[index + 1];
+    if (!value || value.startsWith('--')) throw new Error(`参数 ${current} 缺少值`);
+    values.set(current, value);
+    index += 1;
+  }
+  const resolvedFlow = values.get('--resolved-flow');
+  const result = values.get('--result');
+  if (!resolvedFlow) throw new Error('必须提供 --resolved-flow <path>');
+  if (!result) throw new Error('必须提供 --result <path>');
   return {
-    project,
-    projectRoot: args.values.get('project-root'),
-    flowPath: args.values.get('flow'),
-    dryRun: args.flags.has('dry-run'),
-    args,
+    resolvedFlowPath: path.resolve(resolvedFlow),
+    resultPath: path.resolve(result),
+    dryRun,
   };
+}
+
+async function readResolvedFlow(snapshotPath: string): Promise<ResolvedFlowSnapshot> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(snapshotPath, 'utf8'));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`读取 resolved flow 失败：${snapshotPath}\n${message}`);
+  }
+  const schema = JSON.parse(await readFile(resolvedFlowSchemaPath, 'utf8')) as object;
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const validate = ajv.compile(schema);
+  if (!validate(parsed)) {
+    const details = ajv.errorsText(validate.errors, { separator: '\n' });
+    throw new Error(`resolved flow 契约校验失败：${snapshotPath}\n${details}`);
+  }
+  return parsed as ResolvedFlowSnapshot;
 }
 
 function describeRoute(step: MidsceneFlowStep): string {
@@ -72,7 +119,7 @@ async function delay(ms: number): Promise<void> {
 async function waitBeforeStep(step: MidsceneFlowStep): Promise<void> {
   const waitBeforeMs = step.timing?.waitBeforeMs ?? 0;
   if (waitBeforeMs <= 0) return;
-  console.log(`等待 ${waitBeforeMs}ms 后执行 ${step.id}（来源：录制步骤间隔）`);
+  console.error(`等待 ${waitBeforeMs}ms 后执行 ${step.id}（来源：${step.timing?.waitReason ?? 'resolved flow'}）`);
   await delay(waitBeforeMs);
 }
 
@@ -103,56 +150,80 @@ async function executeStep(agent: ComputerAgent, step: MidsceneFlowStep): Promis
   }
 }
 
-async function run(options: RunOptions): Promise<void> {
-  const inputs = await loadRuntimeInputs(options.args);
-  const resolved = await resolveProjectFlow({
-    project: options.project,
-    projectRoot: options.projectRoot,
-    flowPath: options.flowPath,
-    inputs,
-  });
-  const flow = resolved.flow;
+async function writeResult(resultPath: string, result: ExecutorResult): Promise<void> {
+  await mkdir(path.dirname(resultPath), { recursive: true });
+  await writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+}
 
-  if (options.dryRun) {
-    console.log(`Midscene flow dry-run 通过：${resolved.sources.baseFlowPath}`);
-    console.log(`已确认校准 step：${resolved.sources.appliedOverrideSteps.join(', ') || '无'}`);
-    console.log(`本次输入：${JSON.stringify(resolved.inputs)}`);
-    for (const step of flow.steps) {
-      console.log(describeRoute(step));
-    }
-    return;
+async function executeFlow(flow: ResolvedFlowSnapshot, dryRun: boolean): Promise<string[]> {
+  if (dryRun) {
+    console.error(`Midscene executor dry-run 通过：${flow.flow.project}`);
+    for (const step of flow.flow.steps) console.error(describeRoute(step));
+    return [];
   }
 
   warnIfNodeVersionIsOld();
   checkRequiredModelEnv();
-
-  const paths = taskProjectPaths(options.project, options.projectRoot, options.flowPath);
-  const snapshotPath = await writeResolvedFlowSnapshot(resolved, paths.reportsDir);
-  console.log(`已保存 resolved flow 快照：${snapshotPath}`);
-
   const keyboardTypeText = createKeyboardTypeTextAction();
   const agent = await agentForComputer({
     generateReport: true,
-    groupName: `midscene-flow-${flow.project}`,
-    groupDescription: flow.goal || `执行 Midscene flow：${flow.project}`,
+    groupName: `midscene-flow-${flow.flow.project}`,
+    groupDescription: flow.flow.goal || `执行 Midscene flow：${flow.flow.project}`,
     customActions: [keyboardTypeText.action],
   });
   const keyboard = agent.interface.inputPrimitives?.keyboard;
   if (!keyboard?.keyboardPress) {
+    await agent.destroy();
     throw new Error('当前 Midscene computer interface 不支持底层 keyboardPress 输入');
   }
   keyboardTypeText.setPressKey(async (keyName, target) => {
     await keyboard.keyboardPress(keyName, { target });
   });
 
+  const completedStepIds: string[] = [];
   try {
-    for (const step of flow.steps) {
+    for (const step of flow.flow.steps) {
       await waitBeforeStep(step);
-      console.log(`执行 ${describeRoute(step)}`);
+      console.error(`执行 ${describeRoute(step)}`);
       await executeStep(agent, step);
+      completedStepIds.push(step.id);
     }
+    return completedStepIds;
   } finally {
     await agent.destroy();
+  }
+}
+
+async function run(options: RunOptions): Promise<void> {
+  let flow: ResolvedFlowSnapshot | undefined;
+  let completedStepIds: string[] = [];
+  try {
+    flow = await readResolvedFlow(options.resolvedFlowPath);
+    completedStepIds = await executeFlow(flow, options.dryRun);
+    await writeResult(options.resultPath, {
+      schemaVersion: '0.1',
+      status: 'succeeded',
+      project: flow.flow.project,
+      resolvedFlowPath: options.resolvedFlowPath,
+      dryRun: options.dryRun,
+      stepCount: flow.flow.steps.length,
+      completedStepIds,
+      finishedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await writeResult(options.resultPath, {
+      schemaVersion: '0.1',
+      status: 'failed',
+      project: flow?.flow.project,
+      resolvedFlowPath: options.resolvedFlowPath,
+      dryRun: options.dryRun,
+      stepCount: flow?.flow.steps.length,
+      completedStepIds,
+      finishedAt: new Date().toISOString(),
+      error: message,
+    });
+    throw error;
   }
 }
 

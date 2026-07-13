@@ -25,17 +25,6 @@
       "additionalProperties": false,
       "properties": {
         "route": {
-          "discriminator": {
-            "mapping": {
-              "act": "#/$defs/ActRoute",
-              "input": "#/$defs/InputRoute",
-              "keyboard": "#/$defs/KeyboardRoute",
-              "manual-review": "#/$defs/ManualReviewRoute",
-              "tap": "#/$defs/TapRoute",
-              "wait": "#/$defs/WaitRoute"
-            },
-            "propertyName": "strategy"
-          },
           "oneOf": [
             {
               "$ref": "#/$defs/KeyboardRoute"
@@ -531,7 +520,6 @@
     },
     "schemaVersion": {
       "const": "0.1",
-      "default": "0.1",
       "title": "Schemaversion",
       "type": "string"
     },
@@ -541,6 +529,7 @@
     }
   },
   "required": [
+    "schemaVersion",
     "id",
     "project",
     "baseFlowFingerprint",

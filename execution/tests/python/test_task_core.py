@@ -46,6 +46,7 @@ PROJECT = "task-core-test"
 
 def sample_flow() -> MidsceneFlow:
     return MidsceneFlow(
+        schema_version="0.1",
         project=PROJECT,
         goal="测试任务解析",
         source=MidsceneFlowSource(trace_path="source/showui-trace.json"),
@@ -79,6 +80,7 @@ def sample_flow() -> MidsceneFlow:
 
 def sample_config() -> TaskProjectConfig:
     return TaskProjectConfig(
+        schema_version="0.1",
         project=PROJECT,
         title="解析测试",
         description="验证任务参数和校准",
@@ -113,6 +115,7 @@ def input_route_value(flow: MidsceneFlow) -> str:
 
 def test_resolver_applies_overrides_sparse_inputs_and_snapshot(tmp_path: Path) -> None:
     overrides = FlowOverrides(
+        schema_version="0.1",
         project=PROJECT,
         steps={"step-002": FlowStepPatch(route=RoutePatch(prompt="页面顶部工具栏右侧的蓝色搜索按钮"))},
     )
@@ -144,6 +147,7 @@ def test_resolver_rejects_unknown_input_and_invalid_override(tmp_path: Path) -> 
         )
 
     unknown_step = FlowOverrides(
+        schema_version="0.1",
         project=PROJECT,
         steps={"step-999": FlowStepPatch(route=RoutePatch(prompt="不存在的目标"))},
     )
@@ -151,6 +155,7 @@ def test_resolver_rejects_unknown_input_and_invalid_override(tmp_path: Path) -> 
         validate_overrides(unknown_step, flow)
 
     invalid_route = FlowOverrides(
+        schema_version="0.1",
         project=PROJECT,
         steps={"step-002": FlowStepPatch(route=RoutePatch(strategy="input", value="缺少定位字段"))},
     )
@@ -176,6 +181,7 @@ def test_calibration_requires_current_fingerprint_and_updates_defaults(tmp_path:
     flow, fingerprint = create_project(tmp_path)
     before_route = flow.steps[0].route
     proposal = CalibrationProposal(
+        schema_version="0.1",
         id="fix-input-target",
         project=PROJECT,
         base_flow_fingerprint=fingerprint,

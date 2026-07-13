@@ -26,16 +26,16 @@
 - [x] 4.2 迁移基础 IR、已确认校准和本次输入的确定性合并及 resolved flow 快照写入
 - [x] 4.3 迁移稀疏 `--input`、`--inputs` 参数解析，覆盖未知参数、重复参数和默认值测试
 - [x] 4.4 迁移 calibration proposal validate/apply/history，保持指纹、允许字段和 `--confirmed` 约束
-- [ ] 4.5 实现 `cua project`、`cua flow` 和 `cua calibration` 子命令及机器可读输出
-- [ ] 4.6 验证 pending proposal 不影响执行，inspect 与 run 使用同一 resolved flow 构建逻辑
+- [x] 4.5 实现 `cua project`、`cua flow` 和 `cua calibration` 子命令及机器可读输出
+- [x] 4.6 验证 pending proposal 不影响执行，inspect 与 run 使用同一 resolved flow 构建逻辑
 
 ## 5. Midscene 薄执行器与进程协议
 
-- [ ] 5.1 定义并测试 Python 到 Node 的 resolved flow 路径、退出码、执行结果和日志通道协议
-- [ ] 5.2 让 TypeScript executor 在创建 agent 前按生成契约验证 resolved flow，且不读取其他任务资产
-- [ ] 5.3 保留 `KeyboardTypeText`、route 映射、等待时序、报告目录和失败暴露行为
-- [ ] 5.4 实现 Python `flow run` 对 Node executor 的调用，并在 dry-run 中验证传入快照与 inspect 等价
-- [ ] 5.5 增加非法 resolved flow、非零退出码、非法执行结果和 step 失败测试，确认不存在旧 TS resolver 兜底
+- [x] 5.1 定义并测试 Python 到 Node 的 resolved flow 路径、退出码、执行结果和日志通道协议
+- [x] 5.2 让 TypeScript executor 在创建 agent 前按生成契约验证 resolved flow，且不读取其他任务资产
+- [x] 5.3 保留 `KeyboardTypeText`、route 映射、等待时序、报告目录和失败暴露行为
+- [x] 5.4 实现 Python `flow run` 对 Node executor 的调用，并在 dry-run 中验证传入快照与 inspect 等价
+- [x] 5.5 增加非法 resolved flow、非零退出码、非法执行结果和 step 失败测试，确认不存在旧 TS resolver 兜底
 
 ## 6. 清理与文档迁移
 

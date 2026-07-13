@@ -3,6 +3,7 @@
 from .types import (
     CalibrationOptions,
     ConvertOptions,
+    ExecutionOptions,
     ResolveProjectOptions,
     ResolvedFlowResult,
     TaskProjectPaths,
@@ -12,6 +13,7 @@ from .types import (
 __all__ = [
     "CalibrationOptions",
     "ConvertOptions",
+    "ExecutionOptions",
     "ResolveProjectOptions",
     "ResolvedFlowResult",
     "TaskProjectPaths",

@@ -143,7 +143,7 @@ class MidsceneFlowStep(ContractModel):
 
 
 class MidsceneFlow(ContractModel):
-    schema_version: Literal["0.1"] = MIDSCENE_FLOW_SCHEMA_VERSION
+    schema_version: Literal["0.1"]
     project: str
     goal: str
     source: MidsceneFlowSource

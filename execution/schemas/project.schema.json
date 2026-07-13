@@ -86,7 +86,6 @@
     },
     "schemaVersion": {
       "const": "0.1",
-      "default": "0.1",
       "title": "Schemaversion",
       "type": "string"
     },
@@ -96,6 +95,7 @@
     }
   },
   "required": [
+    "schemaVersion",
     "project",
     "title",
     "description",

@@ -55,6 +55,16 @@ class CalibrationOptions:
 
 
 @dataclass(frozen=True)
+class ExecutionOptions:
+    project: str
+    project_root: Path | None = None
+    flow_path: Path | None = None
+    inputs: dict[str, str] | None = None
+    dry_run: bool = False
+    command_prefix: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True)
 class ValidatedCalibration:
     proposal: CalibrationProposal
     proposal_path: Path

@@ -13,6 +13,7 @@ from cua.models.flow import (
     InputRoute,
     KeyboardRoute,
     ManualReviewRoute,
+    MIDSCENE_FLOW_SCHEMA_VERSION,
     MidsceneFlow,
     MidsceneFlowCommands,
     MidsceneFlowEvidence,
@@ -322,6 +323,7 @@ def convert_trace(options: ConvertOptions) -> Path:
     assert isinstance(trace, ShowuiTrace)
     processed_steps = read_processed_log(processed_log_with_screenshots_path)
     flow = MidsceneFlow(
+        schema_version=MIDSCENE_FLOW_SCHEMA_VERSION,
         project=options.project,
         goal=options.goal,
         source=MidsceneFlowSource(

@@ -54,6 +54,7 @@ def test_existing_project_assets_pass_models_and_json_schema() -> None:
         }
     )
     snapshot = ResolvedFlowSnapshot(
+        schema_version="0.1",
         resolved_at=datetime.now(UTC),
         flow=flow,
         sources=ResolvedFlowSources(

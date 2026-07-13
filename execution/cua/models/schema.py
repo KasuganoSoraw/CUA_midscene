@@ -19,10 +19,23 @@ SCHEMA_MODELS: dict[str, type[BaseModel]] = {
 GENERATED_COMMENT = "由 cua.models.schema 从 Pydantic 模型生成，请勿手工编辑。"
 
 
+def make_schema_portable(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            key: make_schema_portable(item)
+            for key, item in value.items()
+            if key != "discriminator"
+        }
+    if isinstance(value, list):
+        return [make_schema_portable(item) for item in value]
+    return value
+
+
 def schema_documents() -> dict[str, dict[str, object]]:
     documents: dict[str, dict[str, object]] = {}
     for filename, model in SCHEMA_MODELS.items():
-        schema = model.model_json_schema(by_alias=True, mode="validation")
+        schema = make_schema_portable(model.model_json_schema(by_alias=True, mode="validation"))
+        assert isinstance(schema, dict)
         schema["$comment"] = GENERATED_COMMENT
         documents[filename] = schema
     return documents

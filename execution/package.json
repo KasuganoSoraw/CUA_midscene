@@ -15,6 +15,9 @@
     "test:task-resolver": "tsx tests/flow/task/cli-args.test.ts && tsx tests/flow/task/resolver.test.ts && tsx tests/flow/task/calibration.test.ts",
     "test:input-locate": "tsx tests/flow/conversion/input-locate-prompt.test.ts",
     "test:keyboard-type": "tsx tests/executors/keyboard-type-action.test.ts",
+    "test:executor-contract": "tsx tests/executors/resolved-flow-contract.test.ts",
+    "contracts:generate": "tsx executors/generate-resolved-flow-contract.ts",
+    "contracts:check": "tsx executors/generate-resolved-flow-contract.ts --check",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
@@ -22,11 +25,14 @@
   "license": "MIT",
   "dependencies": {
     "@midscene/computer": "^1.10.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "dotenv": "^16.4.7",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   },
   "devDependencies": {
-    "@types/node": "^18.19.68"
+    "@types/node": "^18.19.68",
+    "json-schema-to-typescript": "^15.0.4"
   }
 }

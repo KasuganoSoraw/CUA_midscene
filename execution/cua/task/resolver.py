@@ -9,6 +9,9 @@ from pydantic import TypeAdapter, ValidationError
 from cua.domain.types import ResolveProjectOptions, ResolvedFlowResult, TaskProjectPaths
 from cua.models.flow import InputRoute, MidsceneFlow, MidsceneFlowRoute, MidsceneFlowStep, MidsceneFlowTiming
 from cua.models.task import (
+    FLOW_OVERRIDES_SCHEMA_VERSION,
+    RESOLVED_FLOW_SCHEMA_VERSION,
+    TASK_PROJECT_SCHEMA_VERSION,
     FlowOverrides,
     FlowStepPatch,
     ResolvedFlowSnapshot,
@@ -189,6 +192,7 @@ def resolve_project_flow(options: ResolveProjectOptions) -> ResolvedFlowResult:
 
 def create_resolved_flow_snapshot(result: ResolvedFlowResult) -> ResolvedFlowSnapshot:
     return ResolvedFlowSnapshot(
+        schema_version=RESOLVED_FLOW_SCHEMA_VERSION,
         resolved_at=datetime.now(UTC),
         flow=result.flow,
         sources=result.sources,
@@ -218,6 +222,7 @@ def create_initial_project_config(flow: MidsceneFlow) -> TaskProjectConfig:
             binding=TaskInputBinding(step_id=step.id, field="route.value"),
         )
     return TaskProjectConfig(
+        schema_version=TASK_PROJECT_SCHEMA_VERSION,
         project=flow.project,
         title=flow.project,
         description=flow.goal,
@@ -227,4 +232,4 @@ def create_initial_project_config(flow: MidsceneFlow) -> TaskProjectConfig:
 
 
 def create_empty_overrides(project: str) -> FlowOverrides:
-    return FlowOverrides(project=project, steps={})
+    return FlowOverrides(schema_version=FLOW_OVERRIDES_SCHEMA_VERSION, project=project, steps={})

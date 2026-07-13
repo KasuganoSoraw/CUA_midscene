@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from cua.conversion.showui_trace import convert_trace
-from cua.domain.types import CalibrationOptions, ConvertOptions, ResolveProjectOptions
+from cua.domain.types import CalibrationOptions, ConvertOptions, ExecutionOptions, ResolveProjectOptions
 from cua.task.calibration import apply_calibration_proposal, validate_calibration_proposal
 from cua.task.inputs import load_runtime_inputs
 from cua.task.projects import list_projects
@@ -159,7 +159,17 @@ def run_command(args: argparse.Namespace) -> None:
     if args.domain == "flow" and args.command == "run":
         from cua.task.executor import run_project
 
-        run_project(args)
+        inputs = load_runtime_inputs(args.inputs, args.input)
+        snapshot, result = run_project(
+            ExecutionOptions(
+                project=args.project,
+                project_root=project_root_from_args(args),
+                flow_path=args.flow.resolve() if args.flow else None,
+                inputs=inputs,
+                dry_run=args.dry_run,
+            )
+        )
+        print_json({"snapshot": snapshot.to_json_dict(), "executor": result.to_json_dict()})
         return
 
     if args.domain == "calibration":
@@ -181,6 +191,9 @@ def run_command(args: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

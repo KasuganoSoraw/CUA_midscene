@@ -28,7 +28,7 @@ class TaskInputDefinition(ContractModel):
 
 
 class TaskProjectConfig(ContractModel):
-    schema_version: Literal["0.1"] = TASK_PROJECT_SCHEMA_VERSION
+    schema_version: Literal["0.1"]
     project: str
     title: str
     description: str
@@ -59,7 +59,7 @@ class FlowStepPatch(ContractModel):
 
 
 class FlowOverrides(ContractModel):
-    schema_version: Literal["0.1"] = FLOW_OVERRIDES_SCHEMA_VERSION
+    schema_version: Literal["0.1"]
     project: str
     steps: dict[str, FlowStepPatch]
 
@@ -76,7 +76,7 @@ class CalibrationChange(ContractModel):
 
 
 class CalibrationProposal(ContractModel):
-    schema_version: Literal["0.1"] = CALIBRATION_PROPOSAL_SCHEMA_VERSION
+    schema_version: Literal["0.1"]
     id: str
     project: str
     base_flow_fingerprint: str
@@ -99,8 +99,20 @@ class ResolvedFlowSources(ContractModel):
 
 
 class ResolvedFlowSnapshot(ContractModel):
-    schema_version: Literal["0.1"] = RESOLVED_FLOW_SCHEMA_VERSION
+    schema_version: Literal["0.1"]
     resolved_at: datetime
     flow: MidsceneFlow
     sources: ResolvedFlowSources
     inputs: dict[str, str]
+
+
+class ExecutorResult(ContractModel):
+    schema_version: Literal["0.1"]
+    status: Literal["succeeded", "failed"]
+    project: str | None = None
+    resolved_flow_path: str
+    dry_run: bool
+    step_count: int | None = Field(default=None, ge=0)
+    completed_step_ids: list[str]
+    finished_at: datetime
+    error: str | None = None
