@@ -5,7 +5,7 @@
 ## Requirements
 
 ### Requirement: 按工作流名称组织项目产物
-系统 SHALL 将转换后的 CUA 工作流资产组织在 `execution/projects/<project-name>/` 下，并为 source 输入、Midscene IR、任务配置、校准、生成执行资产和执行报告提供独立区域。
+系统 SHALL 将转换后的 CUA 工作流组织为 `execution/projects/<project-name>/` 下的可调用任务包，并为 source 输入、基础 IR、任务配置、校准、生成执行资产和执行报告提供独立区域。
 
 #### Scenario: 为转换创建项目目录
 - **WHEN** 项目 `air-tickets-demo` 的 ShowUI-Aloha trace 被转换
@@ -28,13 +28,14 @@
 - **AND** 系统 SHALL NOT 为该定位增强新增额外 operation schema 字段
 
 ### Requirement: Converter 生成 Midscene flow IR
-系统 SHALL 将 ShowUI-Aloha trace 数据转换为结构化 `midscene-flow.json` 产物，并供 Midscene 工具消费。
+系统 SHALL 将 ShowUI-Aloha trace 数据转换为结构化基础 `midscene-flow.json`，初始化不存在的任务配置，并保留已经存在的人工任务配置和校准。
 
 #### Scenario: Trace 转换成功
 - **WHEN** converter 收到一个具名项目的有效 ShowUI-Aloha trace
 - **THEN** 它 SHALL 写入 `execution/projects/<project-name>/ir/midscene-flow.json`
 - **AND** flow SHALL 包含 `schemaVersion`、`project`、`source` 和 `steps`
 - **AND** 每个 step SHALL 包含稳定 `id`、源 trace 引用、intent、timing、evidence、route strategy 和 fallback 信息
+- **AND** converter SHALL 仅在任务配置不存在时按 input route 初始化输入定义
 
 #### Scenario: Trace operation 转换为 Midscene prompt
 - **WHEN** trace step 包含结构化 `caption.operation`
@@ -80,12 +81,13 @@
 - **THEN** 转换后的 step SHALL 使用 `manual-review` strategy 或等价的非静默失败标记
 
 ### Requirement: 通用 runner 消费 Midscene flow IR
-系统 SHALL 提供一个 Midscene runner，在生成 TypeScript 脚本成为必要路径之前，直接消费 `midscene-flow.json`。
+系统 SHALL 提供通用 Midscene runner，通过共享 resolver 消费基础 IR、已确认校准和本次输入合并后的 resolved flow。
 
 #### Scenario: Runner 执行受支持策略
-- **WHEN** runner 读取到包含受支持 `keyboard`、`input`、`tap`、`act` 或 `wait` strategy 的 flow
+- **WHEN** runner 读取到包含受支持 `keyboard`、`input`、`tap`、`act` 或 `wait` strategy 的 resolved flow
 - **THEN** 它 SHALL 将这些 step 路由到对应 Midscene computer use 操作
 - **AND** 它 SHALL 使用已配置 run directory 生成 Midscene 执行报告
+- **AND** 它 SHALL 在初始化 Midscene 前保存本次 resolved flow 快照
 
 #### Scenario: Runner 按 IR timing 执行前等待
 - **WHEN** runner 执行包含 `timing.waitBeforeMs` 的 flow step
@@ -106,6 +108,11 @@
 - **WHEN** runner 读取到不受支持或 `manual-review` strategy 的 flow step
 - **THEN** 它 SHALL 给出清晰错误，标识 step id 和原因
 - **AND** 它 SHALL NOT 静默跳过或执行猜测出来的桌面动作
+
+#### Scenario: 检查与执行共用解析结果
+- **WHEN** 相同项目和输入分别用于 flow inspect 与 flow run
+- **THEN** 两者 SHALL 使用相同解析和验证逻辑
+- **AND** 基础 IR、任务配置和已确认校准 SHALL NOT 被运行过程修改
 
 ### Requirement: 生成脚本是派生产物
 系统 SHALL 将未来生成的 Midscene 脚本视为从 `midscene-flow.json` 派生出的产物，而不是源事实。
