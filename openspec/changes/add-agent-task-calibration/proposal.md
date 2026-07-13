@@ -24,8 +24,8 @@
 
 ## Impact
 
-- 影响 `CUA_midscene/src/flow` 的类型、转换器、runner 和新增的任务解析/校准工具。
-- 扩展 `CUA_midscene/package.json` 的通用 CLI scripts。
-- 扩展 `CUA_midscene/projects/<project-name>` 目录契约并迁移现有示例。
+- 影响 `execution/src/flow` 的类型、转换器和任务解析/校准工具，以及 `execution/src/executors` 中的 runner。
+- 扩展 `execution/package.json` 的通用 CLI scripts。
+- 扩展 `execution/projects/<project-name>` 目录契约并迁移现有示例。
 - 新增仓库内 `skills/cua-midscene` Skill 源文件；本机安装副本继续由 `.gitignore` 排除。
 - 不引入 browser-use、Playwright、Puppeteer、CDP 或新的运行时模型调用。

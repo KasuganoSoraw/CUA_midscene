@@ -1,24 +1,24 @@
 ## Purpose
 
-定义从 ShowUI-Aloha 教学录制产物到 Midscene computer use 执行流程的转换边界、项目产物组织方式、IR 要求和 runner 行为。
+定义从 `record` 教学录制产物到 `execution` 中 Midscene computer use 执行流程的转换边界、项目产物组织方式、IR 要求和 runner 行为。
 
 ## Requirements
 
 ### Requirement: 按工作流名称组织项目产物
-系统 SHALL 将转换后的 CUA 工作流资产组织在 `CUA_midscene/projects/<project-name>/` 下，并为 source 输入、Midscene IR、生成执行资产和执行报告提供独立区域。
+系统 SHALL 将转换后的 CUA 工作流资产组织在 `execution/projects/<project-name>/` 下，并为 source 输入、Midscene IR、任务配置、校准、生成执行资产和执行报告提供独立区域。
 
 #### Scenario: 为转换创建项目目录
 - **WHEN** 项目 `air-tickets-demo` 的 ShowUI-Aloha trace 被转换
-- **THEN** 转换输出 SHALL 放在 `CUA_midscene/projects/air-tickets-demo/` 下
-- **AND** 项目目录 SHALL 包含 `source/`、`ir/`、`generated/`、`reports/` 路径或这些路径的文档化占位
+- **THEN** 转换输出 SHALL 放在 `execution/projects/air-tickets-demo/` 下
+- **AND** 项目目录 SHALL 包含 `source/`、`ir/`、`config/`、`calibration/`、`generated/`、`reports/` 路径或这些路径的文档化占位
 
 ### Requirement: ShowUI-Aloha 保持为录制处理器
-系统 SHALL 将 `showui-aloha` 视为录制派生日志、截图和 trace 产物的上游生产方，而不是 Midscene 执行或回放组件。
+系统 SHALL 将 `record/` 视为录制派生日志、截图和 trace 产物的上游生产方，而不是 Midscene 执行或回放组件。
 
 #### Scenario: Converter 消费 ShowUI-Aloha 输出
 - **WHEN** Midscene converter 处理一次教学录制
 - **THEN** 它 SHALL 将 ShowUI-Aloha Learn 输出作为 source artifact 读取
-- **AND** 它 SHALL 在 `CUA_midscene` 下写入 Midscene 专属产物
+- **AND** 它 SHALL 在 `execution` 下写入执行侧产物
 - **AND** 它 SHALL NOT 依赖 `Aloha_Act`、ShowUI-Aloha Actor、ShowUI-Aloha Executor 或 ShowUI-Aloha replay 代码
 
 #### Scenario: Trace prompt 约束 Midscene 定位描述
@@ -32,7 +32,7 @@
 
 #### Scenario: Trace 转换成功
 - **WHEN** converter 收到一个具名项目的有效 ShowUI-Aloha trace
-- **THEN** 它 SHALL 写入 `CUA_midscene/projects/<project-name>/ir/midscene-flow.json`
+- **THEN** 它 SHALL 写入 `execution/projects/<project-name>/ir/midscene-flow.json`
 - **AND** flow SHALL 包含 `schemaVersion`、`project`、`source` 和 `steps`
 - **AND** 每个 step SHALL 包含稳定 `id`、源 trace 引用、intent、timing、evidence、route strategy 和 fallback 信息
 
@@ -112,6 +112,6 @@
 
 #### Scenario: 后续生成脚本
 - **WHEN** 为某个项目创建生成的 `run.ts`
-- **THEN** 它 SHALL 放在 `CUA_midscene/projects/<project-name>/generated/` 下
+- **THEN** 它 SHALL 放在 `execution/projects/<project-name>/generated/` 下
 - **AND** 它 SHALL 引用生成时使用的 flow 或 metadata 版本
 - **AND** 工作流变更 SHALL 先更新 source trace 输入或 `midscene-flow.json`，再重新生成脚本

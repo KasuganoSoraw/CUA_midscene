@@ -1,11 +1,11 @@
 ## MODIFIED Requirements
 
 ### Requirement: 按工作流名称组织项目产物
-系统 SHALL 将转换后的 CUA 工作流组织为 `CUA_midscene/projects/<project-name>/` 下的可调用任务包，并为 source、基础 IR、任务配置、校准、生成资产和执行报告提供独立区域。
+系统 SHALL 将转换后的 CUA 工作流组织为 `execution/projects/<project-name>/` 下的可调用任务包，并为 source、基础 IR、任务配置、校准、生成资产和执行报告提供独立区域。
 
 #### Scenario: 为转换创建项目目录
 - **WHEN** 项目 `air-tickets-demo` 的 ShowUI-Aloha trace 被转换
-- **THEN** 转换输出 SHALL 放在 `CUA_midscene/projects/air-tickets-demo/` 下
+- **THEN** 转换输出 SHALL 放在 `execution/projects/air-tickets-demo/` 下
 - **AND** 项目目录 SHALL 包含或文档化 `source/`、`ir/`、`config/`、`calibration/`、`generated/` 和 `reports/`
 
 ### Requirement: Converter 生成 Midscene flow IR
@@ -13,7 +13,7 @@
 
 #### Scenario: Trace 转换成功
 - **WHEN** converter 收到一个具名项目的有效 ShowUI-Aloha trace
-- **THEN** 它 SHALL 写入 `CUA_midscene/projects/<project-name>/ir/midscene-flow.json`
+- **THEN** 它 SHALL 写入 `execution/projects/<project-name>/ir/midscene-flow.json`
 - **AND** flow SHALL 包含 `schemaVersion`、`project`、`source` 和 `steps`
 - **AND** 每个 step SHALL 包含稳定 `id`、源 trace 引用、intent、timing、evidence、route strategy 和 fallback 信息
 - **AND** converter SHALL 仅在任务配置不存在时按 input route 初始化输入定义

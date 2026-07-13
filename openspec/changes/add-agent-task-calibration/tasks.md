@@ -23,7 +23,7 @@
 
 - [x] 4.1 使用 skill-creator 模板初始化并编写仓库内 `cua-midscene` Skill、界面元数据和任务契约 reference
 - [x] 4.2 提供可重复的本机 Skill 安装方式，并确保安装副本不纳入 Git
-- [x] 4.3 更新根 README、CUA_midscene README、样例 README 和 AGENT.md，准确说明当前任务包、校准审批与参数调用方式
+- [x] 4.3 更新根 README、execution README、样例 README 和 AGENT.md，准确说明当前任务包、校准审批与参数调用方式
 
 ## 5. 完整验证与提交
 

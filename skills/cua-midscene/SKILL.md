@@ -5,7 +5,7 @@ description: 使用 CUA 仓库中的 ShowUI-Aloha 录制产物和 Midscene compu
 
 # CUA Midscene
 
-使用仓库 CLI 操作 `CUA_midscene/projects/<project-name>` 任务包。先定位包含 `CUA_midscene/package.json` 的 CUA 仓库，再从 `CUA_midscene` 目录运行命令。
+使用仓库 CLI 操作 `execution/projects/<project-name>` 任务包。先定位包含 `execution/package.json` 的 CUA 仓库，再从 `execution` 目录运行命令。
 
 ## 分类请求
 

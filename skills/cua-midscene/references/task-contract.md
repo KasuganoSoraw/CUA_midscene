@@ -25,7 +25,7 @@ projects/<project-name>/
 
 ## 常用命令
 
-所有命令从 `CUA_midscene` 目录执行：
+所有命令从 `execution` 目录执行：
 
 ```powershell
 npm run project:list -- --json
