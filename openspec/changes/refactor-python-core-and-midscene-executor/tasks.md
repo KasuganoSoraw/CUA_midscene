@@ -46,8 +46,8 @@
 
 ## 7. 完整验证
 
-- [ ] 7.1 运行 Python 单元测试、Schema 漂移检查和 `air-tickets-demo` 转换/validate/inspect 测试
-- [ ] 7.2 运行 TypeScript 类型检查、键盘映射测试、resolved flow 契约测试和 flow dry-run
-- [ ] 7.3 验证现有项目资产无需人工改写即可执行新链路，运行产物不改写基础 IR、配置或校准文件
-- [ ] 7.4 扫描并删除文档与代码中的过时 npm 业务命令和旧 TypeScript 模块引用
-- [ ] 7.5 运行 Skill 校验与 OpenSpec 全量校验，并按功能域完成中文小步提交
+- [x] 7.1 运行 Python 单元测试、Schema 漂移检查和 `air-tickets-demo` 转换/validate/inspect 测试
+- [x] 7.2 运行 TypeScript 类型检查、键盘映射测试、resolved flow 契约测试和 flow dry-run
+- [x] 7.3 验证现有项目资产无需人工改写即可执行新链路，运行产物不改写基础 IR、配置或校准文件
+- [x] 7.4 扫描并删除文档与代码中的过时 npm 业务命令和旧 TypeScript 模块引用
+- [x] 7.5 运行 Skill 校验与 OpenSpec 全量校验，并按功能域完成中文小步提交

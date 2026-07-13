@@ -62,7 +62,7 @@ execution/
 
 ### Decision: Pydantic 是持久化契约的事实来源
 
-`execution/schemas` 中的 JSON Schema 从 Pydantic 模型确定性生成并纳入 Git，文件头或构建元数据标明不得手工编辑。测试重新生成 Schema 并比较内容，发现漂移即失败。
+`execution/schemas` 中的 JSON Schema 从 Pydantic 模型确定性生成并纳入 Git，文件头或构建元数据标明不得手工编辑。测试重新生成 Schema 并比较内容，发现漂移即失败。TypeScript resolved flow DTO 使用 `json-schema-to-typescript` 从 Schema 生成，并通过独立检查命令检测漂移。
 
 第一版 Schema 至少覆盖：
 
@@ -80,7 +80,7 @@ execution/
 
 Python `run` 命令完成项目发现、基础 IR 校验、校准合并、本次参数覆盖和执行快照写入，再向 Node 执行器传递 `resolved-flow.json` 的绝对路径。TypeScript 不读取 `project.json`、`flow-overrides.json`、proposal 或基础 IR，也不重新合并参数。
 
-执行器在创建 Midscene agent 前验证 resolved flow 契约。验证失败、子进程非零退出、协议输出不合法或某个 step 执行失败均原样失败，不回退到旧 TS resolver。执行器将机器可读结果写入指定报告位置，并用退出码向 Python 报告成功或失败；日志与协议数据使用明确的输出通道，避免 stdout 文本混淆 JSON 结果。
+执行器在创建 Midscene agent 前验证 resolved flow 契约。验证失败、子进程非零退出、协议输出不合法或某个 step 执行失败均原样失败，不回退到旧 TS resolver。执行器将机器可读结果写入 `execution-result.json`，并用退出码向 Python 报告成功或失败；普通执行日志写入 stderr，Python CLI 的 stdout 保持机器可读 JSON。
 
 ### Decision: 统一 Python CLI，删除业务 npm CLI
 
@@ -111,7 +111,6 @@ uv run cua calibration apply --project <name> --proposal <id> --confirmed
 - **子进程协议使本地调试链路变长** → resolved flow 和执行结果都保留为报告产物，Python 打印实际执行命令、退出码和报告路径，但不吞掉 Node 错误。
 - **Pydantic 模型与生成 Schema 漂移** → Schema 只允许通过生成命令更新，CI/测试验证工作区中的生成结果是最新的。
 - **旧 npm 命令被外部脚本调用** → 在 README、Skill 和项目文档中一次性列出新命令，并将移除作为显式 breaking change；不保留隐藏兼容层。
-- **`add-agent-task-calibration` 尚未归档** → 后续归档时先归档其行为规格，再归档本变更，确保本变更只调整实现边界而不丢失既有校准要求。
 
 ## Migration Plan
 
@@ -129,5 +128,4 @@ uv run cua calibration apply --project <name> --proposal <id> --confirmed
 
 ## Open Questions
 
-- TypeScript DTO 生成工具在实现阶段从候选工具中选择，但必须满足“由 resolved-flow Schema 生成或自动校验同步”，不能恢复手工维护完整契约。
-- Node 执行结果采用单独 JSON 文件还是严格 stdout JSON 信封，可在实现首个子进程契约测试时确定；无论选择哪种方式，普通执行日志不得破坏机器可读结果。
+无。TypeScript DTO 生成工具和 Node 执行结果通道已经在实现与契约测试中确定。
