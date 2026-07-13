@@ -39,10 +39,10 @@
 
 ## 6. 清理与文档迁移
 
-- [ ] 6.1 删除已被 Python 替代的 TypeScript contracts、conversion、task 代码及其测试
-- [ ] 6.2 删除业务 npm scripts，只保留 Midscene executor 环境检查、类型检查、构建和测试入口
-- [ ] 6.3 更新根 README、`execution/README.md`、示例项目 README 和 AGENT 目录规范，准确描述 Python 主体与 TS 执行边界
-- [ ] 6.4 更新 `skills/cua-midscene` 的命令、任务契约和执行说明，并重新安装和校验本机 Skill 副本
+- [x] 6.1 删除已被 Python 替代的 TypeScript contracts、conversion、task 代码及其测试
+- [x] 6.2 删除业务 npm scripts，只保留 Midscene executor 环境检查、类型检查、构建和测试入口
+- [x] 6.3 更新根 README、`execution/README.md`、示例项目 README 和 AGENT 目录规范，准确描述 Python 主体与 TS 执行边界
+- [x] 6.4 更新 `skills/cua-midscene` 的命令、任务契约和执行说明，并重新安装和校验本机 Skill 副本
 
 ## 7. 完整验证
 

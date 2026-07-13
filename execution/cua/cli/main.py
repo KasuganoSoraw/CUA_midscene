@@ -94,6 +94,13 @@ def build_conversion_command(args: argparse.Namespace) -> str:
         parts.append(f"--goal {quote_command_value(args.goal)}")
     if args.project_root:
         parts.append(f"--project-root {quote_command_value(str(args.project_root))}")
+    for option, value in (
+        ("recording-preparation-command", args.recording_preparation_command),
+        ("trace-generation-command", args.trace_generation_command),
+        ("flow-execution-command", args.flow_execution_command),
+    ):
+        if value:
+            parts.append(f"--{option} {quote_command_value(value)}")
     return " ".join(parts)
 
 

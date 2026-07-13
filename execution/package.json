@@ -1,24 +1,16 @@
 {
   "name": "cua_midscene",
   "version": "1.0.0",
-  "description": "Midscene computer-use experiments for local desktop automation.",
+  "description": "CUA 的 Midscene computer use TypeScript 执行适配器。",
   "type": "module",
   "scripts": {
     "check": "tsx executors/check-env.ts",
-    "flow:convert": "tsx src/flow/conversion/convert-showui-trace.ts",
-    "project:list": "tsx src/flow/task/cli.ts project:list",
-    "flow:validate": "tsx src/flow/task/cli.ts flow:validate",
-    "flow:inspect": "tsx src/flow/task/cli.ts flow:inspect",
-    "flow:run": "tsx executors/run-midscene-flow.ts",
-    "calibration:validate": "tsx src/flow/task/cli.ts calibration:validate",
-    "calibration:apply": "tsx src/flow/task/cli.ts calibration:apply",
-    "test:task-resolver": "tsx tests/flow/task/cli-args.test.ts && tsx tests/flow/task/resolver.test.ts && tsx tests/flow/task/calibration.test.ts",
-    "test:input-locate": "tsx tests/flow/conversion/input-locate-prompt.test.ts",
     "test:keyboard-type": "tsx tests/executors/keyboard-type-action.test.ts",
     "test:executor-contract": "tsx tests/executors/resolved-flow-contract.test.ts",
     "contracts:generate": "tsx executors/generate-resolved-flow-contract.ts",
     "contracts:check": "tsx executors/generate-resolved-flow-contract.ts --check",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run contracts:check && npm run typecheck && npm run test:keyboard-type && npm run test:executor-contract"
   },
   "keywords": [],
   "author": "",
@@ -27,12 +19,12 @@
     "@midscene/computer": "^1.10.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "dotenv": "^16.4.7",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
     "@types/node": "^18.19.68",
-    "json-schema-to-typescript": "^15.0.4"
+    "json-schema-to-typescript": "^15.0.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
   }
 }

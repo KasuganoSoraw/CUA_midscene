@@ -11,8 +11,8 @@
   "commands": {
     "recordingPreparation": "将 ShowUI-Aloha 录制视频和输入日志放入 record\\Aloha_Learn\\projects\\air_tickets\\inputs",
     "traceGeneration": "uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets",
-    "traceToFlowConversion": "npm run flow:convert -- --project air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\"",
-    "flowExecution": "npm run flow:run -- --project air-tickets-demo"
+    "traceToFlowConversion": "uv run cua flow convert --project air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\" --recording-preparation-command \"将 ShowUI-Aloha 录制视频和输入日志放入 record\\Aloha_Learn\\projects\\air_tickets\\inputs\" --trace-generation-command \"uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets\"",
+    "flowExecution": "uv run cua flow run --project air-tickets-demo"
   },
   "steps": [
     {

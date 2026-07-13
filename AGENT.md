@@ -12,4 +12,5 @@
 2. 当前项目处于开发探索阶段，不应通过兜底实现、静默跳过、硬编码成功路径或伪造结果来掩盖实际执行逻辑的缺陷；遇到不确定、不可执行或模型能力不足的步骤，应显式暴露问题并保留可诊断信息。
 3. 方案设计和代码实现不应只针对单一演示用例构造特化逻辑；样例可以用于验证链路，但抽象、目录结构、IR schema、路由规则和执行器设计应优先保持面向后续多业务流程的泛化能力。
 4. Agent 应将任务交互区分为创建、长期校准和单次调用。Agent 生成的校准必须先形成 proposal 并等待用户明确确认，未经确认不得写入已应用校准、自动重试或操作电脑。
-5. `execution/src/flow` 只保存 `contracts`、`conversion` 和 `task` 等通用流程能力；具体执行器放在 `execution/src/executors`，对应测试放在 `execution/tests/executors`，不把测试与生产代码平铺在同一目录。
+5. `execution/cua` 是 Python 业务核心，负责转换、任务包、校准、参数合并和 CLI；`execution/executors` 只保存 TypeScript Midscene 适配器和 customActions。持久化契约使用 Pydantic 并生成 `execution/schemas`，仅在 Python 内部使用的 VO 不生成 JSON Schema。对应测试分别放在 `execution/tests/python` 和 `execution/tests/executors`。
+6. Python 与 TypeScript 的唯一执行边界是 `reports/<run-id>/resolved-flow.json`。TypeScript executor 不得读取基础 IR、项目配置、校准建议或本次参数，也不得实现旧任务 resolver 兜底。
