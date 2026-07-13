@@ -5,20 +5,20 @@
 ## Requirements
 
 ### Requirement: 按工作流名称组织项目产物
-系统 SHALL 将转换后的 CUA 工作流组织为 `execution/projects/<project-name>/` 下的可调用任务包，并为 source 输入、基础 IR、任务配置、校准、生成执行资产和执行报告提供独立区域。
+系统 SHALL 将转换后的 CUA 工作流资产组织为 `execution/projects/<project-name>/` 下的可调用任务包，并为 source 输入、基础 IR、任务配置、校准、生成执行资产和执行报告提供独立区域。
 
 #### Scenario: 为转换创建项目目录
-- **WHEN** 项目 `air-tickets-demo` 的 ShowUI-Aloha trace 被转换
+- **WHEN** 项目 `air-tickets-demo` 的 record trace 被转换
 - **THEN** 转换输出 SHALL 放在 `execution/projects/air-tickets-demo/` 下
 - **AND** 项目目录 SHALL 包含 `source/`、`ir/`、`config/`、`calibration/`、`generated/`、`reports/` 路径或这些路径的文档化占位
 
 ### Requirement: ShowUI-Aloha 保持为录制处理器
 系统 SHALL 将 `record/` 视为录制派生日志、截图和 trace 产物的上游生产方，而不是 Midscene 执行或回放组件。
 
-#### Scenario: Converter 消费 ShowUI-Aloha 输出
-- **WHEN** Midscene converter 处理一次教学录制
-- **THEN** 它 SHALL 将 ShowUI-Aloha Learn 输出作为 source artifact 读取
-- **AND** 它 SHALL 在 `execution` 下写入执行侧产物
+#### Scenario: Converter 消费录制处理输出
+- **WHEN** execution converter 处理一次教学录制
+- **THEN** 它 SHALL 将 `record/` 中的 ShowUI-Aloha Learn 输出作为 source artifact 读取
+- **AND** 它 SHALL 在 `execution/` 下写入执行侧产物
 - **AND** 它 SHALL NOT 依赖 `Aloha_Act`、ShowUI-Aloha Actor、ShowUI-Aloha Executor 或 ShowUI-Aloha replay 代码
 
 #### Scenario: Trace prompt 约束 Midscene 定位描述
@@ -28,10 +28,10 @@
 - **AND** 系统 SHALL NOT 为该定位增强新增额外 operation schema 字段
 
 ### Requirement: Converter 生成 Midscene flow IR
-系统 SHALL 将 ShowUI-Aloha trace 数据转换为结构化基础 `midscene-flow.json`，初始化不存在的任务配置，并保留已经存在的人工任务配置和校准。
+系统 SHALL 将 record trace 数据转换为结构化基础 `midscene-flow.json`，初始化不存在的任务配置，并保留已经存在的人工任务配置和校准，供 execution 中的 Midscene 执行链路消费。
 
 #### Scenario: Trace 转换成功
-- **WHEN** converter 收到一个具名项目的有效 ShowUI-Aloha trace
+- **WHEN** converter 收到一个具名项目的有效 record trace
 - **THEN** 它 SHALL 写入 `execution/projects/<project-name>/ir/midscene-flow.json`
 - **AND** flow SHALL 包含 `schemaVersion`、`project`、`source` 和 `steps`
 - **AND** 每个 step SHALL 包含稳定 `id`、源 trace 引用、intent、timing、evidence、route strategy 和 fallback 信息
