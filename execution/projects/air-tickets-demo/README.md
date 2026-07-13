@@ -35,7 +35,7 @@ source/showui-trace.json
 uv run cua flow convert --project air-tickets-demo --goal "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
 ```
 
-首次转换初始化 `project.json` 和空 overrides；再次转换只覆盖基础 IR，不覆盖任务配置或已确认校准。converter 会保留 trace 的 operation、source/evidence 和截图引用，并把录制间隔转换为最高 30 秒的 `timing.waitBeforeMs`。
+首次转换初始化 `project.json` 和空 overrides；再次转换只覆盖基础 IR，不覆盖任务配置或已确认校准。converter 要求每个 trace step 都有完整结构化 operation，不会根据自然语言关键词猜测动作，也不会生成视觉 fallback；它会保留 source/evidence 和截图引用，并把录制间隔转换为最高 30 秒的 `timing.waitBeforeMs`。
 
 查看默认任务或只改变浏览器搜索词：
 

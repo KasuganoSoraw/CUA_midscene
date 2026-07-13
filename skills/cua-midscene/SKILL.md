@@ -20,9 +20,12 @@ description: 使用 CUA 仓库中的 ShowUI-Aloha 录制产物和 Midscene compu
 ## 创建任务
 
 1. 确认 ShowUI-Aloha trace、processed log 和截图已放入项目 `source/`。
-2. 运行 `uv run cua flow convert --project <name> --goal "<目标>"`。
-3. 运行 `uv run cua flow validate --project <name>`。
-4. 展示生成的输入定义和需要人工检查的步骤。不要把基础 IR 当作长期人工维护文件。
+2. 检查每个 trace step 都有明确的结构化 operation。不得根据 Action、Expectation、原始录制文本或关键词自行补猜 operation。
+3. 运行 `uv run cua flow convert --project <name> --goal "<目标>"`。
+4. 检查 trace 中的 input operation，与用户确认哪些录制值需要成为调用参数，并在 `project.json` 中保留或调整对应 input 定义和稳定 id。
+5. 运行 `uv run cua flow validate --project <name>`，展示生成的输入定义。不要把基础 IR 当作长期人工维护文件。
+
+input 的 `prompt`、`locatePrompt` 和录制默认值来自 trace operation；Skill 只规定 Agent 如何把已确认的业务输入声明到 `project.json`，不通过正则或自然语言关键词生成 route。trace 缺少可执行 operation 时停止创建并要求修正 trace。
 
 ## 校准任务
 
@@ -42,7 +45,7 @@ description: 使用 CUA 仓库中的 ShowUI-Aloha 录制产物和 Midscene compu
 3. 执行前使用 `uv run cua flow inspect` 或 `uv run cua flow validate` 检查 resolved flow。
 4. 可使用 `uv run cua flow run --project <name> --dry-run` 检查 Python/Node 执行契约；用户明确要求实际操作电脑时，才运行不带 `--dry-run` 的 `flow run`。
 
-不要把一次性输入写进 `project.json`、`flow-overrides.json` 或基础 IR。未知输入或生命周期不明确时先询问用户。
+不要把一次性输入写进 `project.json`、`flow-overrides.json` 或基础 IR。只把用户意图映射到 `project.json` 已声明的 input id；不得从 route prompt 临时发明占位符。未知输入或生命周期不明确时先询问用户。
 
 ## 约束
 

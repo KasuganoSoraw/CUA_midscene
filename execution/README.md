@@ -114,13 +114,13 @@ uv run cua calibration apply --project air-tickets-demo --proposal <proposal-id>
 
 ## 执行语义
 
-- converter 优先使用 trace 的 `operation.type` 和 `operation.prompt`，不以动作文本关键词作为主路由。
-- input route 使用 `operation.locatePrompt` 定位输入框。
+- converter 只使用 trace 的 `operation.type` 和对应必需字段，不扫描 Action、Expectation 或原始录制文本来猜测 route。
+- 每个 trace step 必须有结构化 operation；input 必须显式提供 `operation.locatePrompt`，不会从完整动作 prompt 自动派生。
 - `KeyboardTypeText` 通过 Midscene locate 管线聚焦目标，再发送键盘事件；不使用 `aiInput` 和剪贴板。
 - `KeyboardTypeText` 当前只承诺 ASCII，遇到不支持字符直接失败。
 - `timing.waitBeforeMs` 来自录制步骤间隔，低于 200ms 忽略，高于 30 秒截断。
 - runner 不在定位失败后默认调用 `aiWaitFor`；只有显式 wait route 才调用它。
-- `manual-review` 和未知 route 直接失败，不静默跳过、不自动修改任务并重试。
+- `manual-review` 直接失败；未知 route 在 JSON 契约校验阶段失败，不静默跳过、不自动修改任务并重试。
 
 ## 开发验证
 
@@ -130,9 +130,10 @@ uv run python -m cua.models.schema --check
 npm test
 ```
 
-更新 Pydantic 边界模型后，依次重新生成 Schema 和 TypeScript DTO：
+更新 Pydantic 边界模型后重新生成 Schema：
 
 ```powershell
 uv run python -m cua.models.schema
-npm run contracts:generate
 ```
+
+TypeScript executor 不生成 resolved flow DTO；它通过 Ajv 按 `resolved-flow.schema.json` 校验唯一运行输入，并只在执行器内部声明动作映射所需的最小类型。

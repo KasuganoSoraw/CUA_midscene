@@ -94,7 +94,7 @@ uv sync
 uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 ```
 
-trace 的 `operation.prompt` 应包含足够的视觉定位信息；input 还应提供只描述目标输入框的 `operation.locatePrompt`。执行时 input 使用 `KeyboardTypeText` 发送 ASCII 键盘事件，不依赖剪贴板。
+trace 的每个 step 都必须包含可执行的结构化 `operation`，转换器不会从 Action、Expectation 或录制动作文本中猜测 route。`operation.prompt` 应包含足够的视觉定位信息；input 必须额外提供只描述目标输入框的 `operation.locatePrompt`，缺失时 trace 生成或转换直接失败。执行时 input 使用 `KeyboardTypeText` 发送 ASCII 键盘事件，不依赖剪贴板。
 
 ## 校准与参数
 
@@ -106,6 +106,8 @@ uv run cua calibration apply --project <project-name> --proposal <proposal-id> -
 ```
 
 合并与校准不调用模型。待确认 proposal 不影响 inspect 或 run。缺失、增加或重排 step 属于 trace 结构问题，不通过 overrides 隐式修补。
+
+创建任务时，Agent 根据 trace 中明确的 input operation 检查 `project.json` 输入定义，并与用户确认哪些值需要成为可调用参数。调用任务时，Agent 只能覆盖 `project.json` 已声明的 input id；不能从自然语言 prompt 临时猜测字段或写入新的隐式参数。
 
 ## 当前状态
 

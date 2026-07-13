@@ -25,6 +25,8 @@ projects/<project-name>/
 
 合并顺序固定为基础 IR、已确认校准、本次输入。待确认 proposal 不参与执行。合并过程完全确定性，不调用模型。
 
+基础 IR 的 route 只能来自 trace 中完整的结构化 `caption.operation`。转换器不扫描自然语言关键词，也不生成 fallback；operation 缺失、类型未知或必需字段缺失时必须回到 trace 阶段修正。
+
 ## 常用命令
 
 所有命令从 `execution` 目录执行：
@@ -70,6 +72,8 @@ uv run cua calibration apply --project <project-name> --proposal <proposal-id> -
 ```
 
 只覆盖本次变化的输入。不要为了调用任务修改默认值。
+
+创建任务时，Agent 检查 trace 中的 input operation，并与用户确认需要暴露的业务输入，然后在 `project.json` 中维护稳定 input id、中文标签、录制默认值和 `route.value` 绑定。调用时只能使用这些已声明 id；用户提出未声明输入时，应先澄清或提出任务配置修改，不能从 prompt 猜测并临时注入。
 
 ## 校准建议
 
