@@ -62,7 +62,7 @@ execution/
 
 ### Decision: Pydantic 是持久化契约的事实来源
 
-`execution/schemas` 中的 JSON Schema 从 Pydantic 模型确定性生成并纳入 Git，文件头或构建元数据标明不得手工编辑。测试重新生成 Schema 并比较内容，发现漂移即失败。TypeScript resolved flow DTO 使用 `json-schema-to-typescript` 从 Schema 生成，并通过独立检查命令检测漂移。
+`execution/schemas` 中的 JSON Schema 从 Pydantic 模型确定性生成并纳入 Git，文件头或构建元数据标明不得手工编辑。测试重新生成 Schema 并比较内容，发现漂移即失败。TypeScript executor 直接以 JSON Schema 和 Ajv 校验 `resolved-flow.json`，只在执行器内部声明映射 Midscene 动作所需的最小类型，不再生成或提交 TypeScript DTO。
 
 第一版 Schema 至少覆盖：
 
@@ -72,7 +72,7 @@ execution/
 - `calibration-proposal.schema.json`
 - `resolved-flow.schema.json`
 
-内部 `TaskProjectPaths`、CLI 解析结果、`ResolvedFlowResult` 等不生成 Schema。TypeScript 侧只从 `resolved-flow` 契约获得执行所需 DTO；类型文件应从 Schema 生成或通过生成检查保持同步，不再手工复制 Python 全部模型。
+内部 `TaskProjectPaths`、CLI 解析结果、`ResolvedFlowResult` 等不生成 Schema。TypeScript 侧只读取 `resolved-flow.json`；JSON Schema 是跨进程运行时契约的唯一权威。执行器内部类型不作为公开契约，也不复制 Python 的 source、evidence、校准等非执行字段。
 
 备选方案是手工维护 JSON Schema，再分别生成 Python 和 TypeScript 类型。当前主要开发语言是 Python，Pydantic 模型还承载领域边界校验，以它作为事实来源能减少编辑环节，因此不采用 Schema-first。
 
@@ -128,4 +128,4 @@ uv run cua calibration apply --project <name> --proposal <id> --confirmed
 
 ## Open Questions
 
-无。TypeScript DTO 生成工具和 Node 执行结果通道已经在实现与契约测试中确定。
+无。Node 执行结果通道已经在实现与契约测试中确定；TypeScript 不再维护生成 DTO。

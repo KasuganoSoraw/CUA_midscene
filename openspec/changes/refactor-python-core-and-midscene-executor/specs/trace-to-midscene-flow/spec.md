@@ -7,15 +7,17 @@
 - **WHEN** converter 收到一个具名项目的有效 ShowUI-Aloha trace
 - **THEN** 它 SHALL 写入 `execution/projects/<project-name>/ir/midscene-flow.json`
 - **AND** flow SHALL 包含 `schemaVersion`、`project`、`source` 和 `steps`
-- **AND** 每个 step SHALL 包含稳定 `id`、源 trace 引用、intent、timing、evidence、route strategy 和 fallback 信息
+- **AND** 每个 step SHALL 包含稳定 `id`、源 trace 引用、intent、timing、evidence 和 route strategy
 - **AND** 输出 SHALL 通过 Python Pydantic 模型和生成的 JSON Schema 验证
 
 #### Scenario: Trace operation 转换为 Midscene prompt
 - **WHEN** trace step 包含结构化 `caption.operation`
-- **THEN** converter SHALL 优先使用 `operation.type` 选择 Midscene 执行动作
+- **THEN** converter SHALL 仅使用 `operation.type` 选择 Midscene 执行动作
 - **AND** converter SHALL 将 `operation.prompt` 作为对应 Midscene 动作的 prompt 来源
 - **AND** 当 `operation.type` 为 `input` 时，converter SHALL 将 `operation.locatePrompt` 作为目标输入框定位来源
-- **AND** converter SHALL NOT 通过扫描 `caption.action` 中的自然语言关键词作为主路径生成 route
+- **AND** converter SHALL NOT 通过扫描 `caption.action`、`expectation` 或原始录制动作中的自然语言关键词生成 route
+- **AND** 当 `caption.operation` 缺失、类型未知或必需字段缺失时，converter SHALL 标明 trace step 并直接失败
+- **AND** 当 `operation.type` 为 `input` 时，`operation.locatePrompt` SHALL 是必需字段，converter SHALL NOT 从完整动作 prompt 自动派生该字段
 
 ### Requirement: 通用 runner 消费 Midscene flow IR
 系统 SHALL 先由 Python 核心将基础 Midscene flow IR、已确认校准和本次参数解析为 resolved flow，再由 TypeScript Midscene 执行器消费 resolved flow 中的可执行 steps。
