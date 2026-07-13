@@ -7,10 +7,8 @@
     "check": "tsx executors/check-env.ts",
     "test:keyboard-type": "tsx tests/executors/keyboard-type-action.test.ts",
     "test:executor-contract": "tsx tests/executors/resolved-flow-contract.test.ts",
-    "contracts:generate": "tsx executors/generate-resolved-flow-contract.ts",
-    "contracts:check": "tsx executors/generate-resolved-flow-contract.ts --check",
     "typecheck": "tsc --noEmit",
-    "test": "npm run contracts:check && npm run typecheck && npm run test:keyboard-type && npm run test:executor-contract"
+    "test": "npm run typecheck && npm run test:keyboard-type && npm run test:executor-contract"
   },
   "keywords": [],
   "author": "",
@@ -23,7 +21,6 @@
   },
   "devDependencies": {
     "@types/node": "^18.19.68",
-    "json-schema-to-typescript": "^15.0.4",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }

@@ -56,6 +56,6 @@
 
 - [x] 8.1 删除 trace 转换中的正则关键词路由、unknown operation 和 input locatePrompt 自动派生，缺失结构化 operation 时按 step fail fast
 - [x] 8.2 从 flow 模型、Schema、示例资产和测试中删除 fallback 字段，确认执行链路不读取或生成动作兜底
-- [ ] 8.3 删除 resolved-flow TypeScript DTO 生成器、生成文件、npm 命令和依赖，保留 Ajv 运行时校验与执行器内部最小类型
+- [x] 8.3 删除 resolved-flow TypeScript DTO 生成器、生成文件、npm 命令和依赖，保留 Ajv 运行时校验与执行器内部最小类型
 - [ ] 8.4 更新 Skill 与中文文档，明确 Agent 在任务创建时通过 project.json 声明参数、调用时只覆盖已声明输入
 - [ ] 8.5 全仓审计自动猜测、静默跳过和执行重试类兜底，补充失败用例并运行 Python、TypeScript、Schema、Skill 与 OpenSpec 验证

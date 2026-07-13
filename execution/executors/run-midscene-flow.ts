@@ -7,7 +7,37 @@ import type { Ajv2020 as Ajv2020Class } from 'ajv/dist/2020.js';
 import type { FormatsPlugin } from 'ajv-formats';
 import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
 import { createKeyboardTypeTextAction } from './keyboard-type-action.js';
-import type { MidsceneFlowStep, ResolvedFlowSnapshot } from './generated/resolved-flow.js';
+
+type MidsceneRoute =
+  | { strategy: 'keyboard'; keyName: string }
+  | {
+      strategy: 'input';
+      prompt: string;
+      locatePrompt: string;
+      value: string;
+      mode?: 'replace' | 'append' | 'typeOnly';
+    }
+  | { strategy: 'tap'; prompt: string }
+  | { strategy: 'act'; prompt: string }
+  | { strategy: 'wait'; prompt?: string; condition: string; timeoutMs?: number }
+  | { strategy: 'manual-review'; reason: string };
+
+interface MidsceneFlowStep {
+  id: string;
+  timing?: {
+    waitBeforeMs?: number;
+    waitReason?: 'recorded-step-gap' | 'manual-calibration';
+  };
+  route: MidsceneRoute;
+}
+
+interface ResolvedFlowSnapshot {
+  flow: {
+    project: string;
+    goal: string;
+    steps: MidsceneFlowStep[];
+  };
+}
 
 type ComputerAgent = Awaited<ReturnType<typeof agentForComputer>>;
 
