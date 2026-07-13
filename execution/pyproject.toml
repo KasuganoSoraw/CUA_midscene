@@ -1,0 +1,32 @@
+[project]
+name = "cua-execution"
+version = "0.1.0"
+description = "以 Python 为主体、以 Midscene 为执行适配器的 CUA 任务系统"
+requires-python = ">=3.11"
+dependencies = [
+    "jsonschema>=4.23.0",
+    "pydantic>=2.10.0",
+]
+
+[project.scripts]
+cua = "cua.cli.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cua"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+addopts = "-q"
+pythonpath = ["."]
+
+[tool.uv]
+package = true

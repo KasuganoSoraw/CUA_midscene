@@ -1,16 +1,16 @@
 ## 1. Python 工程与目录边界
 
-- [ ] 1.1 在 `execution` 初始化 uv/Python 工程、`cua` 包和 `tests/python`，配置中文友好的 CLI 入口与测试命令
-- [ ] 1.2 将 TypeScript Midscene 文件迁移到顶层 `execution/executors`，同步 executor 测试路径和 npm scripts
-- [ ] 1.3 建立 `domain`、`models`、`conversion`、`task`、`cli` 模块边界，确认 Python 核心不导入或启动 Midscene SDK
+- [x] 1.1 在 `execution` 初始化 uv/Python 工程、`cua` 包和 `tests/python`，配置中文友好的 CLI 入口与测试命令
+- [x] 1.2 将 TypeScript Midscene 文件迁移到顶层 `execution/executors`，同步 executor 测试路径和 npm scripts
+- [x] 1.3 建立 `domain`、`models`、`conversion`、`task`、`cli` 模块边界，确认 Python 核心不导入或启动 Midscene SDK
 
 ## 2. Python 模型与生成契约
 
-- [ ] 2.1 将 Midscene flow、route、timing、evidence 等落盘结构实现为严格 Pydantic 模型
-- [ ] 2.2 将 project、input binding、flow overrides、calibration proposal/history 和 resolved flow 实现为严格 Pydantic 模型
-- [ ] 2.3 将路径、解析选项、合并结果和校准验证结果实现为内部 Python 类型，并验证它们不进入公开 Schema
-- [ ] 2.4 实现确定性 JSON Schema 生成命令，生成并提交五类公开文件契约
-- [ ] 2.5 增加 Pydantic 与 JSON Schema 合法/非法 fixture 测试，并验证 Schema 重新生成无漂移
+- [x] 2.1 将 Midscene flow、route、timing、evidence 等落盘结构实现为严格 Pydantic 模型
+- [x] 2.2 将 project、input binding、flow overrides、calibration proposal/history 和 resolved flow 实现为严格 Pydantic 模型
+- [x] 2.3 将路径、解析选项、合并结果和校准验证结果实现为内部 Python 类型，并验证它们不进入公开 Schema
+- [x] 2.4 实现确定性 JSON Schema 生成命令，生成并提交五类公开文件契约
+- [x] 2.5 增加 Pydantic 与 JSON Schema 合法/非法 fixture 测试，并验证 Schema 重新生成无漂移
 
 ## 3. Trace 转换迁移
 

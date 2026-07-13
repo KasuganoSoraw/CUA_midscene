@@ -1,14 +1,14 @@
 import { agentForComputer } from '@midscene/computer';
-import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from '../env.js';
+import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
 import { createKeyboardTypeTextAction } from './keyboard-type-action.js';
 import {
   assertAllowedTaskArgs,
   loadRuntimeInputs,
   parseTaskArgs,
   type ParsedTaskArgs,
-} from '../flow/task/cli-args.js';
-import { resolveProjectFlow, taskProjectPaths, writeResolvedFlowSnapshot } from '../flow/task/resolver.js';
-import type { MidsceneFlowStep } from '../flow/contracts/types.js';
+} from '../src/flow/task/cli-args.js';
+import { resolveProjectFlow, taskProjectPaths, writeResolvedFlowSnapshot } from '../src/flow/task/resolver.js';
+import type { MidsceneFlowStep } from '../src/flow/contracts/types.js';
 
 type ComputerAgent = Awaited<ReturnType<typeof agentForComputer>>;
 

@@ -1,0 +1,795 @@
+{
+  "$comment": "由 cua.models.schema 从 Pydantic 模型生成，请勿手工编辑。",
+  "$defs": {
+    "ActRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "act",
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "prompt"
+      ],
+      "title": "ActRoute",
+      "type": "object"
+    },
+    "InputRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "inputMethod": {
+          "anyOf": [
+            {
+              "const": "keyboard-action",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputmethod"
+        },
+        "locatePrompt": {
+          "title": "Locateprompt",
+          "type": "string"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "replace",
+                "append",
+                "typeOnly"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "input",
+          "title": "Strategy",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "prompt",
+        "locatePrompt",
+        "value"
+      ],
+      "title": "InputRoute",
+      "type": "object"
+    },
+    "KeyboardRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "keyName": {
+          "title": "Keyname",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "keyboard",
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "keyName"
+      ],
+      "title": "KeyboardRoute",
+      "type": "object"
+    },
+    "ManualReviewRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "manual-review",
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "reason"
+      ],
+      "title": "ManualReviewRoute",
+      "type": "object"
+    },
+    "MidsceneFlowCommands": {
+      "additionalProperties": false,
+      "properties": {
+        "flowExecution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flowexecution"
+        },
+        "recordingPreparation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recordingpreparation"
+        },
+        "traceGeneration": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tracegeneration"
+        },
+        "traceToFlowConversion": {
+          "title": "Tracetoflowconversion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "traceToFlowConversion"
+      ],
+      "title": "MidsceneFlowCommands",
+      "type": "object"
+    },
+    "MidsceneFlowEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "crop": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crop"
+        },
+        "expectation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expectation"
+        },
+        "observation": {
+          "title": "Observation",
+          "type": "string"
+        },
+        "operation": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "click": "#/$defs/TraceClickOperation",
+                  "input": "#/$defs/TraceInputOperation",
+                  "keyboard": "#/$defs/TraceKeyboardOperation",
+                  "unknown": "#/$defs/TraceUnknownOperation",
+                  "wait": "#/$defs/TraceWaitOperation"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TraceClickOperation"
+                },
+                {
+                  "$ref": "#/$defs/TraceInputOperation"
+                },
+                {
+                  "$ref": "#/$defs/TraceKeyboardOperation"
+                },
+                {
+                  "$ref": "#/$defs/TraceWaitOperation"
+                },
+                {
+                  "$ref": "#/$defs/TraceUnknownOperation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operation"
+        },
+        "screenshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Screenshot"
+        },
+        "thought": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thought"
+        }
+      },
+      "required": [
+        "observation",
+        "action"
+      ],
+      "title": "MidsceneFlowEvidence",
+      "type": "object"
+    },
+    "MidsceneFlowFallback": {
+      "additionalProperties": false,
+      "properties": {
+        "instruction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instruction"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "strategy": {
+          "enum": [
+            "vision",
+            "fail"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy"
+      ],
+      "title": "MidsceneFlowFallback",
+      "type": "object"
+    },
+    "MidsceneFlowSource": {
+      "additionalProperties": false,
+      "properties": {
+        "processedLogPath": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Processedlogpath"
+        },
+        "processedLogWithScreenshotsPath": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Processedlogwithscreenshotspath"
+        },
+        "screenshotsDir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Screenshotsdir"
+        },
+        "tracePath": {
+          "title": "Tracepath",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tracePath"
+      ],
+      "title": "MidsceneFlowSource",
+      "type": "object"
+    },
+    "MidsceneFlowSourceTrace": {
+      "additionalProperties": false,
+      "properties": {
+        "rawAction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rawaction"
+        },
+        "stepIndex": {
+          "title": "Stepindex",
+          "type": "integer"
+        },
+        "timestampSec": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestampsec"
+        }
+      },
+      "required": [
+        "stepIndex"
+      ],
+      "title": "MidsceneFlowSourceTrace",
+      "type": "object"
+    },
+    "MidsceneFlowStep": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "$ref": "#/$defs/MidsceneFlowEvidence"
+        },
+        "fallback": {
+          "$ref": "#/$defs/MidsceneFlowFallback"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "intent": {
+          "title": "Intent",
+          "type": "string"
+        },
+        "route": {
+          "discriminator": {
+            "mapping": {
+              "act": "#/$defs/ActRoute",
+              "input": "#/$defs/InputRoute",
+              "keyboard": "#/$defs/KeyboardRoute",
+              "manual-review": "#/$defs/ManualReviewRoute",
+              "tap": "#/$defs/TapRoute",
+              "wait": "#/$defs/WaitRoute"
+            },
+            "propertyName": "strategy"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/KeyboardRoute"
+            },
+            {
+              "$ref": "#/$defs/InputRoute"
+            },
+            {
+              "$ref": "#/$defs/TapRoute"
+            },
+            {
+              "$ref": "#/$defs/ActRoute"
+            },
+            {
+              "$ref": "#/$defs/WaitRoute"
+            },
+            {
+              "$ref": "#/$defs/ManualReviewRoute"
+            }
+          ],
+          "title": "Route"
+        },
+        "sourceTrace": {
+          "$ref": "#/$defs/MidsceneFlowSourceTrace"
+        },
+        "timing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MidsceneFlowTiming"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "sourceTrace",
+        "intent",
+        "evidence",
+        "route",
+        "fallback"
+      ],
+      "title": "MidsceneFlowStep",
+      "type": "object"
+    },
+    "MidsceneFlowTiming": {
+      "additionalProperties": false,
+      "properties": {
+        "recordedGapMs": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recordedgapms"
+        },
+        "waitBeforeMs": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Waitbeforems"
+        },
+        "waitReason": {
+          "anyOf": [
+            {
+              "enum": [
+                "recorded-step-gap",
+                "manual-calibration"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Waitreason"
+        }
+      },
+      "title": "MidsceneFlowTiming",
+      "type": "object"
+    },
+    "TapRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "tap",
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "prompt"
+      ],
+      "title": "TapRoute",
+      "type": "object"
+    },
+    "TraceClickOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "type": {
+          "const": "click",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "prompt"
+      ],
+      "title": "TraceClickOperation",
+      "type": "object"
+    },
+    "TraceInputOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "locatePrompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locateprompt"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "type": {
+          "const": "input",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "prompt",
+        "value"
+      ],
+      "title": "TraceInputOperation",
+      "type": "object"
+    },
+    "TraceKeyboardOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "type": {
+          "const": "keyboard",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "key"
+      ],
+      "title": "TraceKeyboardOperation",
+      "type": "object"
+    },
+    "TraceUnknownOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "type": {
+          "const": "unknown",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "TraceUnknownOperation",
+      "type": "object"
+    },
+    "TraceWaitOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "type": {
+          "const": "wait",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "condition"
+      ],
+      "title": "TraceWaitOperation",
+      "type": "object"
+    },
+    "WaitRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "strategy": {
+          "const": "wait",
+          "title": "Strategy",
+          "type": "string"
+        },
+        "timeoutMs": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeoutms"
+        }
+      },
+      "required": [
+        "strategy",
+        "condition"
+      ],
+      "title": "WaitRoute",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "commands": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MidsceneFlowCommands"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "goal": {
+      "title": "Goal",
+      "type": "string"
+    },
+    "project": {
+      "title": "Project",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/MidsceneFlowSource"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/MidsceneFlowStep"
+      },
+      "title": "Steps",
+      "type": "array"
+    }
+  },
+  "required": [
+    "project",
+    "goal",
+    "source",
+    "steps"
+  ],
+  "title": "MidsceneFlow",
+  "type": "object"
+}

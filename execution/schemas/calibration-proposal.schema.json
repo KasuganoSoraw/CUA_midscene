@@ -1,0 +1,553 @@
+{
+  "$comment": "由 cua.models.schema 从 Pydantic 模型生成，请勿手工编辑。",
+  "$defs": {
+    "ActRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "act",
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "prompt"
+      ],
+      "title": "ActRoute",
+      "type": "object"
+    },
+    "CalibrationBefore": {
+      "additionalProperties": false,
+      "properties": {
+        "route": {
+          "discriminator": {
+            "mapping": {
+              "act": "#/$defs/ActRoute",
+              "input": "#/$defs/InputRoute",
+              "keyboard": "#/$defs/KeyboardRoute",
+              "manual-review": "#/$defs/ManualReviewRoute",
+              "tap": "#/$defs/TapRoute",
+              "wait": "#/$defs/WaitRoute"
+            },
+            "propertyName": "strategy"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/KeyboardRoute"
+            },
+            {
+              "$ref": "#/$defs/InputRoute"
+            },
+            {
+              "$ref": "#/$defs/TapRoute"
+            },
+            {
+              "$ref": "#/$defs/ActRoute"
+            },
+            {
+              "$ref": "#/$defs/WaitRoute"
+            },
+            {
+              "$ref": "#/$defs/ManualReviewRoute"
+            }
+          ],
+          "title": "Route"
+        },
+        "timing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MidsceneFlowTiming"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "route"
+      ],
+      "title": "CalibrationBefore",
+      "type": "object"
+    },
+    "CalibrationChange": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "$ref": "#/$defs/FlowStepPatch"
+        },
+        "before": {
+          "$ref": "#/$defs/CalibrationBefore"
+        },
+        "stepId": {
+          "title": "Stepid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stepId",
+        "before",
+        "after"
+      ],
+      "title": "CalibrationChange",
+      "type": "object"
+    },
+    "FlowStepPatch": {
+      "additionalProperties": false,
+      "properties": {
+        "route": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RoutePatch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimingPatch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "FlowStepPatch",
+      "type": "object"
+    },
+    "InputRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "inputMethod": {
+          "anyOf": [
+            {
+              "const": "keyboard-action",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputmethod"
+        },
+        "locatePrompt": {
+          "title": "Locateprompt",
+          "type": "string"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "replace",
+                "append",
+                "typeOnly"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "input",
+          "title": "Strategy",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "prompt",
+        "locatePrompt",
+        "value"
+      ],
+      "title": "InputRoute",
+      "type": "object"
+    },
+    "KeyboardRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "keyName": {
+          "title": "Keyname",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "keyboard",
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "keyName"
+      ],
+      "title": "KeyboardRoute",
+      "type": "object"
+    },
+    "ManualReviewRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "manual-review",
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "reason"
+      ],
+      "title": "ManualReviewRoute",
+      "type": "object"
+    },
+    "MidsceneFlowTiming": {
+      "additionalProperties": false,
+      "properties": {
+        "recordedGapMs": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recordedgapms"
+        },
+        "waitBeforeMs": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Waitbeforems"
+        },
+        "waitReason": {
+          "anyOf": [
+            {
+              "enum": [
+                "recorded-step-gap",
+                "manual-calibration"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Waitreason"
+        }
+      },
+      "title": "MidsceneFlowTiming",
+      "type": "object"
+    },
+    "RoutePatch": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "inputMethod": {
+          "anyOf": [
+            {
+              "const": "keyboard-action",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputmethod"
+        },
+        "keyName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyname"
+        },
+        "locatePrompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locateprompt"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "replace",
+                "append",
+                "typeOnly"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "strategy": {
+          "anyOf": [
+            {
+              "enum": [
+                "keyboard",
+                "input",
+                "tap",
+                "act",
+                "wait",
+                "manual-review"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Strategy"
+        },
+        "timeoutMs": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeoutms"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "RoutePatch",
+      "type": "object"
+    },
+    "TapRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "strategy": {
+          "const": "tap",
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "prompt"
+      ],
+      "title": "TapRoute",
+      "type": "object"
+    },
+    "TimingPatch": {
+      "additionalProperties": false,
+      "properties": {
+        "waitBeforeMs": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Waitbeforems"
+        }
+      },
+      "title": "TimingPatch",
+      "type": "object"
+    },
+    "WaitRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "strategy": {
+          "const": "wait",
+          "title": "Strategy",
+          "type": "string"
+        },
+        "timeoutMs": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeoutms"
+        }
+      },
+      "required": [
+        "strategy",
+        "condition"
+      ],
+      "title": "WaitRoute",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "baseFlowFingerprint": {
+      "title": "Baseflowfingerprint",
+      "type": "string"
+    },
+    "changes": {
+      "items": {
+        "$ref": "#/$defs/CalibrationChange"
+      },
+      "title": "Changes",
+      "type": "array"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "project": {
+      "title": "Project",
+      "type": "string"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "project",
+    "baseFlowFingerprint",
+    "summary",
+    "reason",
+    "changes"
+  ],
+  "title": "CalibrationProposal",
+  "type": "object"
+}
