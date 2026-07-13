@@ -74,21 +74,21 @@ class TraceGenerator:
         for b in blocks:
             try:
                 return json.loads(b)
-            except:
+            except json.JSONDecodeError:
                 continue
         try:
             return json.loads(text)
-        except:
+        except json.JSONDecodeError:
             return {}
 
     def _sanitize_operation(self, operation: Any) -> Dict[str, Any]:
         """Keep the minimal structured operation used by downstream runners."""
         if not isinstance(operation, dict):
-            return {"type": "unknown"}
+            return {}
 
-        op_type = str(operation.get("type") or "unknown").strip().lower()
-        if op_type not in {"click", "input", "keyboard", "wait", "unknown"}:
-            op_type = "unknown"
+        op_type = str(operation.get("type") or "").strip().lower()
+        if op_type not in {"click", "input", "keyboard", "wait"}:
+            return {}
 
         sanitized: Dict[str, Any] = {"type": op_type}
         for key in ("prompt", "locatePrompt", "value", "key", "condition"):
@@ -97,6 +97,23 @@ class TraceGenerator:
                 sanitized[key] = value.strip()
 
         return sanitized
+
+    def _operation_error(self, operation: Any) -> str | None:
+        if not isinstance(operation, dict):
+            return "Operation 必须是对象"
+        operation_type = operation.get("type")
+        required_fields = {
+            "click": ("prompt",),
+            "input": ("prompt", "locatePrompt", "value"),
+            "keyboard": ("key",),
+            "wait": ("condition",),
+        }
+        if operation_type not in required_fields:
+            return "Operation.type 必须是 click、input、keyboard 或 wait"
+        missing = [field for field in required_fields[operation_type] if not operation.get(field)]
+        if missing:
+            return f"Operation 缺少非空字段：{', '.join(missing)}"
+        return None
 
     def _sanitize_caption(self, cap: Dict[str, Any]) -> Dict[str, Any]:
         """Clean LLM output: strip coordinates, enforce crop-first observation."""
@@ -118,49 +135,13 @@ class TraceGenerator:
 
         cap["operation"] = self._sanitize_operation(cap.get("operation"))
 
-        if re.search(r"\brelease\b.*\b(title\s*bar|top[-\s]*left)\b", cap.get("action", ""), re.I):
-            cap["action"] = "Click the control shown in the cropped image"
-            cap["think"] = "The cropped image shows a single actionable control; clicking it fulfills the intent."
-
         if not cap.get("observation", "").lower().startswith("cropped image shows"):
             cap["observation"] = ("Cropped image shows " + cap.get("observation", "")).strip()
 
         return cap
 
     def _caption_needs_retry(self, cap: Dict[str, Any]) -> bool:
-        operation = cap.get("operation")
-        operation_type = operation.get("type") if isinstance(operation, dict) else "unknown"
-        return not cap.get("action") or operation_type == "unknown"
-
-    def _coerce_release_to_click(self, items: List[Dict[str, Any]],
-                                 ms_window: int = 500, px_window: int = 32) -> List[Dict[str, Any]]:
-        """Convert stray mouse-up events into click actions if no matching down nearby."""
-        def near(a, b) -> bool:
-            try:
-                ax, ay = a[0].get("x"), a[0].get("y")
-                bx, by = b[0].get("x"), b[0].get("y")
-            except Exception:
-                return False
-            if None in (ax, ay, bx, by):
-                return False
-            return abs(ax - bx) <= px_window and abs(ay - by) <= px_window
-
-        last_down = None
-        for it in items:
-            ts = float(it.get("timestamp") or 0.0)
-            act = (it.get("action") or "").lower()
-            is_down = any(k in act for k in ("mousedown","lbuttondown","pointerdown"))
-            is_up = any(k in act for k in ("mouseup","lbuttonup","pointerup"))
-            if is_down:
-                last_down = it
-            elif is_up:
-                recent = False
-                if last_down:
-                    dt = ts - float(last_down.get("timestamp") or 0.0)
-                    recent = (dt <= ms_window/1000.0) and near(it.get("coords"), last_down.get("coords"))
-                if not recent:
-                    it["action"] = "LClick" if "right" not in act else "RClick"
-        return items
+        return not cap.get("action") or self._operation_error(cap.get("operation")) is not None
 
     def _prompt(self, action: Dict[str, Any], overall_task: str, step_idx: int, recent_steps: List[Dict[str, Any]]) -> str:
         """Build the step prompt. Core rules live in default_prompt.json; add small action-type deltas conditionally."""
@@ -208,9 +189,8 @@ Overall Task: {overall_task}
             key = "Click"
         elif "scroll" in a:
             key = "Scroll"
-        # Fallback: no delta
         if not key:
-            return "ActionTypeDelta: (none)"
+            return ""
         text = deltas_cfg.get(key, "")
         mod_txt = self._modifiers_text(action, modifier_guide)
         return text.replace("<MODIFIER_GUIDE>", mod_txt)
@@ -286,9 +266,12 @@ Overall Task: {overall_task}
         with open(recording_json_path, "r", encoding="utf-8") as f:
             items = json.load(f)
 
-        items = [it for it in items if isinstance(it, dict)]
+        if not isinstance(items, list):
+            raise ValueError("录制 JSON 根节点必须是数组")
+        invalid_indexes = [index for index, item in enumerate(items) if not isinstance(item, dict)]
+        if invalid_indexes:
+            raise ValueError(f"录制 JSON 包含非对象步骤：{invalid_indexes}")
         by_ts = {float(it["timestamp"]): it for it in items if "timestamp" in it}
-        items = self._coerce_release_to_click(items)
 
         traj, step_idx = [], 1
 
@@ -305,7 +288,7 @@ Overall Task: {overall_task}
             crop = raw.get("screenshot_crop") or raw.get("screenshot")
             full = raw.get("screenshot_full") or raw.get("screenshot")
             if not crop and not full:
-                continue
+                raise RuntimeError(f"录制动作缺少截图：timestamp={ts}, action={act_str}")
 
             if isinstance(crop, str) and crop.startswith("screenshots/"):
                 crop = crop.replace("screenshots/", "")
@@ -317,7 +300,7 @@ Overall Task: {overall_task}
             crop_b64 = self._encode_image(crop_path) if crop_path else None
             full_b64 = self._encode_image(full_path) if full_path else None
             if not crop_b64 and not full_b64:
-                continue
+                raise RuntimeError(f"录制动作的截图无法读取：timestamp={ts}, action={act_str}")
 
             act = it.get("action") or ""
             coords = it.get("coords")
@@ -336,7 +319,7 @@ Overall Task: {overall_task}
                     "Think": cap.get("think", ""),
                     "Action": cap.get("action", ""),
                     "Expectation": cap.get("expectation", ""),
-                    "Operation": cap.get("operation", {"type": "unknown"})
+                    "Operation": cap.get("operation", {})
                 })
 
             prompt = self._prompt(it, overall_task, step_idx, recent)
@@ -351,7 +334,7 @@ Overall Task: {overall_task}
                 "think": self._val(data, "Think", "think", default=""),
                 "action": self._val(data, "Action", "action", default=""),
                 "expectation": self._val(data, "Expectation", "expectation", default=""),
-                "operation": self._val(data, "Operation", "operation", default={"type": "unknown"})
+                "operation": self._val(data, "Operation", "operation", default={})
             }
             cap = self._sanitize_caption(cap)
 
@@ -359,7 +342,8 @@ Overall Task: {overall_task}
                 retry_prompt = (
                     f"{prompt}\n\n"
                     "上一次输出缺少有效 Action 或 Operation。请重新输出完整 JSON，必须包含非空 Action，"
-                    "并且 Operation.type 不能是 unknown，除非原始动作确实无法判断。"
+                    "并且 Operation.type 必须是 click、input、keyboard 或 wait；"
+                    "各类型的必需字段必须完整。"
                 )
                 if self.api_provider == "claude":
                     txt = self._call_claude(retry_prompt, crop_b64, full_b64)
@@ -372,16 +356,25 @@ Overall Task: {overall_task}
                     "think": self._val(data, "Think", "think", default=""),
                     "action": self._val(data, "Action", "action", default=""),
                     "expectation": self._val(data, "Expectation", "expectation", default=""),
-                    "operation": self._val(data, "Operation", "operation", default={"type": "unknown"})
+                    "operation": self._val(data, "Operation", "operation", default={})
                 }
                 cap = self._sanitize_caption(cap)
+
+            if self._caption_needs_retry(cap):
+                operation_error = self._operation_error(cap.get("operation"))
+                raise RuntimeError(
+                    f"trace step {step_idx} 在纠错重试后仍缺少可执行 operation："
+                    f"{operation_error or 'Action 为空'}"
+                )
 
             traj.append({"step_idx": step_idx, "caption": cap})
             step_idx += 1
             time.sleep(0.1)
 
-            with open(output_trace_path, "w", encoding="utf-8") as f:
-                json.dump({"trajectory": traj}, f, ensure_ascii=False, indent=2)
+        if not traj:
+            raise RuntimeError("录制中没有可生成 trace 的操作步骤")
+        with open(output_trace_path, "w", encoding="utf-8") as f:
+            json.dump({"trajectory": traj}, f, ensure_ascii=False, indent=2)
 
 
 if __name__ == "__main__":

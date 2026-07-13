@@ -19,6 +19,11 @@
 - **AND** 当 `caption.operation` 缺失、类型未知或必需字段缺失时，converter SHALL 标明 trace step 并直接失败
 - **AND** 当 `operation.type` 为 `input` 时，`operation.locatePrompt` SHALL 是必需字段，converter SHALL NOT 从完整动作 prompt 自动派生该字段
 
+#### Scenario: Trace 生成失败暴露
+- **WHEN** 模型在一次纠错重试后仍未生成完整可执行 operation，或某个录制动作缺少可读取截图
+- **THEN** trace 生成 SHALL 标明 step 或录制动作并直接失败
+- **AND** trace 生成 SHALL NOT 写入 `unknown` operation、静默跳过该动作或把特定 release 文本改写为 click
+
 ### Requirement: 通用 runner 消费 Midscene flow IR
 系统 SHALL 先由 Python 核心将基础 Midscene flow IR、已确认校准和本次参数解析为 resolved flow，再由 TypeScript Midscene 执行器消费 resolved flow 中的可执行 steps。
 

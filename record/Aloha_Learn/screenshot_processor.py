@@ -77,16 +77,15 @@ class VideoScreenshotExtractor:
             c = next(iter(coords.values()))
         else:
             return None
-        return int(c.get("x", 0)), int(c.get("y", 0))
+        if not isinstance(c, dict) or c.get("x") is None or c.get("y") is None:
+            return None
+        return int(c["x"]), int(c["y"])
 
     def _parse_config_resolution(self, actions):
         for a in actions:
             if (a.get("action") or "").startswith("CONFIG"):
                 monitors = a.get("coords", {})
-                # Prefer primary monitor "0"; fallback to any
                 primary = monitors.get("0") if isinstance(monitors, dict) else None
-                if primary is None and isinstance(monitors, dict) and monitors:
-                    primary = next(iter(monitors.values()))
 
                 if not primary:
                     return None, None
@@ -140,10 +139,7 @@ class VideoScreenshotExtractor:
 
             frame = self._get_frame_at(video_path, timestamp)
             if frame is None:
-                ua['screenshot_full'] = None
-                ua['screenshot_crop'] = None
-                updated.append(ua)
-                continue
+                raise RuntimeError(f"Could not read video frame for action at {timestamp}s: {act_str}")
 
             H, W = frame.shape[:2]
             pt = self._primary_point_from_coords(ua.get('coords'))
@@ -187,37 +183,40 @@ class VideoScreenshotExtractor:
                 crop_ok = self._save_jpg(str(crop_path), frame)
             else:
                 # === Default handling (pad crop first, then draw centered semi-transparent X) ===
+                if pt is None:
+                    raise ValueError(f"Action requires coordinates but none were recorded: {act_str}")
                 draw_frame = frame.copy()
 
                 # 1) Crop around click with black padding (keeps center fixed, no shifting)
-                cx_raw, cy_raw = (pt if pt else (None, None))
+                cx_raw, cy_raw = pt
                 crop_img = self._crop_with_black_padding(draw_frame, cx_raw, cy_raw, crop_size=self.crop_size)
 
                 # 2) Draw semi-transparent X AFTER padding so it's fully visible
-                if pt:
-                    # X centered in the crop
-                    cx = cy = self.crop_size // 2
-                    outline = self.x_thick + 2
-                    # ensure the whole X (including outline) fits inside the crop
-                    max_half = (self.crop_size // 2) - 1 - outline
-                    half_x = max(1, min(self.x_size // 2, max_half))
+                # X centered in the crop
+                cx = cy = self.crop_size // 2
+                outline = self.x_thick + 2
+                # ensure the whole X (including outline) fits inside the crop
+                max_half = (self.crop_size // 2) - 1 - outline
+                half_x = max(1, min(self.x_size // 2, max_half))
 
-                    overlay = crop_img.copy()
-                    # white outline
-                    cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (255, 255, 255), outline)
-                    cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (255, 255, 255), outline)
-                    # red core
-                    cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (0, 0, 255), self.x_thick)
-                    cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (0, 0, 255), self.x_thick)
-                    # blend 50%
-                    crop_img = cv2.addWeighted(overlay, 0.5, crop_img, 0.5, 0)
+                overlay = crop_img.copy()
+                # white outline
+                cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (255, 255, 255), outline)
+                cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (255, 255, 255), outline)
+                # red core
+                cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (0, 0, 255), self.x_thick)
+                cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (0, 0, 255), self.x_thick)
+                # blend 50%
+                crop_img = cv2.addWeighted(overlay, 0.5, crop_img, 0.5, 0)
 
                 full_ok = self._save_jpg(str(full_path), frame)
                 crop_ok = self._save_jpg(str(crop_path), crop_img)
 
 
-            ua['screenshot_full'] = f"screenshots/{full_fn}" if full_ok else None
-            ua['screenshot_crop'] = f"screenshots/{crop_fn}" if crop_ok else None
+            if not full_ok or not crop_ok:
+                raise RuntimeError(f"Could not save screenshots for action at {timestamp}s: {act_str}")
+            ua['screenshot_full'] = f"screenshots/{full_fn}"
+            ua['screenshot_crop'] = f"screenshots/{crop_fn}"
 
             updated.append(ua)
         return updated
@@ -283,7 +282,7 @@ class VideoScreenshotExtractor:
         if not inputs_dir.exists():
             raise FileNotFoundError(f"Inputs directory not found: {inputs_dir}")
 
-        # --- Locate video (with fallback search) ---
+        # --- Locate video ---
         preferred_name = project_dir.name.lower().replace("-", "_")
         candidate_videos = sorted(inputs_dir.glob("*.mp4"))
         video_path = None
@@ -299,13 +298,12 @@ class VideoScreenshotExtractor:
                 raise FileNotFoundError(f"No .mp4 files found in {inputs_dir}")
             elif len(candidate_videos) == 1:
                 video_path = candidate_videos[0]
-                print(f"[Info] Using fallback video: {video_path.name}")
+                print(f"[Info] Using the only video: {video_path.name}")
             else:
-                candidate_videos.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-                video_path = candidate_videos[0]
                 all_names = ", ".join(v.name for v in candidate_videos)
-                print(f"[Warning] No exact match for '{preferred_name}.mp4'; using most recent: {video_path.name}")
-                print(f"[Warning] All candidates: {all_names}")
+                raise FileNotFoundError(
+                    f"No exact match for '{preferred_name}.mp4' and multiple videos exist: {all_names}"
+                )
 
         # --- Locate processed log (strict naming) ---
         log_path = project_dir / f"{project_dir.name}_processed_log.json"
