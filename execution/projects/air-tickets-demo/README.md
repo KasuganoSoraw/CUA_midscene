@@ -25,7 +25,7 @@
 准备录制资源：
 
 ```powershell
-将 ShowUI-Aloha 录制视频和输入日志放入 showui-aloha\Aloha_Learn\projects\air_tickets\inputs
+将 ShowUI-Aloha 录制视频和输入日志放入 record\Aloha_Learn\projects\air_tickets\inputs
 ```
 
 这一步只是整理录制输入，不调用模型。
@@ -33,16 +33,16 @@
 生成 ShowUI-Aloha trace：
 
 ```powershell
-cd showui-aloha
+cd record
 uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 ```
 
-这一步会调用 `showui-aloha/.env` 中配置的 OpenAI 兼容模型，用于从截图和操作日志生成语义 trace。
+这一步会调用 `record/.env` 中配置的 OpenAI 兼容模型，用于从截图和操作日志生成语义 trace。
 
 生成 Midscene flow：
 
 ```powershell
-cd CUA_midscene
+cd execution
 npm run flow:convert -- --project air-tickets-demo --goal "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
 ```
 
@@ -62,7 +62,7 @@ npm run flow:inspect -- --project air-tickets-demo --input step-002-value="GOOGL
 执行 Midscene flow：
 
 ```powershell
-cd CUA_midscene
+cd execution
 npm run flow:run -- --project air-tickets-demo
 ```
 
@@ -73,7 +73,7 @@ npm run flow:run -- --project air-tickets-demo
 原始录制视频较大，不在该项目目录重复复制。当前来源为：
 
 ```text
-showui-aloha/Aloha_Learn/Examples/air_tickets/Quick-Recording-08-54-17.mp4
+record/Aloha_Learn/Examples/air_tickets/Quick-Recording-08-54-17.mp4
 ```
 
 ## 执行边界
@@ -86,6 +86,6 @@ source/showui-trace.json
   -> config/flow-overrides.json
   -> 本次输入
   -> resolved flow
-  -> CUA_midscene 通用 runner
+  -> execution 通用 runner
   -> Midscene computer use
 ```

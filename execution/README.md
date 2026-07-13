@@ -1,6 +1,6 @@
-# CUA Midscene
+# Execution
 
-该目录是 CUA 项目的主执行器与转换工具目录，负责把 ShowUI-Aloha Learn 产物转换为 Midscene flow，并通过 Midscene computer use 执行。转换时优先消费 trace 中的 `operation.prompt`，将其作为 Midscene 动作 prompt；对于 input 操作，还会消费 `operation.locatePrompt` 作为输入框定位 prompt。
+该目录是 CUA 项目的执行域，负责把 record 产物转换为任务 flow，处理校准和参数化调用，并通过当前 Midscene computer use 执行器完成电脑操作。转换时优先消费 trace 中的 `operation.prompt`；对于 input 操作，还会消费 `operation.locatePrompt` 作为输入框定位 prompt。
 
 这里不使用 browser-use、Playwright、Puppeteer 或 CDP。后续面向堡垒机、远程桌面和企业内网页系统的执行能力，都应围绕 Midscene computer use 展开。
 
@@ -38,13 +38,14 @@ projects/<project-name>/
   reports/                   # 执行报告和 resolved flow 快照
 ```
 
-`src/flow/` 按功能域保存生产代码，测试统一放在 `tests/flow/`：
+生产代码按通用 flow 能力与具体 executors 分开组织：
 
 - `src/flow/contracts/`：Midscene flow 和任务包 JSON 契约。
 - `src/flow/conversion/`：ShowUI-Aloha trace 到基础 IR 的转换。
 - `src/flow/task/`：项目发现、参数解析、校准和 resolved flow 构建。
-- `src/flow/execution/`：Midscene runner 与 `KeyboardTypeText` action。
-- `tests/flow/`：按相同功能域组织的测试。
+- `src/executors/`：Midscene runner 与 `KeyboardTypeText` action；未来其他执行器也归入该执行域。
+- `tests/flow/`：contracts、conversion 和 task 相关测试。
+- `tests/executors/`：执行器相关测试。
 - `src/env.ts`、`src/check-env.ts`：本地环境检查。
 
 ## 常用命令

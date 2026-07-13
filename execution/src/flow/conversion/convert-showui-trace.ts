@@ -102,10 +102,10 @@ function parseArgs(argv: string[]): ConvertOptions {
 
 function defaultRecordingPreparationCommand(project: string): string {
   if (project === 'air-tickets-demo') {
-    return '将 ShowUI-Aloha 录制视频和输入日志放入 showui-aloha\\Aloha_Learn\\projects\\air_tickets\\inputs';
+    return '将 ShowUI-Aloha 录制视频和输入日志放入 record\\Aloha_Learn\\projects\\air_tickets\\inputs';
   }
 
-  return `将该项目的录制视频和输入日志放入对应 ShowUI-Aloha Learn project，并将生成产物复制到 CUA_midscene\\projects\\${project}\\source`;
+  return `将该项目的录制视频和输入日志放入对应 record Learn project，并将生成产物复制到 execution\\projects\\${project}\\source`;
 }
 
 function defaultTraceGenerationCommand(project: string): string {
