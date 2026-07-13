@@ -11,11 +11,12 @@ from cua.models.flow import (
     InputRoute,
     MidsceneFlow,
     MidsceneFlowEvidence,
-    MidsceneFlowFallback,
     MidsceneFlowSource,
     MidsceneFlowSourceTrace,
     MidsceneFlowStep,
     TapRoute,
+    TraceClickOperation,
+    TraceInputOperation,
 )
 from cua.models.task import (
     CalibrationBefore,
@@ -55,7 +56,16 @@ def sample_flow() -> MidsceneFlow:
                 id="step-001",
                 source_trace=MidsceneFlowSourceTrace(step_index=1),
                 intent="输入关键词",
-                evidence=MidsceneFlowEvidence(observation="", action="输入默认关键词"),
+                evidence=MidsceneFlowEvidence(
+                    observation="",
+                    action="输入默认关键词",
+                    operation=TraceInputOperation(
+                        type="input",
+                        prompt="在搜索框输入 {{value}}",
+                        locate_prompt="页面顶部的搜索输入框",
+                        value="默认关键词",
+                    ),
+                ),
                 route=InputRoute(
                     strategy="input",
                     prompt="在搜索框输入 {{value}}",
@@ -64,15 +74,17 @@ def sample_flow() -> MidsceneFlow:
                     mode="replace",
                     input_method="keyboard-action",
                 ),
-                fallback=MidsceneFlowFallback(strategy="vision", instruction="在搜索框输入 {{value}}"),
             ),
             MidsceneFlowStep(
                 id="step-002",
                 source_trace=MidsceneFlowSourceTrace(step_index=2),
                 intent="点击搜索",
-                evidence=MidsceneFlowEvidence(observation="", action="点击搜索按钮"),
+                evidence=MidsceneFlowEvidence(
+                    observation="",
+                    action="点击搜索按钮",
+                    operation=TraceClickOperation(type="click", prompt="页面右侧的蓝色搜索按钮"),
+                ),
                 route=TapRoute(strategy="tap", prompt="页面右侧的蓝色搜索按钮"),
-                fallback=MidsceneFlowFallback(strategy="vision", instruction="点击搜索按钮"),
             ),
         ],
     )

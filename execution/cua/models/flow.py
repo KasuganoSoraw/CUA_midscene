@@ -43,7 +43,7 @@ class TraceClickOperation(ContractModel):
 class TraceInputOperation(ContractModel):
     type: Literal["input"]
     prompt: str
-    locate_prompt: str | None = None
+    locate_prompt: str
     value: str
 
 
@@ -59,17 +59,11 @@ class TraceWaitOperation(ContractModel):
     condition: str
 
 
-class TraceUnknownOperation(ContractModel):
-    type: Literal["unknown"]
-    prompt: str | None = None
-
-
 MidsceneTraceOperation = Annotated[
     TraceClickOperation
     | TraceInputOperation
     | TraceKeyboardOperation
-    | TraceWaitOperation
-    | TraceUnknownOperation,
+    | TraceWaitOperation,
     Field(discriminator="type"),
 ]
 
@@ -79,7 +73,7 @@ class MidsceneFlowEvidence(ContractModel):
     thought: str | None = None
     action: str
     expectation: str | None = None
-    operation: MidsceneTraceOperation | None = None
+    operation: MidsceneTraceOperation
     screenshot: str | None = None
     crop: str | None = None
 
@@ -126,12 +120,6 @@ MidsceneFlowRoute = Annotated[
 ]
 
 
-class MidsceneFlowFallback(ContractModel):
-    strategy: Literal["vision", "fail"]
-    instruction: str | None = None
-    reason: str | None = None
-
-
 class MidsceneFlowStep(ContractModel):
     id: str
     source_trace: MidsceneFlowSourceTrace
@@ -139,7 +127,6 @@ class MidsceneFlowStep(ContractModel):
     timing: MidsceneFlowTiming | None = None
     evidence: MidsceneFlowEvidence
     route: MidsceneFlowRoute
-    fallback: MidsceneFlowFallback
 
 
 class MidsceneFlow(ContractModel):

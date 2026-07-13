@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from cua.conversion.input_locate import derive_input_locate_prompt
 from cua.conversion.showui_trace import clamp_recorded_wait_ms, convert_trace
 from cua.domain.types import ConvertOptions
 from cua.models.flow import MidsceneFlow
@@ -15,29 +14,6 @@ from cua.models.task import FlowOverrides, TaskProjectConfig
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
 AIR_PROJECT = EXECUTION_ROOT / "projects" / "air-tickets-demo"
 AIR_GOAL = "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
-
-
-@pytest.mark.parametrize(
-    ("prompt", "expected"),
-    [
-        ("在 Chrome 地址栏/搜索栏中输入 {{value}}", "Chrome 地址栏/搜索栏"),
-        (
-            "在 Book a flight 预订组件的 From（出发地）输入框中输入 {{value}}",
-            "Book a flight 预订组件的 From（出发地）输入框",
-        ),
-        (
-            "在 Book a flight 预订组件的 To（目的地）输入框中继续输入 {{value}}，以进一步过滤",
-            "Book a flight 预订组件的 To（目的地）输入框",
-        ),
-    ],
-)
-def test_derive_input_locate_prompt(prompt: str, expected: str) -> None:
-    assert derive_input_locate_prompt(prompt) == expected
-
-
-def test_derive_input_locate_prompt_fails_for_ambiguous_prompt() -> None:
-    with pytest.raises(ValueError, match="无法从 input prompt 推导 locatePrompt"):
-        derive_input_locate_prompt("输入 {{value}}")
 
 
 def test_recorded_wait_bounds() -> None:
@@ -103,3 +79,43 @@ def test_converter_initializes_missing_task_files(tmp_path: Path) -> None:
     assert overrides.steps == {}
     assert (project_root / "calibration" / "proposals").is_dir()
     assert (project_root / "calibration" / "history").is_dir()
+
+
+def test_converter_rejects_missing_structured_operation(tmp_path: Path) -> None:
+    project_root = tmp_path / "missing-operation"
+    shutil.copytree(AIR_PROJECT / "source", project_root / "source")
+    trace_path = project_root / "source" / "showui-trace.json"
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    del trace["trajectory"][0]["caption"]["operation"]
+    trace_path.write_text(json.dumps(trace, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Field required"):
+        convert_trace(
+            ConvertOptions(
+                project="missing-operation",
+                goal="验证严格 operation",
+                project_root=project_root,
+                conversion_command="uv run cua flow convert --project missing-operation --goal 验证严格 operation",
+            )
+        )
+    assert not (project_root / "ir" / "midscene-flow.json").exists()
+
+
+def test_converter_rejects_input_without_locate_prompt(tmp_path: Path) -> None:
+    project_root = tmp_path / "missing-locate"
+    shutil.copytree(AIR_PROJECT / "source", project_root / "source")
+    trace_path = project_root / "source" / "showui-trace.json"
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    del trace["trajectory"][1]["caption"]["operation"]["locatePrompt"]
+    trace_path.write_text(json.dumps(trace, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"trace step 2 的 operation\.locatePrompt 不能为空"):
+        convert_trace(
+            ConvertOptions(
+                project="missing-locate",
+                goal="验证 input 定位契约",
+                project_root=project_root,
+                conversion_command="uv run cua flow convert --project missing-locate --goal 验证 input 定位契约",
+            )
+        )
+    assert not (project_root / "ir" / "midscene-flow.json").exists()

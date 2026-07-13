@@ -255,31 +255,20 @@
           "type": "string"
         },
         "operation": {
-          "anyOf": [
+          "oneOf": [
             {
-              "oneOf": [
-                {
-                  "$ref": "#/$defs/TraceClickOperation"
-                },
-                {
-                  "$ref": "#/$defs/TraceInputOperation"
-                },
-                {
-                  "$ref": "#/$defs/TraceKeyboardOperation"
-                },
-                {
-                  "$ref": "#/$defs/TraceWaitOperation"
-                },
-                {
-                  "$ref": "#/$defs/TraceUnknownOperation"
-                }
-              ]
+              "$ref": "#/$defs/TraceClickOperation"
             },
             {
-              "type": "null"
+              "$ref": "#/$defs/TraceInputOperation"
+            },
+            {
+              "$ref": "#/$defs/TraceKeyboardOperation"
+            },
+            {
+              "$ref": "#/$defs/TraceWaitOperation"
             }
           ],
-          "default": null,
           "title": "Operation"
         },
         "screenshot": {
@@ -309,51 +298,10 @@
       },
       "required": [
         "observation",
-        "action"
+        "action",
+        "operation"
       ],
       "title": "MidsceneFlowEvidence",
-      "type": "object"
-    },
-    "MidsceneFlowFallback": {
-      "additionalProperties": false,
-      "properties": {
-        "instruction": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Instruction"
-        },
-        "reason": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Reason"
-        },
-        "strategy": {
-          "enum": [
-            "vision",
-            "fail"
-          ],
-          "title": "Strategy",
-          "type": "string"
-        }
-      },
-      "required": [
-        "strategy"
-      ],
-      "title": "MidsceneFlowFallback",
       "type": "object"
     },
     "MidsceneFlowSource": {
@@ -450,9 +398,6 @@
         "evidence": {
           "$ref": "#/$defs/MidsceneFlowEvidence"
         },
-        "fallback": {
-          "$ref": "#/$defs/MidsceneFlowFallback"
-        },
         "id": {
           "title": "Id",
           "type": "string"
@@ -504,8 +449,7 @@
         "sourceTrace",
         "intent",
         "evidence",
-        "route",
-        "fallback"
+        "route"
       ],
       "title": "MidsceneFlowStep",
       "type": "object"
@@ -640,16 +584,8 @@
       "additionalProperties": false,
       "properties": {
         "locatePrompt": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Locateprompt"
+          "title": "Locateprompt",
+          "type": "string"
         },
         "prompt": {
           "title": "Prompt",
@@ -668,6 +604,7 @@
       "required": [
         "type",
         "prompt",
+        "locatePrompt",
         "value"
       ],
       "title": "TraceInputOperation",
@@ -703,33 +640,6 @@
         "key"
       ],
       "title": "TraceKeyboardOperation",
-      "type": "object"
-    },
-    "TraceUnknownOperation": {
-      "additionalProperties": false,
-      "properties": {
-        "prompt": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Prompt"
-        },
-        "type": {
-          "const": "unknown",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "type"
-      ],
-      "title": "TraceUnknownOperation",
       "type": "object"
     },
     "TraceWaitOperation": {

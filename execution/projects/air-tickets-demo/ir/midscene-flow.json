@@ -9,9 +9,9 @@
     "screenshotsDir": "source/screenshots"
   },
   "commands": {
-    "recordingPreparation": "将 ShowUI-Aloha 录制视频和输入日志放入 record\\Aloha_Learn\\projects\\air_tickets\\inputs",
-    "traceGeneration": "uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets",
-    "traceToFlowConversion": "uv run cua flow convert --project air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\" --recording-preparation-command \"将 ShowUI-Aloha 录制视频和输入日志放入 record\\Aloha_Learn\\projects\\air_tickets\\inputs\" --trace-generation-command \"uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets\"",
+    "recordingPreparation": "将 record 生成的 trace、processed log 和截图复制到 execution\\projects\\air-tickets-demo\\source",
+    "traceGeneration": "未记录；请通过 --trace-generation-command 提供 air-tickets-demo 的 trace 生成命令",
+    "traceToFlowConversion": "uv run cua flow convert --project air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\"",
     "flowExecution": "uv run cua flow run --project air-tickets-demo"
   },
   "steps": [
@@ -38,10 +38,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 Chrome 浏览器顶部的地址栏/搜索栏区域以聚焦输入框"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 Chrome 浏览器顶部的地址栏/搜索栏区域以聚焦输入框"
       }
     },
     {
@@ -78,10 +74,6 @@
         "value": "QATAR AIRWAYS",
         "mode": "replace",
         "inputMethod": "keyboard-action"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "在 Chrome 地址栏/搜索栏中输入 {{value}}"
       }
     },
     {
@@ -113,10 +105,6 @@
       "route": {
         "strategy": "keyboard",
         "keyName": "Enter"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "在 Chrome 浏览器中按 Enter 键触发搜索。"
       }
     },
     {
@@ -147,10 +135,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 Google 搜索结果中第一条 Sponsored 广告链接'Qatar Airways Official Website'（来自 qatarairways.com）以打开卡塔尔航空官网"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 Google 搜索结果中第一条 Sponsored 广告链接'Qatar Airways Official Website'（来自 qatarairways.com）以打开卡塔尔航空官网"
       }
     },
     {
@@ -181,10 +165,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 Book a flight 预订组件中的 From（出发地）输入框以使其获得焦点，准备输入出发城市或机场"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 Book a flight 预订组件中的 From（出发地）输入框以使其获得焦点，准备输入出发城市或机场"
       }
     },
     {
@@ -215,10 +195,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击卡塔尔航空官网底部 Cookie 同意横幅中的 Accept all 按钮以接受全部 Cookie 并关闭横幅"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击卡塔尔航空官网底部 Cookie 同意横幅中的 Accept all 按钮以接受全部 Cookie 并关闭横幅"
       }
     },
     {
@@ -249,10 +225,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 Book a flight 预订组件中的 From（出发地）输入框以使其获得焦点，准备输入出发城市或机场"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 Book a flight 预订组件中的 From（出发地）输入框以使其获得焦点，准备输入出发城市或机场"
       }
     },
     {
@@ -289,10 +261,6 @@
         "value": "SINGAPORE",
         "mode": "replace",
         "inputMethod": "keyboard-action"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "在 Book a flight 预订组件的 From（出发地）输入框中输入 {{value}}"
       }
     },
     {
@@ -323,10 +291,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 From 输入框自动补全下拉列表中的 'Singapore, Singapore — Singapore Changi Airport (SIN)' 候选项以确认出发地为 Singapore Changi Airport"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 From 输入框自动补全下拉列表中的 'Singapore, Singapore — Singapore Changi Airport (SIN)' 候选项以确认出发地为 Singapore Changi Airport"
       }
     },
     {
@@ -363,10 +327,6 @@
         "value": "LOS",
         "mode": "replace",
         "inputMethod": "keyboard-action"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "在 Book a flight 预订组件的 To（目的地）输入框中继续输入 {{value}}，以进一步过滤到 Los/Lagos 等匹配项"
       }
     },
     {
@@ -397,10 +357,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 To 输入框自动补全下拉列表中的 'Los Angeles, United States of America — Los Angeles / Tom Bradley International Airport (LAX)' 候选项以确认目的地为 Los Angeles (LAX)"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 To 输入框自动补全下拉列表中的 'Los Angeles, United States of America — Los Angeles / Tom Bradley International Airport (LAX)' 候选项以确认目的地为 Los Angeles (LAX)"
       }
     },
     {
@@ -431,10 +387,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 Book a flight 预订组件顶部的 One way 单选按钮，将行程类型从 Return 切换为单程（One way）"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 Book a flight 预订组件顶部的 One way 单选按钮，将行程类型从 Return 切换为单程（One way）"
       }
     },
     {
@@ -465,10 +417,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 Book a flight 预订组件中的 Departure '12 Sep 2025' 日期输入框，打开日期选择日历浮层以确认或调整出发日期"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 Book a flight 预订组件中的 Departure '12 Sep 2025' 日期输入框，打开日期选择日历浮层以确认或调整出发日期"
       }
     },
     {
@@ -499,10 +447,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 Book a flight 预订组件弹出的 September 2025 日历中的 15 号日期格，将出发日期从 12 Sep 2025 调整为 15 Sep 2025"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 Book a flight 预订组件弹出的 September 2025 日历中的 15 号日期格，将出发日期从 12 Sep 2025 调整为 15 Sep 2025"
       }
     },
     {
@@ -533,10 +477,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 Book a flight 预订组件日历浮层底部的紫色 Continue 按钮，确认出发日期 15 Sep 2025、One way 单程、Singapore SIN → Los Angeles LAX、1 Passenger Economy 并继续到航班搜索结果页"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 Book a flight 预订组件日历浮层底部的紫色 Continue 按钮，确认出发日期 15 Sep 2025、One way 单程、Singapore SIN → Los Angeles LAX、1 Passenger Economy 并继续到航班搜索结果页"
       }
     },
     {
@@ -567,10 +507,6 @@
       "route": {
         "strategy": "tap",
         "prompt": "点击 Book a flight 预订组件底部的紫红色 Search flights 主操作按钮，提交当前查询参数（One way 单程、Singapore SIN → Los Angeles LAX、15 Sep 2025 出发、1 Passenger Economy）并进入航班搜索结果页"
-      },
-      "fallback": {
-        "strategy": "vision",
-        "instruction": "点击 Book a flight 预订组件底部的紫红色 Search flights 主操作按钮，提交当前查询参数（One way 单程、Singapore SIN → Los Angeles LAX、15 Sep 2025 出发、1 Passenger Economy）并进入航班搜索结果页"
       }
     }
   ]
