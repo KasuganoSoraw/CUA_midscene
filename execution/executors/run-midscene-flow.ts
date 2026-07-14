@@ -1,46 +1,12 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { agentForComputer } from '@midscene/computer';
-import type { Ajv2020 as Ajv2020Class } from 'ajv/dist/2020.js';
-import type { FormatsPlugin } from 'ajv-formats';
+import { createKeyboardEnabledComputerAgent, type ComputerAgent } from './computer-agent.js';
 import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
-import { createKeyboardTypeTextAction } from './keyboard-type-action.js';
-
-type MidsceneRoute =
-  | { strategy: 'keyboard'; keyName: string }
-  | {
-      strategy: 'input';
-      prompt: string;
-      locatePrompt: string;
-      value: string;
-      mode?: 'replace' | 'append' | 'typeOnly';
-    }
-  | { strategy: 'tap'; prompt: string }
-  | { strategy: 'act'; prompt: string }
-  | { strategy: 'wait'; prompt?: string; condition: string; timeoutMs?: number }
-  | { strategy: 'manual-review'; reason: string };
-
-interface MidsceneFlowStep {
-  id: string;
-  timing?: {
-    waitBeforeMs?: number;
-    waitReason?: 'recorded-step-gap';
-  };
-  route: MidsceneRoute;
-}
-
-interface ResolvedFlowSnapshot {
-  flow: {
-    scene: string;
-    task: string;
-    goal: string;
-    steps: MidsceneFlowStep[];
-  };
-}
-
-type ComputerAgent = Awaited<ReturnType<typeof agentForComputer>>;
+import {
+  readResolvedFlow,
+  type MidsceneFlowStep,
+  type ResolvedFlowSnapshot,
+} from './resolved-flow-contract.js';
 
 interface RunOptions {
   resolvedFlowPath: string;
@@ -60,12 +26,6 @@ interface ExecutorResult {
   finishedAt: string;
   error?: string;
 }
-
-const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const resolvedFlowSchemaPath = path.join(executionRoot, 'schemas', 'resolved-flow.schema.json');
-const require = createRequire(import.meta.url);
-const Ajv2020 = require('ajv/dist/2020') as typeof Ajv2020Class;
-const addFormats = require('ajv-formats') as FormatsPlugin;
 
 function parseArgs(argv: string[]): RunOptions {
   const values = new Map<string, string>();
@@ -95,25 +55,6 @@ function parseArgs(argv: string[]): RunOptions {
     resultPath: path.resolve(result),
     dryRun,
   };
-}
-
-async function readResolvedFlow(snapshotPath: string): Promise<ResolvedFlowSnapshot> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(await readFile(snapshotPath, 'utf8'));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`读取 resolved flow 失败：${snapshotPath}\n${message}`);
-  }
-  const schema = JSON.parse(await readFile(resolvedFlowSchemaPath, 'utf8')) as object;
-  const ajv = new Ajv2020({ allErrors: true, strict: true });
-  addFormats(ajv);
-  const validate = ajv.compile(schema);
-  if (!validate(parsed)) {
-    const details = ajv.errorsText(validate.errors, { separator: '\n' });
-    throw new Error(`resolved flow 契约校验失败：${snapshotPath}\n${details}`);
-  }
-  return parsed as ResolvedFlowSnapshot;
 }
 
 function describeRoute(step: MidsceneFlowStep): string {
@@ -196,20 +137,10 @@ async function executeFlow(flow: ResolvedFlowSnapshot, dryRun: boolean): Promise
 
   warnIfNodeVersionIsOld();
   checkRequiredModelEnv();
-  const keyboardTypeText = createKeyboardTypeTextAction();
-  const agent = await agentForComputer({
+  const agent = await createKeyboardEnabledComputerAgent({
     generateReport: true,
     groupName: `midscene-flow-${flow.flow.scene}-${flow.flow.task}`,
     groupDescription: flow.flow.goal || `执行 Midscene flow：${flow.flow.scene}/${flow.flow.task}`,
-    customActions: [keyboardTypeText.action],
-  });
-  const keyboard = agent.interface.inputPrimitives?.keyboard;
-  if (!keyboard?.keyboardPress) {
-    await agent.destroy();
-    throw new Error('当前 Midscene computer interface 不支持底层 keyboardPress 输入');
-  }
-  keyboardTypeText.setPressKey(async (keyName, target) => {
-    await keyboard.keyboardPress(keyName, { target });
   });
 
   const completedStepIds: string[] = [];

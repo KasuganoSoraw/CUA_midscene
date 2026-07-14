@@ -1,10 +1,10 @@
 ## 1. TypeScript 执行边界
 
-- [ ] 1.1 抽取 resolved flow Ajv 读取校验组件并让现有 flow runner 复用
-- [ ] 1.2 抽取 KeyboardTypeText 注册和 keyboardPress 绑定组件并让现有 flow runner 复用
-- [ ] 1.3 实现录制任务 aiAct prompt 的确定性组合与单元测试
-- [ ] 1.4 实现 `run-midscene-ai-act.ts` 的互斥输入、dry-run、执行和结果落盘
-- [ ] 1.5 增加 aiAct TypeScript 契约测试并确认 dry-run 不初始化设备
+- [x] 1.1 抽取 resolved flow Ajv 读取校验组件并让现有 flow runner 复用
+- [x] 1.2 抽取 KeyboardTypeText 注册和 keyboardPress 绑定组件并让现有 flow runner 复用
+- [x] 1.3 实现录制任务 aiAct prompt 的确定性组合与单元测试
+- [x] 1.4 实现 `run-midscene-ai-act.ts` 的互斥输入、dry-run、执行和结果落盘
+- [x] 1.5 增加 aiAct TypeScript 契约测试并确认 dry-run 不初始化设备
 
 ## 2. Python CLI 与持久化契约
 
