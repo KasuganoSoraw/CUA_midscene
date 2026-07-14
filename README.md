@@ -32,10 +32,14 @@ Python converter：初始化任务 midscene-flow.json
 人工、Agent 或未来前端确认后直接维护该 flow
   ↓ + 本次稀疏输入
 resolved-flow.json
+  ├─ flow run → TypeScript 逐步 executor
+  └─ act run  → 有序步骤 prompt → agent.aiAct()
+
+无录制自然语言要求
   ↓
-TypeScript Midscene executor
-  ↓
-真实桌面 computer use
+act run → agent.aiAct()
+
+两条路径最终均使用真实桌面 computer use
 ```
 
 任务根目录的 `midscene-flow.json` 是唯一长期执行事实源。长期修正直接编辑它；Agent 必须先展示 step 原值、新值和原因，等待用户确认后才能修改。单次输入通过 CLI 参数覆盖，不回写任务。
@@ -58,12 +62,16 @@ uv run cua task describe --scene browser-demo --task air-tickets-demo --json
 uv run cua flow validate --scene browser-demo --task air-tickets-demo
 uv run cua flow inspect --scene browser-demo --task air-tickets-demo --input step-002-value=GOOGLE
 uv run cua flow run --scene browser-demo --task air-tickets-demo --dry-run
+uv run cua act run --scene browser-demo --task air-tickets-demo --dry-run
+uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 ```
 
 实际执行：
 
 ```powershell
 uv run cua flow run --scene browser-demo --task air-tickets-demo
+uv run cua act run --scene browser-demo --task air-tickets-demo
+uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 ```
 
 从已放入任务 `source/` 的 trace 首次初始化 flow：
@@ -87,10 +95,14 @@ execution/projects/<scene>/
     ├── source/
     └── reports/<run-id>/
         ├── resolved-flow.json
-        └── execution-result.json
+        ├── execution-result.json
+        ├── ai-act-prompt.txt
+        └── ai-act-result.json
 ```
 
 `task.json` 只保存输入 ID、中文说明和 `route.value` 绑定，不复制默认值。未传入参数时保留 `midscene-flow.json` 中的当前值。`reports/` 是本地运行产物，不纳入 Git。
+
+执行模式由用户或上层 Agent 显式选择：`flow run` 适合稳定录制流程并按 step 快速执行；任务型 `act run` 将 resolved flow 组合成完整有序 prompt，由 Midscene 统一规划；自然语言 `act run` 用于没有录制资产的任务。任一模式失败都不会自动切换到另一模式。
 
 ## 录制与模型
 

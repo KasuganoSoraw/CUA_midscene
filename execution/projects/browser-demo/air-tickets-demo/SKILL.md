@@ -12,7 +12,8 @@ description: 使用 Midscene 在 Qatar Airways 页面设置出发地、目的地
 1. 先运行 `uv run cua task describe --scene browser-demo --task air-tickets-demo --json` 读取输入定义。
 2. 用户仅修改本次搜索条件时，通过 `--input key=value` 传入明确变化的值；未传入项保持 flow 当前值。
 3. 执行前可用 `uv run cua flow inspect --scene browser-demo --task air-tickets-demo` 检查 resolved flow。
-4. 使用 `uv run cua flow run --scene browser-demo --task air-tickets-demo` 执行。
+4. 页面稳定时使用 `uv run cua flow run --scene browser-demo --task air-tickets-demo` 逐步执行；用户明确要求统一规划完整步骤时，使用 `uv run cua act run --scene browser-demo --task air-tickets-demo`。
+5. 任一模式失败后报告原始错误，不自动切换另一模式。
 
 ## 长期修改
 

@@ -16,16 +16,17 @@ Python cua
 └── cli              人、Agent 和未来前端的统一入口
     ↓ reports/<run-id>/resolved-flow.json
 TypeScript executors
-├── JSON Schema 校验
-├── Midscene route 映射
-└── KeyboardTypeText customAction
+├── 共享 resolved flow JSON Schema 校验
+├── flow runner：逐 step Midscene route 映射
+├── aiAct runner：自然语言或有序步骤整体规划
+└── 共享 KeyboardTypeText customAction
 ```
 
 - `cua/domain/`：Python 进程内部 dataclass 和 VO。
 - `cua/models/`：落盘或跨进程的 Pydantic 契约。
 - `cua/conversion/`：从 record trace 首次初始化任务 flow。
 - `cua/task/`：路径、发现、参数解析、快照和 Python/Node 执行协议。
-- `executors/`：TypeScript Midscene 薄适配器，只读取 resolved flow。
+- `executors/`：TypeScript Midscene 薄适配器，只读取 prompt 或 resolved flow。
 - `schemas/`：从 Pydantic 生成，不手工编辑。
 - `tests/python/`、`tests/executors/`：按职责分离的测试。
 
@@ -42,7 +43,9 @@ projects/<scene>/
     ├── source/                      # trace、日志和截图
     └── reports/<run-id>/            # Git 忽略
         ├── resolved-flow.json
-        └── execution-result.json
+        ├── execution-result.json           # flow run
+        ├── ai-act-prompt.txt               # act run
+        └── ai-act-result.json              # act run
 ```
 
 长期修改直接编辑 `midscene-flow.json` 并运行 validate。Agent 修改前必须展示差异并等待确认。`task.json` 不保存默认值；本次没有传入的 input 保持 flow 当前值。
@@ -89,9 +92,21 @@ uv run cua flow inspect --scene browser-demo --task air-tickets-demo
 uv run cua flow inspect --scene browser-demo --task air-tickets-demo --input step-002-value=GOOGLE
 uv run cua flow run --scene browser-demo --task air-tickets-demo --dry-run
 uv run cua flow run --scene browser-demo --task air-tickets-demo
+uv run cua act run --scene browser-demo --task air-tickets-demo --dry-run
+uv run cua act run --scene browser-demo --task air-tickets-demo --input step-008-value=TOKYO
+uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
+uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 ```
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。两种来源不能重复同一 ID。inspect 与 run 使用完全相同的确定性解析逻辑，不调用模型，不回写任务文件。
+
+三种调用不会自动切换：
+
+- `flow run` 按 resolved flow 的 step 逐步执行，适合页面稳定的录制任务。
+- `act run --scene/--task` 使用同一 resolved 参数结果，将 route 指令组成一个完整 prompt 后调用一次 `agent.aiAct()`。
+- `act run --prompt` 不读取任务资产，直接执行无录制自然语言要求。
+
+两种 `act run` 的 `--dry-run` 都只验证并保存最终 prompt，不初始化 ComputerDevice 或调用模型。自然语言报告位于 `execution/reports/<run-id>/`；任务报告位于任务自身 `reports/<run-id>/`。
 
 ## 执行语义
 
@@ -102,6 +117,8 @@ uv run cua flow run --scene browser-demo --task air-tickets-demo
 - `timing.waitBeforeMs` 来自录制间隔，低于 200ms 忽略，高于 30 秒截断。
 - runner 不在定位失败后默认调用 `aiWaitFor`；只有显式 wait route 才调用。
 - `manual-review` 和未知 route 直接失败，不静默跳过、不自动改写任务。
+- aiAct 的 ASCII 输入优先使用 `KeyboardTypeText`；只有文本包含不支持字符时才允许默认 `Input`。定位或一般执行失败不会触发动作回退。
+- aiAct 失败原样暴露，不调用确定性 runner、不修改任务也不自动重试。
 
 ## 验证
 

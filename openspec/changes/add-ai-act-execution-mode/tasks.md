@@ -15,9 +15,9 @@
 
 ## 3. Agent Skill 与文档
 
-- [ ] 3.1 更新执行器 Skill 和任务契约，说明三种显式调用模式及禁止自动切换
-- [ ] 3.2 更新根 README、execution README、命令示例和结果契约说明
-- [ ] 3.3 重新安装并验证本机 `cua-midscene` Skill 副本
+- [x] 3.1 更新执行器 Skill 和任务契约，说明三种显式调用模式及禁止自动切换
+- [x] 3.2 更新根 README、execution README、命令示例和结果契约说明
+- [x] 3.3 重新安装并验证本机 `cua-midscene` Skill 副本
 
 ## 4. 综合验证
 
