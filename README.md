@@ -1,36 +1,36 @@
 # CUA
 
-本项目探索面向真实桌面环境的 Computer Use Agent（CUA）：用户通过教学录制提供操作证据，系统把录制产物转换为可校准、可参数化的任务包，再由 Midscene computer use 操作本地 Chrome、堡垒机、远程桌面或企业内网页系统。
+本项目探索面向真实桌面环境的 Computer Use Agent（CUA）：`record` 把教学录制处理为结构化日志与 trace，`execution` 将其初始化为本地任务 Skill，再由 Midscene computer use 操作 Chrome、堡垒机、远程桌面或企业内网页系统。
 
-项目不使用 browser-use、Playwright、Puppeteer 或 CDP 作为执行底座。对于公司内网中“先经过堡垒机，再操作目标网页”的链路，执行器必须基于真实屏幕和键盘鼠标事件。
+项目不使用 browser-use、Playwright、Puppeteer 或 CDP 作为执行底座。企业内网中“先经过堡垒机，再操作目标网页”的链路必须基于真实屏幕与键盘鼠标事件。
 
-## 目录定位
+## 目录
 
 ```text
 CUA/
-├── record/            # 教学录制处理：视频/日志/截图 → trace
-├── execution/         # Python 任务核心与 TypeScript Midscene 执行器
-│   ├── cua/           # 转换、契约、任务、校准、CLI
-│   ├── executors/     # Midscene 薄适配器和 customActions
-│   ├── schemas/       # 从 Pydantic 生成的 JSON Schema
-│   └── projects/      # 可由 Agent 调用的业务任务包
-├── skills/            # 仓库内维护的 Codex Skill 源文件
-└── openspec/          # 规格与变更记录
+├── record/                 # 教学录制处理：视频、日志、截图 → trace
+├── execution/              # Python 任务核心与 TypeScript Midscene 适配器
+│   ├── cua/                # 转换、契约、任务解析和 CLI
+│   ├── executors/          # Midscene 薄适配器与 customActions
+│   ├── schemas/            # Pydantic 生成的 JSON Schema
+│   └── projects/           # 本地场景与任务 Skill
+├── skills/cua-midscene/    # 执行器级 Agent Skill 源文件
+└── openspec/               # 规格与变更记录
 ```
 
-`record` 以 ShowUI-Aloha Learn 为基础，只负责录制信息处理，不包含 Act、Actor、Executor 或回放能力。`execution` 是主执行域，以 Python 为主体技术栈；TypeScript 仅用于调用官方 Midscene Node.js SDK。
+`record` 基于 ShowUI-Aloha Learn，只保留录制处理，不包含 Act、Actor、Executor 或回放能力。`execution` 以 Python 为主体；TypeScript 仅用于调用 Midscene Node.js SDK。
 
-## 总体流程
+## 数据流
 
 ```text
 教学录制
   ↓
-record：结构化日志 / trace
+record：日志、截图、trace
   ↓
-Python converter：基础 midscene-flow.json
+Python converter：初始化任务 midscene-flow.json
   ↓
-已确认校准 + 本次稀疏参数
-  ↓
+人工、Agent 或未来前端确认后直接维护该 flow
+  ↓ + 本次稀疏输入
 resolved-flow.json
   ↓
 TypeScript Midscene executor
@@ -38,29 +38,9 @@ TypeScript Midscene executor
 真实桌面 computer use
 ```
 
-基础 IR 可以重新生成，不作为长期人工维护文件。长期修正写入已确认校准；单次变化通过调用参数覆盖。Agent 生成的校准建议必须先展示差异并等待用户确认，未经确认不得应用、自动重试或操作电脑。
-
-## 环境与密钥
-
-当前实验使用火山 Ark 的 OpenAI 兼容接口：
-
-```text
-https://ark.cn-beijing.volces.com/api/coding/v3
-```
-
-当前模型名为 `minimax-m3`。真实 API Key 不提交仓库：
-
-```powershell
-Copy-Item execution\.env.example execution\.env.local
-Copy-Item record\.env.example record\.env
-```
-
-- `record/.env`：ShowUI-Aloha Learn 生成语义 trace。
-- `execution/.env.local`：Midscene computer use 屏幕理解与动作执行。
+任务根目录的 `midscene-flow.json` 是唯一长期执行事实源。长期修正直接编辑它；Agent 必须先展示 step 原值、新值和原因，等待用户确认后才能修改。单次输入通过 CLI 参数覆盖，不回写任务。
 
 ## 快速开始
-
-初始化执行域：
 
 ```powershell
 cd execution
@@ -69,24 +49,50 @@ npm install
 npm run check
 ```
 
-转换、检查和 dry-run 样例任务：
+发现与检查示例任务：
 
 ```powershell
-uv run cua flow convert --project air-tickets-demo --goal "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
-uv run cua flow validate --project air-tickets-demo
-uv run cua flow inspect --project air-tickets-demo --input step-002-value=GOOGLE
-uv run cua flow run --project air-tickets-demo --dry-run
+uv run cua scene list --json
+uv run cua task list --scene browser-demo --json
+uv run cua task describe --scene browser-demo --task air-tickets-demo --json
+uv run cua flow validate --scene browser-demo --task air-tickets-demo
+uv run cua flow inspect --scene browser-demo --task air-tickets-demo --input step-002-value=GOOGLE
+uv run cua flow run --scene browser-demo --task air-tickets-demo --dry-run
 ```
 
 实际执行：
 
 ```powershell
-uv run cua flow run --project air-tickets-demo
+uv run cua flow run --scene browser-demo --task air-tickets-demo
 ```
 
-执行前 Python 会把基础 IR、已确认校准和本次参数合并为 `reports/<run-id>/resolved-flow.json`。TypeScript executor 只消费该快照，不读取项目配置或重新解析参数。
+从已放入任务 `source/` 的 trace 首次初始化 flow：
 
-## 录制处理
+```powershell
+uv run cua task init-from-trace --scene browser-demo --task <task-name> --goal "<任务目标>"
+```
+
+如果目标 `midscene-flow.json` 已存在，初始化会直接失败，不覆盖人工或前端修改。
+
+## 任务资产
+
+```text
+execution/projects/<scene>/
+├── scene.json
+├── SKILL.md
+└── <task>/
+    ├── task.json
+    ├── SKILL.md
+    ├── midscene-flow.json
+    ├── source/
+    └── reports/<run-id>/
+        ├── resolved-flow.json
+        └── execution-result.json
+```
+
+`task.json` 只保存输入 ID、中文说明和 `route.value` 绑定，不复制默认值。未传入参数时保留 `midscene-flow.json` 中的当前值。`reports/` 是本地运行产物，不纳入 Git。
+
+## 录制与模型
 
 ```powershell
 cd record
@@ -94,45 +100,21 @@ uv sync
 uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 ```
 
-trace 的每个 step 都必须包含可执行的结构化 `operation`，转换器不会从 Action、Expectation 或录制动作文本中猜测 route。`operation.prompt` 应包含足够的视觉定位信息；input 必须额外提供只描述目标输入框的 `operation.locatePrompt`，缺失时 trace 生成或转换直接失败。执行时 input 使用 `KeyboardTypeText` 发送 ASCII 键盘事件，不依赖剪贴板。
+trace 每个 step 必须包含结构化 `operation`。converter 不从 Action、Expectation 或录制文本关键词猜测 route；input 必须显式提供只描述目标输入框的 `operation.locatePrompt`。执行 input 时使用 `KeyboardTypeText` 发送 ASCII 键盘事件，不依赖剪贴板。
 
-## 校准与参数
+当前实验使用火山 Ark OpenAI 兼容接口与 `minimax-m3`。真实 API Key 只放在 `record/.env` 和 `execution/.env.local`，不得提交。
+
+## 开发验证
 
 ```powershell
 cd execution
-uv run cua project list --json
-uv run cua calibration validate --project <project-name> --proposal <proposal-id>
-uv run cua calibration apply --project <project-name> --proposal <proposal-id> --confirmed
+uv run pytest
+uv run python -m cua.models.schema --check
+npm test
 ```
 
-合并与校准不调用模型。待确认 proposal 不影响 inspect 或 run。缺失、增加或重排 step 属于 trace 结构问题，不通过 overrides 隐式修补。
-
-创建任务时，Agent 根据 trace 中明确的 input operation 检查 `project.json` 输入定义，并与用户确认哪些值需要成为可调用参数。调用任务时，Agent 只能覆盖 `project.json` 已声明的 input id；不能从自然语言 prompt 临时猜测字段或写入新的隐式参数。
-
-## 当前状态
-
-已完成：
-
-- record 教学录制处理与中文 trace 生成。
-- trace 到基础 Midscene IR 的 Python 确定性转换。
-- Pydantic 持久化契约与可复现 JSON Schema。
-- 任务发现、稀疏参数、人工校准和 resolved flow。
-- Python CLI 与 Node Midscene 薄执行器进程协议。
-- 无剪贴板 `KeyboardTypeText` customAction。
-- 可安装的 `cua-midscene` Codex Skill。
-
-后续重点：
-
-- 从成功运行中沉淀更快的固化步骤或脚本派生产物。
-- 建立明确、可审计且由人触发的失败诊断与视觉恢复流程。
-- 面向华为网管系统沉淀可复用任务模板。
-
-## Agent Skill
-
-Skill 源文件位于 `skills/cua-midscene/`，本机安装副本不纳入 Git：
+Skill 源文件位于 `skills/cua-midscene/`，安装到本机的副本不纳入 Git：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-cua-midscene-skill.ps1
 ```
-
-本仓库以 `CUA` 根目录作为唯一 Git 仓库。密钥、依赖目录、虚拟环境和运行报告均被忽略。

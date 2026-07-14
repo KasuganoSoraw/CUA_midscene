@@ -1,59 +1,60 @@
 ---
 name: cua-midscene
-description: 使用 CUA 仓库中的 ShowUI-Aloha 录制产物和 Midscene computer use 任务包完成任务创建、人工校准建议、参数化调用与执行检查。用户要求创建或运行桌面操作流程、修正某个 Midscene 步骤、修改本次输入参数，或查看可调用 CUA 项目时使用。
+description: 使用 CUA 的本地场景/任务 Skill 与 Midscene computer use 创建、发现、检查、长期修改或参数化执行桌面流程。用户要求录制产物创建任务、列出可用电脑操作、修正某个 Midscene step、改变本次输入或实际操作桌面时使用。
 ---
 
 # CUA Midscene
 
-使用仓库 Python CLI 操作 `execution/projects/<project-name>` 任务包。先定位同时包含 `execution/pyproject.toml` 和 `execution/package.json` 的 CUA 仓库，再从 `execution` 目录运行命令。Python 负责业务流程，TypeScript 只消费 resolved flow 并调用 Midscene。
+定位同时包含 `execution/pyproject.toml` 和 `execution/package.json` 的 CUA 仓库，并从 `execution` 目录运行 Python CLI。Python 负责业务契约；TypeScript 只消费 resolved flow 并调用 Midscene。
 
-## 分类请求
+## 判断意图
 
-把用户请求明确分类为以下一种：
+- **创建**：从任务 `source/` 中的 trace 首次初始化 flow。
+- **长期修改**：以后都改变任务中的已有 step。
+- **单次调用**：只改变本次输入，不修改任务资产。
 
-- **创建**：从录制和 trace 生成新的基础 flow 与任务配置。
-- **校准**：长期修正已有步骤的 route 或 timing。
-- **调用**：只改变本次执行输入，不修改任务定义。
+无法判断“仅本次”还是“以后都使用”时，先询问用户。
 
-如果无法判断修改仅本次生效还是以后都生效，先询问用户，不要修改文件或执行电脑操作。
+## 发现任务
+
+1. 运行 `uv run cua scene list --json`。
+2. 选择场景后运行 `uv run cua task list --scene <scene> --json`。
+3. 只读取目标场景的 `SKILL.md`，再读取目标任务的 `SKILL.md` 和 `task.json`。不要一次加载所有任务 flow 或 source。
 
 ## 创建任务
 
-1. 确认 ShowUI-Aloha trace、processed log 和截图已放入项目 `source/`。
-2. 检查每个 trace step 都有明确的结构化 operation。不得根据 Action、Expectation、原始录制文本或关键词自行补猜 operation。
-3. 运行 `uv run cua flow convert --project <name> --goal "<目标>"`。
-4. 检查 trace 中的 input operation，与用户确认哪些录制值需要成为调用参数，并在 `project.json` 中保留或调整对应 input 定义和稳定 id。
-5. 运行 `uv run cua flow validate --project <name>`，展示生成的输入定义。不要把基础 IR 当作长期人工维护文件。
+1. 将 ShowUI-Aloha trace、processed log 和截图放入 `projects/<scene>/<task>/source/`。
+2. 检查每个 trace step 都有结构化 operation；不得根据 Action、Expectation 或关键词补猜。
+3. 运行 `uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"`。
+4. 运行 `uv run cua flow validate --scene <scene> --task <task>`。
 
-input 的 `prompt`、`locatePrompt` 和录制默认值来自 trace operation；Skill 只规定 Agent 如何把已确认的业务输入声明到 `project.json`，不通过正则或自然语言关键词生成 route。trace 缺少可执行 operation 时停止创建并要求修正 trace。
+已有 `midscene-flow.json` 时初始化会失败。不要删除或覆盖它来绕过失败，除非用户明确要求重新初始化并已处理现有资产。
 
-## 校准任务
+## 长期修改
 
-1. 读取 `uv run cua flow inspect` 输出、源 trace 和相关截图，确认错误来自已有 step 的执行描述。
-2. 在 `calibration/proposals/` 创建 proposal，只修改 route 或 timing；不要修改 source、evidence、intent 或 step id。
-3. 运行 `uv run cua calibration validate`，向用户展示原值、新值和原因。
-4. 停止并等待用户明确确认。不得在同一次未确认交互中调用 apply。
-5. 用户确认后，运行带 `--confirmed` 的 `uv run cua calibration apply`。
-6. 除非用户同时要求执行，否则应用校准后不要自动操作电脑。
+1. 读取任务 `midscene-flow.json`、相关 source trace 和截图，定位已有 step。
+2. 向用户展示 step ID、原值、新值和中文原因。
+3. 停止并等待用户明确确认。
+4. 确认后直接编辑 `midscene-flow.json`，再运行 `flow validate`。
+5. 除非用户同时要求执行，否则修改后不自动操作电脑。
 
-缺失步骤、步骤顺序错误或需要新增步骤时，要求重新生成 trace。不要通过跳过、隐式插入或自动重试掩盖结构问题。
+不创建 overrides、proposal 或 history。缺失步骤、顺序错误或新增步骤应回到 trace 或由用户明确编辑完整 flow；不得静默跳过、隐式插入或失败后自动改写并重试。
 
-## 调用任务
+## 单次调用
 
-1. 运行 `uv run cua project list --json` 读取任务和输入定义。
-2. 只传递用户本次明确改变的输入；未提供输入继续使用录制默认值。
-3. 执行前使用 `uv run cua flow inspect` 或 `uv run cua flow validate` 检查 resolved flow。
-4. 可使用 `uv run cua flow run --project <name> --dry-run` 检查 Python/Node 执行契约；用户明确要求实际操作电脑时，才运行不带 `--dry-run` 的 `flow run`。
+1. 运行 `uv run cua task describe --scene <scene> --task <task> --json` 读取已声明 input ID。
+2. 只传递用户本次明确改变的输入；未提供项保持 canonical flow 当前值。
+3. 用 `flow inspect` 检查 resolved flow，或用 `flow run --dry-run` 检查跨进程契约。
+4. 用户明确要求实际操作电脑时，才运行不带 `--dry-run` 的 `flow run`。
 
-不要把一次性输入写进 `project.json`、`flow-overrides.json` 或基础 IR。只把用户意图映射到 `project.json` 已声明的 input id；不得从 route prompt 临时发明占位符。未知输入或生命周期不明确时先询问用户。
+不要把一次性输入写入 `task.json` 或 `midscene-flow.json`，也不要从 prompt 临时发明 input ID。
 
 ## 约束
 
 - 不使用 browser-use、Playwright、Puppeteer 或 CDP。
-- 不在 resolver、校准应用或参数合并中调用模型。
-- 不绕过 Python CLI 直接调用 TypeScript executor；executor 只消费 `resolved-flow.json`。
-- 不直接长期修改 `ir/midscene-flow.json`。
-- 不未经确认应用 Agent 生成的校准。
-- 不用兜底、静默跳过或针对单一用例的硬编码掩盖失败。
+- 不在任务发现、参数解析或 resolved flow 构建中调用模型。
+- 不绕过 Python CLI 直接调用 TypeScript executor。
+- 不未经确认长期修改 canonical flow。
+- 不用兜底、静默跳过或单用例硬编码掩盖失败。
 
-需要编写项目配置、proposal 或调用具体命令时，读取 [任务契约](references/task-contract.md)。
+需要检查目录、JSON 字段或完整命令时，读取 [任务契约](references/task-contract.md)。

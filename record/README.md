@@ -16,7 +16,7 @@
 
 原上游项目中的 `Aloha_Act`、Actor、Executor、回放入口和执行演示视频已从本仓库删除。
 
-后续如果需要执行 trace，应先把 Learn 阶段产物转换为 Midscene flow IR，再交由 `execution` 的通用 runner 执行。
+后续如果需要执行 trace，应将 Learn 产物放入 `execution/projects/<scene>/<task>/source/`，首次初始化为任务 `midscene-flow.json`，再交由 `execution` 的通用 runner 执行。
 
 ## 环境配置
 
@@ -57,6 +57,6 @@ uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 - `{project}_processed_log_sc.json`
 - `{project}_trace.json`
 
-这些产物当前用于分析和后续转换实验，不作为最终执行入口。其中 trace 会包含面向 Midscene 的最小 `operation` 动作结构，后续由 `execution` 转换为 `midscene-flow.json`。对于 input 操作，`operation.prompt` 表示完整输入动作，`operation.locatePrompt` 表示目标输入框，两者不能混用。
+这些产物当前用于分析和任务初始化，不作为最终执行入口。其中 trace 会包含面向 Midscene 的最小 `operation` 动作结构，后续由 `execution` 初始化任务根目录的 `midscene-flow.json`。对于 input 操作，`operation.prompt` 表示完整输入动作，`operation.locatePrompt` 表示目标输入框，两者不能混用。
 
 为了降低弱模型生成短 prompt 或歧义 prompt 的概率，`Aloha_Learn/default_prompt.json` 会要求模型为 Midscene prompt 提供足量定位信息：目标视觉特征、所在区域、相对锚点和动作意图。对于列表项、下拉候选、表格行、多个相似输入框等场景，prompt 应明确可见文本、所在容器和相对位置。

@@ -1,4 +1,4 @@
 interface:
   display_name: "CUA Midscene"
-  short_description: "创建、校准并安全调用 Midscene 电脑操作任务"
-  default_prompt: "使用 $cua-midscene 查看可调用任务并按我的要求执行。"
+  short_description: "创建、修改并调用本地 Midscene 电脑操作任务"
+  default_prompt: "使用 $cua-midscene 发现本地任务，并按我的要求检查或执行。"
