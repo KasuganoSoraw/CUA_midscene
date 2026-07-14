@@ -52,3 +52,8 @@
 - **WHEN** runner 读取到不受支持或 `manual-review` strategy 的 resolved flow step
 - **THEN** 它 SHALL 给出清晰错误，标识 step id 和原因
 - **AND** 它 SHALL NOT 静默跳过或执行猜测出来的桌面动作
+
+#### Scenario: 检查与执行共用解析结果
+- **WHEN** 相同项目和输入分别用于 flow inspect 与 flow run
+- **THEN** 两者 SHALL 使用相同解析和验证逻辑
+- **AND** 基础 IR、任务配置和已确认校准 SHALL NOT 被运行过程修改
