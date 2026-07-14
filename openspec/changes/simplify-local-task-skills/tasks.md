@@ -26,5 +26,5 @@
 
 - [x] 5.1 更新根 README、execution README、record README、示例文档和 AGENT.md 中的目录与命令
 - [x] 5.2 更新 Python 与 TypeScript 测试，覆盖唯一默认值、直接编辑、初始化防覆盖和 scene/task CLI
-- [ ] 5.3 运行 Python、TypeScript、record、Skill 与 OpenSpec 全量验证并修复发现的问题
-- [ ] 5.4 按实现阶段完成中文小步提交并确认工作区仅保留无关用户文件
+- [x] 5.3 运行 Python、TypeScript、record、Skill 与 OpenSpec 全量验证并修复发现的问题
+- [x] 5.4 按实现阶段完成中文小步提交并确认工作区仅保留无关用户文件
