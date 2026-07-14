@@ -73,7 +73,7 @@ Python 核心 SHALL 在执行前从 canonical flow 和本次输入生成 resolve
 - **THEN** Skill SHALL 指导 Agent 使用 Python CLI 并显式提供 scene 和 task
 - **AND** CLI SHALL 保持稀疏参数覆盖和机器可读输出语义
 
-#### Scenario: 旧项目和校准命令被移除
+#### Scenario: 旧业务 npm 命令被移除
 - **WHEN** 新场景任务 CLI 完成迁移和验证
-- **THEN** `project list` 和全部 `calibration` 命令 SHALL 被移除
+- **THEN** 旧业务 npm scripts、`project list` 和全部 `calibration` 命令 SHALL 被移除
 - **AND** 文档 SHALL 给出对应场景与任务命令

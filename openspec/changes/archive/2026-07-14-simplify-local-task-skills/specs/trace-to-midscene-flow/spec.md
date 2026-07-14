@@ -3,7 +3,7 @@
 ### Requirement: 按工作流名称组织项目产物
 系统 SHALL 将转换后的 CUA 工作流组织为 `execution/projects/<scene>/<task>/` 下的本地任务包，并在任务根目录提供 flow、任务清单、任务 Skill、source 和 reports。
 
-#### Scenario: 为转换创建任务目录
+#### Scenario: 为转换创建项目目录
 - **WHEN** 场景 `browser-demo` 中的任务 `air-tickets-demo` 首次转换 record trace
 - **THEN** 转换输出 SHALL 放在 `execution/projects/browser-demo/air-tickets-demo/` 中
 - **AND** 任务目录 SHALL 包含 `source/`、`midscene-flow.json`、`task.json`、`SKILL.md` 和 `reports/` 路径或这些路径的文档化占位
@@ -12,7 +12,7 @@
 ### Requirement: Converter 生成 Midscene flow IR
 Python converter SHALL 将 ShowUI-Aloha trace 数据初始化为任务根目录的结构化 `midscene-flow.json`，并禁止静默覆盖已有任务 flow。
 
-#### Scenario: Trace 首次转换成功
+#### Scenario: Trace 转换成功
 - **WHEN** converter 收到有效 scene、task、goal 和 ShowUI-Aloha trace，且目标 flow 尚不存在
 - **THEN** 它 SHALL 写入 `execution/projects/<scene>/<task>/midscene-flow.json`
 - **AND** flow SHALL 包含 `schemaVersion`、`scene`、`task`、`source` 和 `steps`

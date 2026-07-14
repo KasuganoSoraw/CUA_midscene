@@ -23,16 +23,21 @@
 ### Requirement: Agent 校准需要确认
 Agent SHALL 在用户明确确认长期修改后直接编辑 canonical flow，并在修改后验证该任务。
 
-#### Scenario: 修改建议尚未确认
+#### Scenario: 校准建议不影响执行
 - **WHEN** Agent 已形成 step 修改建议但用户尚未确认
 - **THEN** Agent SHALL 只展示原值、新值和原因
 - **AND** canonical flow SHALL 保持不变
 
-#### Scenario: 用户确认修改建议
+#### Scenario: 应用已确认建议
 - **WHEN** 用户明确确认 Agent 展示的修改
 - **THEN** Agent SHALL 直接编辑对应任务的 `midscene-flow.json`
 - **AND** Agent SHALL 执行 flow 验证并报告结果
 - **AND** 系统 SHALL NOT 创建持久化 calibration proposal 或 history
+
+#### Scenario: 建议已经过期
+- **WHEN** Agent 展示建议后 canonical flow 在用户确认前已经变化
+- **THEN** Agent SHALL 重新读取当前 flow 并重新展示差异
+- **AND** Agent SHALL NOT 将基于旧值的修改直接写入当前 flow
 
 ### Requirement: Agent Skill 约束任务交互
 仓库 SHALL 提供执行器 Skill、场景 Skill 和任务 Skill，指导 Agent 区分创建、长期修改与单次调用。
