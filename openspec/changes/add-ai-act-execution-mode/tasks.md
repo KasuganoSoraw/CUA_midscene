@@ -21,6 +21,6 @@
 
 ## 4. 综合验证
 
-- [ ] 4.1 运行 Python 测试、TypeScript 类型检查和全部 executor 测试
-- [ ] 4.2 运行 Schema 漂移、Skill 和 OpenSpec 严格校验
-- [ ] 4.3 确认未自动执行真实桌面 smoke test且工作区不包含无关改动
+- [x] 4.1 运行 Python 测试、TypeScript 类型检查和全部 executor 测试
+- [x] 4.2 运行 Schema 漂移、Skill 和 OpenSpec 严格校验
+- [x] 4.3 确认未自动执行真实桌面 smoke test且工作区不包含无关改动
