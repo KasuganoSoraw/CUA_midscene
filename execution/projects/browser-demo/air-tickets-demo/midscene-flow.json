@@ -1,6 +1,7 @@
 {
   "schemaVersion": "0.1",
-  "project": "air-tickets-demo",
+  "scene": "browser-demo",
+  "task": "air-tickets-demo",
   "goal": "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索",
   "source": {
     "tracePath": "source/showui-trace.json",
@@ -9,10 +10,10 @@
     "screenshotsDir": "source/screenshots"
   },
   "commands": {
-    "recordingPreparation": "将 record 生成的 trace、processed log 和截图复制到 execution\\projects\\air-tickets-demo\\source",
+    "recordingPreparation": "将 record 生成的 trace、processed log 和截图复制到 execution\\projects\\browser-demo\\air-tickets-demo\\source",
     "traceGeneration": "未记录；请通过 --trace-generation-command 提供 air-tickets-demo 的 trace 生成命令",
-    "traceToFlowConversion": "uv run cua flow convert --project air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\"",
-    "flowExecution": "uv run cua flow run --project air-tickets-demo"
+    "traceToFlowConversion": "uv run cua task init-from-trace --scene browser-demo --task air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\"",
+    "flowExecution": "uv run cua flow run --scene browser-demo --task air-tickets-demo"
   },
   "steps": [
     {

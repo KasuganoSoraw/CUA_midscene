@@ -7,19 +7,22 @@ from pathlib import Path
 
 import pytest
 
-from cua.domain.types import ExecutionOptions, ResolveProjectOptions
-from cua.task.executor import execute_resolved_flow, run_project
-from cua.task.resolver import resolve_project_flow
+from cua.domain.types import ExecutionOptions, ResolveTaskOptions
+from cua.task.executor import execute_resolved_flow, run_task
+from cua.task.resolver import resolve_task_flow
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
-AIR_PROJECT = EXECUTION_ROOT / "projects" / "air-tickets-demo"
+AIR_TASK = EXECUTION_ROOT / "projects" / "browser-demo" / "air-tickets-demo"
 
 
-def copy_air_task(target: Path) -> None:
-    shutil.copytree(AIR_PROJECT / "ir", target / "ir")
-    shutil.copytree(AIR_PROJECT / "config", target / "config")
-    (target / "calibration" / "proposals").mkdir(parents=True)
-    (target / "calibration" / "history").mkdir(parents=True)
+def copy_air_scene(projects_root: Path) -> None:
+    scene_root = projects_root / "browser-demo"
+    scene_root.mkdir(parents=True)
+    shutil.copy2(AIR_TASK.parent / "scene.json", scene_root / "scene.json")
+    task_root = scene_root / "air-tickets-demo"
+    task_root.mkdir()
+    shutil.copy2(AIR_TASK / "midscene-flow.json", task_root / "midscene-flow.json")
+    shutil.copy2(AIR_TASK / "task.json", task_root / "task.json")
 
 
 def write_fake_executor(path: Path, behavior: str) -> None:
@@ -43,7 +46,8 @@ if behavior == 'invalid-result':
 result = {{
     'schemaVersion': '0.1',
     'status': 'failed' if behavior == 'step-failure' else 'succeeded',
-    'project': snapshot['flow']['project'],
+    'scene': snapshot['flow']['scene'],
+    'task': snapshot['flow']['task'],
     'resolvedFlowPath': str(Path(args.resolved_flow).resolve()),
     'dryRun': args.dry_run,
     'stepCount': len(snapshot['flow']['steps']),
@@ -60,19 +64,19 @@ raise SystemExit(9 if behavior == 'step-failure' else 0)
     )
 
 
-def test_run_project_uses_same_resolved_flow_as_inspect(tmp_path: Path) -> None:
-    project_root = tmp_path / "air-tickets-demo"
-    copy_air_task(project_root)
+def test_run_task_uses_same_resolved_flow_as_inspect(tmp_path: Path) -> None:
+    copy_air_scene(tmp_path)
     fake_executor = tmp_path / "success.py"
     write_fake_executor(fake_executor, "success")
     inputs = {"step-002-value": "GOOGLE"}
-    inspected = resolve_project_flow(
-        ResolveProjectOptions(project="air-tickets-demo", project_root=project_root, inputs=inputs)
+    inspected = resolve_task_flow(
+        ResolveTaskOptions(scene="browser-demo", task="air-tickets-demo", projects_root=tmp_path, inputs=inputs)
     )
-    snapshot, result = run_project(
+    snapshot, result = run_task(
         ExecutionOptions(
-            project="air-tickets-demo",
-            project_root=project_root,
+            scene="browser-demo",
+            task="air-tickets-demo",
+            projects_root=tmp_path,
             inputs=inputs,
             dry_run=True,
             command_prefix=(sys.executable, str(fake_executor)),
@@ -80,35 +84,36 @@ def test_run_project_uses_same_resolved_flow_as_inspect(tmp_path: Path) -> None:
     )
     assert snapshot.flow.to_json_dict() == inspected.flow.to_json_dict()
     assert result.status == "succeeded"
-    assert result.dry_run is True
+    assert result.scene == "browser-demo"
+    assert result.task == "air-tickets-demo"
     assert result.step_count == 16
 
 
 def test_executor_nonzero_exit_preserves_step_error(tmp_path: Path) -> None:
-    project_root = tmp_path / "air-tickets-demo"
-    copy_air_task(project_root)
+    copy_air_scene(tmp_path)
     fake_executor = tmp_path / "failure.py"
     write_fake_executor(fake_executor, "step-failure")
     with pytest.raises(RuntimeError, match="退出码 9.*step step-002 执行失败"):
-        run_project(
+        run_task(
             ExecutionOptions(
-                project="air-tickets-demo",
-                project_root=project_root,
+                scene="browser-demo",
+                task="air-tickets-demo",
+                projects_root=tmp_path,
                 command_prefix=(sys.executable, str(fake_executor)),
             )
         )
 
 
 def test_executor_rejects_invalid_result(tmp_path: Path) -> None:
-    project_root = tmp_path / "air-tickets-demo"
-    copy_air_task(project_root)
+    copy_air_scene(tmp_path)
     fake_executor = tmp_path / "invalid.py"
     write_fake_executor(fake_executor, "invalid-result")
     with pytest.raises(RuntimeError, match="未返回有效结果"):
-        run_project(
+        run_task(
             ExecutionOptions(
-                project="air-tickets-demo",
-                project_root=project_root,
+                scene="browser-demo",
+                task="air-tickets-demo",
+                projects_root=tmp_path,
                 dry_run=True,
                 command_prefix=(sys.executable, str(fake_executor)),
             )
@@ -122,9 +127,4 @@ def test_executor_rejects_mismatched_result_path(tmp_path: Path) -> None:
     fake_executor = tmp_path / "success.py"
     write_fake_executor(fake_executor, "success")
     with pytest.raises(RuntimeError):
-        execute_resolved_flow(
-            snapshot,
-            result,
-            dry_run=True,
-            command_prefix=(sys.executable, str(fake_executor)),
-        )
+        execute_resolved_flow(snapshot, result, dry_run=True, command_prefix=(sys.executable, str(fake_executor)))

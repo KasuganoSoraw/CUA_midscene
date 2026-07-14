@@ -9,11 +9,29 @@ import pytest
 from cua.conversion.showui_trace import clamp_recorded_wait_ms, convert_trace
 from cua.domain.types import ConvertOptions
 from cua.models.flow import MidsceneFlow
-from cua.models.task import FlowOverrides, TaskProjectConfig
+from cua.models.task import SceneManifest, TaskManifest
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
-AIR_PROJECT = EXECUTION_ROOT / "projects" / "air-tickets-demo"
+AIR_TASK = EXECUTION_ROOT / "projects" / "browser-demo" / "air-tickets-demo"
 AIR_GOAL = "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索"
+
+
+def options(projects_root: Path, task: str) -> ConvertOptions:
+    return ConvertOptions(
+        scene="browser-demo",
+        task=task,
+        goal=AIR_GOAL,
+        projects_root=projects_root,
+        conversion_command=(
+            f'uv run cua task init-from-trace --scene browser-demo --task {task} --goal "{AIR_GOAL}"'
+        ),
+    )
+
+
+def copy_source(projects_root: Path, task: str) -> Path:
+    task_root = projects_root / "browser-demo" / task
+    shutil.copytree(AIR_TASK / "source", task_root / "source")
+    return task_root
 
 
 def test_recorded_wait_bounds() -> None:
@@ -22,100 +40,54 @@ def test_recorded_wait_bounds() -> None:
     assert clamp_recorded_wait_ms(30_001) == 30_000
 
 
-def test_python_converter_preserves_steps_and_existing_config(tmp_path: Path) -> None:
-    project_root = tmp_path / "air-tickets-demo"
-    shutil.copytree(AIR_PROJECT / "source", project_root / "source")
-    (project_root / "config").mkdir(parents=True)
-    config_content = (AIR_PROJECT / "config" / "project.json").read_text(encoding="utf-8")
-    overrides_content = (AIR_PROJECT / "config" / "flow-overrides.json").read_text(encoding="utf-8")
-    (project_root / "config" / "project.json").write_text(config_content, encoding="utf-8")
-    (project_root / "config" / "flow-overrides.json").write_text(overrides_content, encoding="utf-8")
-
-    output = convert_trace(
-        ConvertOptions(
-            project="air-tickets-demo",
-            goal=AIR_GOAL,
-            project_root=project_root,
-            conversion_command=f'uv run cua flow convert --project air-tickets-demo --goal "{AIR_GOAL}"',
-        )
-    )
-
+def test_python_converter_initializes_canonical_flow(tmp_path: Path) -> None:
+    task_root = copy_source(tmp_path, "new-task")
+    output = convert_trace(options(tmp_path, "new-task"))
     actual = MidsceneFlow.model_validate_json(output.read_text(encoding="utf-8"))
-    expected = MidsceneFlow.model_validate_json(
-        (AIR_PROJECT / "ir" / "midscene-flow.json").read_text(encoding="utf-8")
-    )
+    expected = MidsceneFlow.model_validate_json((AIR_TASK / "midscene-flow.json").read_text(encoding="utf-8"))
     assert [step.to_json_dict() for step in actual.steps] == [step.to_json_dict() for step in expected.steps]
-    assert actual.source == expected.source
+    assert actual.scene == "browser-demo"
+    assert actual.task == "new-task"
     assert actual.commands is not None
-    assert actual.commands.trace_to_flow_conversion.startswith("uv run cua flow convert")
-    assert actual.commands.flow_execution == "uv run cua flow run --project air-tickets-demo"
-    assert (project_root / "config" / "project.json").read_text(encoding="utf-8") == config_content
-    assert (project_root / "config" / "flow-overrides.json").read_text(encoding="utf-8") == overrides_content
+    assert actual.commands.trace_to_flow_conversion.startswith("uv run cua task init-from-trace")
+    assert actual.commands.flow_execution == "uv run cua flow run --scene browser-demo --task new-task"
+
+    scene = SceneManifest.model_validate_json((task_root.parent / "scene.json").read_text(encoding="utf-8"))
+    task = TaskManifest.model_validate_json((task_root / "task.json").read_text(encoding="utf-8"))
+    assert scene.scene == "browser-demo"
+    assert set(task.inputs) == {"step-002-value", "step-008-value", "step-010-value"}
+    assert "default" not in task.inputs["step-002-value"].to_json_dict()
+    assert (task_root.parent / "SKILL.md").is_file()
+    assert (task_root / "SKILL.md").is_file()
 
 
-def test_converter_initializes_missing_task_files(tmp_path: Path) -> None:
-    project_root = tmp_path / "new-project"
-    (project_root / "source").mkdir(parents=True)
-    for filename in ("showui-trace.json", "processed-log.json", "processed-log-sc.json"):
-        shutil.copy2(AIR_PROJECT / "source" / filename, project_root / "source" / filename)
-
-    convert_trace(
-        ConvertOptions(
-            project="new-project",
-            goal="测试目标",
-            project_root=project_root,
-            conversion_command="uv run cua flow convert --project new-project --goal 测试目标",
-        )
-    )
-
-    config = TaskProjectConfig.model_validate_json(
-        (project_root / "config" / "project.json").read_text(encoding="utf-8")
-    )
-    overrides = FlowOverrides.model_validate_json(
-        (project_root / "config" / "flow-overrides.json").read_text(encoding="utf-8")
-    )
-    assert set(config.inputs) == {"step-002-value", "step-008-value", "step-010-value"}
-    assert overrides.project == "new-project"
-    assert overrides.steps == {}
-    assert (project_root / "calibration" / "proposals").is_dir()
-    assert (project_root / "calibration" / "history").is_dir()
+def test_converter_rejects_existing_flow_without_modifying_it(tmp_path: Path) -> None:
+    task_root = copy_source(tmp_path, "existing-task")
+    flow_path = task_root / "midscene-flow.json"
+    flow_path.write_text('{"preserve": true}\n', encoding="utf-8")
+    before = flow_path.read_bytes()
+    with pytest.raises(ValueError, match="任务 flow 已存在，拒绝覆盖"):
+        convert_trace(options(tmp_path, "existing-task"))
+    assert flow_path.read_bytes() == before
 
 
 def test_converter_rejects_missing_structured_operation(tmp_path: Path) -> None:
-    project_root = tmp_path / "missing-operation"
-    shutil.copytree(AIR_PROJECT / "source", project_root / "source")
-    trace_path = project_root / "source" / "showui-trace.json"
+    task_root = copy_source(tmp_path, "missing-operation")
+    trace_path = task_root / "source" / "showui-trace.json"
     trace = json.loads(trace_path.read_text(encoding="utf-8"))
     del trace["trajectory"][0]["caption"]["operation"]
     trace_path.write_text(json.dumps(trace, ensure_ascii=False), encoding="utf-8")
-
     with pytest.raises(ValueError, match="Field required"):
-        convert_trace(
-            ConvertOptions(
-                project="missing-operation",
-                goal="验证严格 operation",
-                project_root=project_root,
-                conversion_command="uv run cua flow convert --project missing-operation --goal 验证严格 operation",
-            )
-        )
-    assert not (project_root / "ir" / "midscene-flow.json").exists()
+        convert_trace(options(tmp_path, "missing-operation"))
+    assert not (task_root / "midscene-flow.json").exists()
 
 
 def test_converter_rejects_input_without_locate_prompt(tmp_path: Path) -> None:
-    project_root = tmp_path / "missing-locate"
-    shutil.copytree(AIR_PROJECT / "source", project_root / "source")
-    trace_path = project_root / "source" / "showui-trace.json"
+    task_root = copy_source(tmp_path, "missing-locate")
+    trace_path = task_root / "source" / "showui-trace.json"
     trace = json.loads(trace_path.read_text(encoding="utf-8"))
     del trace["trajectory"][1]["caption"]["operation"]["locatePrompt"]
     trace_path.write_text(json.dumps(trace, ensure_ascii=False), encoding="utf-8")
-
     with pytest.raises(ValueError, match=r"trace step 2 的 operation\.locatePrompt 不能为空"):
-        convert_trace(
-            ConvertOptions(
-                project="missing-locate",
-                goal="验证 input 定位契约",
-                project_root=project_root,
-                conversion_command="uv run cua flow convert --project missing-locate --goal 验证 input 定位契约",
-            )
-        )
-    assert not (project_root / "ir" / "midscene-flow.json").exists()
+        convert_trace(options(tmp_path, "missing-locate"))
+    assert not (task_root / "midscene-flow.json").exists()

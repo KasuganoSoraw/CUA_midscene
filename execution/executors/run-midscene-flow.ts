@@ -26,14 +26,15 @@ interface MidsceneFlowStep {
   id: string;
   timing?: {
     waitBeforeMs?: number;
-    waitReason?: 'recorded-step-gap' | 'manual-calibration';
+    waitReason?: 'recorded-step-gap';
   };
   route: MidsceneRoute;
 }
 
 interface ResolvedFlowSnapshot {
   flow: {
-    project: string;
+    scene: string;
+    task: string;
     goal: string;
     steps: MidsceneFlowStep[];
   };
@@ -50,7 +51,8 @@ interface RunOptions {
 interface ExecutorResult {
   schemaVersion: '0.1';
   status: 'succeeded' | 'failed';
-  project?: string;
+  scene?: string;
+  task?: string;
   resolvedFlowPath: string;
   dryRun: boolean;
   stepCount?: number;
@@ -187,7 +189,7 @@ async function writeResult(resultPath: string, result: ExecutorResult): Promise<
 
 async function executeFlow(flow: ResolvedFlowSnapshot, dryRun: boolean): Promise<string[]> {
   if (dryRun) {
-    console.error(`Midscene executor dry-run 通过：${flow.flow.project}`);
+    console.error(`Midscene executor dry-run 通过：${flow.flow.scene}/${flow.flow.task}`);
     for (const step of flow.flow.steps) console.error(describeRoute(step));
     return [];
   }
@@ -197,8 +199,8 @@ async function executeFlow(flow: ResolvedFlowSnapshot, dryRun: boolean): Promise
   const keyboardTypeText = createKeyboardTypeTextAction();
   const agent = await agentForComputer({
     generateReport: true,
-    groupName: `midscene-flow-${flow.flow.project}`,
-    groupDescription: flow.flow.goal || `执行 Midscene flow：${flow.flow.project}`,
+    groupName: `midscene-flow-${flow.flow.scene}-${flow.flow.task}`,
+    groupDescription: flow.flow.goal || `执行 Midscene flow：${flow.flow.scene}/${flow.flow.task}`,
     customActions: [keyboardTypeText.action],
   });
   const keyboard = agent.interface.inputPrimitives?.keyboard;
@@ -233,7 +235,8 @@ async function run(options: RunOptions): Promise<void> {
     await writeResult(options.resultPath, {
       schemaVersion: '0.1',
       status: 'succeeded',
-      project: flow.flow.project,
+      scene: flow.flow.scene,
+      task: flow.flow.task,
       resolvedFlowPath: options.resolvedFlowPath,
       dryRun: options.dryRun,
       stepCount: flow.flow.steps.length,
@@ -245,7 +248,8 @@ async function run(options: RunOptions): Promise<void> {
     await writeResult(options.resultPath, {
       schemaVersion: '0.1',
       status: 'failed',
-      project: flow?.flow.project,
+      scene: flow?.flow.scene,
+      task: flow?.flow.task,
       resolvedFlowPath: options.resolvedFlowPath,
       dryRun: options.dryRun,
       stepCount: flow?.flow.steps.length,

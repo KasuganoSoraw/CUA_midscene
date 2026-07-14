@@ -8,27 +8,26 @@ import pytest
 from cua.cli.main import main
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
-AIR_PROJECT = EXECUTION_ROOT / "projects" / "air-tickets-demo"
+PROJECTS_ROOT = EXECUTION_ROOT / "projects"
 
 
-def test_project_list_json(capsys: pytest.CaptureFixture[str]) -> None:
-    main(["project", "list", "--projects-root", str(EXECUTION_ROOT / "projects"), "--json"])
+def test_scene_and_task_list_json(capsys: pytest.CaptureFixture[str]) -> None:
+    main(["scene", "list", "--projects-root", str(PROJECTS_ROOT), "--json"])
+    assert json.loads(capsys.readouterr().out)["scenes"][0]["scene"] == "browser-demo"
+    main(["task", "list", "--scene", "browser-demo", "--projects-root", str(PROJECTS_ROOT), "--json"])
     result = json.loads(capsys.readouterr().out)
-    assert result["projects"][0]["project"] == "air-tickets-demo"
-    assert "step-002-value" in result["projects"][0]["inputs"]
+    assert result["tasks"][0]["task"] == "air-tickets-demo"
+    assert "step-002-value" in result["tasks"][0]["inputs"]
 
 
 def test_flow_inspect_applies_only_explicit_input(capsys: pytest.CaptureFixture[str]) -> None:
     main(
         [
-            "flow",
-            "inspect",
-            "--project",
-            "air-tickets-demo",
-            "--project-root",
-            str(AIR_PROJECT),
-            "--input",
-            "step-002-value=GOOGLE",
+            "flow", "inspect",
+            "--scene", "browser-demo",
+            "--task", "air-tickets-demo",
+            "--projects-root", str(PROJECTS_ROOT),
+            "--input", "step-002-value=GOOGLE",
         ]
     )
     result = json.loads(capsys.readouterr().out)
@@ -40,32 +39,14 @@ def test_flow_inspect_applies_only_explicit_input(capsys: pytest.CaptureFixture[
 
 def test_cli_rejects_duplicate_single_value_argument() -> None:
     with pytest.raises(SystemExit) as error:
-        main(
-            [
-                "flow",
-                "inspect",
-                "--project",
-                "first",
-                "--project",
-                "second",
-            ]
-        )
+        main(["flow", "inspect", "--scene", "first", "--scene", "second", "--task", "demo"])
     assert error.value.code == 2
 
 
-def test_calibration_apply_requires_confirmation(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as error:
-        main(
-            [
-                "calibration",
-                "apply",
-                "--project",
-                "air-tickets-demo",
-                "--project-root",
-                str(AIR_PROJECT),
-                "--proposal",
-                "not-applied",
-            ]
-        )
-    assert error.value.code == 1
-    assert "必须取得用户明确确认" in capsys.readouterr().err
+def test_removed_project_and_calibration_commands_are_rejected() -> None:
+    with pytest.raises(SystemExit) as project_error:
+        main(["project", "list"])
+    assert project_error.value.code == 2
+    with pytest.raises(SystemExit) as calibration_error:
+        main(["calibration", "apply"])
+    assert calibration_error.value.code == 2

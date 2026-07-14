@@ -100,6 +100,42 @@ def write_json_if_missing(path: Path, value: BaseModel) -> bool:
         return False
 
 
+def write_text_if_missing(path: Path, content: str) -> bool:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("x", encoding="utf-8") as file:
+            file.write(content)
+        return True
+    except FileExistsError:
+        return False
+
+
+def scene_skill_content(scene: str) -> str:
+    return f"""---
+name: {scene}
+description: 发现和调用 {scene} 场景中的本地 CUA 任务。
+---
+
+# {scene} 场景
+
+先运行 `uv run cua task list --scene {scene} --json` 发现任务，再按需读取目标任务的 `SKILL.md` 和 `task.json`。
+"""
+
+
+def task_skill_content(scene: str, task: str) -> str:
+    return f"""---
+name: {task}
+description: 调用和维护 {scene}/{task} 本地 CUA 任务。
+---
+
+# {task} 任务
+
+使用 `uv run cua task describe --scene {scene} --task {task} --json` 读取输入定义。
+
+单次参数通过 `flow inspect` 或 `flow run` 的 `--input key=value` 传入，不修改 `midscene-flow.json`。长期修改必须先展示差异并等待用户确认，确认后直接编辑 `midscene-flow.json`，再执行 `flow validate`。
+"""
+
+
 def normalize_source_screenshot_path(source_path: str | None) -> str | None:
     if not source_path:
         return None
@@ -293,5 +329,7 @@ def convert_trace(options: ConvertOptions) -> Path:
     )
     write_json_if_missing(task_root.parent / "scene.json", scene_manifest)
     write_json_if_missing(task_root / "task.json", create_initial_task_manifest(flow))
+    write_text_if_missing(task_root.parent / "SKILL.md", scene_skill_content(options.scene))
+    write_text_if_missing(task_root / "SKILL.md", task_skill_content(options.scene, options.task))
     (task_root / "reports").mkdir(parents=True, exist_ok=True)
     return output_path

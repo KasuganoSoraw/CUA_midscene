@@ -4,9 +4,8 @@ import json
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
-from cua.domain.types import CalibrationOptions, ResolveProjectOptions
+from cua.domain.types import ResolveTaskOptions
 from cua.models.flow import (
     InputRoute,
     MidsceneFlow,
@@ -18,59 +17,43 @@ from cua.models.flow import (
     TraceClickOperation,
     TraceInputOperation,
 )
-from cua.models.task import (
-    CalibrationBefore,
-    CalibrationChange,
-    CalibrationProposal,
-    FlowOverrides,
-    FlowStepPatch,
-    RoutePatch,
-    TaskInputBinding,
-    TaskInputDefinition,
-    TaskProjectConfig,
-)
-from cua.task.calibration import apply_calibration_proposal, validate_calibration_proposal
+from cua.models.task import SceneManifest, TaskInputBinding, TaskInputDefinition, TaskManifest
 from cua.task.inputs import load_runtime_inputs
-from cua.task.io import read_model, write_model
-from cua.task.projects import list_projects
-from cua.task.resolver import (
-    apply_step_patch,
-    create_empty_overrides,
-    fingerprint_flow_content,
-    resolve_project_flow,
-    validate_overrides,
-    write_resolved_flow_snapshot,
-)
+from cua.task.io import write_model
+from cua.task.projects import describe_task, list_scenes, list_tasks
+from cua.task.resolver import resolve_task_flow, write_resolved_flow_snapshot
 
-PROJECT = "task-core-test"
+SCENE = "browser-demo"
+TASK = "search-demo"
 
 
-def sample_flow() -> MidsceneFlow:
+def make_flow(value: str = "默认关键词") -> MidsceneFlow:
     return MidsceneFlow(
         schema_version="0.1",
-        project=PROJECT,
-        goal="测试任务解析",
+        scene=SCENE,
+        task=TASK,
+        goal="测试搜索",
         source=MidsceneFlowSource(trace_path="source/showui-trace.json"),
         steps=[
             MidsceneFlowStep(
                 id="step-001",
                 source_trace=MidsceneFlowSourceTrace(step_index=1),
-                intent="输入关键词",
+                intent="输入搜索词",
                 evidence=MidsceneFlowEvidence(
-                    observation="",
-                    action="输入默认关键词",
+                    observation="搜索框可见",
+                    action="输入关键词",
                     operation=TraceInputOperation(
                         type="input",
                         prompt="在搜索框输入 {{value}}",
-                        locate_prompt="页面顶部的搜索输入框",
-                        value="默认关键词",
+                        locate_prompt="页面顶部搜索框",
+                        value=value,
                     ),
                 ),
                 route=InputRoute(
                     strategy="input",
                     prompt="在搜索框输入 {{value}}",
-                    locate_prompt="页面顶部的搜索输入框",
-                    value="默认关键词",
+                    locate_prompt="页面顶部搜索框",
+                    value=value,
                     mode="replace",
                     input_method="keyboard-action",
                 ),
@@ -80,102 +63,103 @@ def sample_flow() -> MidsceneFlow:
                 source_trace=MidsceneFlowSourceTrace(step_index=2),
                 intent="点击搜索",
                 evidence=MidsceneFlowEvidence(
-                    observation="",
-                    action="点击搜索按钮",
-                    operation=TraceClickOperation(type="click", prompt="页面右侧的蓝色搜索按钮"),
+                    observation="搜索按钮可见",
+                    action="点击搜索",
+                    operation=TraceClickOperation(type="click", prompt="页面顶部的搜索按钮"),
                 ),
-                route=TapRoute(strategy="tap", prompt="页面右侧的蓝色搜索按钮"),
+                route=TapRoute(strategy="tap", prompt="页面顶部的搜索按钮"),
             ),
         ],
     )
 
 
-def sample_config() -> TaskProjectConfig:
-    return TaskProjectConfig(
-        schema_version="0.1",
-        project=PROJECT,
-        title="解析测试",
-        description="验证任务参数和校准",
-        goal="测试任务解析",
-        inputs={
-            "step-001-value": TaskInputDefinition(
-                type="string",
-                label="搜索关键词",
-                default="默认关键词",
-                binding=TaskInputBinding(step_id="step-001", field="route.value"),
-            )
-        },
+def create_task(projects_root: Path, value: str = "默认关键词") -> Path:
+    scene_root = projects_root / SCENE
+    task_root = scene_root / TASK
+    flow = make_flow(value)
+    write_model(
+        scene_root / "scene.json",
+        SceneManifest(
+            schema_version="0.1",
+            scene=SCENE,
+            title="浏览器示例",
+            description="测试场景",
+        ),
     )
+    write_model(
+        task_root / "task.json",
+        TaskManifest(
+            schema_version="0.1",
+            scene=SCENE,
+            task=TASK,
+            title="搜索示例",
+            description="测试任务",
+            goal=flow.goal,
+            inputs={
+                "query": TaskInputDefinition(
+                    type="string",
+                    label="搜索词",
+                    binding=TaskInputBinding(step_id="step-001", field="route.value"),
+                )
+            },
+        ),
+    )
+    write_model(task_root / "midscene-flow.json", flow)
+    return task_root
 
 
-def create_project(root: Path, overrides: FlowOverrides | None = None) -> tuple[MidsceneFlow, str]:
-    flow = sample_flow()
-    write_model(root / "ir" / "midscene-flow.json", flow)
-    write_model(root / "config" / "project.json", sample_config())
-    write_model(root / "config" / "flow-overrides.json", overrides or create_empty_overrides(PROJECT))
-    (root / "calibration" / "proposals").mkdir(parents=True)
-    (root / "calibration" / "history").mkdir(parents=True)
-    flow_content = (root / "ir" / "midscene-flow.json").read_text(encoding="utf-8")
-    return flow, fingerprint_flow_content(flow_content)
-
-
-def input_route_value(flow: MidsceneFlow) -> str:
+def input_value(flow: MidsceneFlow) -> str:
     route = flow.steps[0].route
     assert isinstance(route, InputRoute)
     return route.value
 
 
-def test_resolver_applies_overrides_sparse_inputs_and_snapshot(tmp_path: Path) -> None:
-    overrides = FlowOverrides(
-        schema_version="0.1",
-        project=PROJECT,
-        steps={"step-002": FlowStepPatch(route=RoutePatch(prompt="页面顶部工具栏右侧的蓝色搜索按钮"))},
-    )
-    _, fingerprint = create_project(tmp_path, overrides)
-    defaults = resolve_project_flow(ResolveProjectOptions(project=PROJECT, project_root=tmp_path))
-    assert input_route_value(defaults.flow) == "默认关键词"
-    assert defaults.flow.steps[1].route.prompt == "页面顶部工具栏右侧的蓝色搜索按钮"  # type: ignore[union-attr]
-    assert defaults.sources.base_flow_fingerprint == fingerprint
+def test_resolver_uses_flow_value_and_applies_sparse_input(tmp_path: Path) -> None:
+    task_root = create_task(tmp_path)
+    defaults = resolve_task_flow(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
+    assert input_value(defaults.flow) == "默认关键词"
+    assert defaults.inputs == {"query": "默认关键词"}
 
-    sparse = resolve_project_flow(
-        ResolveProjectOptions(
-            project=PROJECT,
-            project_root=tmp_path,
-            inputs={"step-001-value": "47405"},
-        )
+    sparse = resolve_task_flow(
+        ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path, inputs={"query": "47405"})
     )
-    assert input_route_value(sparse.flow) == "47405"
-    original_flow = (tmp_path / "ir" / "midscene-flow.json").read_text(encoding="utf-8")
-    snapshot_path = write_resolved_flow_snapshot(sparse, tmp_path / "reports")
+    assert input_value(sparse.flow) == "47405"
+    canonical = MidsceneFlow.model_validate_json(
+        (task_root / "midscene-flow.json").read_text(encoding="utf-8")
+    )
+    assert input_value(canonical) == "默认关键词"
+    snapshot_path = write_resolved_flow_snapshot(sparse, task_root / "reports")
     assert snapshot_path.name == "resolved-flow.json"
-    assert (tmp_path / "ir" / "midscene-flow.json").read_text(encoding="utf-8") == original_flow
 
 
-def test_resolver_rejects_unknown_input_and_invalid_override(tmp_path: Path) -> None:
-    flow, _ = create_project(tmp_path)
+def test_direct_flow_edit_becomes_new_default(tmp_path: Path) -> None:
+    task_root = create_task(tmp_path)
+    flow = make_flow("长期修改后的关键词")
+    write_model(task_root / "midscene-flow.json", flow)
+    resolved = resolve_task_flow(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
+    assert input_value(resolved.flow) == "长期修改后的关键词"
+
+
+def test_resolver_rejects_unknown_input_and_invalid_binding(tmp_path: Path) -> None:
+    task_root = create_task(tmp_path)
     with pytest.raises(ValueError, match="未知输入参数：unknown"):
-        resolve_project_flow(
-            ResolveProjectOptions(project=PROJECT, project_root=tmp_path, inputs={"unknown": "value"})
+        resolve_task_flow(
+            ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path, inputs={"unknown": "value"})
         )
 
-    unknown_step = FlowOverrides(
-        schema_version="0.1",
-        project=PROJECT,
-        steps={"step-999": FlowStepPatch(route=RoutePatch(prompt="不存在的目标"))},
+    manifest = TaskManifest.model_validate_json((task_root / "task.json").read_text(encoding="utf-8"))
+    invalid = manifest.model_copy(
+        update={
+            "inputs": {
+                "query": manifest.inputs["query"].model_copy(
+                    update={"binding": TaskInputBinding(step_id="step-999", field="route.value")}
+                )
+            }
+        }
     )
+    write_model(task_root / "task.json", invalid)
     with pytest.raises(ValueError, match="不存在的 step：step-999"):
-        validate_overrides(unknown_step, flow)
-
-    invalid_route = FlowOverrides(
-        schema_version="0.1",
-        project=PROJECT,
-        steps={"step-002": FlowStepPatch(route=RoutePatch(strategy="input", value="缺少定位字段"))},
-    )
-    with pytest.raises(ValueError, match="route 校准无效"):
-        validate_overrides(invalid_route, flow)
-
-    with pytest.raises(ValidationError, match="source"):
-        FlowStepPatch.model_validate({"source": {"tracePath": "invalid"}})
+        resolve_task_flow(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
 
 
 def test_runtime_inputs_reject_duplicates_and_non_strings(tmp_path: Path) -> None:
@@ -189,59 +173,10 @@ def test_runtime_inputs_reject_duplicates_and_non_strings(tmp_path: Path) -> Non
         load_runtime_inputs(inputs_path, [])
 
 
-def test_calibration_requires_current_fingerprint_and_updates_defaults(tmp_path: Path) -> None:
-    flow, fingerprint = create_project(tmp_path)
-    before_route = flow.steps[0].route
-    proposal = CalibrationProposal(
-        schema_version="0.1",
-        id="fix-input-target",
-        project=PROJECT,
-        base_flow_fingerprint=fingerprint,
-        summary="修正输入框定位与默认值",
-        reason="原定位描述不足，默认搜索值需要长期调整",
-        changes=[
-            CalibrationChange(
-                step_id="step-001",
-                before=CalibrationBefore(route=before_route),
-                after=FlowStepPatch(
-                    route=RoutePatch(locate_prompt="页面顶部工具栏中的搜索输入框", value="47405")
-                ),
-            )
-        ],
-    )
-    proposal_path = tmp_path / "calibration" / "proposals" / "fix-input-target.json"
-    write_model(proposal_path, proposal)
-
-    pending = resolve_project_flow(ResolveProjectOptions(project=PROJECT, project_root=tmp_path))
-    assert isinstance(pending.flow.steps[0].route, InputRoute)
-    assert pending.flow.steps[0].route.locate_prompt == "页面顶部的搜索输入框"
-    validate_calibration_proposal(
-        CalibrationOptions(project=PROJECT, project_root=tmp_path, proposal="fix-input-target")
-    )
-    history = apply_calibration_proposal(
-        CalibrationOptions(project=PROJECT, project_root=tmp_path, proposal="fix-input-target")
-    )
-    assert history.status == "applied"
-    assert not proposal_path.exists()
-    applied = resolve_project_flow(ResolveProjectOptions(project=PROJECT, project_root=tmp_path))
-    assert isinstance(applied.flow.steps[0].route, InputRoute)
-    assert applied.flow.steps[0].route.locate_prompt == "页面顶部工具栏中的搜索输入框"
-    assert applied.flow.steps[0].route.value == "47405"
-    config = read_model(tmp_path / "config" / "project.json", TaskProjectConfig, "项目配置")
-    assert config.inputs["step-001-value"].default == "47405"
-
-    stale = proposal.model_copy(update={"id": "stale", "base_flow_fingerprint": "0" * 64})
-    write_model(tmp_path / "calibration" / "proposals" / "stale.json", stale)
-    with pytest.raises(ValueError, match="proposal 已过期"):
-        validate_calibration_proposal(
-            CalibrationOptions(project=PROJECT, project_root=tmp_path, proposal="stale")
-        )
-
-
-def test_project_listing_validates_task_packages(tmp_path: Path) -> None:
-    project_root = tmp_path / PROJECT
-    create_project(project_root)
-    projects = list_projects(tmp_path)
-    assert len(projects) == 1
-    assert projects[0]["project"] == PROJECT
-    assert "step-001-value" in projects[0]["inputs"]  # type: ignore[operator]
+def test_scene_and_task_discovery_validate_assets(tmp_path: Path) -> None:
+    create_task(tmp_path)
+    assert list_scenes(tmp_path)[0]["scene"] == SCENE
+    tasks = list_tasks(SCENE, tmp_path)
+    assert tasks[0]["task"] == TASK
+    assert "query" in tasks[0]["inputs"]  # type: ignore[operator]
+    assert describe_task(SCENE, TASK, tmp_path)["stepCount"] == 2

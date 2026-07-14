@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "0.1",
+  "scene": "browser-demo",
+  "task": "air-tickets-demo",
+  "title": "Qatar Airways 航班搜索",
+  "description": "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索",
+  "goal": "将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索",
+  "inputs": {
+    "step-002-value": {
+      "type": "string",
+      "label": "Chrome 地址栏或搜索栏输入值",
+      "description": "在 Chrome 地址栏或搜索栏中输入搜索词",
+      "binding": {
+        "stepId": "step-002",
+        "field": "route.value"
+      }
+    },
+    "step-008-value": {
+      "type": "string",
+      "label": "出发地",
+      "description": "在 Book a flight 的 From 输入框中输入出发地",
+      "binding": {
+        "stepId": "step-008",
+        "field": "route.value"
+      }
+    },
+    "step-010-value": {
+      "type": "string",
+      "label": "目的地搜索词",
+      "description": "在 Book a flight 的 To 输入框中输入目的地搜索词",
+      "binding": {
+        "stepId": "step-010",
+        "field": "route.value"
+      }
+    }
+  }
+}
