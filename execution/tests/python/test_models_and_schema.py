@@ -12,7 +12,13 @@ from cua.cli.main import build_parser
 from cua.domain.types import ResolveTaskOptions, ResolvedFlowResult, TaskPaths
 from cua.models.flow import MidsceneFlow
 from cua.models.schema import GENERATED_COMMENT, SCHEMA_MODELS, check_schemas, schema_documents
-from cua.models.task import ResolvedFlowSnapshot, ResolvedFlowSources, SceneManifest, TaskManifest
+from cua.models.task import (
+    AiActExecutorResult,
+    ResolvedFlowSnapshot,
+    ResolvedFlowSources,
+    SceneManifest,
+    TaskManifest,
+)
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
 SCENE_ROOT = EXECUTION_ROOT / "projects" / "browser-demo"
@@ -45,6 +51,17 @@ def test_existing_task_assets_pass_models_and_json_schema() -> None:
         "scene.schema.json": scene.to_json_dict(),
         "task.schema.json": task.to_json_dict(),
         "resolved-flow.schema.json": snapshot.to_json_dict(),
+        "ai-act-result.schema.json": AiActExecutorResult(
+            schema_version="0.1",
+            status="succeeded",
+            mode="task",
+            scene=flow.scene,
+            task=flow.task,
+            prompt_path=str(TASK_ROOT / "reports" / "run" / "ai-act-prompt.txt"),
+            source_path=str(TASK_ROOT / "reports" / "run" / "resolved-flow.json"),
+            dry_run=True,
+            finished_at=datetime.now(UTC),
+        ).to_json_dict(),
     }
     for filename, schema in schema_documents().items():
         Draft202012Validator.check_schema(schema)

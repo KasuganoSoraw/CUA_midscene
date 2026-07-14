@@ -8,10 +8,10 @@
 
 ## 2. Python CLI 与持久化契约
 
-- [ ] 2.1 新增 `AiActExecutorResult` Pydantic 模型并生成 JSON Schema
-- [ ] 2.2 实现自然语言和任务两种 aiAct 子进程调用及报告目录规则
-- [ ] 2.3 新增 `cua act run` CLI、互斥参数校验和机器可读输出
-- [ ] 2.4 增加 Python 模型、协议、resolver 复用和 CLI 失败测试
+- [x] 2.1 新增 `AiActExecutorResult` Pydantic 模型并生成 JSON Schema
+- [x] 2.2 实现自然语言和任务两种 aiAct 子进程调用及报告目录规则
+- [x] 2.3 新增 `cua act run` CLI、互斥参数校验和机器可读输出
+- [x] 2.4 增加 Python 模型、协议、resolver 复用和 CLI 失败测试
 
 ## 3. Agent Skill 与文档
 

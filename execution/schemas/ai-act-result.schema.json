@@ -1,0 +1,110 @@
+{
+  "$comment": "由 cua.models.schema 从 Pydantic 模型生成，请勿手工编辑。",
+  "additionalProperties": false,
+  "properties": {
+    "aiActResult": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Aiactresult"
+    },
+    "dryRun": {
+      "title": "Dryrun",
+      "type": "boolean"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "finishedAt": {
+      "format": "date-time",
+      "title": "Finishedat",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "prompt",
+        "task"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "promptPath": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Promptpath"
+    },
+    "scene": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scene"
+    },
+    "schemaVersion": {
+      "const": "0.1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "sourcePath": {
+      "title": "Sourcepath",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "succeeded",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "task": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Task"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "status",
+    "mode",
+    "sourcePath",
+    "dryRun",
+    "finishedAt"
+  ],
+  "title": "AiActExecutorResult",
+  "type": "object"
+}

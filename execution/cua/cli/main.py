@@ -80,6 +80,19 @@ def build_parser() -> argparse.ArgumentParser:
         flow_command.add_argument("--json", action="store_true", help="输出机器可读 JSON")
         if command == "run":
             flow_command.add_argument("--dry-run", action="store_true", help="只验证执行快照和 route")
+
+    act_parser = domains.add_parser("act", help="使用 Midscene aiAct 执行自然语言或完整录制任务")
+    act_commands = act_parser.add_subparsers(dest="command", required=True)
+    act_run = act_commands.add_parser("run", help="执行一次 aiAct")
+    add_unique_argument(act_run, "--prompt", help="无录制任务的自然语言要求")
+    add_unique_argument(act_run, "--scene", help="业务场景标识")
+    add_unique_argument(act_run, "--task", help="任务标识")
+    add_unique_argument(act_run, "--projects-root", type=Path, help="场景集合目录，默认 projects")
+    add_unique_argument(act_run, "--task-root", type=Path, help="任务目录覆盖")
+    add_unique_argument(act_run, "--flow", type=Path, help="canonical flow 路径覆盖")
+    add_unique_argument(act_run, "--inputs", type=Path, help="本次输入 JSON 文件")
+    act_run.add_argument("--input", action="append", default=[], help="稀疏输入，格式为 key=value")
+    act_run.add_argument("--dry-run", action="store_true", help="只验证并输出最终 aiAct prompt")
     return parser
 
 
@@ -192,6 +205,35 @@ def run_command(args: argparse.Namespace) -> None:
 
         inputs = load_runtime_inputs(args.inputs, args.input)
         snapshot, result = run_task(
+            ExecutionOptions(
+                scene=args.scene,
+                task=args.task,
+                projects_root=projects_root_from_args(args),
+                task_root=args.task_root.resolve() if args.task_root else None,
+                flow_path=args.flow.resolve() if args.flow else None,
+                inputs=inputs,
+                dry_run=args.dry_run,
+            )
+        )
+        print_json({"snapshot": snapshot.to_json_dict(), "executor": result.to_json_dict()})
+        return
+
+    if args.domain == "act" and args.command == "run":
+        from cua.task.ai_act import run_prompt_ai_act, run_task_ai_act
+
+        has_prompt = args.prompt is not None
+        has_task_identity = args.scene is not None or args.task is not None
+        task_only_values = [args.projects_root, args.task_root, args.flow, args.inputs]
+        if has_prompt:
+            if has_task_identity or any(value is not None for value in task_only_values) or args.input:
+                raise ValueError("--prompt 不能与 scene/task、任务路径或任务输入参数混用")
+            result = run_prompt_ai_act(args.prompt, dry_run=args.dry_run)
+            print_json({"executor": result.to_json_dict()})
+            return
+        if not args.scene or not args.task:
+            raise ValueError("任务 aiAct 模式必须同时提供 --scene 和 --task")
+        inputs = load_runtime_inputs(args.inputs, args.input)
+        snapshot, result = run_task_ai_act(
             ExecutionOptions(
                 scene=args.scene,
                 task=args.task,

@@ -50,3 +50,47 @@ def test_removed_project_and_calibration_commands_are_rejected() -> None:
     with pytest.raises(SystemExit) as calibration_error:
         main(["calibration", "apply"])
     assert calibration_error.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "argv, message",
+    [
+        (["act", "run"], "必须同时提供 --scene 和 --task"),
+        (["act", "run", "--scene", "browser-demo"], "必须同时提供 --scene 和 --task"),
+        (["act", "run", "--task", "air-tickets-demo"], "必须同时提供 --scene 和 --task"),
+        (["act", "run", "--prompt", ""], "prompt 不能为空"),
+        (
+            ["act", "run", "--prompt", "搜索", "--scene", "browser-demo", "--task", "air-tickets-demo"],
+            "不能与 scene/task",
+        ),
+        (["act", "run", "--prompt", "搜索", "--input", "query=GUI"], "不能与 scene/task"),
+    ],
+)
+def test_act_cli_rejects_invalid_source_combinations(
+    argv: list[str], message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        main(argv)
+    assert error.value.code == 1
+    assert message in capsys.readouterr().err
+
+
+def test_act_task_rejects_unknown_input_before_executor(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "act",
+                "run",
+                "--scene",
+                "browser-demo",
+                "--task",
+                "air-tickets-demo",
+                "--projects-root",
+                str(PROJECTS_ROOT),
+                "--input",
+                "unknown=value",
+                "--dry-run",
+            ]
+        )
+    assert error.value.code == 1
+    assert "未知输入参数：unknown" in capsys.readouterr().err
