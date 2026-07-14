@@ -139,8 +139,8 @@
           "title": "Goal",
           "type": "string"
         },
-        "project": {
-          "title": "Project",
+        "scene": {
+          "title": "Scene",
           "type": "string"
         },
         "schemaVersion": {
@@ -157,11 +157,16 @@
           },
           "title": "Steps",
           "type": "array"
+        },
+        "task": {
+          "title": "Task",
+          "type": "string"
         }
       },
       "required": [
         "schemaVersion",
-        "project",
+        "scene",
+        "task",
         "goal",
         "source",
         "steps"
@@ -486,10 +491,7 @@
         "waitReason": {
           "anyOf": [
             {
-              "enum": [
-                "recorded-step-gap",
-                "manual-calibration"
-              ],
+              "const": "recorded-step-gap",
               "type": "string"
             },
             {
@@ -506,36 +508,18 @@
     "ResolvedFlowSources": {
       "additionalProperties": false,
       "properties": {
-        "appliedOverrideSteps": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Appliedoverridesteps",
-          "type": "array"
-        },
-        "baseFlowFingerprint": {
-          "title": "Baseflowfingerprint",
+        "flowPath": {
+          "title": "Flowpath",
           "type": "string"
         },
-        "baseFlowPath": {
-          "title": "Baseflowpath",
-          "type": "string"
-        },
-        "overridesPath": {
-          "title": "Overridespath",
-          "type": "string"
-        },
-        "projectConfigPath": {
-          "title": "Projectconfigpath",
+        "taskPath": {
+          "title": "Taskpath",
           "type": "string"
         }
       },
       "required": [
-        "baseFlowPath",
-        "projectConfigPath",
-        "overridesPath",
-        "baseFlowFingerprint",
-        "appliedOverrideSteps"
+        "flowPath",
+        "taskPath"
       ],
       "title": "ResolvedFlowSources",
       "type": "object"

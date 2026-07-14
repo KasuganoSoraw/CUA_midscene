@@ -1,60 +1,40 @@
 from __future__ import annotations
 
-import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import TypeAdapter, ValidationError
-
-from cua.domain.types import ResolveProjectOptions, ResolvedFlowResult, TaskProjectPaths
-from cua.models.flow import InputRoute, MidsceneFlow, MidsceneFlowRoute, MidsceneFlowStep, MidsceneFlowTiming
+from cua.domain.types import ResolveTaskOptions, ResolvedFlowResult, TaskPaths
+from cua.models.flow import InputRoute, MidsceneFlow
 from cua.models.task import (
-    FLOW_OVERRIDES_SCHEMA_VERSION,
     RESOLVED_FLOW_SCHEMA_VERSION,
-    TASK_PROJECT_SCHEMA_VERSION,
-    FlowOverrides,
-    FlowStepPatch,
     ResolvedFlowSnapshot,
     ResolvedFlowSources,
+    SceneManifest,
     TaskInputBinding,
     TaskInputDefinition,
-    TaskProjectConfig,
+    TaskManifest,
 )
 from cua.task.io import read_model, write_model
 
-ROUTE_ADAPTER = TypeAdapter(MidsceneFlowRoute)
 
-
-def task_project_paths(
-    project: str,
-    project_root: Path | None = None,
+def task_paths(
+    scene: str,
+    task: str,
+    projects_root: Path | None = None,
+    task_root: Path | None = None,
     flow_path: Path | None = None,
-) -> TaskProjectPaths:
-    root = (project_root or Path("projects") / project).resolve()
-    return TaskProjectPaths(
-        project_root=root,
-        flow_path=(flow_path or root / "ir" / "midscene-flow.json").resolve(),
-        project_config_path=root / "config" / "project.json",
-        overrides_path=root / "config" / "flow-overrides.json",
-        proposals_dir=root / "calibration" / "proposals",
-        history_dir=root / "calibration" / "history",
+) -> TaskPaths:
+    projects = (projects_root or Path("projects")).resolve()
+    root = (task_root or projects / scene / task).resolve()
+    scene_root = root.parent
+    return TaskPaths(
+        scene_root=scene_root,
+        task_root=root,
+        scene_manifest_path=scene_root / "scene.json",
+        task_manifest_path=root / "task.json",
+        flow_path=(flow_path or root / "midscene-flow.json").resolve(),
         reports_dir=root / "reports",
     )
-
-
-def fingerprint_flow_content(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def read_flow_with_fingerprint(flow_path: Path) -> tuple[MidsceneFlow, str]:
-    try:
-        content = flow_path.read_text(encoding="utf-8")
-    except Exception as error:
-        raise ValueError(f"读取 Midscene flow 失败：{flow_path}\n{error}") from error
-    try:
-        return MidsceneFlow.model_validate_json(content), fingerprint_flow_content(content)
-    except Exception as error:
-        raise ValueError(f"解析并验证 Midscene flow 失败：{flow_path}\n{error}") from error
 
 
 def require_non_empty(value: str, field: str) -> None:
@@ -62,8 +42,13 @@ def require_non_empty(value: str, field: str) -> None:
         raise ValueError(f"{field} 必须是非空字符串")
 
 
+def read_flow(flow_path: Path) -> MidsceneFlow:
+    return read_model(flow_path, MidsceneFlow, "Midscene flow")
+
+
 def validate_flow(flow: MidsceneFlow, executable: bool = True) -> None:
-    require_non_empty(flow.project, "flow.project")
+    require_non_empty(flow.scene, "flow.scene")
+    require_non_empty(flow.task, "flow.task")
     ids: set[str] = set()
     for step in flow.steps:
         require_non_empty(step.id, "step.id")
@@ -74,12 +59,17 @@ def validate_flow(flow: MidsceneFlow, executable: bool = True) -> None:
             raise ValueError(f"{step.id}.route 需要人工审查：{step.route.reason}")
 
 
-def validate_project_config(config: TaskProjectConfig, flow: MidsceneFlow) -> None:
-    if config.project != flow.project:
-        raise ValueError(f"project.json 项目 {config.project} 与 flow 项目 {flow.project} 不一致")
-    require_non_empty(config.title, "project.title")
+def validate_manifests(scene: SceneManifest, task: TaskManifest, flow: MidsceneFlow) -> None:
+    if scene.scene != flow.scene:
+        raise ValueError(f"scene.json 场景 {scene.scene} 与 flow 场景 {flow.scene} 不一致")
+    if task.scene != flow.scene or task.task != flow.task:
+        raise ValueError(
+            f"task.json 标识 {task.scene}/{task.task} 与 flow 标识 {flow.scene}/{flow.task} 不一致"
+        )
+    require_non_empty(scene.title, "scene.title")
+    require_non_empty(task.title, "task.title")
     step_map = {step.id: step for step in flow.steps}
-    for input_id, definition in config.inputs.items():
+    for input_id, definition in task.inputs.items():
         require_non_empty(input_id, "input id")
         require_non_empty(definition.label, f"输入 {input_id}.label")
         step = step_map.get(definition.binding.step_id)
@@ -89,102 +79,53 @@ def validate_project_config(config: TaskProjectConfig, flow: MidsceneFlow) -> No
             raise ValueError(f"输入 {input_id} 只能绑定 input route：{step.id}")
 
 
-def route_patch_data(patch: FlowStepPatch) -> dict[str, object] | None:
-    if patch.route is None:
-        return None
-    return patch.route.model_dump(by_alias=True, exclude_none=True)
-
-
-def apply_step_patch(step: MidsceneFlowStep, patch: FlowStepPatch) -> MidsceneFlowStep:
-    if patch.route is None and patch.timing is None:
-        raise ValueError(f"{step.id} 校准必须包含 route 或 timing")
-    step_data = step.to_json_dict()
-    route_patch = route_patch_data(patch)
-    if route_patch is not None:
-        patch_strategy = route_patch.get("strategy")
-        if patch_strategy is not None and patch_strategy != step.route.strategy:
-            candidate = route_patch
-        else:
-            candidate = {**step.route.to_json_dict(), **route_patch, "strategy": step.route.strategy}
-        try:
-            step_data["route"] = ROUTE_ADAPTER.validate_python(candidate).to_json_dict()
-        except ValidationError as error:
-            raise ValueError(f"{step.id}.route 校准无效：{error}") from error
-
-    if patch.timing is not None:
-        timing_data = step.timing.to_json_dict() if step.timing else {}
-        timing_data.update(patch.timing.to_json_dict())
-        timing_data["waitReason"] = "manual-calibration"
-        step_data["timing"] = MidsceneFlowTiming.model_validate(timing_data).to_json_dict()
-    return MidsceneFlowStep.model_validate(step_data)
-
-
-def validate_overrides(overrides: FlowOverrides, flow: MidsceneFlow) -> None:
-    if overrides.project != flow.project:
-        raise ValueError(f"flow-overrides 项目 {overrides.project} 与 flow 项目 {flow.project} 不一致")
-    step_map = {step.id: step for step in flow.steps}
-    for step_id, patch in overrides.steps.items():
-        step = step_map.get(step_id)
-        if step is None:
-            raise ValueError(f"flow-overrides 引用了不存在的 step：{step_id}")
-        apply_step_patch(step, patch)
-
-
-def apply_overrides(flow: MidsceneFlow, overrides: FlowOverrides) -> MidsceneFlow:
-    flow_data = flow.to_json_dict()
-    flow_data["steps"] = [
-        apply_step_patch(step, overrides.steps[step.id]).to_json_dict()
-        if step.id in overrides.steps
-        else step.to_json_dict()
-        for step in flow.steps
-    ]
-    return MidsceneFlow.model_validate(flow_data)
-
-
 def apply_inputs(
     flow: MidsceneFlow,
-    config: TaskProjectConfig,
+    task: TaskManifest,
     provided_inputs: dict[str, str],
 ) -> tuple[MidsceneFlow, dict[str, str]]:
     for input_id in provided_inputs:
-        if input_id not in config.inputs:
+        if input_id not in task.inputs:
             raise ValueError(f"未知输入参数：{input_id}")
 
     flow_data = flow.to_json_dict()
     step_map = {step["id"]: step for step in flow_data["steps"]}  # type: ignore[index]
     values: dict[str, str] = {}
-    for input_id, definition in config.inputs.items():
-        value = provided_inputs.get(input_id, definition.default)
-        values[input_id] = value
+    for input_id, definition in task.inputs.items():
         step = step_map.get(definition.binding.step_id)
         if step is None or step["route"]["strategy"] != "input":  # type: ignore[index]
             raise ValueError(f"输入 {input_id} 的绑定已失效：{definition.binding.step_id}")
-        step["route"]["value"] = value  # type: ignore[index]
+        route = step["route"]  # type: ignore[index]
+        if input_id in provided_inputs:
+            route["value"] = provided_inputs[input_id]
+        values[input_id] = route["value"]
     return MidsceneFlow.model_validate(flow_data), values
 
 
-def resolve_project_flow(options: ResolveProjectOptions) -> ResolvedFlowResult:
-    paths = task_project_paths(options.project, options.project_root, options.flow_path)
-    base_flow, fingerprint = read_flow_with_fingerprint(paths.flow_path)
-    config = read_model(paths.project_config_path, TaskProjectConfig, "项目配置")
-    overrides = read_model(paths.overrides_path, FlowOverrides, "校准配置")
-    validate_flow(base_flow, executable=False)
-    if base_flow.project != options.project:
-        raise ValueError(f"请求项目 {options.project} 与 flow 项目 {base_flow.project} 不一致")
-    validate_project_config(config, base_flow)
-    validate_overrides(overrides, base_flow)
-
-    calibrated_flow = apply_overrides(base_flow, overrides)
-    resolved_flow, values = apply_inputs(calibrated_flow, config, options.inputs or {})
+def resolve_task_flow(options: ResolveTaskOptions) -> ResolvedFlowResult:
+    paths = task_paths(
+        options.scene,
+        options.task,
+        options.projects_root,
+        options.task_root,
+        options.flow_path,
+    )
+    flow = read_flow(paths.flow_path)
+    scene = read_model(paths.scene_manifest_path, SceneManifest, "场景清单")
+    task = read_model(paths.task_manifest_path, TaskManifest, "任务清单")
+    validate_flow(flow, executable=False)
+    if flow.scene != options.scene or flow.task != options.task:
+        raise ValueError(
+            f"请求任务 {options.scene}/{options.task} 与 flow 标识 {flow.scene}/{flow.task} 不一致"
+        )
+    validate_manifests(scene, task, flow)
+    resolved_flow, values = apply_inputs(flow, task, options.inputs or {})
     validate_flow(resolved_flow, executable=options.executable)
     return ResolvedFlowResult(
         flow=resolved_flow,
         sources=ResolvedFlowSources(
-            base_flow_path=str(paths.flow_path),
-            project_config_path=str(paths.project_config_path),
-            overrides_path=str(paths.overrides_path),
-            base_flow_fingerprint=fingerprint,
-            applied_override_steps=list(overrides.steps),
+            flow_path=str(paths.flow_path),
+            task_path=str(paths.task_manifest_path),
         ),
         inputs=values,
     )
@@ -208,7 +149,7 @@ def write_resolved_flow_snapshot(result: ResolvedFlowResult, reports_dir: Path) 
     return snapshot_path
 
 
-def create_initial_project_config(flow: MidsceneFlow) -> TaskProjectConfig:
+def create_initial_task_manifest(flow: MidsceneFlow) -> TaskManifest:
     inputs: dict[str, TaskInputDefinition] = {}
     for step in flow.steps:
         if not isinstance(step.route, InputRoute):
@@ -216,20 +157,16 @@ def create_initial_project_config(flow: MidsceneFlow) -> TaskProjectConfig:
         input_id = f"{step.id}-value"
         inputs[input_id] = TaskInputDefinition(
             type="string",
-            label=f"{step.route.locate_prompt}输入值",
+            label=step.route.locate_prompt,
             description=step.route.prompt,
-            default=step.route.value,
             binding=TaskInputBinding(step_id=step.id, field="route.value"),
         )
-    return TaskProjectConfig(
-        schema_version=TASK_PROJECT_SCHEMA_VERSION,
-        project=flow.project,
-        title=flow.project,
+    return TaskManifest(
+        schema_version="0.1",
+        scene=flow.scene,
+        task=flow.task,
+        title=flow.task,
         description=flow.goal,
         goal=flow.goal,
         inputs=inputs,
     )
-
-
-def create_empty_overrides(project: str) -> FlowOverrides:
-    return FlowOverrides(schema_version=FLOW_OVERRIDES_SCHEMA_VERSION, project=project, steps={})

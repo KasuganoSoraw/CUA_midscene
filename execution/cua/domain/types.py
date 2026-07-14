@@ -5,25 +5,26 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from cua.models.flow import MidsceneFlow, MidsceneFlowStep
-    from cua.models.task import CalibrationProposal, FlowOverrides, ResolvedFlowSources, TaskProjectConfig
+    from cua.models.flow import MidsceneFlow
+    from cua.models.task import ResolvedFlowSources
 
 
 @dataclass(frozen=True)
-class TaskProjectPaths:
-    project_root: Path
+class TaskPaths:
+    scene_root: Path
+    task_root: Path
+    scene_manifest_path: Path
+    task_manifest_path: Path
     flow_path: Path
-    project_config_path: Path
-    overrides_path: Path
-    proposals_dir: Path
-    history_dir: Path
     reports_dir: Path
 
 
 @dataclass(frozen=True)
-class ResolveProjectOptions:
-    project: str
-    project_root: Path | None = None
+class ResolveTaskOptions:
+    scene: str
+    task: str
+    projects_root: Path | None = None
+    task_root: Path | None = None
     flow_path: Path | None = None
     inputs: dict[str, str] | None = None
     executable: bool = True
@@ -31,9 +32,10 @@ class ResolveProjectOptions:
 
 @dataclass(frozen=True)
 class ConvertOptions:
-    project: str
+    scene: str
+    task: str
     goal: str
-    project_root: Path
+    projects_root: Path
     conversion_command: str
     recording_preparation_command: str | None = None
     trace_generation_command: str | None = None
@@ -48,27 +50,12 @@ class ResolvedFlowResult:
 
 
 @dataclass(frozen=True)
-class CalibrationOptions:
-    project: str
-    proposal: str
-    project_root: Path | None = None
-
-
-@dataclass(frozen=True)
 class ExecutionOptions:
-    project: str
-    project_root: Path | None = None
+    scene: str
+    task: str
+    projects_root: Path | None = None
+    task_root: Path | None = None
     flow_path: Path | None = None
     inputs: dict[str, str] | None = None
     dry_run: bool = False
     command_prefix: tuple[str, ...] | None = None
-
-
-@dataclass(frozen=True)
-class ValidatedCalibration:
-    proposal: CalibrationProposal
-    proposal_path: Path
-    current_steps: dict[str, MidsceneFlowStep]
-    patched_steps: dict[str, MidsceneFlowStep]
-    config: TaskProjectConfig
-    overrides: FlowOverrides

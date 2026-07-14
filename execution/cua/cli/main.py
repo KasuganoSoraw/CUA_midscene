@@ -6,11 +6,10 @@ import sys
 from pathlib import Path
 
 from cua.conversion.showui_trace import convert_trace
-from cua.domain.types import CalibrationOptions, ConvertOptions, ExecutionOptions, ResolveProjectOptions
-from cua.task.calibration import apply_calibration_proposal, validate_calibration_proposal
+from cua.domain.types import ConvertOptions, ExecutionOptions, ResolveTaskOptions
 from cua.task.inputs import load_runtime_inputs
-from cua.task.projects import list_projects
-from cua.task.resolver import create_resolved_flow_snapshot, resolve_project_flow
+from cua.task.projects import describe_task, list_scenes, list_tasks
+from cua.task.resolver import create_resolved_flow_snapshot, resolve_task_flow
 
 
 class UniqueStoreAction(argparse.Action):
@@ -30,52 +29,57 @@ def add_unique_argument(parser: argparse.ArgumentParser, name: str, **kwargs: ob
     parser.add_argument(name, action=UniqueStoreAction, **kwargs)
 
 
-def add_project_arguments(parser: argparse.ArgumentParser, *, inputs: bool = False) -> None:
-    add_unique_argument(parser, "--project", required=True, help="任务项目名")
-    add_unique_argument(parser, "--project-root", type=Path, help="项目目录覆盖")
-    add_unique_argument(parser, "--flow", type=Path, help="基础 IR 路径覆盖")
+def add_task_identity(parser: argparse.ArgumentParser) -> None:
+    add_unique_argument(parser, "--scene", required=True, help="业务场景标识")
+    add_unique_argument(parser, "--task", required=True, help="任务标识")
+    add_unique_argument(parser, "--projects-root", type=Path, help="场景集合目录，默认 projects")
+
+
+def add_flow_arguments(parser: argparse.ArgumentParser, *, inputs: bool = False) -> None:
+    add_task_identity(parser)
+    add_unique_argument(parser, "--task-root", type=Path, help="任务目录覆盖")
+    add_unique_argument(parser, "--flow", type=Path, help="canonical flow 路径覆盖")
     if inputs:
         add_unique_argument(parser, "--inputs", type=Path, help="本次输入 JSON 文件")
         parser.add_argument("--input", action="append", default=[], help="稀疏输入，格式为 key=value")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="cua", description="CUA 任务转换、校准与执行工具")
+    parser = argparse.ArgumentParser(prog="cua", description="CUA 场景、任务与执行工具")
     domains = parser.add_subparsers(dest="domain", required=True)
 
-    project_parser = domains.add_parser("project", help="任务项目查询")
-    project_commands = project_parser.add_subparsers(dest="command", required=True)
-    project_list = project_commands.add_parser("list", help="列出可调用任务")
-    add_unique_argument(project_list, "--projects-root", type=Path, help="项目集合目录")
-    project_list.add_argument("--json", action="store_true", help="输出机器可读 JSON")
+    scene_parser = domains.add_parser("scene", help="场景查询")
+    scene_commands = scene_parser.add_subparsers(dest="command", required=True)
+    scene_list = scene_commands.add_parser("list", help="列出场景")
+    add_unique_argument(scene_list, "--projects-root", type=Path, help="场景集合目录")
+    scene_list.add_argument("--json", action="store_true", help="输出机器可读 JSON")
 
-    flow_parser = domains.add_parser("flow", help="流程转换、检查与执行")
+    task_parser = domains.add_parser("task", help="任务查询与初始化")
+    task_commands = task_parser.add_subparsers(dest="command", required=True)
+    task_list = task_commands.add_parser("list", help="列出场景中的任务")
+    add_unique_argument(task_list, "--scene", required=True, help="业务场景标识")
+    add_unique_argument(task_list, "--projects-root", type=Path, help="场景集合目录")
+    task_list.add_argument("--json", action="store_true", help="输出机器可读 JSON")
+
+    task_describe = task_commands.add_parser("describe", help="查看任务契约")
+    add_task_identity(task_describe)
+    task_describe.add_argument("--json", action="store_true", help="输出机器可读 JSON")
+
+    task_init = task_commands.add_parser("init-from-trace", help="从 record trace 首次初始化任务 flow")
+    add_task_identity(task_init)
+    add_unique_argument(task_init, "--goal", required=True, help="任务目标")
+    add_unique_argument(task_init, "--recording-preparation-command", help="录制准备命令记录")
+    add_unique_argument(task_init, "--trace-generation-command", help="trace 生成命令记录")
+    add_unique_argument(task_init, "--flow-execution-command", help="flow 执行命令记录")
+
+    flow_parser = domains.add_parser("flow", help="流程验证、检查与执行")
     flow_commands = flow_parser.add_subparsers(dest="command", required=True)
-    flow_convert = flow_commands.add_parser("convert", help="将 record trace 转换为基础 IR")
-    add_unique_argument(flow_convert, "--project", required=True, help="任务项目名")
-    add_unique_argument(flow_convert, "--project-root", type=Path, help="项目目录覆盖")
-    add_unique_argument(flow_convert, "--goal", help="任务目标")
-    add_unique_argument(flow_convert, "--recording-preparation-command", help="录制准备命令记录")
-    add_unique_argument(flow_convert, "--trace-generation-command", help="trace 生成命令记录")
-    add_unique_argument(flow_convert, "--flow-execution-command", help="flow 执行命令记录")
-
     for command in ("validate", "inspect", "run"):
         flow_command = flow_commands.add_parser(command)
-        add_project_arguments(flow_command, inputs=True)
+        add_flow_arguments(flow_command, inputs=True)
         flow_command.add_argument("--json", action="store_true", help="输出机器可读 JSON")
         if command == "run":
             flow_command.add_argument("--dry-run", action="store_true", help="只验证执行快照和 route")
-
-    calibration_parser = domains.add_parser("calibration", help="人工校准建议")
-    calibration_commands = calibration_parser.add_subparsers(dest="command", required=True)
-    for command in ("validate", "apply"):
-        calibration_command = calibration_commands.add_parser(command)
-        add_unique_argument(calibration_command, "--project", required=True, help="任务项目名")
-        add_unique_argument(calibration_command, "--project-root", type=Path, help="项目目录覆盖")
-        add_unique_argument(calibration_command, "--proposal", required=True, help="建议 ID")
-        calibration_command.add_argument("--json", action="store_true", help="输出机器可读 JSON")
-        if command == "apply":
-            calibration_command.add_argument("--confirmed", action="store_true", help="确认应用长期校准")
     return parser
 
 
@@ -88,12 +92,19 @@ def quote_command_value(value: str) -> str:
     return f'"{escaped}"'
 
 
+def projects_root_from_args(args: argparse.Namespace) -> Path:
+    return (args.projects_root or Path("projects")).resolve()
+
+
 def build_conversion_command(args: argparse.Namespace) -> str:
-    parts = ["uv run cua flow convert", f"--project {args.project}"]
-    if args.goal:
-        parts.append(f"--goal {quote_command_value(args.goal)}")
-    if args.project_root:
-        parts.append(f"--project-root {quote_command_value(str(args.project_root))}")
+    parts = [
+        "uv run cua task init-from-trace",
+        f"--scene {args.scene}",
+        f"--task {args.task}",
+        f"--goal {quote_command_value(args.goal)}",
+    ]
+    if args.projects_root:
+        parts.append(f"--projects-root {quote_command_value(str(args.projects_root))}")
     for option, value in (
         ("recording-preparation-command", args.recording_preparation_command),
         ("trace-generation-command", args.trace_generation_command),
@@ -104,16 +115,14 @@ def build_conversion_command(args: argparse.Namespace) -> str:
     return " ".join(parts)
 
 
-def project_root_from_args(args: argparse.Namespace) -> Path | None:
-    return args.project_root.resolve() if args.project_root else None
-
-
 def resolve_from_args(args: argparse.Namespace, *, executable: bool = True):
     inputs = load_runtime_inputs(args.inputs, args.input)
-    return resolve_project_flow(
-        ResolveProjectOptions(
-            project=args.project,
-            project_root=project_root_from_args(args),
+    return resolve_task_flow(
+        ResolveTaskOptions(
+            scene=args.scene,
+            task=args.task,
+            projects_root=projects_root_from_args(args),
+            task_root=args.task_root.resolve() if args.task_root else None,
             flow_path=args.flow.resolve() if args.flow else None,
             inputs=inputs,
             executable=executable,
@@ -122,29 +131,43 @@ def resolve_from_args(args: argparse.Namespace, *, executable: bool = True):
 
 
 def run_command(args: argparse.Namespace) -> None:
-    if args.domain == "project" and args.command == "list":
-        projects = list_projects(args.projects_root or Path("projects"))
+    if args.domain == "scene" and args.command == "list":
+        scenes = list_scenes(projects_root_from_args(args))
         if args.json:
-            print_json({"projects": projects})
+            print_json({"scenes": scenes})
         else:
-            for project in projects:
-                print(f"{project['project']}\t{project['title']}\t{project['description']}")
+            for scene in scenes:
+                print(f"{scene['scene']}\t{scene['title']}\t{scene['description']}")
         return
 
-    if args.domain == "flow" and args.command == "convert":
-        project_root = project_root_from_args(args) or (Path("projects") / args.project).resolve()
+    if args.domain == "task" and args.command == "list":
+        tasks = list_tasks(args.scene, projects_root_from_args(args))
+        if args.json:
+            print_json({"scene": args.scene, "tasks": tasks})
+        else:
+            for task in tasks:
+                print(f"{task['task']}\t{task['title']}\t{task['description']}")
+        return
+
+    if args.domain == "task" and args.command == "describe":
+        task = describe_task(args.scene, args.task, projects_root_from_args(args))
+        print_json(task)
+        return
+
+    if args.domain == "task" and args.command == "init-from-trace":
         output = convert_trace(
             ConvertOptions(
-                project=args.project,
-                goal=args.goal or "",
-                project_root=project_root,
+                scene=args.scene,
+                task=args.task,
+                goal=args.goal,
+                projects_root=projects_root_from_args(args),
                 conversion_command=build_conversion_command(args),
                 recording_preparation_command=args.recording_preparation_command,
                 trace_generation_command=args.trace_generation_command,
                 flow_execution_command=args.flow_execution_command,
             )
         )
-        print_json({"converted": True, "project": args.project, "flowPath": str(output)})
+        print_json({"initialized": True, "scene": args.scene, "task": args.task, "flowPath": str(output)})
         return
 
     if args.domain == "flow" and args.command in {"validate", "inspect"}:
@@ -153,7 +176,8 @@ def run_command(args: argparse.Namespace) -> None:
             print_json(
                 {
                     "valid": True,
-                    "project": args.project,
+                    "scene": args.scene,
+                    "task": args.task,
                     "inputs": resolved.inputs,
                     "sources": resolved.sources.to_json_dict(),
                     "stepCount": len(resolved.flow.steps),
@@ -164,35 +188,21 @@ def run_command(args: argparse.Namespace) -> None:
         return
 
     if args.domain == "flow" and args.command == "run":
-        from cua.task.executor import run_project
+        from cua.task.executor import run_task
 
         inputs = load_runtime_inputs(args.inputs, args.input)
-        snapshot, result = run_project(
+        snapshot, result = run_task(
             ExecutionOptions(
-                project=args.project,
-                project_root=project_root_from_args(args),
+                scene=args.scene,
+                task=args.task,
+                projects_root=projects_root_from_args(args),
+                task_root=args.task_root.resolve() if args.task_root else None,
                 flow_path=args.flow.resolve() if args.flow else None,
                 inputs=inputs,
                 dry_run=args.dry_run,
             )
         )
         print_json({"snapshot": snapshot.to_json_dict(), "executor": result.to_json_dict()})
-        return
-
-    if args.domain == "calibration":
-        options = CalibrationOptions(
-            project=args.project,
-            project_root=project_root_from_args(args),
-            proposal=args.proposal,
-        )
-        if args.command == "validate":
-            validated = validate_calibration_proposal(options)
-            print_json({"valid": True, "project": args.project, "proposal": validated.proposal.to_json_dict()})
-            return
-        if not args.confirmed:
-            raise ValueError("应用校准前必须取得用户明确确认，并传入 --confirmed")
-        history = apply_calibration_proposal(options)
-        print_json({"applied": True, "project": args.project, "history": history.to_json_dict()})
         return
     raise ValueError(f"不支持的命令：{args.domain} {args.command}")
 

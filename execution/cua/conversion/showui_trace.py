@@ -28,7 +28,8 @@ from cua.models.flow import (
     TraceWaitOperation,
     WaitRoute,
 )
-from cua.task.resolver import create_empty_overrides, create_initial_project_config
+from cua.models.task import SCENE_SCHEMA_VERSION, SceneManifest
+from cua.task.resolver import create_initial_task_manifest
 
 MIN_RECORDED_WAIT_MS = 200
 MAX_RECORDED_WAIT_MS = 30_000
@@ -86,12 +87,6 @@ def read_processed_log(path: Path) -> list[ProcessedLogStep]:
         return [ProcessedLogStep.model_validate(item) for item in value]
     except Exception as error:
         raise ValueError(f"读取并验证 processed log 失败：{path}\n{error}") from error
-
-
-def write_json(path: Path, value: BaseModel) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(value.to_json_dict(), ensure_ascii=False, indent=2) + "\n"  # type: ignore[attr-defined]
-    path.write_text(content, encoding="utf-8")
 
 
 def write_json_if_missing(path: Path, value: BaseModel) -> bool:
@@ -233,32 +228,35 @@ def build_step(
     )
 
 
-def default_recording_preparation_command(project: str) -> str:
+def default_recording_preparation_command(scene: str, task: str) -> str:
     return (
         "将 record 生成的 trace、processed log 和截图复制到 "
-        f"execution\\projects\\{project}\\source"
+        f"execution\\projects\\{scene}\\{task}\\source"
     )
 
 
-def default_trace_generation_command(project: str) -> str:
-    return f"未记录；请通过 --trace-generation-command 提供 {project} 的 trace 生成命令"
+def default_trace_generation_command(scene: str, task: str) -> str:
+    return f"未记录；请通过 --trace-generation-command 提供 {scene}/{task} 的 trace 生成命令"
 
 
 def convert_trace(options: ConvertOptions) -> Path:
-    project_root = options.project_root.resolve()
-    source_root = project_root / "source"
+    task_root = (options.projects_root / options.scene / options.task).resolve()
+    source_root = task_root / "source"
     trace_path = source_root / "showui-trace.json"
     processed_log_path = source_root / "processed-log.json"
     processed_log_with_screenshots_path = source_root / "processed-log-sc.json"
     screenshots_dir = source_root / "screenshots"
-    output_path = project_root / "ir" / "midscene-flow.json"
+    output_path = task_root / "midscene-flow.json"
+    if output_path.exists():
+        raise ValueError(f"任务 flow 已存在，拒绝覆盖：{output_path}")
 
     trace = read_model(trace_path, ShowuiTrace)
     assert isinstance(trace, ShowuiTrace)
     processed_steps = read_processed_log(processed_log_with_screenshots_path)
     flow = MidsceneFlow(
         schema_version=MIDSCENE_FLOW_SCHEMA_VERSION,
-        project=options.project,
+        scene=options.scene,
+        task=options.task,
         goal=options.goal,
         source=MidsceneFlowSource(
             trace_path="source/showui-trace.json",
@@ -268,10 +266,12 @@ def convert_trace(options: ConvertOptions) -> Path:
         ),
         commands=MidsceneFlowCommands(
             recording_preparation=options.recording_preparation_command
-            or default_recording_preparation_command(options.project),
-            trace_generation=options.trace_generation_command or default_trace_generation_command(options.project),
+            or default_recording_preparation_command(options.scene, options.task),
+            trace_generation=options.trace_generation_command
+            or default_trace_generation_command(options.scene, options.task),
             trace_to_flow_conversion=options.conversion_command,
-            flow_execution=options.flow_execution_command or f"uv run cua flow run --project {options.project}",
+            flow_execution=options.flow_execution_command
+            or f"uv run cua flow run --scene {options.scene} --task {options.task}",
         ),
         steps=[
             build_step(
@@ -282,17 +282,16 @@ def convert_trace(options: ConvertOptions) -> Path:
             for index, step in enumerate(trace.trajectory)
         ],
     )
-    write_json(output_path, flow)
+    if not write_json_if_missing(output_path, flow):
+        raise ValueError(f"任务 flow 已存在，拒绝覆盖：{output_path}")
 
-    project_config_path = project_root / "config" / "project.json"
-    overrides_path = project_root / "config" / "flow-overrides.json"
-    write_json_if_missing(project_config_path, create_initial_project_config(flow))
-    write_json_if_missing(overrides_path, create_empty_overrides(flow.project))
-    for directory in (
-        project_root / "calibration" / "proposals",
-        project_root / "calibration" / "history",
-        project_root / "generated",
-        project_root / "reports",
-    ):
-        directory.mkdir(parents=True, exist_ok=True)
+    scene_manifest = SceneManifest(
+        schema_version=SCENE_SCHEMA_VERSION,
+        scene=options.scene,
+        title=options.scene,
+        description=f"{options.scene} 场景任务集合",
+    )
+    write_json_if_missing(task_root.parent / "scene.json", scene_manifest)
+    write_json_if_missing(task_root / "task.json", create_initial_task_manifest(flow))
+    (task_root / "reports").mkdir(parents=True, exist_ok=True)
     return output_path

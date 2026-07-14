@@ -438,10 +438,7 @@
         "waitReason": {
           "anyOf": [
             {
-              "enum": [
-                "recorded-step-gap",
-                "manual-calibration"
-              ],
+              "const": "recorded-step-gap",
               "type": "string"
             },
             {
@@ -652,8 +649,8 @@
       "title": "Goal",
       "type": "string"
     },
-    "project": {
-      "title": "Project",
+    "scene": {
+      "title": "Scene",
       "type": "string"
     },
     "schemaVersion": {
@@ -670,11 +667,16 @@
       },
       "title": "Steps",
       "type": "array"
+    },
+    "task": {
+      "title": "Task",
+      "type": "string"
     }
   },
   "required": [
     "schemaVersion",
-    "project",
+    "scene",
+    "task",
     "goal",
     "source",
     "steps"

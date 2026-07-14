@@ -6,13 +6,12 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .flow import MidsceneFlow
-from .task import CalibrationProposal, FlowOverrides, ResolvedFlowSnapshot, TaskProjectConfig
+from .task import ResolvedFlowSnapshot, SceneManifest, TaskManifest
 
 SCHEMA_MODELS: dict[str, type[BaseModel]] = {
     "midscene-flow.schema.json": MidsceneFlow,
-    "project.schema.json": TaskProjectConfig,
-    "flow-overrides.schema.json": FlowOverrides,
-    "calibration-proposal.schema.json": CalibrationProposal,
+    "scene.schema.json": SceneManifest,
+    "task.schema.json": TaskManifest,
     "resolved-flow.schema.json": ResolvedFlowSnapshot,
 }
 
@@ -47,6 +46,10 @@ def render_schema(schema: dict[str, object]) -> str:
 
 def write_schemas(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
+    expected = set(SCHEMA_MODELS)
+    for path in output_dir.glob("*.schema.json"):
+        if path.name not in expected:
+            path.unlink()
     for filename, schema in schema_documents().items():
         (output_dir / filename).write_text(render_schema(schema), encoding="utf-8")
 

@@ -1,21 +1,11 @@
 """仅在 Python 进程内部使用的领域对象。"""
 
-from .types import (
-    CalibrationOptions,
-    ConvertOptions,
-    ExecutionOptions,
-    ResolveProjectOptions,
-    ResolvedFlowResult,
-    TaskProjectPaths,
-    ValidatedCalibration,
-)
+from .types import ConvertOptions, ExecutionOptions, ResolveTaskOptions, ResolvedFlowResult, TaskPaths
 
 __all__ = [
-    "CalibrationOptions",
     "ConvertOptions",
     "ExecutionOptions",
-    "ResolveProjectOptions",
+    "ResolveTaskOptions",
     "ResolvedFlowResult",
-    "TaskProjectPaths",
-    "ValidatedCalibration",
+    "TaskPaths",
 ]

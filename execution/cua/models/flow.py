@@ -32,7 +32,7 @@ class MidsceneFlowSourceTrace(ContractModel):
 class MidsceneFlowTiming(ContractModel):
     recorded_gap_ms: int | None = Field(default=None, ge=0)
     wait_before_ms: int | None = Field(default=None, ge=0)
-    wait_reason: Literal["recorded-step-gap", "manual-calibration"] | None = None
+    wait_reason: Literal["recorded-step-gap"] | None = None
 
 
 class TraceClickOperation(ContractModel):
@@ -131,7 +131,8 @@ class MidsceneFlowStep(ContractModel):
 
 class MidsceneFlow(ContractModel):
     schema_version: Literal["0.1"]
-    project: str
+    scene: str
+    task: str
     goal: str
     source: MidsceneFlowSource
     commands: MidsceneFlowCommands | None = None

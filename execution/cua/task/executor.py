@@ -4,10 +4,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from cua.domain.types import ExecutionOptions, ResolveProjectOptions
+from cua.domain.types import ExecutionOptions, ResolveTaskOptions
 from cua.models.task import ExecutorResult, ResolvedFlowSnapshot
 from cua.task.io import read_model
-from cua.task.resolver import resolve_project_flow, task_project_paths, write_resolved_flow_snapshot
+from cua.task.resolver import resolve_task_flow, task_paths, write_resolved_flow_snapshot
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
 
@@ -58,17 +58,25 @@ def execute_resolved_flow(
     return result
 
 
-def run_project(options: ExecutionOptions) -> tuple[ResolvedFlowSnapshot, ExecutorResult]:
-    resolved = resolve_project_flow(
-        ResolveProjectOptions(
-            project=options.project,
-            project_root=options.project_root,
+def run_task(options: ExecutionOptions) -> tuple[ResolvedFlowSnapshot, ExecutorResult]:
+    resolved = resolve_task_flow(
+        ResolveTaskOptions(
+            scene=options.scene,
+            task=options.task,
+            projects_root=options.projects_root,
+            task_root=options.task_root,
             flow_path=options.flow_path,
             inputs=options.inputs,
             executable=True,
         )
     )
-    paths = task_project_paths(options.project, options.project_root, options.flow_path)
+    paths = task_paths(
+        options.scene,
+        options.task,
+        options.projects_root,
+        options.task_root,
+        options.flow_path,
+    )
     snapshot_path = write_resolved_flow_snapshot(resolved, paths.reports_dir)
     result_path = snapshot_path.parent / "execution-result.json"
     result = execute_resolved_flow(
@@ -77,6 +85,9 @@ def run_project(options: ExecutionOptions) -> tuple[ResolvedFlowSnapshot, Execut
         dry_run=options.dry_run,
         command_prefix=options.command_prefix,
     )
-    if result.project != options.project:
-        raise RuntimeError(f"Midscene executor 结果项目 {result.project} 与请求项目 {options.project} 不一致")
+    if result.scene != options.scene or result.task != options.task:
+        raise RuntimeError(
+            f"Midscene executor 结果任务 {result.scene}/{result.task} "
+            f"与请求任务 {options.scene}/{options.task} 不一致"
+        )
     return read_model(snapshot_path, ResolvedFlowSnapshot, "resolved flow 快照"), result

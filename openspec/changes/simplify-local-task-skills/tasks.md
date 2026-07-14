@@ -1,15 +1,15 @@
 ## 1. 契约与模型
 
-- [ ] 1.1 将持久化模型调整为 scene、task、canonical flow 和 resolved flow，删除 calibration 与 overrides 模型
-- [ ] 1.2 让任务输入只保存字段绑定，并使 canonical flow 成为未覆盖输入的唯一默认值来源
-- [ ] 1.3 更新并验证四类 JSON Schema，删除过时 Schema
+- [x] 1.1 将持久化模型调整为 scene、task、canonical flow 和 resolved flow，删除 calibration 与 overrides 模型
+- [x] 1.2 让任务输入只保存字段绑定，并使 canonical flow 成为未覆盖输入的唯一默认值来源
+- [x] 1.3 更新并验证四类 JSON Schema，删除过时 Schema
 
 ## 2. Python 任务核心
 
-- [ ] 2.1 将路径与发现逻辑调整为 `projects/<scene>/<task>`，实现 scene list、task list 和 task describe
-- [ ] 2.2 简化 resolver，仅验证 canonical flow 并应用本次稀疏输入
-- [ ] 2.3 调整 trace converter 为首次初始化语义，已有 flow 时直接失败
-- [ ] 2.4 更新 Python CLI，新增 scene/task 命令并删除 project/calibration 命令
+- [x] 2.1 将路径与发现逻辑调整为 `projects/<scene>/<task>`，实现 scene list、task list 和 task describe
+- [x] 2.2 简化 resolver，仅验证 canonical flow 并应用本次稀疏输入
+- [x] 2.3 调整 trace converter 为首次初始化语义，已有 flow 时直接失败
+- [x] 2.4 更新 Python CLI，新增 scene/task 命令并删除 project/calibration 命令
 
 ## 3. Midscene 执行边界
 
