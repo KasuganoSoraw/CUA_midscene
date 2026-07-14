@@ -4,6 +4,8 @@
 
 这里不使用 browser-use、Playwright、Puppeteer 或 CDP。面向堡垒机、远程桌面和企业内网页系统的操作统一使用 Midscene computer use。
 
+`execution/` 同时是可独立打包发布的 `cua-midscene` Skill 根目录：`SKILL.md` 提供 Agent 入口，`agents/` 提供展示元数据，`references/` 提供按需加载的契约，其余目录构成实际运行时。安装包不应包含环境密钥、本地依赖、缓存或运行报告。
+
 ## 模块职责
 
 ```text
@@ -23,6 +25,7 @@ TypeScript executors
 ```
 
 - `cua/domain/`：Python 进程内部 dataclass 和 VO。
+- `SKILL.md`、`agents/`、`references/`：执行器 Skill 的入口、元数据和契约。
 - `cua/models/`：落盘或跨进程的 Pydantic 契约。
 - `cua/conversion/`：从 record trace 首次初始化任务 flow。
 - `cua/task/`：路径、发现、参数解析、快照和 Python/Node 执行协议。

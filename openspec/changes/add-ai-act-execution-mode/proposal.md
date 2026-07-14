@@ -27,4 +27,4 @@
 - 影响 `execution/executors` 下的 Midscene 适配器与共享组件。
 - 影响 `execution/cua` 的 CLI、任务执行边界模型和 Schema 生成。
 - 新增执行报告契约，但不改变 canonical `midscene-flow.json` 和现有 `flow run` 的行为。
-- 影响根目录、execution 文档及仓库内 `cua-midscene` Skill；本机 Skill 副本需要重新安装。
+- `execution/` 作为完整 `cua-midscene` Skill 发布单元，包含入口、元数据、契约和运行代码；本机 Skill 副本需要重新安装。

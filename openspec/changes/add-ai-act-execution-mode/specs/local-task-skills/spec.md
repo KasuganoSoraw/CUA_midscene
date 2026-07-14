@@ -19,3 +19,16 @@
 - **WHEN** 任一执行模式失败
 - **THEN** Skill SHALL 报告原始错误并等待用户决定
 - **AND** Skill SHALL NOT 自动切换模式、自动修改 flow 或自动重试
+
+### Requirement: execution 是完整执行器 Skill 发布单元
+系统 SHALL 将执行器 Skill 入口、Agent 元数据、参考契约、运行代码和本地任务资产组织在 `execution/` 目录内，使其可作为单一 Skill 包发布。
+
+#### Scenario: 构建本机 Skill 副本
+- **WHEN** 开发者运行 Skill 安装脚本
+- **THEN** 安装包 SHALL 包含受版本管理的 `execution/SKILL.md`、运行代码、Schema、项目资产、Agent 元数据和参考契约
+- **AND** 安装包 SHALL NOT 包含环境密钥、本地依赖、缓存或运行报告
+
+#### Scenario: Agent 从安装包调用执行器
+- **WHEN** Agent 加载已安装的 `cua-midscene` Skill
+- **THEN** Agent SHALL 将包含 `SKILL.md`、`pyproject.toml` 和 `package.json` 的目录作为执行根目录
+- **AND** Agent SHALL NOT 依赖外层 CUA 仓库才能发现 CLI 或执行器

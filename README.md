@@ -10,11 +10,13 @@
 CUA/
 ├── record/                 # 教学录制处理：视频、日志、截图 → trace
 ├── execution/              # Python 任务核心与 TypeScript Midscene 适配器
+│   ├── SKILL.md            # 执行器 Skill 入口；execution 本身是发布单元
 │   ├── cua/                # 转换、契约、任务解析和 CLI
 │   ├── executors/          # Midscene 薄适配器与 customActions
 │   ├── schemas/            # Pydantic 生成的 JSON Schema
-│   └── projects/           # 本地场景与任务 Skill
-├── skills/cua-midscene/    # 执行器级 Agent Skill 源文件
+│   ├── projects/           # 本地场景与任务 Skill
+│   ├── agents/             # Skill 展示元数据
+│   └── references/         # Agent 按需读取的执行契约
 └── openspec/               # 规格与变更记录
 ```
 
@@ -125,7 +127,7 @@ uv run python -m cua.models.schema --check
 npm test
 ```
 
-Skill 源文件位于 `skills/cua-midscene/`，安装到本机的副本不纳入 Git：
+`execution/` 本身是 `cua-midscene` Skill 的完整发布单元。安装脚本只复制该目录中受 Git 管理的文件，因此不会带入 `.env.local`、`.venv`、`node_modules`、缓存或运行报告。本机安装副本不纳入 Git：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-cua-midscene-skill.ps1

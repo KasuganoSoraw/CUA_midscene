@@ -58,6 +58,10 @@ route 映射是确定性的：`tap/act` 使用 prompt；`input` 渲染当前 val
 
 新增 `AiActExecutorResult` Pydantic 契约和 Schema，记录模式、场景/任务、prompt 路径、源文件、dry-run、aiAct 返回值、状态、错误和完成时间。TypeScript 即使失败也尽力写结果；Python 对非零退出、无效结果、模式或路径不一致立即失败并保留原始错误。
 
+### 7. execution 目录作为 Skill 发布单元
+
+将 `SKILL.md`、`agents/` 和 `references/` 放入 `execution/` 根目录，使 Skill 的说明、契约、CLI、执行器和项目资产处于同一交付边界。安装脚本使用 Git 跟踪文件构建副本，不复制 `.env.local`、依赖目录、缓存或报告，避免发布元数据与实现分离后发生版本漂移。
+
 ## Risks / Trade-offs
 
 - [规划模型不遵循 `aiActContext`] → 保留 Midscene 报告和最终 prompt，不做静默纠正；后续可基于真实报告评估动作空间裁剪。
