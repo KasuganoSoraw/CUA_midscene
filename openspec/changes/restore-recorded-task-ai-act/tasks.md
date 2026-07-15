@@ -12,5 +12,5 @@
 ## 3. Skill、文档与验证
 
 - [x] 3.1 更新根 README、execution README、执行器 Skill 与任务契约中的三种显式模式
-- [ ] 3.2 运行 Python、TypeScript、Schema、Skill 与 OpenSpec 验证并重新安装本机 Skill
-- [ ] 3.3 全局检查不存在旧 flow、专用 TS aiAct runner、fallback 或自动切换实现，完成中文小步提交
+- [x] 3.2 运行 Python、TypeScript、Schema、Skill 与 OpenSpec 验证并重新安装本机 Skill
+- [x] 3.3 全局检查不存在旧 flow、专用 TS aiAct runner、fallback 或自动切换实现，完成中文小步提交
