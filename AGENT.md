@@ -15,3 +15,4 @@
 5. `execution/cua` 是 Python 业务核心，负责转换、场景与任务发现、参数解析和 CLI；`execution/executors` 只保存 TypeScript Midscene 适配器和 customActions。持久化契约使用 Pydantic 并生成 `execution/schemas`，仅在 Python 内部使用的 VO 不生成 JSON Schema。对应测试分别放在 `execution/tests/python` 和 `execution/tests/executors`。
 6. 任务根目录的 `task.yaml` 是唯一长期执行事实源，不维护自定义 flow、route、overrides、proposal 或 history。`task.json` 保存输入定义和录制默认值；本次参数只解析到运行快照，不回写任务资产。
 7. Python 与 TypeScript 的唯一执行边界是 `reports/<run-id>/resolved-task.yaml`。TypeScript executor 只注册 customActions、创建 ComputerAgent 并调用 `agent.runYaml()`，不得解释业务步骤、读取任务清单或实现兼容与兜底逻辑。
+8. 录制任务中每个 trace step 对应一个 Midscene task，名称固定为 `step-NNN | <operation-type>`；输入 ID 固定为对应的 `step-NNN-input`。长期修改应使用该名称定位步骤，不得重编号、复用编号、打乱顺序或启用 `continueOnError`。整体业务目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`，不得用整体目标替代步骤名称。

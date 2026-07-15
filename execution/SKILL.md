@@ -37,17 +37,19 @@ description: 使用本地场景/任务 Skill 与 Midscene computer use 创建、
 3. 运行 `uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"`。
 4. 运行 `uv run cua task validate --scene <scene> --task <task>`。
 
+初始化后，每个 trace step 对应一个名为 `step-NNN | <operation-type>` 的 Midscene task。整体目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`；输入 ID 由其步骤派生，例如 `step-002-input`。
+
 如果 `task.yaml` 或 `task.json` 已存在，初始化直接失败。除非用户明确要求删除并重新初始化，否则不得移除现有资产绕过该错误。
 
 ## 长期修改
 
-1. 读取任务 `task.yaml`、相关 source trace 和截图，定位错误动作。
+1. 读取任务 `task.yaml`、相关 source trace 和截图，使用 `step-NNN | <operation-type>` 定位错误动作。
 2. 向用户展示 YAML 原值、新值和中文原因。
 3. 停止并等待用户明确确认。
 4. 确认后直接编辑 `task.yaml`，再运行 `task validate`。
 5. 除非用户同时要求执行，否则修改后不操作电脑。
 
-不创建自定义 flow、route、overrides、proposal 或 history。缺失动作、顺序错误或新增动作由用户确认后直接修改 YAML，或回到 trace 重新初始化；不得静默跳过或在失败后自动改写。
+不创建自定义 flow、route、overrides、proposal 或 history。不得重编号、复用或打乱已有 step ID，也不得启用 `continueOnError`。缺失动作、顺序错误或新增动作由用户确认后直接修改 YAML，或回到 trace 重新初始化；不得静默跳过或在失败后自动改写。
 
 ## 单次调用
 

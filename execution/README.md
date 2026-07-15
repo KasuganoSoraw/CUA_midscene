@@ -83,7 +83,7 @@ uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"
 ```powershell
 uv run cua task validate --scene browser-demo --task air-tickets-demo
 uv run cua task inspect --scene browser-demo --task air-tickets-demo
-uv run cua task inspect --scene browser-demo --task air-tickets-demo --input input-001=GOOGLE
+uv run cua task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
 uv run cua task run --scene browser-demo --task air-tickets-demo --dry-run
 uv run cua task run --scene browser-demo --task air-tickets-demo
 ```
@@ -102,12 +102,14 @@ uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 ## 执行语义
 
 - converter 只读取 trace 的 `caption.operation` 和 processed log 时间，不扫描其他自然语言字段。
+- 每个 trace step 生成一个 Midscene task，名称固定为 `step-NNN | <operation-type>`；整体目标写入 `agent.groupDescription`。
 - click、input、keyboard、wait 分别生成 `aiTap`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。
 - 录制间隔生成前置 `sleep`：低于 200ms 忽略，高于 30 秒截断。
-- 每个 trace input 依次生成 `input-001`、`input-002` 等 ID，录制值保存在 `task.json`。
+- 每个 trace input 使用步骤派生 ID，例如 step 2 生成 `step-002-input`；录制值保存在 `task.json`。
 - `KeyboardTypeText` 通过 Midscene locate 定位输入框，再用底层键盘 primitive 逐键输入；每个字符不会经过模型规划，也不使用剪贴板。
 - `KeyboardTypeText` 只承诺 ASCII，遇到不支持字符直接失败。
 - 未知输入、重复输入、非法或未声明占位符、无效 YAML 和执行错误均直接暴露。
+- 录制任务的 step ID 必须唯一且严格递增；不得启用 `continueOnError` 跳过失败步骤。
 - 系统不兼容读取旧 flow，不自动切换模式，不修改任务后重试，也不调用替代输入动作。
 
 ## 验证

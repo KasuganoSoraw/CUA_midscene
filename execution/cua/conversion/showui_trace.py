@@ -106,7 +106,7 @@ description: 调用和维护 {scene}/{task} 本地 CUA 任务。
 
 使用 `uv run cua task describe --scene {scene} --task {task} --json` 读取输入定义。
 
-单次参数通过 `task inspect` 或 `task run` 的 `--input key=value` 传入，不修改 `task.yaml`。长期修改必须先展示 YAML 原值、新值和原因并等待用户确认，确认后直接编辑 `task.yaml`，再执行 `task validate`。
+`task.yaml` 中每个 `step-NNN | <operation-type>` task 对应原 trace 的同编号步骤。单次参数通过 `task inspect` 或 `task run` 的 `--input key=value` 传入，不修改 `task.yaml`。长期修改必须先展示 YAML 原值、新值和原因并等待用户确认，确认后直接编辑 `task.yaml`，再执行 `task validate`；不得重编号、复用或打乱步骤，也不得启用 `continueOnError`。
 """
 
 

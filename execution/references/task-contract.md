@@ -53,7 +53,7 @@ uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
     "conversionCommand": "uv run cua task init-from-trace ..."
   },
   "inputs": {
-    "input-001": {
+    "step-002-input": {
       "type": "string",
       "label": "Chrome 地址栏/搜索栏",
       "description": "在地址栏输入搜索词",
@@ -67,18 +67,30 @@ uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 
 ```yaml
 computer: {}
+agent:
+  groupName: air-tickets-demo
+  groupDescription: 完成单程航班搜索
+  generateReport: true
 tasks:
-  - name: 搜索示例
+  - name: step-001 | click
     flow:
+      - aiTap: 点击 Chrome 浏览器顶部的地址栏/搜索栏区域以聚焦输入框
+  - name: step-002 | input
+    flow:
+      - sleep: 4101
       - KeyboardTypeText:
           locate: Chrome 地址栏/搜索栏
-          value: '{{input-001}}'
+          value: '{{step-002-input}}'
           mode: replace
+  - name: step-003 | keyboard
+    flow:
       - KeyboardPress:
           keyName: Enter
 ```
 
 调用时只能覆盖已声明 ID。未提供输入使用 `task.json` 的 `default`。未知、重复、非字符串、未声明、未使用或格式错误的占位符都会在启动 Midscene 前失败。
+
+每个 trace step 对应一个 Midscene task，名称固定为 `step-NNN | <operation-type>`。步骤编号必须为正整数、唯一并严格递增；前置录制等待和本步动作位于同一 task 的 flow。整体业务目标同时保存在 `task.json.goal` 和 `agent.groupDescription`，不作为某一步的名称。
 
 占位符可以嵌入任意 YAML 字符串。同一输入还会影响后续动作时，由人或 Agent 经确认后在相关 prompt 中显式复用该占位符；resolver 不根据业务文字猜测参数关联。
 
@@ -87,7 +99,7 @@ tasks:
 Agent 在对话中展示 YAML 片段的原值、新值和原因，无需创建持久化 proposal：
 
 ```text
-位置: tasks[0].flow[2].KeyboardTypeText.locate
+位置: task "step-002 | input" 的 flow[1].KeyboardTypeText.locate
 原值: Chrome 地址栏/搜索栏
 新值: Chrome 窗口顶部工具栏中、标签栏下方横向延伸的地址栏输入框
 原因: 增加区域、锚点和视觉特征，降低定位歧义

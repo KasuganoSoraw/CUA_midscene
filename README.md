@@ -50,7 +50,7 @@ uv run cua scene list --json
 uv run cua task list --scene browser-demo --json
 uv run cua task describe --scene browser-demo --task air-tickets-demo --json
 uv run cua task validate --scene browser-demo --task air-tickets-demo
-uv run cua task inspect --scene browser-demo --task air-tickets-demo --input input-001=GOOGLE
+uv run cua task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
 uv run cua task run --scene browser-demo --task air-tickets-demo --dry-run
 uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 ```
@@ -86,9 +86,9 @@ execution/projects/<scene>/
         └── execution-result.json
 ```
 
-trace 每个 step 必须包含结构化 `operation`。converter 不从 observation、Action、Expectation 或关键词猜测动作。input 必须显式提供 `operation.locatePrompt` 和 `operation.value`，并生成 `KeyboardTypeText` action；该动作通过底层键盘事件输入 ASCII，不使用剪贴板。
+trace 每个 step 必须包含结构化 `operation`。converter 不从 observation、Action、Expectation 或关键词猜测动作。每个 trace step 生成一个名为 `step-NNN | <operation-type>` 的 Midscene task，整体目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`。input 必须显式提供 `operation.locatePrompt` 和 `operation.value`，并生成 `KeyboardTypeText` action；该动作通过底层键盘事件输入 ASCII，不使用剪贴板。
 
-输入参数采用显式 `{{input-xxx}}` 占位符。同一参数需要影响后续动作时，应经确认后在相关 YAML prompt 中复用同一个占位符；系统不会根据业务文本自动猜测关联。
+输入参数 ID 由对应步骤派生，例如 `step-002-input`，YAML 使用显式 `{{step-002-input}}` 占位符。同一参数需要影响后续动作时，应经确认后在相关 YAML prompt 中复用同一个占位符；系统不会根据业务文本自动猜测关联。
 
 ## 模型与验证
 
