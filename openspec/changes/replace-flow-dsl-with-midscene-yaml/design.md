@@ -41,25 +41,33 @@
 
 converter 只读取 `caption.operation` 和 processed log 时间，不扫描 observation、think、action、expectation 或原始动作关键词。任一必填字段缺失、operation 未知或 trace 与 processed log 无法对应时，整个转换失败且不写出半成品。
 
-### 3. 输入使用严格命名占位符
+### 3. 录制步骤直接对应 Midscene task
 
-每个 trace input operation 按顺序生成 `input-001`、`input-002` 等稳定 ID。`task.json` 保存 ID、中文标签、可选说明和录制默认值；`task.yaml` 中 value 使用完整标量 `{{input-001}}`。人工或 Agent 可以将同一占位符显式放入后续 prompt，使一次参数覆盖影响所有相关语义。
+每个 trace step 生成一个 Midscene `tasks[]` 项，任务名固定为 `step-NNN | <operation-type>`。该 task 的 `flow` 包含本步骤的前置录制等待（如有）和本步骤动作。这样不引入自定义 step DSL，也能让人、Agent 和 Midscene 报告使用同一个稳定步骤标识。
+
+trace 中的 step ID 必须为正整数、唯一且按轨迹顺序严格递增；违反约束时转换失败。录制任务解析时也校验 task 名称、顺序和 operation type，不允许 `continueOnError: true`，避免修改 YAML 后步骤引用漂移或失败被跳过。
+
+整体业务目标继续保留在 `task.json.goal`，同时写入 YAML 的 `agent.groupDescription`；场景内任务名写入 `agent.groupName`。它们用于报告和任务整体语义，不再占用某个步骤 task 的名称。
+
+### 4. 输入使用严格命名占位符
+
+每个 trace input operation 使用其步骤 ID 生成输入 ID，例如 `step-002-input`。`task.json` 保存 ID、中文标签、可选说明和录制默认值；`task.yaml` 中 value 使用完整标量 `{{step-002-input}}`。人工或 Agent 可以将同一占位符显式放入后续 prompt，使一次参数覆盖影响所有相关语义。
 
 Python 使用 YAML AST 递归处理字符串标量，支持完整或嵌入式占位符；未知输入、重复输入、未解析占位符和非字符串值立即失败。解析顺序为录制默认值后叠加本次稀疏输入，不回写 canonical 文件。
 
 没有选择“输入 ID 绑定某个 JSON 路径”，因为这会重新引入自定义 flow 模型；也不自动搜索并替换 trace 字面值，因为无法可靠判断后续动作的语义关联。
 
-### 4. 运行边界是 resolved task YAML
+### 5. 运行边界是 resolved task YAML
 
 Python 将参数解析后的 YAML 写入 `reports/<run-id>/resolved-task.yaml`，随后调用单一 TS runner。runner 接受 `--yaml`、`--result` 和 `--dry-run`：dry-run 解析并检查 YAML，但不创建设备；实际运行创建启用 `KeyboardTypeText` 的 ComputerAgent 并调用一次 `agent.runYaml(content)`，最终始终销毁 Agent。
 
 TS 不读取 scene、task、source、task.json 或 CLI 输入，也不解释动作顺序。结果仅记录状态、源 YAML、dry-run、任务数、完成时间、Midscene 返回值或原始错误。
 
-### 5. 自然语言 aiAct 也通过 YAML runner
+### 6. 自然语言 aiAct 也通过 YAML runner
 
 `cua act run --prompt` 在独立报告目录生成只包含一个 `ai` action 的临时 YAML，并复用同一 runner。录制任务统一执行其 canonical YAML，不再把 YAML 动作重新翻译为一个大 prompt；如果任务作者希望某部分使用 aiAct，可以直接在 `task.yaml` 中写 `ai` action。
 
-### 6. 删除而非废弃旧实现
+### 7. 删除而非废弃旧实现
 
 删除 flow Pydantic 模型、resolved snapshot、route runner、aiAct prompt builder、Ajv flow schema、旧命令与对应测试。CLI 收敛为 `task init-from-trace`、`task validate`、`task inspect`、`task run` 和无录制 `act run --prompt`。不保留别名或兼容参数。
 

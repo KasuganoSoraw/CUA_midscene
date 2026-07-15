@@ -24,3 +24,10 @@
 - [x] 4.3 更新根 README、execution README、AGENT.md、Skill 与任务契约，删除过时描述
 - [x] 4.4 重新安装并验证本机 `cua-midscene` Skill，运行 Schema 漂移与 OpenSpec 严格校验
 - [x] 4.5 全局检索并清除旧 flow、route、resolved-flow、fallback 和任务型 aiAct 实现，按阶段完成中文小步提交
+
+## 5. 保留录制步骤身份
+
+- [ ] 5.1 更新 converter 与录制任务校验，使每个 trace step 生成一个带稳定名称的 Midscene task
+- [ ] 5.2 将输入 ID 改为由 trace step ID 派生，并重新生成 air-tickets-demo
+- [ ] 5.3 更新 Python 测试、文档与 Skill，覆盖步骤顺序、唯一性、输入解析和整体目标
+- [ ] 5.4 运行 Python、TypeScript、Skill 与 OpenSpec 验证，完成中文小步提交
