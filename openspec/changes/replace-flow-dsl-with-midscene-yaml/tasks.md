@@ -23,4 +23,4 @@
 - [x] 4.2 重写 TypeScript YAML runner 与 KeyboardTypeText 测试并运行类型检查
 - [x] 4.3 更新根 README、execution README、AGENT.md、Skill 与任务契约，删除过时描述
 - [x] 4.4 重新安装并验证本机 `cua-midscene` Skill，运行 Schema 漂移与 OpenSpec 严格校验
-- [ ] 4.5 全局检索并清除旧 flow、route、resolved-flow、fallback 和任务型 aiAct 实现，按阶段完成中文小步提交
+- [x] 4.5 全局检索并清除旧 flow、route、resolved-flow、fallback 和任务型 aiAct 实现，按阶段完成中文小步提交
