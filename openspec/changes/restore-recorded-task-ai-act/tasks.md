@@ -1,7 +1,7 @@
 ## 1. 整体 prompt 投影
 
-- [ ] 1.1 新增 resolved task YAML 到有序中文 aiAct prompt 的确定性渲染器
-- [ ] 1.2 覆盖受支持动作、参数值、步骤顺序、忽略 sleep 和未知动作失败测试
+- [x] 1.1 新增 resolved task YAML 到有序中文 aiAct prompt 的确定性渲染器
+- [x] 1.2 覆盖受支持动作、参数值、步骤顺序、忽略 sleep 和未知动作失败测试
 
 ## 2. CLI 与执行编排
 
