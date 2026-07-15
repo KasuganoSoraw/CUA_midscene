@@ -133,7 +133,6 @@ def recorded_wait_ms(current: ProcessedLogStep, previous: ProcessedLogStep | Non
 def action_from_operation(
     operation: ShowuiTraceOperation,
     step_index: int,
-    input_index: int,
 ) -> tuple[dict[str, Any], tuple[str, TaskInputDefinition] | None]:
     if operation.type == "click":
         prompt = required_operation_text(operation.prompt, "prompt", step_index)
@@ -142,7 +141,7 @@ def action_from_operation(
         prompt = required_operation_text(operation.prompt, "prompt", step_index)
         locate = required_operation_text(operation.locatePrompt, "locatePrompt", step_index)
         value = required_operation_text(operation.value, "value", step_index)
-        input_id = f"input-{input_index:03d}"
+        input_id = f"step-{step_index:03d}-input"
         definition = TaskInputDefinition(
             type="string",
             label=locate,
@@ -176,35 +175,44 @@ def build_task_assets(
             f"trace step 数量 {len(trace.trajectory)} 与 processed log 数量 {len(processed_steps)} 不一致"
         )
 
-    flow: list[dict[str, Any]] = []
+    tasks: list[dict[str, Any]] = []
     inputs: dict[str, TaskInputDefinition] = {}
-    input_index = 0
     previous: ProcessedLogStep | None = None
+    previous_step_index = 0
     for trace_step, processed_step in zip(trace.trajectory, processed_steps, strict=True):
+        step_index = trace_step.step_idx
+        if step_index <= previous_step_index:
+            raise ValueError("trace step_idx 必须为正整数、唯一且按轨迹顺序严格递增")
+
+        flow: list[dict[str, Any]] = []
         wait_ms = recorded_wait_ms(processed_step, previous)
         if wait_ms:
             flow.append({"sleep": wait_ms})
-        if trace_step.caption.operation.type == "input":
-            input_index += 1
         action, input_definition = action_from_operation(
             trace_step.caption.operation,
-            trace_step.step_idx,
-            input_index,
+            step_index,
         )
         flow.append(action)
+        tasks.append(
+            {
+                "name": f"step-{step_index:03d} | {trace_step.caption.operation.type}",
+                "flow": flow,
+            }
+        )
         if input_definition:
             input_id, definition = input_definition
             inputs[input_id] = definition
         previous = processed_step
+        previous_step_index = step_index
 
     document = {
         "computer": {},
-        "tasks": [
-            {
-                "name": options.goal,
-                "flow": flow,
-            }
-        ],
+        "agent": {
+            "groupName": options.task,
+            "groupDescription": options.goal,
+            "generateReport": True,
+        },
+        "tasks": tasks,
     }
     manifest = TaskManifest(
         schema_version=TASK_SCHEMA_VERSION,

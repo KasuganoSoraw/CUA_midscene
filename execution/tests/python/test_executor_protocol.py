@@ -33,6 +33,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import yaml
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--yaml', required=True)
@@ -40,6 +41,7 @@ parser.add_argument('--result', required=True)
 parser.add_argument('--dry-run', action='store_true')
 args = parser.parse_args()
 behavior = {behavior!r}
+document = yaml.safe_load(Path(args.yaml).read_text(encoding='utf-8'))
 if behavior == 'invalid-result':
     Path(args.result).write_text('{{}}', encoding='utf-8')
     raise SystemExit(0)
@@ -48,7 +50,7 @@ result = {{
     'status': 'failed' if behavior == 'action-failure' else 'succeeded',
     'sourceYamlPath': str(Path(args.yaml).resolve()),
     'dryRun': args.dry_run,
-    'taskCount': 1,
+    'taskCount': len(document['tasks']),
     'finishedAt': datetime.now(timezone.utc).isoformat(),
 }}
 if behavior == 'action-failure':
@@ -65,7 +67,7 @@ def test_run_task_uses_same_resolved_yaml_as_inspect(tmp_path: Path) -> None:
     copy_air_scene(tmp_path)
     fake_executor = tmp_path / "success.py"
     write_fake_executor(fake_executor, "success")
-    inputs = {"input-001": "GOOGLE"}
+    inputs = {"step-002-input": "GOOGLE"}
     inspected = resolve_task(
         ResolveTaskOptions(scene="browser-demo", task="air-tickets-demo", projects_root=tmp_path, inputs=inputs)
     )
@@ -81,6 +83,7 @@ def test_run_task_uses_same_resolved_yaml_as_inspect(tmp_path: Path) -> None:
     )
     assert resolved.document == inspected.document == read_yaml_document(snapshot_path)
     assert result.status == "succeeded"
+    assert result.task_count == 16
     assert snapshot_path.name == "resolved-task.yaml"
     assert not (tmp_path / "browser-demo" / "air-tickets-demo" / "resolved-flow.json").exists()
 

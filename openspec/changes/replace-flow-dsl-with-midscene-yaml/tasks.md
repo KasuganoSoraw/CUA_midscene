@@ -27,7 +27,7 @@
 
 ## 5. 保留录制步骤身份
 
-- [ ] 5.1 更新 converter 与录制任务校验，使每个 trace step 生成一个带稳定名称的 Midscene task
-- [ ] 5.2 将输入 ID 改为由 trace step ID 派生，并重新生成 air-tickets-demo
+- [x] 5.1 更新 converter 与录制任务校验，使每个 trace step 生成一个带稳定名称的 Midscene task
+- [x] 5.2 将输入 ID 改为由 trace step ID 派生，并重新生成 air-tickets-demo
 - [ ] 5.3 更新 Python 测试、文档与 Skill，覆盖步骤顺序、唯一性、输入解析和整体目标
 - [ ] 5.4 运行 Python、TypeScript、Skill 与 OpenSpec 验证，完成中文小步提交

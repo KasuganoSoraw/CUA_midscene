@@ -35,7 +35,7 @@ def test_existing_task_assets_pass_models_and_yaml_parser() -> None:
         finished_at=datetime.now(UTC),
     )
     assert scene.scene == task.scene == "browser-demo"
-    assert result.task_count == 1
+    assert result.task_count == 16
     for schema in schema_documents().values():
         assert schema["$comment"] == GENERATED_COMMENT
 

@@ -9,6 +9,10 @@ import yaml
 from cua.models.task import TaskManifest
 
 PLACEHOLDER_PATTERN = re.compile(r"\{\{([a-z][a-z0-9-]*)\}\}")
+RECORDED_TASK_NAME_PATTERN = re.compile(
+    r"^(step-(\d{3,})) \| (click|input|keyboard|wait)$"
+)
+RECORDED_INPUT_ID_PATTERN = re.compile(r"^(step-(\d{3,}))-input$")
 
 
 def read_yaml_document(path: Path) -> dict[str, Any]:
@@ -50,6 +54,51 @@ def dump_yaml_document(document: dict[str, Any]) -> str:
         default_flow_style=False,
         width=120,
     )
+
+
+def validate_recorded_task_document(
+    document: dict[str, Any],
+    manifest: TaskManifest,
+    source: Path | str,
+) -> None:
+    agent = document.get("agent")
+    if not isinstance(agent, dict):
+        raise ValueError(f"录制任务 YAML agent 必须是对象：{source}")
+    if agent.get("groupName") != manifest.task:
+        raise ValueError(f"录制任务 YAML agent.groupName 必须等于 task.json 的 task：{source}")
+    if agent.get("groupDescription") != manifest.goal:
+        raise ValueError(f"录制任务 YAML agent.groupDescription 必须等于 task.json 的 goal：{source}")
+
+    previous_step_number = 0
+    operation_by_step_id: dict[str, str] = {}
+    for index, task in enumerate(document["tasks"], start=1):
+        name = task["name"]
+        match = RECORDED_TASK_NAME_PATTERN.fullmatch(name)
+        if match is None:
+            raise ValueError(
+                f"录制任务 YAML tasks[{index}].name 必须符合 step-NNN | <operation-type>：{source}"
+            )
+        step_id, number_text, operation_type = match.groups()
+        step_number = int(number_text)
+        if step_number <= 0 or step_id != f"step-{step_number:03d}":
+            raise ValueError(f"录制任务 YAML tasks[{index}] 的 step ID 非法：{source}")
+        if step_number <= previous_step_number:
+            raise ValueError(f"录制任务 YAML step ID 必须唯一且严格递增：{source}")
+        if task.get("continueOnError") is True:
+            raise ValueError(f"录制任务 YAML 不允许启用 continueOnError：{source}")
+        operation_by_step_id[step_id] = operation_type
+        previous_step_number = step_number
+
+    for input_id in manifest.inputs:
+        match = RECORDED_INPUT_ID_PATTERN.fullmatch(input_id)
+        if match is None:
+            raise ValueError(f"录制任务输入 ID 必须符合 step-NNN-input：{input_id}")
+        step_id, number_text = match.groups()
+        step_number = int(number_text)
+        if step_number <= 0 or step_id != f"step-{step_number:03d}":
+            raise ValueError(f"录制任务输入 ID 非法：{input_id}")
+        if operation_by_step_id.get(step_id) != "input":
+            raise ValueError(f"录制任务输入 {input_id} 未对应 input 类型步骤")
 
 
 def write_yaml_document(path: Path, document: dict[str, Any]) -> None:

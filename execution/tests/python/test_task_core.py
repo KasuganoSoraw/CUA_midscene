@@ -39,7 +39,7 @@ def create_task(projects_root: Path) -> Path:
                 conversion_command="uv run cua task init-from-trace",
             ),
             inputs={
-                "query": TaskInputDefinition(
+                "step-001-input": TaskInputDefinition(
                     type="string", label="搜索词", description="搜索内容", default="默认关键词"
                 )
             },
@@ -49,20 +49,28 @@ def create_task(projects_root: Path) -> Path:
         task_root / "task.yaml",
         {
             "computer": {},
+            "agent": {
+                "groupName": TASK,
+                "groupDescription": "测试搜索",
+                "generateReport": True,
+            },
             "tasks": [
                 {
-                    "name": "搜索 {{query}}",
+                    "name": "step-001 | input",
                     "flow": [
                         {
                             "KeyboardTypeText": {
                                 "locate": "页面顶部搜索框",
-                                "value": "{{query}}",
+                                "value": "{{step-001-input}}",
                                 "mode": "replace",
                             }
-                        },
-                        {"aiTap": "点击与 {{query}} 对应的候选项"},
+                        }
                     ],
-                }
+                },
+                {
+                    "name": "step-002 | click",
+                    "flow": [{"aiTap": "点击与 {{step-001-input}} 对应的候选项"}],
+                },
             ],
         },
     )
@@ -72,16 +80,20 @@ def create_task(projects_root: Path) -> Path:
 def test_resolver_uses_defaults_and_replaces_every_explicit_placeholder(tmp_path: Path) -> None:
     task_root = create_task(tmp_path)
     defaults = resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
-    assert defaults.inputs == {"query": "默认关键词"}
-    assert defaults.document["tasks"][0]["name"] == "搜索 默认关键词"
+    assert defaults.inputs == {"step-001-input": "默认关键词"}
+    assert defaults.document["tasks"][0]["name"] == "step-001 | input"
 
     resolved = resolve_task(
-        ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path, inputs={"query": "GUI agent"})
+        ResolveTaskOptions(
+            scene=SCENE,
+            task=TASK,
+            projects_root=tmp_path,
+            inputs={"step-001-input": "GUI agent"},
+        )
     )
-    flow = resolved.document["tasks"][0]["flow"]
-    assert flow[0]["KeyboardTypeText"]["value"] == "GUI agent"
-    assert flow[1]["aiTap"] == "点击与 GUI agent 对应的候选项"
-    assert "{{query}}" in (task_root / "task.yaml").read_text(encoding="utf-8")
+    assert resolved.document["tasks"][0]["flow"][0]["KeyboardTypeText"]["value"] == "GUI agent"
+    assert resolved.document["tasks"][1]["flow"][0]["aiTap"] == "点击与 GUI agent 对应的候选项"
+    assert "{{step-001-input}}" in (task_root / "task.yaml").read_text(encoding="utf-8")
 
 
 def test_resolver_rejects_unknown_undeclared_unused_and_malformed_inputs(tmp_path: Path) -> None:
@@ -93,16 +105,46 @@ def test_resolver_rejects_unknown_undeclared_unused_and_malformed_inputs(tmp_pat
 
     yaml_path = task_root / "task.yaml"
     text = yaml_path.read_text(encoding="utf-8")
-    yaml_path.write_text(text.replace("{{query}}", "{{missing}}"), encoding="utf-8")
+    yaml_path.write_text(text.replace("{{step-001-input}}", "{{missing}}"), encoding="utf-8")
     with pytest.raises(ValueError, match="未声明输入占位符：missing"):
         resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
 
-    yaml_path.write_text(text.replace("{{query}}", "fixed"), encoding="utf-8")
-    with pytest.raises(ValueError, match="任务清单输入未在 YAML 中使用：query"):
+    yaml_path.write_text(text.replace("{{step-001-input}}", "fixed"), encoding="utf-8")
+    with pytest.raises(ValueError, match="任务清单输入未在 YAML 中使用：step-001-input"):
         resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
 
-    yaml_path.write_text(text.replace("{{query}}", "{{Query}}"), encoding="utf-8")
+    yaml_path.write_text(text.replace("{{step-001-input}}", "{{StepInput}}"), encoding="utf-8")
     with pytest.raises(ValueError, match="非法输入占位符"):
+        resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
+
+
+@pytest.mark.parametrize(
+    ("old_text", "new_text", "message"),
+    [
+        ("step-002 | click", "second click", "name 必须符合"),
+        ("step-002 | click", "step-001 | click", "唯一且严格递增"),
+        ("groupDescription: 测试搜索", "groupDescription: 其他目标", "groupDescription"),
+    ],
+)
+def test_resolver_rejects_broken_recorded_step_contract(
+    tmp_path: Path, old_text: str, new_text: str, message: str
+) -> None:
+    task_root = create_task(tmp_path)
+    yaml_path = task_root / "task.yaml"
+    yaml_path.write_text(
+        yaml_path.read_text(encoding="utf-8").replace(old_text, new_text),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=message):
+        resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
+
+
+def test_resolver_rejects_continue_on_error(tmp_path: Path) -> None:
+    task_root = create_task(tmp_path)
+    yaml_path = task_root / "task.yaml"
+    text = yaml_path.read_text(encoding="utf-8")
+    yaml_path.write_text(text.replace("  flow:\n", "  continueOnError: true\n  flow:\n", 1), encoding="utf-8")
+    with pytest.raises(ValueError, match="不允许启用 continueOnError"):
         resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
 
 
@@ -122,5 +164,6 @@ def test_scene_and_task_discovery_validate_assets(tmp_path: Path) -> None:
     assert list_scenes(tmp_path)[0]["scene"] == SCENE
     tasks = list_tasks(SCENE, tmp_path)
     assert tasks[0]["task"] == TASK
+    assert tasks[0]["taskCount"] == 2
     assert tasks[0]["actionCount"] == 2
     assert describe_task(SCENE, TASK, tmp_path)["taskYamlPath"].endswith("task.yaml")

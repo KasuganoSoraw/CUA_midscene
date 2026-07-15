@@ -17,7 +17,11 @@ def test_scene_and_task_list_json(capsys: pytest.CaptureFixture[str]) -> None:
     main(["task", "list", "--scene", "browser-demo", "--projects-root", str(PROJECTS_ROOT), "--json"])
     result = json.loads(capsys.readouterr().out)
     assert result["tasks"][0]["task"] == "air-tickets-demo"
-    assert list(result["tasks"][0]["inputs"]) == ["input-001", "input-002", "input-003"]
+    assert list(result["tasks"][0]["inputs"]) == [
+        "step-002-input",
+        "step-008-input",
+        "step-010-input",
+    ]
     assert result["tasks"][0]["taskYamlPath"].endswith("task.yaml")
 
 
@@ -33,14 +37,14 @@ def test_task_inspect_applies_only_explicit_input(capsys: pytest.CaptureFixture[
             "--projects-root",
             str(PROJECTS_ROOT),
             "--input",
-            "input-001=GOOGLE",
+            "step-002-input=GOOGLE",
             "--json",
         ]
     )
     result = json.loads(capsys.readouterr().out)
-    assert result["inputs"]["input-001"] == "GOOGLE"
-    assert result["inputs"]["input-002"] == "SINGAPORE"
-    assert result["yaml"]["tasks"][0]["flow"][2]["KeyboardTypeText"]["value"] == "GOOGLE"
+    assert result["inputs"]["step-002-input"] == "GOOGLE"
+    assert result["inputs"]["step-008-input"] == "SINGAPORE"
+    assert result["yaml"]["tasks"][1]["flow"][1]["KeyboardTypeText"]["value"] == "GOOGLE"
 
 
 def test_cli_rejects_duplicate_single_value_argument() -> None:

@@ -6,7 +6,7 @@ from pathlib import Path
 from cua.domain.types import ResolveTaskOptions, ResolvedTaskResult, TaskPaths
 from cua.models.task import SceneManifest, TaskManifest
 from cua.task.io import read_model
-from cua.task.yaml_task import read_yaml_document, resolve_yaml_inputs
+from cua.task.yaml_task import read_yaml_document, resolve_yaml_inputs, validate_recorded_task_document
 
 
 def task_paths(scene: str, task: str, projects_root: Path | None = None) -> TaskPaths:
@@ -49,6 +49,7 @@ def resolve_task(options: ResolveTaskOptions) -> ResolvedTaskResult:
     manifest = read_model(paths.task_manifest_path, TaskManifest, "任务清单")
     validate_manifests(scene, manifest, options.scene, options.task)
     document = read_yaml_document(paths.task_yaml_path)
+    validate_recorded_task_document(document, manifest, paths.task_yaml_path)
     resolved, values = resolve_yaml_inputs(document, manifest, options.inputs)
     return ResolvedTaskResult(
         document=resolved,
