@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from cua.domain.types import ExecutionOptions, ResolveTaskOptions, ResolvedTaskResult
 from cua.models.task import ExecutorResult
+from cua.task.ai_act_prompt import build_recorded_task_ai_act_prompt
 from cua.task.io import read_model
 from cua.task.resolver import create_run_directory, resolve_task, task_paths
 from cua.task.yaml_task import write_yaml_document
@@ -16,6 +19,15 @@ AI_ACT_CONTEXT = """文本输入必须遵守以下规则：
 1. 仅使用 KeyboardTypeText 输入 ASCII 文本，不使用默认 Input 或剪贴板。
 2. 待输入文本包含 KeyboardTypeText 不支持的字符时直接失败，不切换输入动作。
 3. 不得因为定位失败或一般执行失败改用其他输入方式。"""
+
+
+@dataclass(frozen=True)
+class RecordedTaskAiActRun:
+    resolved: ResolvedTaskResult
+    resolved_task_path: Path
+    prompt_path: Path
+    ai_act_yaml_path: Path
+    executor_result: ExecutorResult
 
 
 def default_executor_command() -> tuple[str, ...]:
@@ -91,6 +103,71 @@ def run_task(options: ExecutionOptions) -> tuple[ResolvedTaskResult, Path, Execu
     return resolved, snapshot_path, result
 
 
+def ai_act_yaml_document(
+    prompt: str,
+    *,
+    group_name: str,
+    group_description: str,
+    task_name: str,
+) -> dict[str, Any]:
+    return {
+        "computer": {},
+        "agent": {
+            "groupName": group_name,
+            "groupDescription": group_description,
+            "generateReport": True,
+            "aiActContext": AI_ACT_CONTEXT,
+        },
+        "tasks": [
+            {
+                "name": task_name,
+                "flow": [{"ai": prompt}],
+            }
+        ],
+    }
+
+
+def run_recorded_task_ai_act(options: ExecutionOptions) -> RecordedTaskAiActRun:
+    resolved = resolve_task(
+        ResolveTaskOptions(
+            scene=options.scene,
+            task=options.task,
+            projects_root=options.projects_root,
+            inputs=options.inputs,
+        )
+    )
+    prompt = build_recorded_task_ai_act_prompt(resolved.document)
+    paths = task_paths(options.scene, options.task, options.projects_root)
+    run_dir = create_run_directory(paths.reports_dir)
+    resolved_task_path = run_dir / "resolved-task.yaml"
+    prompt_path = run_dir / "ai-act-prompt.txt"
+    ai_act_yaml_path = run_dir / "ai-act-task.yaml"
+    write_yaml_document(resolved_task_path, resolved.document)
+    prompt_path.write_text(prompt, encoding="utf-8")
+    write_yaml_document(
+        ai_act_yaml_path,
+        ai_act_yaml_document(
+            prompt,
+            group_name=f"{options.task}-ai-act",
+            group_description=resolved.manifest.goal,
+            task_name="录制任务整体 aiAct",
+        ),
+    )
+    result = execute_yaml(
+        ai_act_yaml_path,
+        run_dir / "execution-result.json",
+        dry_run=options.dry_run,
+        command_prefix=options.command_prefix,
+    )
+    return RecordedTaskAiActRun(
+        resolved=resolved,
+        resolved_task_path=resolved_task_path,
+        prompt_path=prompt_path,
+        ai_act_yaml_path=ai_act_yaml_path,
+        executor_result=result,
+    )
+
+
 def run_prompt(
     prompt: str,
     *,
@@ -105,19 +182,12 @@ def run_prompt(
     yaml_path = run_dir / "resolved-task.yaml"
     write_yaml_document(
         yaml_path,
-        {
-            "computer": {},
-            "agent": {
-                "generateReport": True,
-                "aiActContext": AI_ACT_CONTEXT,
-            },
-            "tasks": [
-                {
-                    "name": "自然语言电脑操作",
-                    "flow": [{"ai": normalized_prompt}],
-                }
-            ],
-        },
+        ai_act_yaml_document(
+            normalized_prompt,
+            group_name="natural-language-ai-act",
+            group_description="执行无录制自然语言电脑操作",
+            task_name="自然语言电脑操作",
+        ),
     )
     result = execute_yaml(
         yaml_path,

@@ -77,10 +77,14 @@ def build_parser() -> argparse.ArgumentParser:
         if command == "run":
             task_command.add_argument("--dry-run", action="store_true", help="只验证 resolved task YAML")
 
-    act_parser = domains.add_parser("act", help="执行无录制自然语言电脑操作")
+    act_parser = domains.add_parser("act", help="使用整体 aiAct 执行电脑操作")
     act_commands = act_parser.add_subparsers(dest="command", required=True)
-    act_run = act_commands.add_parser("run", help="将自然语言要求包装为 Midscene YAML 并执行")
-    add_unique_argument(act_run, "--prompt", required=True, help="自然语言电脑操作要求")
+    act_run = act_commands.add_parser("run", help="执行自然语言要求或录制任务的整体 aiAct")
+    add_unique_argument(act_run, "--prompt", help="无录制自然语言电脑操作要求")
+    add_unique_argument(act_run, "--scene", help="录制任务的业务场景标识")
+    add_unique_argument(act_run, "--task", help="录制任务标识")
+    add_unique_argument(act_run, "--projects-root", type=Path, help="场景集合目录，默认 projects")
+    add_runtime_inputs(act_run)
     act_run.add_argument("--dry-run", action="store_true", help="只验证生成的 YAML")
     return parser
 
@@ -124,6 +128,28 @@ def resolve_from_args(args: argparse.Namespace):
             inputs=load_runtime_inputs(args.inputs, args.input),
         )
     )
+
+
+def validate_act_run_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if args.domain != "act" or args.command != "run":
+        return
+    has_prompt = args.prompt is not None
+    task_options = {
+        "--scene": args.scene,
+        "--task": args.task,
+        "--projects-root": args.projects_root,
+        "--inputs": args.inputs,
+        "--input": args.input,
+    }
+    provided_task_options = [
+        name for name, value in task_options.items() if value not in (None, [])
+    ]
+    if has_prompt:
+        if provided_task_options:
+            parser.error(f"--prompt 不能与任务参数混用：{', '.join(provided_task_options)}")
+        return
+    if not args.scene or not args.task:
+        parser.error("必须提供 --prompt，或同时提供 --scene 和 --task")
 
 
 def run_command(args: argparse.Namespace) -> None:
@@ -228,10 +254,39 @@ def run_command(args: argparse.Namespace) -> None:
         return
 
     if args.domain == "act" and args.command == "run":
-        from cua.task.executor import run_prompt
+        from cua.task.executor import run_prompt, run_recorded_task_ai_act
 
-        yaml_path, result = run_prompt(args.prompt, dry_run=args.dry_run)
-        print_json({"resolvedTaskPath": str(yaml_path), "executor": result.to_json_dict()})
+        if args.prompt is not None:
+            yaml_path, result = run_prompt(args.prompt, dry_run=args.dry_run)
+            print_json(
+                {
+                    "mode": "prompt",
+                    "aiActYamlPath": str(yaml_path),
+                    "executor": result.to_json_dict(),
+                }
+            )
+            return
+        run = run_recorded_task_ai_act(
+            ExecutionOptions(
+                scene=args.scene,
+                task=args.task,
+                projects_root=projects_root_from_args(args),
+                inputs=load_runtime_inputs(args.inputs, args.input),
+                dry_run=args.dry_run,
+            )
+        )
+        print_json(
+            {
+                "mode": "recorded-task",
+                "scene": args.scene,
+                "task": args.task,
+                "inputs": run.resolved.inputs,
+                "resolvedTaskPath": str(run.resolved_task_path),
+                "promptPath": str(run.prompt_path),
+                "aiActYamlPath": str(run.ai_act_yaml_path),
+                "executor": run.executor_result.to_json_dict(),
+            }
+        )
         return
     raise ValueError(f"不支持的命令：{args.domain} {args.command}")
 
@@ -242,6 +297,7 @@ def main(argv: list[str] | None = None) -> None:
             stream.reconfigure(encoding="utf-8")
     parser = build_parser()
     args = parser.parse_args(argv)
+    validate_act_run_args(parser, args)
     try:
         run_command(args)
     except Exception as error:

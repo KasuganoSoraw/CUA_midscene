@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from cua.domain.types import ExecutionOptions, ResolveTaskOptions
-from cua.task.executor import execute_yaml, run_prompt, run_task
+from cua.task.executor import execute_yaml, run_prompt, run_recorded_task_ai_act, run_task
 from cua.task.resolver import resolve_task
 from cua.task.yaml_task import read_yaml_document
 
@@ -132,3 +132,59 @@ def test_natural_language_prompt_generates_one_action_yaml(tmp_path: Path) -> No
     assert result.status == "succeeded"
     with pytest.raises(ValueError, match="prompt 不能为空"):
         run_prompt("   ", reports_root=tmp_path / "empty")
+
+
+def test_recorded_task_ai_act_uses_resolved_inputs_and_writes_runtime_projection(
+    tmp_path: Path,
+) -> None:
+    copy_air_scene(tmp_path)
+    fake_executor = tmp_path / "success.py"
+    write_fake_executor(fake_executor, "success")
+    run = run_recorded_task_ai_act(
+        ExecutionOptions(
+            scene="browser-demo",
+            task="air-tickets-demo",
+            projects_root=tmp_path,
+            inputs={"step-002-input": "GOOGLE"},
+            dry_run=True,
+            command_prefix=(sys.executable, str(fake_executor)),
+        )
+    )
+
+    resolved_document = read_yaml_document(run.resolved_task_path)
+    prompt = run.prompt_path.read_text(encoding="utf-8")
+    ai_act_document = read_yaml_document(run.ai_act_yaml_path)
+    assert resolved_document == run.resolved.document
+    assert resolved_document["tasks"][1]["flow"][1]["KeyboardTypeText"]["value"] == "GOOGLE"
+    assert prompt.count("step-") == 16
+    assert '使用 KeyboardTypeText 在 "Chrome 地址栏/搜索栏" 中替换输入 "GOOGLE"' in prompt
+    assert "sleep" not in prompt
+    assert ai_act_document["tasks"] == [
+        {
+            "name": "录制任务整体 aiAct",
+            "flow": [{"ai": prompt}],
+        }
+    ]
+    assert "KeyboardTypeText" in ai_act_document["agent"]["aiActContext"]
+    assert run.executor_result.status == "succeeded"
+    assert run.executor_result.task_count == 1
+
+
+def test_recorded_task_ai_act_rejects_unknown_action_before_creating_report(tmp_path: Path) -> None:
+    copy_air_scene(tmp_path)
+    yaml_path = tmp_path / "browser-demo" / "air-tickets-demo" / "task.yaml"
+    yaml_path.write_text(
+        yaml_path.read_text(encoding="utf-8").replace("aiTap:", "aiHover:", 1),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="必须且只能包含一个受支持动作"):
+        run_recorded_task_ai_act(
+            ExecutionOptions(
+                scene="browser-demo",
+                task="air-tickets-demo",
+                projects_root=tmp_path,
+                dry_run=True,
+            )
+        )
+    assert not (tmp_path / "browser-demo" / "air-tickets-demo" / "reports").exists()

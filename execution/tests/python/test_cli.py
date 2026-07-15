@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from cua.cli.main import main
+from cua.cli.main import build_parser, main, validate_act_run_args
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
 PROJECTS_ROOT = EXECUTION_ROOT / "projects"
@@ -62,13 +63,78 @@ def test_removed_flow_and_calibration_commands_are_rejected() -> None:
     assert calibration_error.value.code == 2
 
 
-def test_act_only_accepts_prompt() -> None:
+def test_act_accepts_exactly_one_prompt_or_recorded_task_source() -> None:
+    parser = build_parser()
+    prompt_args = parser.parse_args(["act", "run", "--prompt", "打开 Chrome"])
+    validate_act_run_args(parser, prompt_args)
+    task_args = parser.parse_args(
+        ["act", "run", "--scene", "browser-demo", "--task", "air-tickets-demo"]
+    )
+    validate_act_run_args(parser, task_args)
+
     with pytest.raises(SystemExit) as missing:
         main(["act", "run"])
     assert missing.value.code == 2
-    with pytest.raises(SystemExit) as task_mode:
-        main(["act", "run", "--scene", "browser-demo", "--task", "air-tickets-demo"])
-    assert task_mode.value.code == 2
+    with pytest.raises(SystemExit) as mixed:
+        main(
+            [
+                "act",
+                "run",
+                "--prompt",
+                "打开 Chrome",
+                "--scene",
+                "browser-demo",
+                "--task",
+                "air-tickets-demo",
+            ]
+        )
+    assert mixed.value.code == 2
+    with pytest.raises(SystemExit) as incomplete:
+        main(["act", "run", "--scene", "browser-demo"])
+    assert incomplete.value.code == 2
+    with pytest.raises(SystemExit) as prompt_input:
+        main(["act", "run", "--prompt", "打开 Chrome", "--input", "query=value"])
+    assert prompt_input.value.code == 2
+
+
+def test_act_recorded_task_routes_inputs_and_outputs_artifacts(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    executor_result = SimpleNamespace(to_json_dict=lambda: {"status": "succeeded"})
+    run = SimpleNamespace(
+        resolved=SimpleNamespace(inputs={"step-002-input": "GOOGLE"}),
+        resolved_task_path=tmp_path / "resolved-task.yaml",
+        prompt_path=tmp_path / "ai-act-prompt.txt",
+        ai_act_yaml_path=tmp_path / "ai-act-task.yaml",
+        executor_result=executor_result,
+    )
+
+    def fake_run(options: object) -> object:
+        assert getattr(options, "inputs") == {"step-002-input": "GOOGLE"}
+        assert getattr(options, "dry_run") is True
+        return run
+
+    monkeypatch.setattr("cua.task.executor.run_recorded_task_ai_act", fake_run)
+    main(
+        [
+            "act",
+            "run",
+            "--scene",
+            "browser-demo",
+            "--task",
+            "air-tickets-demo",
+            "--projects-root",
+            str(PROJECTS_ROOT),
+            "--input",
+            "step-002-input=GOOGLE",
+            "--dry-run",
+        ]
+    )
+    result = json.loads(capsys.readouterr().out)
+    assert result["mode"] == "recorded-task"
+    assert result["inputs"] == {"step-002-input": "GOOGLE"}
+    assert result["promptPath"].endswith("ai-act-prompt.txt")
+    assert result["aiActYamlPath"].endswith("ai-act-task.yaml")
 
 
 def test_task_rejects_unknown_input_before_executor(capsys: pytest.CaptureFixture[str]) -> None:
@@ -76,6 +142,29 @@ def test_task_rejects_unknown_input_before_executor(capsys: pytest.CaptureFixtur
         main(
             [
                 "task",
+                "run",
+                "--scene",
+                "browser-demo",
+                "--task",
+                "air-tickets-demo",
+                "--projects-root",
+                str(PROJECTS_ROOT),
+                "--input",
+                "unknown=value",
+                "--dry-run",
+            ]
+        )
+    assert error.value.code == 1
+    assert "未知输入参数：unknown" in capsys.readouterr().err
+
+
+def test_act_recorded_task_rejects_unknown_input_before_executor(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "act",
                 "run",
                 "--scene",
                 "browser-demo",

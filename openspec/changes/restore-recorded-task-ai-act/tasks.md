@@ -5,9 +5,9 @@
 
 ## 2. CLI 与执行编排
 
-- [ ] 2.1 恢复 `act run --scene/--task`、稀疏输入和互斥来源校验
-- [ ] 2.2 在任务报告目录保存 resolved YAML、prompt、临时 aiAct YAML并复用统一 runner
-- [ ] 2.3 验证 dry-run 不创建设备，执行失败不切换模式或修改任务
+- [x] 2.1 恢复 `act run --scene/--task`、稀疏输入和互斥来源校验
+- [x] 2.2 在任务报告目录保存 resolved YAML、prompt、临时 aiAct YAML并复用统一 runner
+- [x] 2.3 验证 dry-run 不创建设备，执行失败不切换模式或修改任务
 
 ## 3. Skill、文档与验证
 
