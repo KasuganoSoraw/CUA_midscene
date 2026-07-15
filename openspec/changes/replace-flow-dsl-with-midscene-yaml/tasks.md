@@ -1,9 +1,9 @@
 ## 1. Python YAML 任务核心
 
-- [ ] 1.1 引入 YAML 依赖并用精简 Pydantic 模型重建任务清单、输入和统一执行结果契约
-- [ ] 1.2 实现 Midscene YAML 的结构化读取、严格占位符解析和 resolved task 快照
-- [ ] 1.3 将 ShowUI trace operation 直接转换为 Midscene YAML action 和 trace 输入定义
-- [ ] 1.4 重新生成 air-tickets-demo 的 `task.yaml` 与 `task.json` 并删除旧 flow 资产
+- [x] 1.1 引入 YAML 依赖并用精简 Pydantic 模型重建任务清单、输入和统一执行结果契约
+- [x] 1.2 实现 Midscene YAML 的结构化读取、严格占位符解析和 resolved task 快照
+- [x] 1.3 将 ShowUI trace operation 直接转换为 Midscene YAML action 和 trace 输入定义
+- [x] 1.4 重新生成 air-tickets-demo 的 `task.yaml` 与 `task.json` 并删除旧 flow 资产
 
 ## 2. Midscene YAML 执行适配器
 

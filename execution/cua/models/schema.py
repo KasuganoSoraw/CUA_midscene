@@ -5,15 +5,12 @@ import json
 from pathlib import Path
 from pydantic import BaseModel
 
-from .flow import MidsceneFlow
-from .task import AiActExecutorResult, ResolvedFlowSnapshot, SceneManifest, TaskManifest
+from .task import ExecutorResult, SceneManifest, TaskManifest
 
 SCHEMA_MODELS: dict[str, type[BaseModel]] = {
-    "midscene-flow.schema.json": MidsceneFlow,
     "scene.schema.json": SceneManifest,
     "task.schema.json": TaskManifest,
-    "resolved-flow.schema.json": ResolvedFlowSnapshot,
-    "ai-act-result.schema.json": AiActExecutorResult,
+    "execution-result.schema.json": ExecutorResult,
 }
 
 GENERATED_COMMENT = "由 cua.models.schema 从 Pydantic 模型生成，请勿手工编辑。"

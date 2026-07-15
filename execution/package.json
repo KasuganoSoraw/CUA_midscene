@@ -6,19 +6,15 @@
   "scripts": {
     "check": "tsx executors/check-env.ts",
     "test:keyboard-type": "tsx tests/executors/keyboard-type-action.test.ts",
-    "test:executor-contract": "tsx tests/executors/resolved-flow-contract.test.ts",
-    "test:ai-act-prompt": "tsx tests/executors/ai-act-prompt.test.ts",
-    "test:ai-act-contract": "tsx tests/executors/ai-act-contract.test.ts",
+    "test:yaml-runner": "tsx tests/executors/yaml-runner.test.ts",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck && npm run test:keyboard-type && npm run test:executor-contract && npm run test:ai-act-prompt && npm run test:ai-act-contract"
+    "test": "npm run typecheck && npm run test:keyboard-type && npm run test:yaml-runner"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@midscene/computer": "^1.10.0",
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {

@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
-if TYPE_CHECKING:
-    from cua.models.flow import MidsceneFlow
-    from cua.models.task import ResolvedFlowSources
+from cua.models.task import TaskManifest
 
 
 @dataclass(frozen=True)
@@ -15,7 +13,7 @@ class TaskPaths:
     task_root: Path
     scene_manifest_path: Path
     task_manifest_path: Path
-    flow_path: Path
+    task_yaml_path: Path
     reports_dir: Path
 
 
@@ -24,10 +22,7 @@ class ResolveTaskOptions:
     scene: str
     task: str
     projects_root: Path | None = None
-    task_root: Path | None = None
-    flow_path: Path | None = None
     inputs: dict[str, str] | None = None
-    executable: bool = True
 
 
 @dataclass(frozen=True)
@@ -39,13 +34,13 @@ class ConvertOptions:
     conversion_command: str
     recording_preparation_command: str | None = None
     trace_generation_command: str | None = None
-    flow_execution_command: str | None = None
 
 
 @dataclass(frozen=True)
-class ResolvedFlowResult:
-    flow: MidsceneFlow
-    sources: ResolvedFlowSources
+class ResolvedTaskResult:
+    document: dict[str, Any]
+    manifest: TaskManifest
+    source_path: Path
     inputs: dict[str, str]
 
 
@@ -54,8 +49,6 @@ class ExecutionOptions:
     scene: str
     task: str
     projects_root: Path | None = None
-    task_root: Path | None = None
-    flow_path: Path | None = None
     inputs: dict[str, str] | None = None
     dry_run: bool = False
     command_prefix: tuple[str, ...] | None = None

@@ -2,18 +2,6 @@
   "$comment": "由 cua.models.schema 从 Pydantic 模型生成，请勿手工编辑。",
   "additionalProperties": false,
   "properties": {
-    "aiActResult": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Aiactresult"
-    },
     "dryRun": {
       "title": "Dryrun",
       "type": "boolean"
@@ -35,45 +23,26 @@
       "title": "Finishedat",
       "type": "string"
     },
-    "mode": {
-      "enum": [
-        "prompt",
-        "task"
-      ],
-      "title": "Mode",
-      "type": "string"
-    },
-    "promptPath": {
+    "midsceneResult": {
       "anyOf": [
         {
-          "type": "string"
+          "additionalProperties": true,
+          "type": "object"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "title": "Promptpath"
-    },
-    "scene": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Scene"
+      "title": "Midsceneresult"
     },
     "schemaVersion": {
-      "const": "0.1",
+      "const": "0.2",
       "title": "Schemaversion",
       "type": "string"
     },
-    "sourcePath": {
-      "title": "Sourcepath",
+    "sourceYamlPath": {
+      "title": "Sourceyamlpath",
       "type": "string"
     },
     "status": {
@@ -84,27 +53,26 @@
       "title": "Status",
       "type": "string"
     },
-    "task": {
+    "taskCount": {
       "anyOf": [
         {
-          "type": "string"
+          "type": "integer"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "title": "Task"
+      "title": "Taskcount"
     }
   },
   "required": [
     "schemaVersion",
     "status",
-    "mode",
-    "sourcePath",
+    "sourceYamlPath",
     "dryRun",
     "finishedAt"
   ],
-  "title": "AiActExecutorResult",
+  "title": "ExecutorResult",
   "type": "object"
 }

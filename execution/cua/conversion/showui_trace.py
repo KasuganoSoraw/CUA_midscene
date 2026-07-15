@@ -2,34 +2,22 @@ from __future__ import annotations
 
 import json
 import math
-from pathlib import Path, PurePosixPath
-from typing import Literal
+from pathlib import Path
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from cua.domain.types import ConvertOptions
-from cua.models.flow import (
-    InputRoute,
-    KeyboardRoute,
-    MIDSCENE_FLOW_SCHEMA_VERSION,
-    MidsceneFlow,
-    MidsceneFlowCommands,
-    MidsceneFlowEvidence,
-    MidsceneFlowRoute,
-    MidsceneFlowSource,
-    MidsceneFlowSourceTrace,
-    MidsceneFlowStep,
-    MidsceneFlowTiming,
-    MidsceneTraceOperation,
-    TapRoute,
-    TraceClickOperation,
-    TraceInputOperation,
-    TraceKeyboardOperation,
-    TraceWaitOperation,
-    WaitRoute,
+from cua.models.task import (
+    SCENE_SCHEMA_VERSION,
+    TASK_SCHEMA_VERSION,
+    SceneManifest,
+    TaskInputDefinition,
+    TaskManifest,
+    TaskSource,
 )
-from cua.models.task import SCENE_SCHEMA_VERSION, SceneManifest
-from cua.task.resolver import create_initial_task_manifest
+from cua.task.io import write_model
+from cua.task.yaml_task import write_yaml_document
 
 MIN_RECORDED_WAIT_MS = 200
 MAX_RECORDED_WAIT_MS = 30_000
@@ -66,13 +54,10 @@ class ShowuiTrace(InputModel):
 
 
 class ProcessedLogStep(InputModel):
-    timestamp: float | None = None
-    action: str | None = None
-    screenshot_full: str | None = None
-    screenshot_crop: str | None = None
+    timestamp: float
 
 
-def read_model(path: Path, model: type[BaseModel]) -> BaseModel:
+def read_json_model(path: Path, model: type[BaseModel]) -> BaseModel:
     try:
         return model.model_validate_json(path.read_text(encoding="utf-8"))
     except Exception as error:
@@ -87,17 +72,6 @@ def read_processed_log(path: Path) -> list[ProcessedLogStep]:
         return [ProcessedLogStep.model_validate(item) for item in value]
     except Exception as error:
         raise ValueError(f"读取并验证 processed log 失败：{path}\n{error}") from error
-
-
-def write_json_if_missing(path: Path, value: BaseModel) -> bool:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(value.to_json_dict(), ensure_ascii=False, indent=2) + "\n"  # type: ignore[attr-defined]
-    try:
-        with path.open("x", encoding="utf-8") as file:
-            file.write(content)
-        return True
-    except FileExistsError:
-        return False
 
 
 def write_text_if_missing(path: Path, content: str) -> bool:
@@ -118,7 +92,7 @@ description: 发现和调用 {scene} 场景中的本地 CUA 任务。
 
 # {scene} 场景
 
-先运行 `uv run cua task list --scene {scene} --json` 发现任务，再按需读取目标任务的 `SKILL.md` 和 `task.json`。
+运行 `uv run cua task list --scene {scene} --json` 发现任务，再按需读取目标任务的 `SKILL.md`、`task.json` 和 `task.yaml`。
 """
 
 
@@ -132,14 +106,8 @@ description: 调用和维护 {scene}/{task} 本地 CUA 任务。
 
 使用 `uv run cua task describe --scene {scene} --task {task} --json` 读取输入定义。
 
-单次参数通过 `flow inspect` 或 `flow run` 的 `--input key=value` 传入，不修改 `midscene-flow.json`。长期修改必须先展示差异并等待用户确认，确认后直接编辑 `midscene-flow.json`，再执行 `flow validate`。
+单次参数通过 `task inspect` 或 `task run` 的 `--input key=value` 传入，不修改 `task.yaml`。长期修改必须先展示 YAML 原值、新值和原因并等待用户确认，确认后直接编辑 `task.yaml`，再执行 `task validate`。
 """
-
-
-def normalize_source_screenshot_path(source_path: str | None) -> str | None:
-    if not source_path:
-        return None
-    return str(PurePosixPath("source") / PurePosixPath(source_path.replace("\\", "/")))
 
 
 def required_operation_text(value: str | None, field: str, step_index: int) -> str:
@@ -149,187 +117,138 @@ def required_operation_text(value: str | None, field: str, step_index: int) -> s
     return normalized
 
 
-def normalize_trace_operation(operation: ShowuiTraceOperation, step_index: int) -> MidsceneTraceOperation:
-    operation_type = operation.type
-    prompt = operation.prompt.strip() if operation.prompt else None
-    locate_prompt = operation.locatePrompt.strip() if operation.locatePrompt else None
-    value = operation.value.strip() if operation.value else None
-    key = operation.key.strip() if operation.key else None
-    condition = operation.condition.strip() if operation.condition else None
-
-    if operation_type == "click":
-        return TraceClickOperation(
-            type="click",
-            prompt=required_operation_text(prompt, "prompt", step_index),
-        )
-    if operation_type == "input":
-        return TraceInputOperation(
-            type="input",
-            prompt=required_operation_text(prompt, "prompt", step_index),
-            locate_prompt=required_operation_text(locate_prompt, "locatePrompt", step_index),
-            value=required_operation_text(value, "value", step_index),
-        )
-    if operation_type == "keyboard":
-        return TraceKeyboardOperation(
-            type="keyboard",
-            prompt=prompt,
-            key=required_operation_text(key, "key", step_index),
-        )
-    return TraceWaitOperation(
-        type="wait",
-        prompt=prompt,
-        condition=required_operation_text(condition, "condition", step_index),
-    )
-
-
-def route_from_operation(operation: MidsceneTraceOperation) -> MidsceneFlowRoute:
-    if operation.type == "click":
-        return TapRoute(strategy="tap", prompt=operation.prompt)
-    if operation.type == "input":
-        return InputRoute(
-            strategy="input",
-            prompt=operation.prompt,
-            locate_prompt=operation.locate_prompt,
-            value=operation.value,
-            mode="replace",
-            input_method="keyboard-action",
-        )
-    if operation.type == "keyboard":
-        return KeyboardRoute(strategy="keyboard", key_name=operation.key)
-    return WaitRoute(
-        strategy="wait",
-        prompt=operation.prompt,
-        condition=operation.condition,
-        timeout_ms=15_000,
-    )
-
-
 def clamp_recorded_wait_ms(recorded_gap_ms: int) -> int:
     if recorded_gap_ms < MIN_RECORDED_WAIT_MS:
         return 0
     return min(recorded_gap_ms, MAX_RECORDED_WAIT_MS)
 
 
-def build_timing(
-    processed_step: ProcessedLogStep | None,
-    previous_processed_step: ProcessedLogStep | None,
-) -> MidsceneFlowTiming | None:
-    if processed_step is None or previous_processed_step is None:
-        return None
-    if processed_step.timestamp is None or previous_processed_step.timestamp is None:
-        return None
-    gap_ms = (processed_step.timestamp - previous_processed_step.timestamp) * 1000
-    recorded_gap_ms = max(0, math.floor(gap_ms + 0.5))
-    wait_before_ms = clamp_recorded_wait_ms(recorded_gap_ms)
-    if wait_before_ms <= 0:
-        return MidsceneFlowTiming(recorded_gap_ms=recorded_gap_ms)
-    return MidsceneFlowTiming(
-        recorded_gap_ms=recorded_gap_ms,
-        wait_before_ms=wait_before_ms,
-        wait_reason="recorded-step-gap",
-    )
+def recorded_wait_ms(current: ProcessedLogStep, previous: ProcessedLogStep | None) -> int:
+    if previous is None:
+        return 0
+    gap_ms = max(0, math.floor((current.timestamp - previous.timestamp) * 1000 + 0.5))
+    return clamp_recorded_wait_ms(gap_ms)
 
 
-def build_step(
-    trace_step: ShowuiTraceStep,
-    processed_step: ProcessedLogStep | None,
-    previous_processed_step: ProcessedLogStep | None,
-) -> MidsceneFlowStep:
-    caption = trace_step.caption
-    observation = caption.observation or ""
-    action = caption.action or ""
-    expectation = caption.expectation or ""
-    operation = normalize_trace_operation(caption.operation, trace_step.step_idx)
-    route = route_from_operation(operation)
-    evidence = MidsceneFlowEvidence(
-        observation=observation,
-        thought=caption.think,
-        action=action,
-        expectation=expectation,
-        operation=operation,
-        screenshot=normalize_source_screenshot_path(processed_step.screenshot_full if processed_step else None),
-        crop=normalize_source_screenshot_path(processed_step.screenshot_crop if processed_step else None),
-    )
-    return MidsceneFlowStep(
-        id=f"step-{trace_step.step_idx:03d}",
-        source_trace=MidsceneFlowSourceTrace(
-            step_index=trace_step.step_idx,
-            raw_action=processed_step.action if processed_step else None,
-            timestamp_sec=processed_step.timestamp if processed_step else None,
+def action_from_operation(
+    operation: ShowuiTraceOperation,
+    step_index: int,
+    input_index: int,
+) -> tuple[dict[str, Any], tuple[str, TaskInputDefinition] | None]:
+    if operation.type == "click":
+        prompt = required_operation_text(operation.prompt, "prompt", step_index)
+        return {"aiTap": prompt}, None
+    if operation.type == "input":
+        prompt = required_operation_text(operation.prompt, "prompt", step_index)
+        locate = required_operation_text(operation.locatePrompt, "locatePrompt", step_index)
+        value = required_operation_text(operation.value, "value", step_index)
+        input_id = f"input-{input_index:03d}"
+        definition = TaskInputDefinition(
+            type="string",
+            label=locate,
+            description=prompt,
+            default=value,
+        )
+        return {
+            "KeyboardTypeText": {
+                "locate": locate,
+                "value": f"{{{{{input_id}}}}}",
+                "mode": "replace",
+            }
+        }, (input_id, definition)
+    if operation.type == "keyboard":
+        key = required_operation_text(operation.key, "key", step_index)
+        return {"KeyboardPress": {"keyName": key}}, None
+    prompt = operation.prompt.strip() if operation.prompt else None
+    condition = required_operation_text(operation.condition, "condition", step_index)
+    return {"aiWaitFor": prompt or condition, "timeout": 15_000}, None
+
+
+def build_task_assets(
+    trace: ShowuiTrace,
+    processed_steps: list[ProcessedLogStep],
+    options: ConvertOptions,
+) -> tuple[dict[str, Any], TaskManifest]:
+    if not trace.trajectory:
+        raise ValueError("trace trajectory 不能为空")
+    if len(trace.trajectory) != len(processed_steps):
+        raise ValueError(
+            f"trace step 数量 {len(trace.trajectory)} 与 processed log 数量 {len(processed_steps)} 不一致"
+        )
+
+    flow: list[dict[str, Any]] = []
+    inputs: dict[str, TaskInputDefinition] = {}
+    input_index = 0
+    previous: ProcessedLogStep | None = None
+    for trace_step, processed_step in zip(trace.trajectory, processed_steps, strict=True):
+        wait_ms = recorded_wait_ms(processed_step, previous)
+        if wait_ms:
+            flow.append({"sleep": wait_ms})
+        if trace_step.caption.operation.type == "input":
+            input_index += 1
+        action, input_definition = action_from_operation(
+            trace_step.caption.operation,
+            trace_step.step_idx,
+            input_index,
+        )
+        flow.append(action)
+        if input_definition:
+            input_id, definition = input_definition
+            inputs[input_id] = definition
+        previous = processed_step
+
+    document = {
+        "computer": {},
+        "tasks": [
+            {
+                "name": options.goal,
+                "flow": flow,
+            }
+        ],
+    }
+    manifest = TaskManifest(
+        schema_version=TASK_SCHEMA_VERSION,
+        scene=options.scene,
+        task=options.task,
+        title=options.task,
+        description=options.goal,
+        goal=options.goal,
+        source=TaskSource(
+            trace_path="source/showui-trace.json",
+            processed_log_path="source/processed-log-sc.json",
+            conversion_command=options.conversion_command,
+            recording_preparation_command=options.recording_preparation_command,
+            trace_generation_command=options.trace_generation_command,
         ),
-        intent=caption.think or action,
-        timing=build_timing(processed_step, previous_processed_step),
-        evidence=evidence,
-        route=route,
+        inputs=inputs,
     )
-
-
-def default_recording_preparation_command(scene: str, task: str) -> str:
-    return (
-        "将 record 生成的 trace、processed log 和截图复制到 "
-        f"execution\\projects\\{scene}\\{task}\\source"
-    )
-
-
-def default_trace_generation_command(scene: str, task: str) -> str:
-    return f"未记录；请通过 --trace-generation-command 提供 {scene}/{task} 的 trace 生成命令"
+    return document, manifest
 
 
 def convert_trace(options: ConvertOptions) -> Path:
     task_root = (options.projects_root / options.scene / options.task).resolve()
     source_root = task_root / "source"
-    trace_path = source_root / "showui-trace.json"
-    processed_log_path = source_root / "processed-log.json"
-    processed_log_with_screenshots_path = source_root / "processed-log-sc.json"
-    screenshots_dir = source_root / "screenshots"
-    output_path = task_root / "midscene-flow.json"
-    if output_path.exists():
-        raise ValueError(f"任务 flow 已存在，拒绝覆盖：{output_path}")
+    task_yaml_path = task_root / "task.yaml"
+    task_manifest_path = task_root / "task.json"
+    existing = [path for path in (task_yaml_path, task_manifest_path) if path.exists()]
+    if existing:
+        raise ValueError(f"任务资产已存在，拒绝覆盖：{', '.join(str(path) for path in existing)}")
 
-    trace = read_model(trace_path, ShowuiTrace)
+    trace = read_json_model(source_root / "showui-trace.json", ShowuiTrace)
     assert isinstance(trace, ShowuiTrace)
-    processed_steps = read_processed_log(processed_log_with_screenshots_path)
-    flow = MidsceneFlow(
-        schema_version=MIDSCENE_FLOW_SCHEMA_VERSION,
-        scene=options.scene,
-        task=options.task,
-        goal=options.goal,
-        source=MidsceneFlowSource(
-            trace_path="source/showui-trace.json",
-            processed_log_path="source/processed-log.json",
-            processed_log_with_screenshots_path="source/processed-log-sc.json",
-            screenshots_dir="source/screenshots",
-        ),
-        commands=MidsceneFlowCommands(
-            recording_preparation=options.recording_preparation_command
-            or default_recording_preparation_command(options.scene, options.task),
-            trace_generation=options.trace_generation_command
-            or default_trace_generation_command(options.scene, options.task),
-            trace_to_flow_conversion=options.conversion_command,
-            flow_execution=options.flow_execution_command
-            or f"uv run cua flow run --scene {options.scene} --task {options.task}",
-        ),
-        steps=[
-            build_step(
-                step,
-                processed_steps[index] if index < len(processed_steps) else None,
-                processed_steps[index - 1] if 0 < index < len(processed_steps) else None,
-            )
-            for index, step in enumerate(trace.trajectory)
-        ],
-    )
-    if not write_json_if_missing(output_path, flow):
-        raise ValueError(f"任务 flow 已存在，拒绝覆盖：{output_path}")
+    processed_steps = read_processed_log(source_root / "processed-log-sc.json")
+    document, manifest = build_task_assets(trace, processed_steps, options)
 
+    write_yaml_document(task_yaml_path, document)
+    write_model(task_manifest_path, manifest)
     scene_manifest = SceneManifest(
         schema_version=SCENE_SCHEMA_VERSION,
         scene=options.scene,
         title=options.scene,
         description=f"{options.scene} 场景任务集合",
     )
-    write_json_if_missing(task_root.parent / "scene.json", scene_manifest)
-    write_json_if_missing(task_root / "task.json", create_initial_task_manifest(flow))
+    if not (task_root.parent / "scene.json").exists():
+        write_model(task_root.parent / "scene.json", scene_manifest)
     write_text_if_missing(task_root.parent / "SKILL.md", scene_skill_content(options.scene))
     write_text_if_missing(task_root / "SKILL.md", task_skill_content(options.scene, options.task))
-    (task_root / "reports").mkdir(parents=True, exist_ok=True)
-    return output_path
+    return task_yaml_path

@@ -9,7 +9,8 @@ from cua.conversion.showui_trace import convert_trace
 from cua.domain.types import ConvertOptions, ExecutionOptions, ResolveTaskOptions
 from cua.task.inputs import load_runtime_inputs
 from cua.task.projects import describe_task, list_scenes, list_tasks
-from cua.task.resolver import create_resolved_flow_snapshot, resolve_task_flow
+from cua.task.resolver import resolve_task
+from cua.task.yaml_task import dump_yaml_document
 
 
 class UniqueStoreAction(argparse.Action):
@@ -35,17 +36,13 @@ def add_task_identity(parser: argparse.ArgumentParser) -> None:
     add_unique_argument(parser, "--projects-root", type=Path, help="场景集合目录，默认 projects")
 
 
-def add_flow_arguments(parser: argparse.ArgumentParser, *, inputs: bool = False) -> None:
-    add_task_identity(parser)
-    add_unique_argument(parser, "--task-root", type=Path, help="任务目录覆盖")
-    add_unique_argument(parser, "--flow", type=Path, help="canonical flow 路径覆盖")
-    if inputs:
-        add_unique_argument(parser, "--inputs", type=Path, help="本次输入 JSON 文件")
-        parser.add_argument("--input", action="append", default=[], help="稀疏输入，格式为 key=value")
+def add_runtime_inputs(parser: argparse.ArgumentParser) -> None:
+    add_unique_argument(parser, "--inputs", type=Path, help="本次输入 JSON 文件")
+    parser.add_argument("--input", action="append", default=[], help="稀疏输入，格式为 key=value")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="cua", description="CUA 场景、任务与执行工具")
+    parser = argparse.ArgumentParser(prog="cua", description="CUA 场景、任务与 Midscene YAML 执行工具")
     domains = parser.add_subparsers(dest="domain", required=True)
 
     scene_parser = domains.add_parser("scene", help="场景查询")
@@ -54,8 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_unique_argument(scene_list, "--projects-root", type=Path, help="场景集合目录")
     scene_list.add_argument("--json", action="store_true", help="输出机器可读 JSON")
 
-    task_parser = domains.add_parser("task", help="任务查询与初始化")
+    task_parser = domains.add_parser("task", help="录制任务的创建、查询、检查与执行")
     task_commands = task_parser.add_subparsers(dest="command", required=True)
+
     task_list = task_commands.add_parser("list", help="列出场景中的任务")
     add_unique_argument(task_list, "--scene", required=True, help="业务场景标识")
     add_unique_argument(task_list, "--projects-root", type=Path, help="场景集合目录")
@@ -65,34 +63,25 @@ def build_parser() -> argparse.ArgumentParser:
     add_task_identity(task_describe)
     task_describe.add_argument("--json", action="store_true", help="输出机器可读 JSON")
 
-    task_init = task_commands.add_parser("init-from-trace", help="从 record trace 首次初始化任务 flow")
+    task_init = task_commands.add_parser("init-from-trace", help="从 record trace 初始化 Midscene YAML 任务")
     add_task_identity(task_init)
     add_unique_argument(task_init, "--goal", required=True, help="任务目标")
     add_unique_argument(task_init, "--recording-preparation-command", help="录制准备命令记录")
     add_unique_argument(task_init, "--trace-generation-command", help="trace 生成命令记录")
-    add_unique_argument(task_init, "--flow-execution-command", help="flow 执行命令记录")
 
-    flow_parser = domains.add_parser("flow", help="流程验证、检查与执行")
-    flow_commands = flow_parser.add_subparsers(dest="command", required=True)
     for command in ("validate", "inspect", "run"):
-        flow_command = flow_commands.add_parser(command)
-        add_flow_arguments(flow_command, inputs=True)
-        flow_command.add_argument("--json", action="store_true", help="输出机器可读 JSON")
+        task_command = task_commands.add_parser(command)
+        add_task_identity(task_command)
+        add_runtime_inputs(task_command)
+        task_command.add_argument("--json", action="store_true", help="输出机器可读 JSON")
         if command == "run":
-            flow_command.add_argument("--dry-run", action="store_true", help="只验证执行快照和 route")
+            task_command.add_argument("--dry-run", action="store_true", help="只验证 resolved task YAML")
 
-    act_parser = domains.add_parser("act", help="使用 Midscene aiAct 执行自然语言或完整录制任务")
+    act_parser = domains.add_parser("act", help="执行无录制自然语言电脑操作")
     act_commands = act_parser.add_subparsers(dest="command", required=True)
-    act_run = act_commands.add_parser("run", help="执行一次 aiAct")
-    add_unique_argument(act_run, "--prompt", help="无录制任务的自然语言要求")
-    add_unique_argument(act_run, "--scene", help="业务场景标识")
-    add_unique_argument(act_run, "--task", help="任务标识")
-    add_unique_argument(act_run, "--projects-root", type=Path, help="场景集合目录，默认 projects")
-    add_unique_argument(act_run, "--task-root", type=Path, help="任务目录覆盖")
-    add_unique_argument(act_run, "--flow", type=Path, help="canonical flow 路径覆盖")
-    add_unique_argument(act_run, "--inputs", type=Path, help="本次输入 JSON 文件")
-    act_run.add_argument("--input", action="append", default=[], help="稀疏输入，格式为 key=value")
-    act_run.add_argument("--dry-run", action="store_true", help="只验证并输出最终 aiAct prompt")
+    act_run = act_commands.add_parser("run", help="将自然语言要求包装为 Midscene YAML 并执行")
+    add_unique_argument(act_run, "--prompt", required=True, help="自然语言电脑操作要求")
+    act_run.add_argument("--dry-run", action="store_true", help="只验证生成的 YAML")
     return parser
 
 
@@ -101,8 +90,7 @@ def print_json(value: object) -> None:
 
 
 def quote_command_value(value: str) -> str:
-    escaped = value.replace('"', '\\"')
-    return f'"{escaped}"'
+    return f'"{value.replace(chr(34), chr(92) + chr(34))}"'
 
 
 def projects_root_from_args(args: argparse.Namespace) -> Path:
@@ -121,24 +109,19 @@ def build_conversion_command(args: argparse.Namespace) -> str:
     for option, value in (
         ("recording-preparation-command", args.recording_preparation_command),
         ("trace-generation-command", args.trace_generation_command),
-        ("flow-execution-command", args.flow_execution_command),
     ):
         if value:
             parts.append(f"--{option} {quote_command_value(value)}")
     return " ".join(parts)
 
 
-def resolve_from_args(args: argparse.Namespace, *, executable: bool = True):
-    inputs = load_runtime_inputs(args.inputs, args.input)
-    return resolve_task_flow(
+def resolve_from_args(args: argparse.Namespace):
+    return resolve_task(
         ResolveTaskOptions(
             scene=args.scene,
             task=args.task,
             projects_root=projects_root_from_args(args),
-            task_root=args.task_root.resolve() if args.task_root else None,
-            flow_path=args.flow.resolve() if args.flow else None,
-            inputs=inputs,
-            executable=executable,
+            inputs=load_runtime_inputs(args.inputs, args.input),
         )
     )
 
@@ -163,8 +146,7 @@ def run_command(args: argparse.Namespace) -> None:
         return
 
     if args.domain == "task" and args.command == "describe":
-        task = describe_task(args.scene, args.task, projects_root_from_args(args))
-        print_json(task)
+        print_json(describe_task(args.scene, args.task, projects_root_from_args(args)))
         return
 
     if args.domain == "task" and args.command == "init-from-trace":
@@ -177,13 +159,12 @@ def run_command(args: argparse.Namespace) -> None:
                 conversion_command=build_conversion_command(args),
                 recording_preparation_command=args.recording_preparation_command,
                 trace_generation_command=args.trace_generation_command,
-                flow_execution_command=args.flow_execution_command,
             )
         )
-        print_json({"initialized": True, "scene": args.scene, "task": args.task, "flowPath": str(output)})
+        print_json({"initialized": True, "scene": args.scene, "task": args.task, "taskYamlPath": str(output)})
         return
 
-    if args.domain == "flow" and args.command in {"validate", "inspect"}:
+    if args.domain == "task" and args.command in {"validate", "inspect"}:
         resolved = resolve_from_args(args)
         if args.command == "validate":
             print_json(
@@ -192,59 +173,51 @@ def run_command(args: argparse.Namespace) -> None:
                     "scene": args.scene,
                     "task": args.task,
                     "inputs": resolved.inputs,
-                    "sources": resolved.sources.to_json_dict(),
-                    "stepCount": len(resolved.flow.steps),
+                    "sourceYamlPath": str(resolved.source_path),
+                }
+            )
+        elif args.json:
+            print_json(
+                {
+                    "scene": args.scene,
+                    "task": args.task,
+                    "inputs": resolved.inputs,
+                    "sourceYamlPath": str(resolved.source_path),
+                    "yaml": resolved.document,
                 }
             )
         else:
-            print_json(create_resolved_flow_snapshot(resolved).to_json_dict())
+            print(dump_yaml_document(resolved.document), end="")
         return
 
-    if args.domain == "flow" and args.command == "run":
+    if args.domain == "task" and args.command == "run":
         from cua.task.executor import run_task
 
-        inputs = load_runtime_inputs(args.inputs, args.input)
-        snapshot, result = run_task(
+        resolved, snapshot_path, result = run_task(
             ExecutionOptions(
                 scene=args.scene,
                 task=args.task,
                 projects_root=projects_root_from_args(args),
-                task_root=args.task_root.resolve() if args.task_root else None,
-                flow_path=args.flow.resolve() if args.flow else None,
-                inputs=inputs,
+                inputs=load_runtime_inputs(args.inputs, args.input),
                 dry_run=args.dry_run,
             )
         )
-        print_json({"snapshot": snapshot.to_json_dict(), "executor": result.to_json_dict()})
+        print_json(
+            {
+                "scene": args.scene,
+                "task": args.task,
+                "inputs": resolved.inputs,
+                "resolvedTaskPath": str(snapshot_path),
+                "executor": result.to_json_dict(),
+            }
+        )
         return
 
     if args.domain == "act" and args.command == "run":
-        from cua.task.ai_act import run_prompt_ai_act, run_task_ai_act
+        from cua.task.executor import run_prompt
 
-        has_prompt = args.prompt is not None
-        has_task_identity = args.scene is not None or args.task is not None
-        task_only_values = [args.projects_root, args.task_root, args.flow, args.inputs]
-        if has_prompt:
-            if has_task_identity or any(value is not None for value in task_only_values) or args.input:
-                raise ValueError("--prompt 不能与 scene/task、任务路径或任务输入参数混用")
-            result = run_prompt_ai_act(args.prompt, dry_run=args.dry_run)
-            print_json({"executor": result.to_json_dict()})
-            return
-        if not args.scene or not args.task:
-            raise ValueError("任务 aiAct 模式必须同时提供 --scene 和 --task")
-        inputs = load_runtime_inputs(args.inputs, args.input)
-        snapshot, result = run_task_ai_act(
-            ExecutionOptions(
-                scene=args.scene,
-                task=args.task,
-                projects_root=projects_root_from_args(args),
-                task_root=args.task_root.resolve() if args.task_root else None,
-                flow_path=args.flow.resolve() if args.flow else None,
-                inputs=inputs,
-                dry_run=args.dry_run,
-            )
-        )
-        print_json({"snapshot": snapshot.to_json_dict(), "executor": result.to_json_dict()})
+        yaml_path, result = run_prompt(args.prompt, dry_run=args.dry_run)
+        print_json({"resolvedTaskPath": str(yaml_path), "executor": result.to_json_dict()})
         return
     raise ValueError(f"不支持的命令：{args.domain} {args.command}")
 

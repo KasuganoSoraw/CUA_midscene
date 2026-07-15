@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cua.domain.types import ResolveTaskOptions
 from cua.models.task import SceneManifest, TaskManifest
 from cua.task.io import read_model
-from cua.task.resolver import read_flow, task_paths, validate_flow, validate_manifests
+from cua.task.resolver import resolve_task, task_paths
+from cua.task.yaml_task import read_yaml_document
 
 
 def require_directory(path: Path, label: str) -> Path:
@@ -27,15 +29,16 @@ def list_scenes(projects_root: Path) -> list[dict[str, object]]:
 
 def describe_task(scene: str, task: str, projects_root: Path) -> dict[str, object]:
     paths = task_paths(scene, task, projects_root)
-    flow = read_flow(paths.flow_path)
-    scene_manifest = read_model(paths.scene_manifest_path, SceneManifest, "场景清单")
-    task_manifest = read_model(paths.task_manifest_path, TaskManifest, "任务清单")
-    validate_flow(flow, executable=False)
-    validate_manifests(scene_manifest, task_manifest, flow)
+    manifest = read_model(paths.task_manifest_path, TaskManifest, "任务清单")
+    document = read_yaml_document(paths.task_yaml_path)
+    resolve_task(ResolveTaskOptions(scene=scene, task=task, projects_root=projects_root))
+    tasks = document["tasks"]
+    action_count = sum(len(item["flow"]) for item in tasks)
     return {
-        **task_manifest.to_json_dict(),
-        "flowPath": str(paths.flow_path),
-        "stepCount": len(flow.steps),
+        **manifest.to_json_dict(),
+        "taskYamlPath": str(paths.task_yaml_path),
+        "taskCount": len(tasks),
+        "actionCount": action_count,
     }
 
 
