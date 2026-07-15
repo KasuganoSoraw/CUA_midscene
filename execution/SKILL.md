@@ -19,10 +19,11 @@ description: 使用本地场景/任务 Skill 与 Midscene computer use 创建、
 
 ## 选择入口
 
-- **已有录制任务**：使用 `uv run cua task run --scene <scene> --task <task>`。
+- **已有录制且页面稳定**：使用 `uv run cua task run --scene <scene> --task <task>`，按 YAML task 顺序执行以降低规划成本。
+- **已有录制且需要统一规划**：使用 `uv run cua act run --scene <scene> --task <task>`，将完整步骤交给一次整体 aiAct。
 - **无录制自然语言任务**：使用 `uv run cua act run --prompt "<电脑操作要求>"`。
 
-录制任务只执行其 `task.yaml`。需要 aiAct 规划时应在 YAML 中明确使用 Midscene 原生 `ai` action，不存在另一套“把录制步骤重新拼成完整 prompt”的执行模式。失败后报告原始错误并等待用户决定；不得自动切换、修改任务或重试。
+两种录制执行模式都从同一 canonical `task.yaml` 和本次输入解析结果出发；整体 aiAct prompt 只是报告目录中的运行时投影。需要只让某一步规划时，可以在 YAML 中明确使用 Midscene 原生 `ai` action。失败后报告原始错误并等待用户决定；不得自动切换、修改任务或重试。
 
 ## 发现任务
 
@@ -56,7 +57,7 @@ description: 使用本地场景/任务 Skill 与 Midscene computer use 创建、
 1. 运行 `uv run cua task describe --scene <scene> --task <task> --json` 读取 input ID、中文说明和录制默认值。
 2. 只传递用户本次明确改变的输入；未提供项保持 `task.json` 中的录制默认值。
 3. 使用 `uv run cua task inspect ... --input <id>=<value>` 检查 resolved YAML。
-4. 用户明确要求实际操作电脑时，运行 `task run`；可先加 `--dry-run`。
+4. 用户明确要求实际操作电脑时，根据页面稳定性和用户意图显式选择 `task run` 或 `act run --scene/--task`；可先加 `--dry-run`。
 
 同一参数需要影响后续动作时，canonical YAML 必须在相关 prompt 中显式复用同一个 `{{input-id}}`。不要根据字面值机械替换，不要从用户自然语言临时发明 input ID，也不要把一次性值写回任务文件。
 

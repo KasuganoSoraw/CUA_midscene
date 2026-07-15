@@ -11,8 +11,8 @@ record trace
   -> cua/conversion：trace operation -> task.yaml + task.json
   -> cua/task：任务发现、YAML 占位符解析、运行快照与子进程协议
   -> cua/cli：人、Agent 和未来前端的统一入口
-  -> reports/<run-id>/resolved-task.yaml
-  -> executors/run-midscene-yaml.ts
+  -> task run：resolved-task.yaml -> executors/run-midscene-yaml.ts
+  -> act run --scene/--task：resolved-task.yaml -> 完整步骤 prompt -> 单 ai action YAML
        -> 注册 KeyboardTypeText
        -> agent.runYaml()
 ```
@@ -39,6 +39,8 @@ projects/<scene>/
     ├── source/
     └── reports/<run-id>/            # Git 忽略
         ├── resolved-task.yaml
+        ├── ai-act-prompt.txt             # 录制任务整体 aiAct 模式
+        ├── ai-act-task.yaml              # 录制任务整体 aiAct 模式
         └── execution-result.json
 ```
 
@@ -88,7 +90,14 @@ uv run cua task run --scene browser-demo --task air-tickets-demo --dry-run
 uv run cua task run --scene browser-demo --task air-tickets-demo
 ```
 
-无录制自然语言任务：
+录制任务整体 aiAct：
+
+```powershell
+uv run cua act run --scene browser-demo --task air-tickets-demo --dry-run
+uv run cua act run --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
+```
+
+无录制自然语言整体 aiAct：
 
 ```powershell
 uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
@@ -97,7 +106,7 @@ uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。两种来源不能重复同一 ID。inspect 与 run 使用同一确定性解析函数，不调用模型、不回写任务文件。
 
-录制任务只执行其 YAML。若希望某一步由 Midscene 规划，可直接在 `task.yaml` 使用 Midscene 原生 `ai` action；系统不会再把全部录制步骤拼成第二份 aiAct prompt。
+`task run` 直接执行 canonical YAML 中的多个 task，适合页面稳定且希望降低规划成本的场景。`act run --scene/--task` 从同一份参数已解析 YAML 临时生成完整有序步骤 prompt，再包装为单 `ai` action；该 prompt 只保存在本次报告中，不是第二份长期任务资产。若只希望某一步由 Midscene 规划，也可以直接在 `task.yaml` 使用 Midscene 原生 `ai` action。
 
 ## 执行语义
 
@@ -110,6 +119,7 @@ uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 - `KeyboardTypeText` 只承诺 ASCII，遇到不支持字符直接失败。
 - 未知输入、重复输入、非法或未声明占位符、无效 YAML 和执行错误均直接暴露。
 - 录制任务的 step ID 必须唯一且严格递增；不得启用 `continueOnError` 跳过失败步骤。
+- 整体 aiAct prompt 保留 step 名称和执行动作，忽略录制 sleep；未知 YAML action 在启动 ComputerAgent 前失败。
 - 系统不兼容读取旧 flow，不自动切换模式，不修改任务后重试，也不调用替代输入动作。
 
 ## 验证

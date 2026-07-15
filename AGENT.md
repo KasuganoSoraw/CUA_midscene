@@ -16,3 +16,4 @@
 6. 任务根目录的 `task.yaml` 是唯一长期执行事实源，不维护自定义 flow、route、overrides、proposal 或 history。`task.json` 保存输入定义和录制默认值；本次参数只解析到运行快照，不回写任务资产。
 7. Python 与 TypeScript 的唯一执行边界是 `reports/<run-id>/resolved-task.yaml`。TypeScript executor 只注册 customActions、创建 ComputerAgent 并调用 `agent.runYaml()`，不得解释业务步骤、读取任务清单或实现兼容与兜底逻辑。
 8. 录制任务中每个 trace step 对应一个 Midscene task，名称固定为 `step-NNN | <operation-type>`；输入 ID 固定为对应的 `step-NNN-input`。长期修改应使用该名称定位步骤，不得重编号、复用编号、打乱顺序或启用 `continueOnError`。整体业务目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`，不得用整体目标替代步骤名称。
+9. 上层 Agent 必须显式选择执行模式：稳定的录制任务使用 `task run` 逐 task 执行；需要模型统一规划完整录制步骤时使用 `act run --scene/--task`；无录制任务使用 `act run --prompt`。任一模式失败后不得自动切换、修改任务或重试。

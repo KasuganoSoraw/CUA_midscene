@@ -29,7 +29,8 @@ CUA/
   -> Python converter：task.yaml + task.json
   -> 人、Agent 或未来前端确认后直接维护 task.yaml
   -> Python 解析本次输入：reports/<run-id>/resolved-task.yaml
-  -> TypeScript：agent.runYaml()
+  -> task run：按多个 Midscene task 顺序执行
+  -> act run --scene/--task：投影为完整步骤 prompt，再执行单个 ai action
 
 无录制自然语言要求
   -> 临时单 action YAML
@@ -52,6 +53,7 @@ uv run cua task describe --scene browser-demo --task air-tickets-demo --json
 uv run cua task validate --scene browser-demo --task air-tickets-demo
 uv run cua task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
 uv run cua task run --scene browser-demo --task air-tickets-demo --dry-run
+uv run cua act run --scene browser-demo --task air-tickets-demo --dry-run
 uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 ```
 
@@ -59,6 +61,7 @@ uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 
 ```powershell
 uv run cua task run --scene browser-demo --task air-tickets-demo
+uv run cua act run --scene browser-demo --task air-tickets-demo
 uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 ```
 
@@ -83,6 +86,8 @@ execution/projects/<scene>/
     ├── source/                   # trace、日志和截图
     └── reports/<run-id>/         # Git 忽略
         ├── resolved-task.yaml
+        ├── ai-act-prompt.txt          # 仅整体 aiAct 模式
+        ├── ai-act-task.yaml           # 仅整体 aiAct 模式
         └── execution-result.json
 ```
 

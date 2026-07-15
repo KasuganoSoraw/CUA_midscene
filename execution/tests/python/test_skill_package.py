@@ -16,7 +16,8 @@ def test_execution_is_self_contained_skill_root() -> None:
     assert "uv run cua task run" in skill
     assert "task.yaml" in skill
     assert "flow run" not in skill
-    assert "act run --scene" not in skill
+    assert "act run --scene" in skill
+    assert "不得自动切换" in skill
 
 
 def test_installer_packages_execution_tracked_files() -> None:
