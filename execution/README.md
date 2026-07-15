@@ -1,57 +1,48 @@
 # Execution
 
-该目录是 CUA 执行域。Python 核心负责把 record trace 初始化为本地任务、发现与验证任务、应用本次输入并生成 resolved flow；TypeScript 只通过 `@midscene/computer` 执行该快照。
+该目录是可独立发布的 `cua-midscene` Skill。Python 核心负责把 record trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入和编排执行；TypeScript 只注册 `KeyboardTypeText`、创建 ComputerAgent 并调用 `agent.runYaml()`。
 
-这里不使用 browser-use、Playwright、Puppeteer 或 CDP。面向堡垒机、远程桌面和企业内网页系统的操作统一使用 Midscene computer use。
-
-`execution/` 同时是可独立打包发布的 `cua-midscene` Skill 根目录：`SKILL.md` 提供 Agent 入口，`agents/` 提供展示元数据，`references/` 提供按需加载的契约，其余目录构成实际运行时。安装包不应包含环境密钥、本地依赖、缓存或运行报告。
+这里不使用 browser-use、Playwright、Puppeteer 或 CDP。堡垒机、远程桌面和企业内网页系统统一使用 Midscene computer use。
 
 ## 模块职责
 
 ```text
 record trace
-    ↓
-Python cua
-├── conversion       trace → canonical midscene-flow.json
-├── models           Pydantic 持久化契约
-├── task             场景/任务发现、输入解析、执行协议
-└── cli              人、Agent 和未来前端的统一入口
-    ↓ reports/<run-id>/resolved-flow.json
-TypeScript executors
-├── 共享 resolved flow JSON Schema 校验
-├── flow runner：逐 step Midscene route 映射
-├── aiAct runner：自然语言或有序步骤整体规划
-└── 共享 KeyboardTypeText customAction
+  -> cua/conversion：trace operation -> task.yaml + task.json
+  -> cua/task：任务发现、YAML 占位符解析、运行快照与子进程协议
+  -> cua/cli：人、Agent 和未来前端的统一入口
+  -> reports/<run-id>/resolved-task.yaml
+  -> executors/run-midscene-yaml.ts
+       -> 注册 KeyboardTypeText
+       -> agent.runYaml()
 ```
 
-- `cua/domain/`：Python 进程内部 dataclass 和 VO。
-- `SKILL.md`、`agents/`、`references/`：执行器 Skill 的入口、元数据和契约。
-- `cua/models/`：落盘或跨进程的 Pydantic 契约。
-- `cua/conversion/`：从 record trace 首次初始化任务 flow。
-- `cua/task/`：路径、发现、参数解析、快照和 Python/Node 执行协议。
-- `executors/`：TypeScript Midscene 薄适配器，只读取 prompt 或 resolved flow。
+- `cua/domain/`：Python 进程内部 dataclass。
+- `cua/models/`：scene、task 和 execution result 的 Pydantic 契约。
+- `cua/conversion/`：只根据结构化 trace operation 初始化任务。
+- `cua/task/`：YAML、输入、发现、报告与 Python/Node 执行协议。
+- `executors/`：Midscene YAML 薄适配器、环境读取和 customAction。
+- `projects/`：本地场景与任务 Skill。
 - `schemas/`：从 Pydantic 生成，不手工编辑。
-- `tests/python/`、`tests/executors/`：按职责分离的测试。
+- `tests/python/`、`tests/executors/`：按技术边界分离的测试。
 
 ## 任务目录
 
 ```text
 projects/<scene>/
-├── scene.json                       # 场景清单
-├── SKILL.md                         # 场景路由规则
+├── scene.json
+├── SKILL.md
 └── <task>/
-    ├── task.json                    # 任务说明与输入绑定
-    ├── SKILL.md                     # 具体任务调用规则
-    ├── midscene-flow.json           # 唯一长期执行事实源
-    ├── source/                      # trace、日志和截图
+    ├── task.yaml                    # Midscene 原生 YAML，唯一长期事实源
+    ├── task.json                    # 元数据、source 命令、输入与默认值
+    ├── SKILL.md
+    ├── source/
     └── reports/<run-id>/            # Git 忽略
-        ├── resolved-flow.json
-        ├── execution-result.json           # flow run
-        ├── ai-act-prompt.txt               # act run
-        └── ai-act-result.json              # act run
+        ├── resolved-task.yaml
+        └── execution-result.json
 ```
 
-长期修改直接编辑 `midscene-flow.json` 并运行 validate。Agent 修改前必须展示差异并等待确认。`task.json` 不保存默认值；本次没有传入的 input 保持 flow 当前值。
+长期修改直接编辑 `task.yaml` 并运行 `task validate`。Agent 修改前必须展示差异并等待确认。`task.json` 中未被本次 `--input` 覆盖的值保持录制默认值。
 
 ## 环境
 
@@ -79,49 +70,45 @@ uv run cua task list --scene browser-demo --json
 uv run cua task describe --scene browser-demo --task air-tickets-demo --json
 ```
 
-首次初始化已准备好 `source/` 的任务：
+从已准备好的 `source/` 初始化任务：
 
 ```powershell
-uv run cua task init-from-trace --scene browser-demo --task <task-name> --goal "<目标>"
+uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"
 ```
 
-该命令创建 flow、缺失的清单和最小 Skill；如果 flow 已存在则失败，不提供覆盖兜底。
+若 `task.yaml` 或 `task.json` 已存在，命令直接失败。它不会覆盖、迁移或合并旧资产。
 
-验证、检查和执行：
+检查与执行录制任务：
 
 ```powershell
-uv run cua flow validate --scene browser-demo --task air-tickets-demo
-uv run cua flow inspect --scene browser-demo --task air-tickets-demo
-uv run cua flow inspect --scene browser-demo --task air-tickets-demo --input step-002-value=GOOGLE
-uv run cua flow run --scene browser-demo --task air-tickets-demo --dry-run
-uv run cua flow run --scene browser-demo --task air-tickets-demo
-uv run cua act run --scene browser-demo --task air-tickets-demo --dry-run
-uv run cua act run --scene browser-demo --task air-tickets-demo --input step-008-value=TOKYO
+uv run cua task validate --scene browser-demo --task air-tickets-demo
+uv run cua task inspect --scene browser-demo --task air-tickets-demo
+uv run cua task inspect --scene browser-demo --task air-tickets-demo --input input-001=GOOGLE
+uv run cua task run --scene browser-demo --task air-tickets-demo --dry-run
+uv run cua task run --scene browser-demo --task air-tickets-demo
+```
+
+无录制自然语言任务：
+
+```powershell
 uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 ```
 
-`--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。两种来源不能重复同一 ID。inspect 与 run 使用完全相同的确定性解析逻辑，不调用模型，不回写任务文件。
+`--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。两种来源不能重复同一 ID。inspect 与 run 使用同一确定性解析函数，不调用模型、不回写任务文件。
 
-三种调用不会自动切换：
-
-- `flow run` 按 resolved flow 的 step 逐步执行，适合页面稳定的录制任务。
-- `act run --scene/--task` 使用同一 resolved 参数结果，将 route 指令组成一个完整 prompt 后调用一次 `agent.aiAct()`。
-- `act run --prompt` 不读取任务资产，直接执行无录制自然语言要求。
-
-两种 `act run` 的 `--dry-run` 都只验证并保存最终 prompt，不初始化 ComputerDevice 或调用模型。自然语言报告位于 `execution/reports/<run-id>/`；任务报告位于任务自身 `reports/<run-id>/`。
+录制任务只执行其 YAML。若希望某一步由 Midscene 规划，可直接在 `task.yaml` 使用 Midscene 原生 `ai` action；系统不会再把全部录制步骤拼成第二份 aiAct prompt。
 
 ## 执行语义
 
-- converter 只使用 trace 的结构化 `operation.type` 和必需字段，不扫描自然语言关键词猜 route。
-- input 必须有 `operation.locatePrompt`；不会从完整动作 prompt 自动派生。
-- `KeyboardTypeText` 通过 Midscene locate 管线定位输入框并发送键盘事件，不使用 `aiInput` 或剪贴板。
-- `KeyboardTypeText` 当前只承诺 ASCII，遇到不支持字符直接失败。
-- `timing.waitBeforeMs` 来自录制间隔，低于 200ms 忽略，高于 30 秒截断。
-- runner 不在定位失败后默认调用 `aiWaitFor`；只有显式 wait route 才调用。
-- `manual-review` 和未知 route 直接失败，不静默跳过、不自动改写任务。
-- aiAct 的 ASCII 输入优先使用 `KeyboardTypeText`；只有文本包含不支持字符时才允许默认 `Input`。定位或一般执行失败不会触发动作回退。
-- aiAct 失败原样暴露，不调用确定性 runner、不修改任务也不自动重试。
+- converter 只读取 trace 的 `caption.operation` 和 processed log 时间，不扫描其他自然语言字段。
+- click、input、keyboard、wait 分别生成 `aiTap`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。
+- 录制间隔生成前置 `sleep`：低于 200ms 忽略，高于 30 秒截断。
+- 每个 trace input 依次生成 `input-001`、`input-002` 等 ID，录制值保存在 `task.json`。
+- `KeyboardTypeText` 通过 Midscene locate 定位输入框，再用底层键盘 primitive 逐键输入；每个字符不会经过模型规划，也不使用剪贴板。
+- `KeyboardTypeText` 只承诺 ASCII，遇到不支持字符直接失败。
+- 未知输入、重复输入、非法或未声明占位符、无效 YAML 和执行错误均直接暴露。
+- 系统不兼容读取旧 flow，不自动切换模式，不修改任务后重试，也不调用替代输入动作。
 
 ## 验证
 

@@ -15,12 +15,12 @@
 
 - [x] 3.1 将录制任务命令收敛为 `task init-from-trace/validate/inspect/run`
 - [x] 3.2 将 `act run` 收敛为无录制 prompt 生成临时 YAML并复用统一 runner
-- [ ] 3.3 更新任务发现、报告目录和失败协议，确认不存在兼容读取、自动切换或 fallback
+- [x] 3.3 更新任务发现、报告目录和失败协议，确认不存在兼容读取、自动切换或 fallback
 
 ## 4. 测试、Skill 与文档
 
 - [x] 4.1 重写 Python converter、resolver、CLI 和执行协议测试并删除旧 flow 测试
 - [x] 4.2 重写 TypeScript YAML runner 与 KeyboardTypeText 测试并运行类型检查
-- [ ] 4.3 更新根 README、execution README、AGENT.md、Skill 与任务契约，删除过时描述
-- [ ] 4.4 重新安装并验证本机 `cua-midscene` Skill，运行 Schema 漂移与 OpenSpec 严格校验
+- [x] 4.3 更新根 README、execution README、AGENT.md、Skill 与任务契约，删除过时描述
+- [x] 4.4 重新安装并验证本机 `cua-midscene` Skill，运行 Schema 漂移与 OpenSpec 严格校验
 - [ ] 4.5 全局检索并清除旧 flow、route、resolved-flow、fallback 和任务型 aiAct 实现，按阶段完成中文小步提交

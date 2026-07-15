@@ -11,14 +11,6 @@ export function warnIfNodeVersionIsOld(): void {
   }
 }
 
-export function mustGetEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required env var: ${name}`);
-  }
-  return value;
-}
-
 export const requiredModelEnv = [
   'MIDSCENE_MODEL_BASE_URL',
   'MIDSCENE_MODEL_NAME',

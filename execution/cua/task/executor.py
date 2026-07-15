@@ -12,6 +12,11 @@ from cua.task.yaml_task import write_yaml_document
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
 
+AI_ACT_CONTEXT = """文本输入必须遵守以下规则：
+1. 仅使用 KeyboardTypeText 输入 ASCII 文本，不使用默认 Input 或剪贴板。
+2. 待输入文本包含 KeyboardTypeText 不支持的字符时直接失败，不切换输入动作。
+3. 不得因为定位失败或一般执行失败改用其他输入方式。"""
+
 
 def default_executor_command() -> tuple[str, ...]:
     npm = shutil.which("npm")
@@ -102,6 +107,10 @@ def run_prompt(
         yaml_path,
         {
             "computer": {},
+            "agent": {
+                "generateReport": True,
+                "aiActContext": AI_ACT_CONTEXT,
+            },
             "tasks": [
                 {
                     "name": "自然语言电脑操作",

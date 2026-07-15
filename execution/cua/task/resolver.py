@@ -6,7 +6,7 @@ from pathlib import Path
 from cua.domain.types import ResolveTaskOptions, ResolvedTaskResult, TaskPaths
 from cua.models.task import SceneManifest, TaskManifest
 from cua.task.io import read_model
-from cua.task.yaml_task import read_yaml_document, resolve_yaml_inputs, write_yaml_document
+from cua.task.yaml_task import read_yaml_document, resolve_yaml_inputs
 
 
 def task_paths(scene: str, task: str, projects_root: Path | None = None) -> TaskPaths:
@@ -64,10 +64,3 @@ def create_run_directory(reports_dir: Path) -> Path:
     run_dir = reports_dir.resolve() / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
     return run_dir
-
-
-def write_resolved_task(result: ResolvedTaskResult, reports_dir: Path) -> Path:
-    run_dir = create_run_directory(reports_dir)
-    snapshot_path = run_dir / "resolved-task.yaml"
-    write_yaml_document(snapshot_path, result.document)
-    return snapshot_path

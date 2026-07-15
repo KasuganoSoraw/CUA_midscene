@@ -125,6 +125,7 @@ def test_natural_language_prompt_generates_one_action_yaml(tmp_path: Path) -> No
     )
     document = read_yaml_document(yaml_path)
     assert document["tasks"][0]["flow"] == [{"ai": "打开 Chrome 并搜索 GUI agent"}]
+    assert "KeyboardTypeText" in document["agent"]["aiActContext"]
     assert result.status == "succeeded"
     with pytest.raises(ValueError, match="prompt 不能为空"):
         run_prompt("   ", reports_root=tmp_path / "empty")

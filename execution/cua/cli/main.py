@@ -164,19 +164,33 @@ def run_command(args: argparse.Namespace) -> None:
         print_json({"initialized": True, "scene": args.scene, "task": args.task, "taskYamlPath": str(output)})
         return
 
-    if args.domain == "task" and args.command in {"validate", "inspect"}:
-        resolved = resolve_from_args(args)
-        if args.command == "validate":
-            print_json(
-                {
-                    "valid": True,
-                    "scene": args.scene,
-                    "task": args.task,
-                    "inputs": resolved.inputs,
-                    "sourceYamlPath": str(resolved.source_path),
-                }
+    if args.domain == "task" and args.command == "validate":
+        from cua.task.executor import run_task
+
+        resolved, snapshot_path, result = run_task(
+            ExecutionOptions(
+                scene=args.scene,
+                task=args.task,
+                projects_root=projects_root_from_args(args),
+                inputs=load_runtime_inputs(args.inputs, args.input),
+                dry_run=True,
             )
-        elif args.json:
+        )
+        print_json(
+            {
+                "valid": True,
+                "scene": args.scene,
+                "task": args.task,
+                "inputs": resolved.inputs,
+                "resolvedTaskPath": str(snapshot_path),
+                "executor": result.to_json_dict(),
+            }
+        )
+        return
+
+    if args.domain == "task" and args.command == "inspect":
+        resolved = resolve_from_args(args)
+        if args.json:
             print_json(
                 {
                     "scene": args.scene,

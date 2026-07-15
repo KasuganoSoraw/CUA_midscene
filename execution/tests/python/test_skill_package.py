@@ -13,6 +13,10 @@ def test_execution_is_self_contained_skill_root() -> None:
     assert (EXECUTION_ROOT / "references" / "task-contract.md").is_file()
     assert "该目录是完整交付单元，不依赖外层 CUA 仓库" in skill
     assert "uv run cua act run" in skill
+    assert "uv run cua task run" in skill
+    assert "task.yaml" in skill
+    assert "flow run" not in skill
+    assert "act run --scene" not in skill
 
 
 def test_installer_packages_execution_tracked_files() -> None:
