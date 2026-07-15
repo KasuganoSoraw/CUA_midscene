@@ -6,160 +6,104 @@ from pathlib import Path
 import pytest
 
 from cua.domain.types import ResolveTaskOptions
-from cua.models.flow import (
-    InputRoute,
-    MidsceneFlow,
-    MidsceneFlowEvidence,
-    MidsceneFlowSource,
-    MidsceneFlowSourceTrace,
-    MidsceneFlowStep,
-    TapRoute,
-    TraceClickOperation,
-    TraceInputOperation,
-)
-from cua.models.task import SceneManifest, TaskInputBinding, TaskInputDefinition, TaskManifest
+from cua.models.task import SceneManifest, TaskInputDefinition, TaskManifest, TaskSource
 from cua.task.inputs import load_runtime_inputs
 from cua.task.io import write_model
 from cua.task.projects import describe_task, list_scenes, list_tasks
-from cua.task.resolver import resolve_task_flow, write_resolved_flow_snapshot
+from cua.task.resolver import resolve_task
+from cua.task.yaml_task import write_yaml_document
 
 SCENE = "browser-demo"
 TASK = "search-demo"
 
 
-def make_flow(value: str = "默认关键词") -> MidsceneFlow:
-    return MidsceneFlow(
-        schema_version="0.1",
-        scene=SCENE,
-        task=TASK,
-        goal="测试搜索",
-        source=MidsceneFlowSource(trace_path="source/showui-trace.json"),
-        steps=[
-            MidsceneFlowStep(
-                id="step-001",
-                source_trace=MidsceneFlowSourceTrace(step_index=1),
-                intent="输入搜索词",
-                evidence=MidsceneFlowEvidence(
-                    observation="搜索框可见",
-                    action="输入关键词",
-                    operation=TraceInputOperation(
-                        type="input",
-                        prompt="在搜索框输入 {{value}}",
-                        locate_prompt="页面顶部搜索框",
-                        value=value,
-                    ),
-                ),
-                route=InputRoute(
-                    strategy="input",
-                    prompt="在搜索框输入 {{value}}",
-                    locate_prompt="页面顶部搜索框",
-                    value=value,
-                    mode="replace",
-                    input_method="keyboard-action",
-                ),
-            ),
-            MidsceneFlowStep(
-                id="step-002",
-                source_trace=MidsceneFlowSourceTrace(step_index=2),
-                intent="点击搜索",
-                evidence=MidsceneFlowEvidence(
-                    observation="搜索按钮可见",
-                    action="点击搜索",
-                    operation=TraceClickOperation(type="click", prompt="页面顶部的搜索按钮"),
-                ),
-                route=TapRoute(strategy="tap", prompt="页面顶部的搜索按钮"),
-            ),
-        ],
-    )
-
-
-def create_task(projects_root: Path, value: str = "默认关键词") -> Path:
+def create_task(projects_root: Path) -> Path:
     scene_root = projects_root / SCENE
     task_root = scene_root / TASK
-    flow = make_flow(value)
     write_model(
         scene_root / "scene.json",
-        SceneManifest(
-            schema_version="0.1",
-            scene=SCENE,
-            title="浏览器示例",
-            description="测试场景",
-        ),
+        SceneManifest(schema_version="0.1", scene=SCENE, title="浏览器示例", description="测试场景"),
     )
     write_model(
         task_root / "task.json",
         TaskManifest(
-            schema_version="0.1",
+            schema_version="0.2",
             scene=SCENE,
             task=TASK,
             title="搜索示例",
             description="测试任务",
-            goal=flow.goal,
+            goal="测试搜索",
+            source=TaskSource(
+                trace_path="source/showui-trace.json",
+                processed_log_path="source/processed-log-sc.json",
+                conversion_command="uv run cua task init-from-trace",
+            ),
             inputs={
                 "query": TaskInputDefinition(
-                    type="string",
-                    label="搜索词",
-                    binding=TaskInputBinding(step_id="step-001", field="route.value"),
+                    type="string", label="搜索词", description="搜索内容", default="默认关键词"
                 )
             },
         ),
     )
-    write_model(task_root / "midscene-flow.json", flow)
+    write_yaml_document(
+        task_root / "task.yaml",
+        {
+            "computer": {},
+            "tasks": [
+                {
+                    "name": "搜索 {{query}}",
+                    "flow": [
+                        {
+                            "KeyboardTypeText": {
+                                "locate": "页面顶部搜索框",
+                                "value": "{{query}}",
+                                "mode": "replace",
+                            }
+                        },
+                        {"aiTap": "点击与 {{query}} 对应的候选项"},
+                    ],
+                }
+            ],
+        },
+    )
     return task_root
 
 
-def input_value(flow: MidsceneFlow) -> str:
-    route = flow.steps[0].route
-    assert isinstance(route, InputRoute)
-    return route.value
-
-
-def test_resolver_uses_flow_value_and_applies_sparse_input(tmp_path: Path) -> None:
+def test_resolver_uses_defaults_and_replaces_every_explicit_placeholder(tmp_path: Path) -> None:
     task_root = create_task(tmp_path)
-    defaults = resolve_task_flow(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
-    assert input_value(defaults.flow) == "默认关键词"
+    defaults = resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
     assert defaults.inputs == {"query": "默认关键词"}
+    assert defaults.document["tasks"][0]["name"] == "搜索 默认关键词"
 
-    sparse = resolve_task_flow(
-        ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path, inputs={"query": "47405"})
+    resolved = resolve_task(
+        ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path, inputs={"query": "GUI agent"})
     )
-    assert input_value(sparse.flow) == "47405"
-    canonical = MidsceneFlow.model_validate_json(
-        (task_root / "midscene-flow.json").read_text(encoding="utf-8")
-    )
-    assert input_value(canonical) == "默认关键词"
-    snapshot_path = write_resolved_flow_snapshot(sparse, task_root / "reports")
-    assert snapshot_path.name == "resolved-flow.json"
+    flow = resolved.document["tasks"][0]["flow"]
+    assert flow[0]["KeyboardTypeText"]["value"] == "GUI agent"
+    assert flow[1]["aiTap"] == "点击与 GUI agent 对应的候选项"
+    assert "{{query}}" in (task_root / "task.yaml").read_text(encoding="utf-8")
 
 
-def test_direct_flow_edit_becomes_new_default(tmp_path: Path) -> None:
-    task_root = create_task(tmp_path)
-    flow = make_flow("长期修改后的关键词")
-    write_model(task_root / "midscene-flow.json", flow)
-    resolved = resolve_task_flow(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
-    assert input_value(resolved.flow) == "长期修改后的关键词"
-
-
-def test_resolver_rejects_unknown_input_and_invalid_binding(tmp_path: Path) -> None:
+def test_resolver_rejects_unknown_undeclared_unused_and_malformed_inputs(tmp_path: Path) -> None:
     task_root = create_task(tmp_path)
     with pytest.raises(ValueError, match="未知输入参数：unknown"):
-        resolve_task_flow(
+        resolve_task(
             ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path, inputs={"unknown": "value"})
         )
 
-    manifest = TaskManifest.model_validate_json((task_root / "task.json").read_text(encoding="utf-8"))
-    invalid = manifest.model_copy(
-        update={
-            "inputs": {
-                "query": manifest.inputs["query"].model_copy(
-                    update={"binding": TaskInputBinding(step_id="step-999", field="route.value")}
-                )
-            }
-        }
-    )
-    write_model(task_root / "task.json", invalid)
-    with pytest.raises(ValueError, match="不存在的 step：step-999"):
-        resolve_task_flow(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
+    yaml_path = task_root / "task.yaml"
+    text = yaml_path.read_text(encoding="utf-8")
+    yaml_path.write_text(text.replace("{{query}}", "{{missing}}"), encoding="utf-8")
+    with pytest.raises(ValueError, match="未声明输入占位符：missing"):
+        resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
+
+    yaml_path.write_text(text.replace("{{query}}", "fixed"), encoding="utf-8")
+    with pytest.raises(ValueError, match="任务清单输入未在 YAML 中使用：query"):
+        resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
+
+    yaml_path.write_text(text.replace("{{query}}", "{{Query}}"), encoding="utf-8")
+    with pytest.raises(ValueError, match="非法输入占位符"):
+        resolve_task(ResolveTaskOptions(scene=SCENE, task=TASK, projects_root=tmp_path))
 
 
 def test_runtime_inputs_reject_duplicates_and_non_strings(tmp_path: Path) -> None:
@@ -178,5 +122,5 @@ def test_scene_and_task_discovery_validate_assets(tmp_path: Path) -> None:
     assert list_scenes(tmp_path)[0]["scene"] == SCENE
     tasks = list_tasks(SCENE, tmp_path)
     assert tasks[0]["task"] == TASK
-    assert "query" in tasks[0]["inputs"]  # type: ignore[operator]
-    assert describe_task(SCENE, TASK, tmp_path)["stepCount"] == 2
+    assert tasks[0]["actionCount"] == 2
+    assert describe_task(SCENE, TASK, tmp_path)["taskYamlPath"].endswith("task.yaml")

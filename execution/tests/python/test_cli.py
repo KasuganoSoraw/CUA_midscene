@@ -17,69 +17,61 @@ def test_scene_and_task_list_json(capsys: pytest.CaptureFixture[str]) -> None:
     main(["task", "list", "--scene", "browser-demo", "--projects-root", str(PROJECTS_ROOT), "--json"])
     result = json.loads(capsys.readouterr().out)
     assert result["tasks"][0]["task"] == "air-tickets-demo"
-    assert "step-002-value" in result["tasks"][0]["inputs"]
+    assert list(result["tasks"][0]["inputs"]) == ["input-001", "input-002", "input-003"]
+    assert result["tasks"][0]["taskYamlPath"].endswith("task.yaml")
 
 
-def test_flow_inspect_applies_only_explicit_input(capsys: pytest.CaptureFixture[str]) -> None:
+def test_task_inspect_applies_only_explicit_input(capsys: pytest.CaptureFixture[str]) -> None:
     main(
         [
-            "flow", "inspect",
-            "--scene", "browser-demo",
-            "--task", "air-tickets-demo",
-            "--projects-root", str(PROJECTS_ROOT),
-            "--input", "step-002-value=GOOGLE",
+            "task",
+            "inspect",
+            "--scene",
+            "browser-demo",
+            "--task",
+            "air-tickets-demo",
+            "--projects-root",
+            str(PROJECTS_ROOT),
+            "--input",
+            "input-001=GOOGLE",
+            "--json",
         ]
     )
     result = json.loads(capsys.readouterr().out)
-    assert result["inputs"]["step-002-value"] == "GOOGLE"
-    assert result["inputs"]["step-008-value"] == "SINGAPORE"
-    assert result["flow"]["steps"][1]["route"]["value"] == "GOOGLE"
-    assert result["flow"]["steps"][7]["route"]["value"] == "SINGAPORE"
+    assert result["inputs"]["input-001"] == "GOOGLE"
+    assert result["inputs"]["input-002"] == "SINGAPORE"
+    assert result["yaml"]["tasks"][0]["flow"][2]["KeyboardTypeText"]["value"] == "GOOGLE"
 
 
 def test_cli_rejects_duplicate_single_value_argument() -> None:
     with pytest.raises(SystemExit) as error:
-        main(["flow", "inspect", "--scene", "first", "--scene", "second", "--task", "demo"])
+        main(["task", "inspect", "--scene", "first", "--scene", "second", "--task", "demo"])
     assert error.value.code == 2
 
 
-def test_removed_project_and_calibration_commands_are_rejected() -> None:
-    with pytest.raises(SystemExit) as project_error:
-        main(["project", "list"])
-    assert project_error.value.code == 2
+def test_removed_flow_and_calibration_commands_are_rejected() -> None:
+    with pytest.raises(SystemExit) as flow_error:
+        main(["flow", "inspect"])
+    assert flow_error.value.code == 2
     with pytest.raises(SystemExit) as calibration_error:
         main(["calibration", "apply"])
     assert calibration_error.value.code == 2
 
 
-@pytest.mark.parametrize(
-    "argv, message",
-    [
-        (["act", "run"], "必须同时提供 --scene 和 --task"),
-        (["act", "run", "--scene", "browser-demo"], "必须同时提供 --scene 和 --task"),
-        (["act", "run", "--task", "air-tickets-demo"], "必须同时提供 --scene 和 --task"),
-        (["act", "run", "--prompt", ""], "prompt 不能为空"),
-        (
-            ["act", "run", "--prompt", "搜索", "--scene", "browser-demo", "--task", "air-tickets-demo"],
-            "不能与 scene/task",
-        ),
-        (["act", "run", "--prompt", "搜索", "--input", "query=GUI"], "不能与 scene/task"),
-    ],
-)
-def test_act_cli_rejects_invalid_source_combinations(
-    argv: list[str], message: str, capsys: pytest.CaptureFixture[str]
-) -> None:
-    with pytest.raises(SystemExit) as error:
-        main(argv)
-    assert error.value.code == 1
-    assert message in capsys.readouterr().err
+def test_act_only_accepts_prompt() -> None:
+    with pytest.raises(SystemExit) as missing:
+        main(["act", "run"])
+    assert missing.value.code == 2
+    with pytest.raises(SystemExit) as task_mode:
+        main(["act", "run", "--scene", "browser-demo", "--task", "air-tickets-demo"])
+    assert task_mode.value.code == 2
 
 
-def test_act_task_rejects_unknown_input_before_executor(capsys: pytest.CaptureFixture[str]) -> None:
+def test_task_rejects_unknown_input_before_executor(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as error:
         main(
             [
-                "act",
+                "task",
                 "run",
                 "--scene",
                 "browser-demo",
