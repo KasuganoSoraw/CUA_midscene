@@ -88,11 +88,16 @@ tasks:
     flow:
       - KeyboardPress:
           keyName: Enter
+  - name: step-004 | doubleClick
+    flow:
+      - aiDoubleClick: 双击页面中部文件列表里名称为 report.xlsx 的文件行，以打开该文件
 ```
 
 调用时只能覆盖已声明 ID。未提供输入使用 `task.json` 的 `default`。未知、重复、非字符串、未声明、未使用或格式错误的占位符都会在启动 Midscene 前失败。
 
 每个 trace step 对应一个 Midscene task，名称固定为 `step-NNN | <operation-type>`。步骤编号必须为正整数、唯一并严格递增；前置录制等待和本步动作位于同一 task 的 flow。整体业务目标同时保存在 `task.json.goal` 和 `agent.groupDescription`，不作为某一步的名称。
+
+`operation.type` 支持 click、doubleClick、input、keyboard 和 wait。`doubleClick` 必须映射为 Midscene 原生 `aiDoubleClick`，整体 aiAct 投影也必须明确保留双击语义。
 
 占位符可以嵌入任意 YAML 字符串。同一输入还会影响后续动作时，由人或 Agent 经确认后在相关 prompt 中显式复用该占位符；resolver 不根据业务文字猜测参数关联。
 

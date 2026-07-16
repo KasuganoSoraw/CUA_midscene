@@ -112,7 +112,7 @@ uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 
 - converter 只读取 trace 的 `caption.operation` 和 processed log 时间，不扫描其他自然语言字段。
 - 每个 trace step 生成一个 Midscene task，名称固定为 `step-NNN | <operation-type>`；整体目标写入 `agent.groupDescription`。
-- click、input、keyboard、wait 分别生成 `aiTap`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。
+- click、doubleClick、input、keyboard、wait 分别生成 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。
 - 录制间隔生成前置 `sleep`：低于 200ms 忽略，高于 30 秒截断。
 - 每个 trace input 使用步骤派生 ID，例如 step 2 生成 `step-002-input`；录制值保存在 `task.json`。
 - `KeyboardTypeText` 通过 Midscene locate 定位输入框，再用底层键盘 primitive 逐键输入；每个字符不会经过模型规划，也不使用剪贴板。

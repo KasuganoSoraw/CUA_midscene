@@ -43,6 +43,12 @@ def recorded_document() -> dict[str, object]:
                     {"aiTap": "点击结果页顶部的确认按钮"},
                 ],
             },
+            {
+                "name": "step-006 | doubleClick",
+                "flow": [
+                    {"aiDoubleClick": "页面中部文件列表里的 report.xlsx 文件行"}
+                ],
+            },
         ],
     }
 
@@ -61,6 +67,10 @@ def test_build_prompt_preserves_steps_and_renders_supported_actions() -> None:
     assert "等待搜索结果页出现" in prompt
     assert "确认页面已加载并点击第一条结果" in prompt
     assert "点击结果页顶部的确认按钮" in prompt
+    assert (
+        '双击以下描述对应的目标："页面中部文件列表里的 report.xlsx 文件行"'
+        in prompt
+    )
     assert "500" not in prompt
     assert "timeout" not in prompt
 

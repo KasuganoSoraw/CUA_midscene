@@ -28,7 +28,7 @@ class InputModel(BaseModel):
 
 
 class ShowuiTraceOperation(InputModel):
-    type: Literal["click", "input", "keyboard", "wait"]
+    type: Literal["click", "doubleClick", "input", "keyboard", "wait"]
     prompt: str | None = None
     locatePrompt: str | None = None
     value: str | None = None
@@ -137,6 +137,9 @@ def action_from_operation(
     if operation.type == "click":
         prompt = required_operation_text(operation.prompt, "prompt", step_index)
         return {"aiTap": prompt}, None
+    if operation.type == "doubleClick":
+        prompt = required_operation_text(operation.prompt, "prompt", step_index)
+        return {"aiDoubleClick": prompt}, None
     if operation.type == "input":
         prompt = required_operation_text(operation.prompt, "prompt", step_index)
         locate = required_operation_text(operation.locatePrompt, "locatePrompt", step_index)

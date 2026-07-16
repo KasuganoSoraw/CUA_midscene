@@ -10,7 +10,7 @@ from cua.models.task import TaskManifest
 
 PLACEHOLDER_PATTERN = re.compile(r"\{\{([a-z][a-z0-9-]*)\}\}")
 RECORDED_TASK_NAME_PATTERN = re.compile(
-    r"^(step-(\d{3,})) \| (click|input|keyboard|wait)$"
+    r"^(step-(\d{3,})) \| (click|doubleClick|input|keyboard|wait)$"
 )
 RECORDED_INPUT_ID_PATTERN = re.compile(r"^(step-(\d{3,}))-input$")
 

@@ -8,6 +8,7 @@ from cua.task.yaml_task import validate_yaml_document
 PROMPT_HEADER = "请严格按以下步骤顺序完成电脑操作："
 SUPPORTED_ACTIONS = {
     "ai",
+    "aiDoubleClick",
     "aiTap",
     "aiWaitFor",
     "KeyboardPress",
@@ -66,6 +67,9 @@ def render_action(action: dict[str, Any], context: str) -> str | None:
     value = action[action_name]
     if action_name in {"ai", "aiTap", "aiWaitFor"}:
         return required_string(value, action_name, context)
+    if action_name == "aiDoubleClick":
+        prompt = required_string(value, action_name, context)
+        return f"双击以下描述对应的目标：{quoted(prompt)}"
     if action_name == "KeyboardTypeText":
         return render_keyboard_type_text(value, context)
     if not isinstance(value, dict):

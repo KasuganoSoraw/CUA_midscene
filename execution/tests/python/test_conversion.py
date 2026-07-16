@@ -71,6 +71,29 @@ def test_converter_generates_midscene_yaml_and_trace_inputs(tmp_path: Path) -> N
     assert not (task_root / "midscene-flow.json").exists()
 
 
+def test_converter_maps_double_click_to_midscene_native_action(tmp_path: Path) -> None:
+    task_root = copy_source(tmp_path, "double-click-task")
+    trace_path = task_root / "source" / "showui-trace.json"
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    trace["trajectory"][0]["caption"]["operation"] = {
+        "type": "doubleClick",
+        "prompt": "双击页面中部文件列表里的 report.xlsx 文件行以打开文件",
+    }
+    trace_path.write_text(json.dumps(trace, ensure_ascii=False), encoding="utf-8")
+
+    output = convert_trace(options(tmp_path, "double-click-task"))
+    document = read_yaml_document(output)
+
+    assert document["tasks"][0] == {
+        "name": "step-001 | doubleClick",
+        "flow": [
+            {
+                "aiDoubleClick": "双击页面中部文件列表里的 report.xlsx 文件行以打开文件"
+            }
+        ],
+    }
+
+
 def test_converter_rejects_existing_assets(tmp_path: Path) -> None:
     task_root = copy_source(tmp_path, "existing-task")
     (task_root / "task.yaml").write_text("preserve: true\n", encoding="utf-8")

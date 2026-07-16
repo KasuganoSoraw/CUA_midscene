@@ -35,8 +35,9 @@ description: 使用本地场景/任务 Skill 与 Midscene computer use 创建、
 
 1. 将 ShowUI-Aloha trace、processed log 和截图放入 `projects/<scene>/<task>/source/`。
 2. 检查每个 trace step 都有结构化 `caption.operation`；不得根据 observation、Action、Expectation 或关键词补猜。
-3. 运行 `uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"`。
-4. 运行 `uv run cua task validate --scene <scene> --task <task>`。
+3. 录制事件为 `LDoubleClick` 时，trace 的 `operation.type` 必须是 `doubleClick`，初始化后必须得到 Midscene 原生 `aiDoubleClick`；发现其被写成 `click` 时应停止并重新生成 trace，不得按普通点击继续。
+4. 运行 `uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"`。
+5. 运行 `uv run cua task validate --scene <scene> --task <task>`。
 
 初始化后，每个 trace step 对应一个名为 `step-NNN | <operation-type>` 的 Midscene task。整体目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`；输入 ID 由其步骤派生，例如 `step-002-input`。
 

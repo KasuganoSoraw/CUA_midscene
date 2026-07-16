@@ -91,7 +91,7 @@ execution/projects/<scene>/
         └── execution-result.json
 ```
 
-trace 每个 step 必须包含结构化 `operation`。converter 不从 observation、Action、Expectation 或关键词猜测动作。每个 trace step 生成一个名为 `step-NNN | <operation-type>` 的 Midscene task，整体目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`。input 必须显式提供 `operation.locatePrompt` 和 `operation.value`，并生成 `KeyboardTypeText` action；该动作通过底层键盘事件输入 ASCII，不使用剪贴板。
+trace 每个 step 必须包含结构化 `operation`。converter 不从 observation、Action、Expectation 或关键词猜测动作。每个 trace step 生成一个名为 `step-NNN | <operation-type>` 的 Midscene task，整体目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`。录制事件 `LDoubleClick` 必须生成 `operation.type=doubleClick`，并转换为 Midscene 原生 `aiDoubleClick`；不允许退化为普通点击。input 必须显式提供 `operation.locatePrompt` 和 `operation.value`，并生成 `KeyboardTypeText` action；该动作通过底层键盘事件输入 ASCII，不使用剪贴板。
 
 输入参数 ID 由对应步骤派生，例如 `step-002-input`，YAML 使用显式 `{{step-002-input}}` 占位符。同一参数需要影响后续动作时，应经确认后在相关 YAML prompt 中复用同一个占位符；系统不会根据业务文本自动猜测关联。
 

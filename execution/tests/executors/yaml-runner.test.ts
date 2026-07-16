@@ -47,6 +47,7 @@ tasks:
           mode: replace
       - KeyboardPress:
           keyName: Enter
+      - aiDoubleClick: 双击页面中部文件列表里的 report.xlsx 文件行
 `);
 assert.equal(valid.completed.status, 0, valid.completed.stderr);
 assert.equal(valid.result.status, 'succeeded');
