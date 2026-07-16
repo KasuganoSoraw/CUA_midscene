@@ -33,5 +33,27 @@ class LogProcessorKeyboardMergeTest(unittest.TestCase):
         )
 
 
+class LogProcessorDoubleClickTest(unittest.TestCase):
+    def test_cleanup_keeps_ldoubleclick_and_removes_preceding_single_click(self):
+        actions = [
+            {
+                "timestamp": 1.0,
+                "action": "LClick at",
+                "coords": [{"x": 320, "y": 240}],
+                "current_software": "Explorer",
+            },
+            {
+                "timestamp": 1.1,
+                "action": "LDoubleClick at",
+                "coords": [{"x": 321, "y": 239}],
+                "current_software": "Explorer",
+            },
+        ]
+
+        cleaned = LogProcessor().cleanup_preceded_double_clicks(actions)
+
+        self.assertEqual([actions[1]], cleaned)
+
+
 if __name__ == "__main__":
     unittest.main()

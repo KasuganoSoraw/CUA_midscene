@@ -80,6 +80,30 @@ class InvalidTraceGenerator(TraceGenerator):
         )
 
 
+class DoubleClickRetryTraceGenerator(TraceGenerator):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.calls = 0
+
+    def _call_openai(self, prompt, crop_b64, full_b64):
+        self.calls += 1
+        operation_type = "click" if self.calls == 1 else "doubleClick"
+        action = "点击文件行。" if self.calls == 1 else "双击文件行。"
+        return json.dumps(
+            {
+                "Observation": "局部图中红色 X 位于 report.xlsx 文件行上。",
+                "Think": "用户需要打开该文件。",
+                "Action": action,
+                "Expectation": "文件被打开。",
+                "Operation": {
+                    "type": operation_type,
+                    "prompt": "双击文件列表中的 report.xlsx 文件行以打开文件",
+                },
+            },
+            ensure_ascii=False,
+        )
+
+
 class TraceGeneratorOperationTest(unittest.TestCase):
     def test_env_bool_is_strict(self):
         with patch.dict(os.environ, {"OPENAI_VERIFY_SSL": "false"}):
@@ -190,6 +214,91 @@ class TraceGeneratorOperationTest(unittest.TestCase):
 
                 self.assertEqual(
                     {"type": "click", "prompt": "点击继续按钮"},
+                    trace["trajectory"][0]["caption"]["operation"],
+                )
+        finally:
+            if previous_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = previous_key
+
+    def test_sanitize_operation_preserves_double_click(self):
+        previous_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                prompt_path = Path(tmp) / "default_prompt.json"
+                prompt_path.write_text(json.dumps({"Base Prompt": ""}), encoding="utf-8")
+                generator = StubTraceGenerator(
+                    default_prompt_path=str(prompt_path),
+                    api_provider="openai",
+                )
+
+                self.assertEqual(
+                    {
+                        "type": "doubleClick",
+                        "prompt": "双击 report.xlsx 文件行",
+                    },
+                    generator._sanitize_operation(
+                        {
+                            "type": "DoubleClick",
+                            "prompt": " 双击 report.xlsx 文件行 ",
+                        }
+                    ),
+                )
+        finally:
+            if previous_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = previous_key
+
+    def test_ldoubleclick_retries_when_model_degrades_it_to_click(self):
+        previous_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                prompt_path = root / "default_prompt.json"
+                prompt_path.write_text(
+                    json.dumps({"Base Prompt": "只输出 JSON。"}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                shots_dir = root / "screenshots"
+                shots_dir.mkdir()
+                (shots_dir / "step.jpg").write_bytes(b"fake-jpeg")
+                recording_path = root / "recording.json"
+                recording_path.write_text(
+                    json.dumps(
+                        [
+                            {
+                                "timestamp": 1.0,
+                                "action": "LDoubleClick at",
+                                "current_software": "Explorer",
+                                "screenshot": "step.jpg",
+                            }
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                output_path = root / "trace.json"
+                generator = DoubleClickRetryTraceGenerator(
+                    default_prompt_path=str(prompt_path),
+                    api_provider="openai",
+                )
+
+                generator.generate_trace(
+                    str(recording_path),
+                    str(shots_dir),
+                    str(output_path),
+                )
+
+                trace = json.loads(output_path.read_text(encoding="utf-8"))
+                self.assertEqual(2, generator.calls)
+                self.assertEqual(
+                    {
+                        "type": "doubleClick",
+                        "prompt": "双击文件列表中的 report.xlsx 文件行以打开文件",
+                    },
                     trace["trajectory"][0]["caption"]["operation"],
                 )
         finally:

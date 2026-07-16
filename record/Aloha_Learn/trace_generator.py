@@ -101,8 +101,16 @@ class TraceGenerator:
         if not isinstance(operation, dict):
             return {}
 
-        op_type = str(operation.get("type") or "").strip().lower()
-        if op_type not in {"click", "input", "keyboard", "wait"}:
+        raw_type = str(operation.get("type") or "").strip().lower()
+        operation_types = {
+            "click": "click",
+            "doubleclick": "doubleClick",
+            "input": "input",
+            "keyboard": "keyboard",
+            "wait": "wait",
+        }
+        op_type = operation_types.get(raw_type)
+        if op_type is None:
             return {}
 
         sanitized: Dict[str, Any] = {"type": op_type}
@@ -113,18 +121,35 @@ class TraceGenerator:
 
         return sanitized
 
-    def _operation_error(self, operation: Any) -> str | None:
+    def _recorded_operation_type(self, action: str) -> str | None:
+        """Return the operation type mandated by an explicit recorder event."""
+        event_name = re.split(r"\s+|:", action.strip(), maxsplit=1)[0].lower()
+        if event_name in {"ldoubleclick", "ldblclick", "doubleclick", "dblclick"}:
+            return "doubleClick"
+        return None
+
+    def _operation_error(
+        self,
+        operation: Any,
+        expected_type: str | None = None,
+    ) -> str | None:
         if not isinstance(operation, dict):
             return "Operation 必须是对象"
         operation_type = operation.get("type")
         required_fields = {
             "click": ("prompt",),
+            "doubleClick": ("prompt",),
             "input": ("prompt", "locatePrompt", "value"),
             "keyboard": ("key",),
             "wait": ("condition",),
         }
         if operation_type not in required_fields:
-            return "Operation.type 必须是 click、input、keyboard 或 wait"
+            return "Operation.type 必须是 click、doubleClick、input、keyboard 或 wait"
+        if expected_type is not None and operation_type != expected_type:
+            return (
+                f"录制事件要求 Operation.type 为 {expected_type}，"
+                f"模型输出为 {operation_type}"
+            )
         missing = [field for field in required_fields[operation_type] if not operation.get(field)]
         if missing:
             return f"Operation 缺少非空字段：{', '.join(missing)}"
@@ -155,8 +180,19 @@ class TraceGenerator:
 
         return cap
 
-    def _caption_needs_retry(self, cap: Dict[str, Any]) -> bool:
-        return not cap.get("action") or self._operation_error(cap.get("operation")) is not None
+    def _caption_needs_retry(
+        self,
+        cap: Dict[str, Any],
+        expected_operation_type: str | None = None,
+    ) -> bool:
+        return (
+            not cap.get("action")
+            or self._operation_error(
+                cap.get("operation"),
+                expected_operation_type,
+            )
+            is not None
+        )
 
     def _prompt(self, action: Dict[str, Any], overall_task: str, step_idx: int, recent_steps: List[Dict[str, Any]]) -> str:
         """Build the step prompt. Core rules live in default_prompt.json; add small action-type deltas conditionally."""
@@ -324,6 +360,7 @@ Overall Task: {overall_task}
                 raise RuntimeError(f"录制动作的截图无法读取：timestamp={ts}, action={act_str}")
 
             act = it.get("action") or ""
+            expected_operation_type = self._recorded_operation_type(act)
             coords = it.get("coords")
             if coords and isinstance(coords, list):
                 coord_str = ", ".join(f"({c.get('x')},{c.get('y')})" for c in coords)
@@ -359,11 +396,16 @@ Overall Task: {overall_task}
             }
             cap = self._sanitize_caption(cap)
 
-            if self._caption_needs_retry(cap):
+            if self._caption_needs_retry(cap, expected_operation_type):
+                operation_error = self._operation_error(
+                    cap.get("operation"),
+                    expected_operation_type,
+                )
                 retry_prompt = (
                     f"{prompt}\n\n"
-                    "上一次输出缺少有效 Action 或 Operation。请重新输出完整 JSON，必须包含非空 Action，"
-                    "并且 Operation.type 必须是 click、input、keyboard 或 wait；"
+                    f"上一次输出缺少有效 Action 或 Operation：{operation_error or 'Action 为空'}。"
+                    "请重新输出完整 JSON，必须包含非空 Action，"
+                    "并且 Operation.type 必须是 click、doubleClick、input、keyboard 或 wait；"
                     "各类型的必需字段必须完整。"
                 )
                 if self.api_provider == "claude":
@@ -381,8 +423,11 @@ Overall Task: {overall_task}
                 }
                 cap = self._sanitize_caption(cap)
 
-            if self._caption_needs_retry(cap):
-                operation_error = self._operation_error(cap.get("operation"))
+            if self._caption_needs_retry(cap, expected_operation_type):
+                operation_error = self._operation_error(
+                    cap.get("operation"),
+                    expected_operation_type,
+                )
                 raise RuntimeError(
                     f"trace step {step_idx} 在纠错重试后仍缺少可执行 operation："
                     f"{operation_error or 'Action 为空'}"
