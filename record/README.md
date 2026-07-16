@@ -32,10 +32,19 @@ Copy-Item .env.example .env
 OPENAI_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
 OPENAI_MODEL=minimax-m3
 OPENAI_API_KEY=replace-me
+OPENAI_VERIFY_SSL=true
 ALOHA_TRACE_TEMPERATURE=0.2
 ```
 
 真实 `.env` 不会提交到 git。
+
+公司内网 OpenAI 兼容端点使用无法由本机信任链验证的证书时，可以临时设置：
+
+```text
+OPENAI_VERIFY_SSL=false
+```
+
+该配置只影响 trace 生成器的 OpenAI 兼容请求，并会关闭对应的证书告警。默认必须保持 `true`；如果公司能够提供 CA 证书，应优先通过 `REQUESTS_CA_BUNDLE=<CA 文件路径>` 建立信任链，而不是关闭验证。
 
 ## 运行 Learn 流程
 

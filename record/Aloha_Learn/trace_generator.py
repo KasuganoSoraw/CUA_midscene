@@ -1,7 +1,19 @@
-import os, json, base64, re, time, requests
+import os, json, base64, re, time, requests, urllib3
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
+
+
+def env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} 必须是 true/false、1/0、yes/no 或 on/off")
 
 class TraceGenerator:
     """Generate step-by-step traces from GUI actions with crop+full screenshots."""
@@ -29,6 +41,9 @@ class TraceGenerator:
             or "https://api.openai.com/v1"
         ).rstrip("/")
         self.openai_temperature = float(os.environ.get("ALOHA_TRACE_TEMPERATURE", "0.2"))
+        self.openai_verify_ssl = env_bool("OPENAI_VERIFY_SSL", True)
+        if not self.openai_verify_ssl:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.claude_model = claude_model
 
         self.openai_key = ""
@@ -226,7 +241,13 @@ Overall Task: {overall_task}
         data = {"model": self.openai_model,
                 "messages": [{"role": "user", "content": content}],
                 "temperature": self.openai_temperature}
-        r = requests.post(url, headers=headers, json=data, timeout=120)
+        r = requests.post(
+            url,
+            headers=headers,
+            json=data,
+            timeout=120,
+            verify=self.openai_verify_ssl,
+        )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 

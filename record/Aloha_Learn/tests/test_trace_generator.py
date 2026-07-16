@@ -4,9 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 import sys
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from trace_generator import TraceGenerator
+from trace_generator import TraceGenerator, env_bool
 
 
 class StubTraceGenerator(TraceGenerator):
@@ -80,6 +81,45 @@ class InvalidTraceGenerator(TraceGenerator):
 
 
 class TraceGeneratorOperationTest(unittest.TestCase):
+    def test_env_bool_is_strict(self):
+        with patch.dict(os.environ, {"OPENAI_VERIFY_SSL": "false"}):
+            self.assertFalse(env_bool("OPENAI_VERIFY_SSL", True))
+        with patch.dict(os.environ, {"OPENAI_VERIFY_SSL": "true"}):
+            self.assertTrue(env_bool("OPENAI_VERIFY_SSL", False))
+        with patch.dict(os.environ, {"OPENAI_VERIFY_SSL": "invalid"}):
+            with self.assertRaisesRegex(ValueError, "OPENAI_VERIFY_SSL 必须是"):
+                env_bool("OPENAI_VERIFY_SSL", True)
+
+    def test_openai_request_can_disable_ssl_verification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prompt_path = root / "default_prompt.json"
+            prompt_path.write_text(json.dumps({"Base Prompt": ""}), encoding="utf-8")
+            keys_path = root / "api_keys.json"
+            keys_path.write_text("{}", encoding="utf-8")
+            response = Mock()
+            response.raise_for_status.return_value = None
+            response.json.return_value = {"choices": [{"message": {"content": "{}"}}]}
+
+            with (
+                patch("trace_generator.load_dotenv"),
+                patch.dict(
+                    os.environ,
+                    {"OPENAI_API_KEY": "test-key", "OPENAI_VERIFY_SSL": "false"},
+                    clear=False,
+                ),
+                patch("trace_generator.requests.post", return_value=response) as post,
+            ):
+                generator = TraceGenerator(
+                    default_prompt_path=str(prompt_path),
+                    api_provider="openai",
+                    api_keys_path=str(keys_path),
+                )
+                generator._call_openai("prompt", None, None)
+
+            self.assertFalse(generator.openai_verify_ssl)
+            self.assertFalse(post.call_args.kwargs["verify"])
+
     def test_sanitize_operation_preserves_input_locate_prompt(self):
         previous_key = os.environ.get("OPENAI_API_KEY")
         os.environ["OPENAI_API_KEY"] = "test-key"
