@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Agent 显式选择电脑操作执行模式
 执行器 Skill SHALL 向上层 Agent 说明录制 YAML 逐 task 执行、录制任务整体 aiAct 和无录制自然语言 aiAct 三种调用方式，并禁止隐式切换。

@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: aiAct 支持互斥的自然语言与录制任务来源
 系统 SHALL 通过统一 Midscene YAML runner 接受自然语言 prompt 或参数已解析的录制任务 YAML 其中一种来源，并调用一次整体 aiAct。
@@ -62,3 +62,9 @@
 - **WHEN** prompt 组合、YAML runner 或 aiAct 执行失败
 - **THEN** 系统 SHALL 保留或暴露原始错误并以非成功状态结束
 - **AND** 系统 SHALL NOT 自动修改任务或切换执行模式
+
+## REMOVED Requirements
+
+### Requirement: aiAct 只处理无录制自然语言任务
+**Reason**: 统一 YAML runner 已恢复录制任务整体 aiAct 来源，不再只处理无录制自然语言任务。
+**Migration**: 无录制任务继续使用 `act run --prompt`；录制任务使用 `act run --scene/--task`。

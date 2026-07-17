@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Python CLI 提供 aiAct 统一入口
 Python 核心 SHALL 通过 `cua act run` 暴露自然语言和录制 YAML 任务两种显式 aiAct 调用方式，并复用现有任务 resolver 与 YAML runner。

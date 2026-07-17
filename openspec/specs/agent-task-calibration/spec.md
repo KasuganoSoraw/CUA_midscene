@@ -2,66 +2,20 @@
 
 定义可供 Agent 和人工发现、校准、参数化调用与执行的 CUA 任务包契约，以及校准确认和确定性解析要求。
 ## Requirements
-### Requirement: 项目作为可调用任务包
-系统 SHALL 使用场景清单与任务清单描述场景、任务名称、目标、可调用输入及字段绑定，并允许 Agent 和人工通过统一 CLI 发现任务。
+### Requirement: Agent 修改 canonical YAML 前必须确认
+Agent 发现录制任务意图或动作错误时 SHALL 生成 `task.yaml` 修改建议，展示原值、新值和中文原因，并等待用户明确确认后再写入。
 
-#### Scenario: Agent 列出可调用任务
-- **WHEN** 调用方执行场景内任务列表命令并请求 JSON 输出
-- **THEN** 系统 SHALL 返回每个有效任务的名称、说明和输入定义
-- **AND** 系统 SHALL NOT 操作电脑或调用模型
+#### Scenario: 用户确认长期修改
+- **WHEN** 用户确认 Agent 展示的 YAML 差异
+- **THEN** Agent SHALL 修改 `task.yaml` 并运行 `task validate`
 
-### Requirement: 调用输入采用稀疏覆盖
-系统 SHALL 将任务输入绑定到已有 flow step 的执行字段，并仅使用本次明确提供的输入覆盖 canonical flow 中的值。
+#### Scenario: 用户尚未确认
+- **WHEN** Agent 仅收到问题描述但未得到明确确认
+- **THEN** Agent SHALL NOT 修改 canonical YAML 或实际操作电脑
 
-#### Scenario: 只改变一个输入
-- **WHEN** 一个任务声明多个输入且调用方只提供其中一个
-- **THEN** resolved flow SHALL 只覆盖该输入绑定的字段
-- **AND** 其他字段 SHALL 保持 canonical flow 中的当前值
+### Requirement: 单次输入不得改写任务
+Agent SHALL 将用户明确指定的本次变化作为 `--input` 传入，并保留未指定输入的录制默认值。
 
-#### Scenario: 输入无效
-- **WHEN** 调用方提供未知输入、重复输入或指向不存在 step 的绑定
-- **THEN** 系统 SHALL 在执行前给出清晰错误并停止
-
-### Requirement: Agent 校准需要确认
-Agent SHALL 在用户明确确认长期修改后直接编辑 canonical flow，并在修改后验证该任务。
-
-#### Scenario: 校准建议不影响执行
-- **WHEN** Agent 已形成 step 修改建议但用户尚未确认
-- **THEN** Agent SHALL 只展示原值、新值和原因
-- **AND** canonical flow SHALL 保持不变
-
-#### Scenario: 应用已确认建议
-- **WHEN** 用户明确确认 Agent 展示的修改
-- **THEN** Agent SHALL 直接编辑对应任务的 `midscene-flow.json`
-- **AND** Agent SHALL 执行 flow 验证并报告结果
-- **AND** 系统 SHALL NOT 创建持久化 calibration proposal 或 history
-
-#### Scenario: 建议已经过期
-- **WHEN** Agent 展示建议后 canonical flow 在用户确认前已经变化
-- **THEN** Agent SHALL 重新读取当前 flow 并重新展示差异
-- **AND** Agent SHALL NOT 将基于旧值的修改直接写入当前 flow
-
-### Requirement: Agent Skill 约束任务交互
-仓库 SHALL 提供执行器 Skill、场景 Skill 和任务 Skill，指导 Agent 区分创建、长期修改与单次调用。
-
-#### Scenario: Agent 收到长期修正
-- **WHEN** 用户说明某个步骤以后都应改变
-- **THEN** Skill SHALL 要求 Agent 展示 flow 修改差异并等待确认
-- **AND** Skill SHALL 禁止 Agent 未经确认直接修改或自动重试
-
-#### Scenario: Agent 收到单次调用要求
-- **WHEN** 用户只改变本次任务输入
-- **THEN** Skill SHALL 要求 Agent 读取任务输入定义并只传递明确改变的值
-- **AND** Skill SHALL NOT 修改 canonical flow
-
-#### Scenario: 生命周期不明确
-- **WHEN** Agent 无法判断用户要求仅本次生效还是长期生效
-- **THEN** Skill SHALL 要求 Agent 在修改任务前询问用户
-
-### Requirement: 任务解析不调用模型
-系统 SHALL 使用确定性逻辑验证 canonical flow、任务输入绑定和本次输入，并构建 resolved flow。
-
-#### Scenario: 构建 resolved flow
-- **WHEN** flow inspect 或 flow run 构建 resolved flow
-- **THEN** 合并顺序 SHALL 为 canonical flow、本次输入
-- **AND** 该过程 SHALL NOT 调用模型
+#### Scenario: 永久修改与本次输入不明确
+- **WHEN** Agent 无法判断用户要求只对本次生效还是以后都生效
+- **THEN** Agent SHALL 追问而不得自行选择
