@@ -37,7 +37,7 @@ CUA/
   -> 同一个 agent.runYaml()
 ```
 
-`task.yaml` 是任务唯一长期执行事实源，直接使用 Midscene 原生 YAML action。`task.json` 保存任务说明、trace 来源、输入 ID 和录制默认值。系统不维护自定义 route、resolved flow、override、proposal 或 history。
+`task.yaml` 是任务唯一长期可执行流程，直接使用 Midscene 原生 YAML action。`task.json` 是参数契约，保存任务说明、trace 来源、输入 ID 和录制默认值；`source/` 是校准时的只读录制证据。系统不维护自定义 route、resolved flow、override、proposal 或 history。
 
 ## 快速开始
 

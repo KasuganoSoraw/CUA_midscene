@@ -106,7 +106,7 @@ description: 调用和维护 {scene}/{task} 本地 CUA 任务。
 
 使用 `uv run cua task describe --scene {scene} --task {task} --json` 读取输入定义。
 
-`task.yaml` 中每个 `step-NNN | <operation-type>` task 对应原 trace 的同编号步骤。页面稳定时使用 `task run` 逐 task 执行，需要模型统一规划完整步骤时使用 `act run --scene/--task`。单次参数通过两种命令的 `--input key=value` 传入，不修改 `task.yaml`。长期修改必须先展示 YAML 原值、新值和原因并等待用户确认，确认后直接编辑 `task.yaml`，再执行 `task validate`；不得重编号、复用或打乱步骤，也不得启用 `continueOnError`。
+本任务的执行流程是 `task.yaml`，输入契约是 `task.json`，`source/` 是只读录制证据。调用、校准和执行模式遵循执行器根 `SKILL.md`；本文件只提供任务特有信息，不覆盖根 Skill 的确认与只读规则。
 """
 
 

@@ -1,4 +1,4 @@
 interface:
   display_name: "CUA Midscene"
-  short_description: "创建、修改并执行 Midscene YAML 电脑操作任务"
-  default_prompt: "使用 $cua-midscene 发现任务；稳定录制任务使用 task run，需要统一规划时使用任务型 act run，无录制时使用自然语言 act，并按我的要求检查或执行。"
+  short_description: "创建、校准并执行 Midscene YAML 电脑操作任务"
+  default_prompt: "使用 $cua-midscene 发现或调用电脑操作任务；校准时将 source 作为只读证据，先展示 task.yaml 修改建议并等待确认，只有我明确要求时才实际操作电脑。"

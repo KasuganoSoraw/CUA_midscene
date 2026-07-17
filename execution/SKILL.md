@@ -1,73 +1,69 @@
 ---
 name: cua-midscene
-description: 使用本地场景/任务 Skill 与 Midscene computer use 创建、发现、检查、修改或执行桌面任务。已有录制时运行 canonical Midscene YAML；没有录制时将自然语言包装为临时 YAML。用户要求从 trace 创建任务、列出可用电脑操作、修正任务步骤、改变本次输入或实际操作桌面时使用。
+description: 使用本地场景/任务 Skill 与 Midscene computer use 发现、创建、重建、校准或执行桌面任务。用户要求从录制 trace 创建任务、修正某一步、调整长期流程、临时改变输入、运行已有任务，或在无录制时直接操作电脑时使用。
 ---
 
 # CUA Midscene
 
-将包含本文件、`pyproject.toml` 和 `package.json` 的目录作为 Skill 根目录，并始终从该目录运行 Python CLI。该目录是完整交付单元，不依赖外层 CUA 仓库；Python 负责 trace 转换、任务与输入，TypeScript 只注册 customActions 并调用 Midscene `agent.runYaml()`。
+将包含本文件、`pyproject.toml` 和 `package.json` 的目录作为 Skill 根目录，并始终从该目录运行 `uv run cua ...`。该目录是完整交付单元，不依赖外层 CUA 仓库。
 
-首次运行前检查 `uv run cua --help` 和 `npm run typecheck`。缺少依赖时明确告知用户，再在 Skill 根目录运行 `uv sync` 与 `npm install`；不得把依赖目录、报告或环境密钥打包为 Skill 资产。
+## 核心事实
+
+- `task.yaml` 是唯一长期可执行流程，由人、Agent、前端和 Midscene 共同消费。
+- `task.json` 是任务元数据和参数契约，保存输入 ID 与录制默认值，不保存执行步骤。
+- `source/` 保存 trace、处理日志和截图，是校准时的只读录制证据。
+- `reports/` 只保存本次解析和执行产物，不得作为长期任务资产。
+
+不得为了保持上下游一致而反向修改 `source/`。只有用户明确要求“重新生成 trace”或“重建任务”时，才进入重建流程；这不属于校准。
 
 ## 判断意图
 
-- **创建**：从任务 `source/` 中的结构化 trace 初始化 `task.yaml` 和 `task.json`。
-- **长期修改**：以后都改变 canonical `task.yaml` 中的动作、prompt 或占位符。
-- **单次调用**：只覆盖本次已声明输入，不修改任务资产。
+- **发现**：列出场景或任务，不读取无关任务资产。
+- **创建/重建**：从 `source/` 初始化 `task.yaml` 和 `task.json`。已有任务必须先说明会替换哪些资产并等待用户明确确认；不得删除文件绕过初始化冲突。
+- **校准**：用户说“校准”“修正步骤”“这一步不对”“以后改成”或表达同类长期意图时，提出 `task.yaml` 修改建议并等待确认。
+- **参数契约修改**：用户明确要求以后改变输入默认值、标签或说明时，提出 `task.json` 修改建议并单独等待确认；不得同时改写执行步骤。
+- **单次调用**：用户只改变本次输入时，通过已声明的 `--input` 传值，不修改任务资产。
+- **执行**：只有用户明确要求操作电脑时才运行非 dry-run 的执行命令。
 
-无法判断“仅本次”还是“以后都使用”时，必须先询问用户。
+无法判断变更是“仅本次”还是“以后都使用”时，必须先询问用户。
 
-## 选择入口
+## 发现与创建
 
-- **已有录制且页面稳定**：使用 `uv run cua task run --scene <scene> --task <task>`，按 YAML task 顺序执行以降低规划成本。
-- **已有录制且需要统一规划**：使用 `uv run cua act run --scene <scene> --task <task>`，将完整步骤交给一次整体 aiAct。
-- **无录制自然语言任务**：使用 `uv run cua act run --prompt "<电脑操作要求>"`。
+1. 运行 `uv run cua scene list --json`，选择场景后运行 `uv run cua task list --scene <scene> --json`。
+2. 只读取目标场景的 `SKILL.md`，再读取目标任务的 `SKILL.md` 和 `task.json`；检查步骤时才读取 `task.yaml` 和相关 source。
+3. 创建任务前检查 `source/showui-trace.json` 和 `source/processed-log-sc.json`。每个 trace step 必须有结构化 `caption.operation`，不得根据其他自然语言字段补猜。
+4. 运行 `uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，然后运行 `uv run cua task validate --scene <scene> --task <task>`。
 
-两种录制执行模式都从同一 canonical `task.yaml` 和本次输入解析结果出发；整体 aiAct prompt 只是报告目录中的运行时投影。需要只让某一步规划时，可以在 YAML 中明确使用 Midscene 原生 `ai` action。失败后报告原始错误并等待用户决定；不得自动切换、修改任务或重试。
+动作类型和目录契约见 [任务契约](references/task-contract.md)。转换器发现非法或不一致动作时必须失败，不得降级为替代动作。
 
-## 发现任务
+## 校准协议
 
-1. 运行 `uv run cua scene list --json`。
-2. 选择场景后运行 `uv run cua task list --scene <scene> --json`。
-3. 只读取目标场景的 `SKILL.md`，再读取目标任务的 `SKILL.md` 和 `task.json`。需要修改流程时才读取目标 `task.yaml` 和相关 source，不要一次加载所有任务资产。
+1. 读取 `task.yaml`，按稳定的 `step-NNN | <operation-type>` 定位目标步骤；按需只读查看 trace、日志和截图。
+2. 在对话中展示 YAML 位置、原值、新值和中文原因。
+3. 停止并等待用户明确确认。未经确认不得写入任何任务资产。
+4. 确认后只修改 `task.yaml`，再运行 `uv run cua task validate --scene <scene> --task <task>`。
+5. 除非用户同时要求执行，否则校准完成后不得操作电脑。
 
-## 创建任务
+校准不得修改 `source/`、`task.json` 或报告；不得重编号、复用或打乱 step ID，也不得启用 `continueOnError`。缺失动作、顺序错误或新增动作可以在确认后直接修改 YAML；需要纠正模型原始 trace 时必须切换为重建意图并重新确认。
 
-1. 将 ShowUI-Aloha trace、processed log 和截图放入 `projects/<scene>/<task>/source/`。
-2. 检查每个 trace step 都有结构化 `caption.operation`；不得根据 observation、Action、Expectation 或关键词补猜。
-3. 录制事件为 `LDoubleClick` 时，trace 的 `operation.type` 必须是 `doubleClick`，初始化后必须得到 Midscene 原生 `aiDoubleClick`；发现其被写成 `click` 时应停止并重新生成 trace，不得按普通点击继续。
-4. 运行 `uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"`。
-5. 运行 `uv run cua task validate --scene <scene> --task <task>`。
+只有参数契约修改可以在确认后编辑 `task.json`，并且仅限输入定义、默认值和任务说明。若同一请求还需要改变 YAML 占位符或执行动作，必须分别展示两份差异并取得确认。
 
-初始化后，每个 trace step 对应一个名为 `step-NNN | <operation-type>` 的 Midscene task。整体目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`；输入 ID 由其步骤派生，例如 `step-002-input`。
+## 单次调用与执行
 
-如果 `task.yaml` 或 `task.json` 已存在，初始化直接失败。除非用户明确要求删除并重新初始化，否则不得移除现有资产绕过该错误。
+1. 运行 `uv run cua task describe --scene <scene> --task <task> --json` 读取 input ID 和默认值。
+2. 只传用户本次明确改变的输入；未提供项保持 `task.json` 中的录制默认值。
+3. 使用 `uv run cua task inspect ... --input <id>=<value>` 查看参数解析后的 YAML；使用 `task validate` 做静态验证。
+4. 已有录制默认使用 `uv run cua task run --scene <scene> --task <task>`。只有用户明确要求整体规划，或明确确认页面可能偏离录制路径时，才使用任务型 `uv run cua act run --scene <scene> --task <task>`。
+5. 无录制时使用 `uv run cua act run --prompt "<电脑操作要求>"`。
 
-## 长期修改
+`--dry-run` 只构建并静态解析执行 YAML，不调用模型、不创建设备，也不验证页面定位；不要把它描述为模拟执行。执行失败后报告原始错误并等待用户决定，不得自动切换模式、修改任务或重试。
 
-1. 读取任务 `task.yaml`、相关 source trace 和截图，使用 `step-NNN | <operation-type>` 定位错误动作。
-2. 向用户展示 YAML 原值、新值和中文原因。
-3. 停止并等待用户明确确认。
-4. 确认后直接编辑 `task.yaml`，再运行 `task validate`。
-5. 除非用户同时要求执行，否则修改后不操作电脑。
-
-不创建自定义 flow、route、overrides、proposal 或 history。不得重编号、复用或打乱已有 step ID，也不得启用 `continueOnError`。缺失动作、顺序错误或新增动作由用户确认后直接修改 YAML，或回到 trace 重新初始化；不得静默跳过或在失败后自动改写。
-
-## 单次调用
-
-1. 运行 `uv run cua task describe --scene <scene> --task <task> --json` 读取 input ID、中文说明和录制默认值。
-2. 只传递用户本次明确改变的输入；未提供项保持 `task.json` 中的录制默认值。
-3. 使用 `uv run cua task inspect ... --input <id>=<value>` 检查 resolved YAML。
-4. 用户明确要求实际操作电脑时，根据页面稳定性和用户意图显式选择 `task run` 或 `act run --scene/--task`；可先加 `--dry-run`。
-
-同一参数需要影响后续动作时，canonical YAML 必须在相关 prompt 中显式复用同一个 `{{input-id}}`。不要根据字面值机械替换，不要从用户自然语言临时发明 input ID，也不要把一次性值写回任务文件。
+同一输入需要影响后续动作时，只能在用户确认后于 `task.yaml` 中显式复用同一个 `{{input-id}}`。不得根据字面值机械替换，不得从用户自然语言发明 input ID，也不得把一次性值写回任务文件。
 
 ## 约束
 
 - 不使用 browser-use、Playwright、Puppeteer 或 CDP。
 - 不在 trace 转换、任务发现、输入解析或 YAML 快照构建中调用模型。
 - 不绕过 Python CLI 直接调用 TypeScript runner。
-- 不未经确认长期修改 `task.yaml`。
+- 不创建自定义 flow、route、overrides、proposal 或 history。
 - 不用兼容读取、替代动作、静默跳过、自动重试或单用例硬编码掩盖失败。
-
-需要检查目录、字段和完整命令时，读取 [任务契约](references/task-contract.md)。

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cua.conversion.showui_trace import task_skill_content
+
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY_ROOT = EXECUTION_ROOT.parent
@@ -18,6 +20,19 @@ def test_execution_is_self_contained_skill_root() -> None:
     assert "flow run" not in skill
     assert "act run --scene" in skill
     assert "不得自动切换" in skill
+    assert "校准时的只读录制证据" in skill
+    assert "确认后只修改 `task.yaml`" in skill
+    assert "校准不得修改 `source/`、`task.json` 或报告" in skill
+    assert "不要把它描述为模拟执行" in skill
+
+
+def test_generated_task_skill_delegates_generic_rules_to_root_skill() -> None:
+    skill = task_skill_content("network-management", "alarm-query")
+
+    assert "执行流程是 `task.yaml`" in skill
+    assert "`source/` 是只读录制证据" in skill
+    assert "遵循执行器根 `SKILL.md`" in skill
+    assert "页面稳定时使用" not in skill
 
 
 def test_installer_packages_execution_tracked_files() -> None:

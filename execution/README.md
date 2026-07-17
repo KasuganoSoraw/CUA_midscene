@@ -44,7 +44,7 @@ projects/<scene>/
         └── execution-result.json
 ```
 
-长期修改直接编辑 `task.yaml` 并运行 `task validate`。Agent 修改前必须展示差异并等待确认。`task.json` 中未被本次 `--input` 覆盖的值保持录制默认值。
+校准只修改 `task.yaml` 并运行 `task validate`。Agent 修改前必须展示差异并等待确认；`source/` 是只读录制证据，不得为了同步 YAML 而修改 trace。`task.json` 是参数契约，其中未被本次 `--input` 覆盖的值保持录制默认值。
 
 ## 环境
 
@@ -107,6 +107,8 @@ uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。两种来源不能重复同一 ID。inspect 与 run 使用同一确定性解析函数，不调用模型、不回写任务文件。
 
 `task run` 直接执行 canonical YAML 中的多个 task，适合页面稳定且希望降低规划成本的场景。`act run --scene/--task` 从同一份参数已解析 YAML 临时生成完整有序步骤 prompt，再包装为单 `ai` action；该 prompt 只保存在本次报告中，不是第二份长期任务资产。若只希望某一步由 Midscene 规划，也可以直接在 `task.yaml` 使用 Midscene 原生 `ai` action。
+
+对 Agent 而言，已有录制默认使用 `task run`；只有用户明确要求整体规划，或明确确认页面可能偏离录制路径时，才选择任务型 `act run`。`task validate` 用于静态验证。`--dry-run` 不调用模型、不创建设备、不验证页面定位，因此不是模拟执行，不需要在普通检查命令中反复追加。
 
 ## 执行语义
 
