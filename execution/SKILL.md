@@ -12,7 +12,11 @@ description: 使用本地场景/任务 Skill 与 Midscene computer use 发现、
 - `task.yaml` 是唯一长期可执行流程，由人、Agent、前端和 Midscene 共同消费。
 - `task.json` 是任务元数据和参数契约，保存输入 ID 与录制默认值，不保存执行步骤。
 - `source/` 保存 trace、处理日志和截图，是校准时的只读录制证据。
-- `reports/` 只保存本次解析和执行产物，不得作为长期任务资产。
+- Skill 内的 `projects/` 是只读 builtin catalog；不得在其中创建、校准或沉淀用户任务。
+- 用户任务是由 Executor Skill 管理的数据包，只写入 `<CUA_DATA_ROOT>/projects/`。
+- 所有运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`，不得写回任务目录或 Skill。
+
+运行前必须配置 Skill 外部的绝对数据根。优先级为命令行 `--data-root`、进程 `CUA_DATA_ROOT`、`.env.local`、`.env`。发现命令可在未配置时只读取 builtin catalog；创建、验证和执行必须有可写数据根。
 
 不得为了保持上下游一致而反向修改 `source/`。只有用户明确要求“重新生成 trace”或“重建任务”时，才进入重建流程；这不属于校准。
 
@@ -31,7 +35,7 @@ description: 使用本地场景/任务 Skill 与 Midscene computer use 发现、
 
 1. 运行 `uv run cua scene list --json`，选择场景后运行 `uv run cua task list --scene <scene> --json`。
 2. 只读取目标场景的 `SKILL.md`，再读取目标任务的 `SKILL.md` 和 `task.json`；检查步骤时才读取 `task.yaml` 和相关 source。
-3. 创建任务前检查 `source/showui-trace.json` 和 `source/processed-log-sc.json`。每个 trace step 必须有结构化 `caption.operation`，不得根据其他自然语言字段补猜。
+3. 创建任务前检查 user catalog 中目标任务的 `source/showui-trace.json` 和 `source/processed-log-sc.json`。每个 trace step 必须有结构化 `caption.operation`，不得根据其他自然语言字段补猜。
 4. 运行 `uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，然后运行 `uv run cua task validate --scene <scene> --task <task>`。
 
 动作类型和目录契约见 [任务契约](references/task-contract.md)。转换器发现非法或不一致动作时必须失败，不得降级为替代动作。
@@ -40,9 +44,10 @@ description: 使用本地场景/任务 Skill 与 Midscene computer use 发现、
 
 1. 读取 `task.yaml`，按稳定的 `step-NNN | <operation-type>` 定位目标步骤；按需只读查看 trace、日志和截图。
 2. 在对话中展示 YAML 位置、原值、新值和中文原因。
-3. 停止并等待用户明确确认。未经确认不得写入任何任务资产。
-4. 确认后只修改 `task.yaml`，再运行 `uv run cua task validate --scene <scene> --task <task>`。
-5. 除非用户同时要求执行，否则校准完成后不得操作电脑。
+3. 确认目标的 `origin=user` 与 `writable=true`；builtin 任务不得修改，应创建新的 user task 标识。
+4. 停止并等待用户明确确认。未经确认不得写入任何任务资产。
+5. 确认后只修改 user task 的 `task.yaml`，再运行 `uv run cua task validate --scene <scene> --task <task>`。
+6. 除非用户同时要求执行，否则校准完成后不得操作电脑。
 
 校准不得修改 `source/`、`task.json` 或报告；不得重编号、复用或打乱 step ID，也不得启用 `continueOnError`。缺失动作、顺序错误或新增动作可以在确认后直接修改 YAML；需要纠正模型原始 trace 时必须切换为重建意图并重新确认。
 

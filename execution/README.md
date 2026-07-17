@@ -20,28 +20,33 @@ record trace
 - `cua/domain/`：Python 进程内部 dataclass。
 - `cua/models/`：scene、task 和 execution result 的 Pydantic 契约。
 - `cua/conversion/`：只根据结构化 trace operation 初始化任务。
-- `cua/task/`：YAML、输入、发现、报告与 Python/Node 执行协议。
+- `cua/task/`：YAML、输入、双 Catalog 发现、外部运行目录与 Python/Node 执行协议。
 - `executors/`：Midscene YAML 薄适配器、环境读取和 customAction。
-- `projects/`：本地场景与任务 Skill。
+- `projects/`：随 Skill 发布的只读内置场景与任务数据包。
 - `schemas/`：从 Pydantic 生成，不手工编辑。
 - `tests/python/`、`tests/executors/`：按技术边界分离的测试。
 
-## 任务目录
+## 任务与运行目录
 
 ```text
-projects/<scene>/
+projects/<scene>/                    # Skill 内只读 builtin catalog
 ├── scene.json
 ├── SKILL.md
 └── <task>/
     ├── task.yaml                    # Midscene 原生 YAML，唯一长期事实源
     ├── task.json                    # 元数据、source 命令、输入与默认值
     ├── SKILL.md
-    ├── source/
-    └── reports/<run-id>/            # Git 忽略
+    └── source/
+
+<CUA_DATA_ROOT>/
+├── projects/<scene>/<task>/         # 可写 user catalog
+├── cache/
+└── runs/<run-id>/
         ├── resolved-task.yaml
         ├── ai-act-prompt.txt             # 录制任务整体 aiAct 模式
         ├── ai-act-task.yaml              # 录制任务整体 aiAct 模式
-        └── execution-result.json
+        ├── execution-result.json
+        └── midscene/                 # Midscene 报告与截图
 ```
 
 校准只修改 `task.yaml` 并运行 `task validate`。Agent 修改前必须展示差异并等待确认；`source/` 是只读录制证据，不得为了同步 YAML 而修改 trace。`task.json` 是参数契约，其中未被本次 `--input` 覆盖的值保持录制默认值。
@@ -60,7 +65,10 @@ npm run check
 MIDSCENE_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
 MIDSCENE_MODEL_NAME=minimax-m3
 MIDSCENE_MODEL_FAMILY=doubao-vision
+CUA_DATA_ROOT=C:\path\to\cua-data
 ```
+
+`CUA_DATA_ROOT` 必须是 Skill 根目录外的绝对路径。解析优先级为 CLI `--data-root`、进程环境、`.env.local`、`.env`。发现命令可在未配置时只查看 builtin catalog；任何创建或运行都会 fail-fast，并在数据根下派生 `projects/`、`runs/` 和 `cache/`。
 
 ## CLI
 
@@ -72,7 +80,7 @@ uv run cua task list --scene browser-demo --json
 uv run cua task describe --scene browser-demo --task air-tickets-demo --json
 ```
 
-从已准备好的 `source/` 初始化任务：
+从 user catalog 中已准备好的 `source/` 初始化任务：
 
 ```powershell
 uv run cua task init-from-trace --scene <scene> --task <task> --goal "<目标>"
@@ -105,6 +113,8 @@ uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
 ```
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。两种来源不能重复同一 ID。inspect 与 run 使用同一确定性解析函数，不调用模型、不回写任务文件。
+
+所有命令都接受可选 `--data-root <绝对路径>`。Skill 内置任务始终只读；用户任务写入 `<CUA_DATA_ROOT>/projects`。同一 scene 的任务会合并展示，同一 `scene/task` 在两处重复则拒绝继续。
 
 `task run` 直接执行 canonical YAML 中的多个 task，适合页面稳定且希望降低规划成本的场景。`act run --scene/--task` 从同一份参数已解析 YAML 临时生成完整有序步骤 prompt，再包装为单 `ai` action；该 prompt 只保存在本次报告中，不是第二份长期任务资产。若只希望某一步由 Midscene 规划，也可以直接在 `task.yaml` 使用 Midscene 原生 `ai` action。
 

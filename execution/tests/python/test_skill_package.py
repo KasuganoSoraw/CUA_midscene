@@ -21,8 +21,10 @@ def test_execution_is_self_contained_skill_root() -> None:
     assert "act run --scene" in skill
     assert "不得自动切换" in skill
     assert "校准时的只读录制证据" in skill
-    assert "确认后只修改 `task.yaml`" in skill
+    assert "确认后只修改 user task 的 `task.yaml`" in skill
     assert "校准不得修改 `source/`、`task.json` 或报告" in skill
+    assert "只读 builtin catalog" in skill
+    assert "<CUA_DATA_ROOT>/runs/<run-id>/" in skill
     assert "不要把它描述为模拟执行" in skill
 
 
@@ -38,5 +40,8 @@ def test_generated_task_skill_delegates_generic_rules_to_root_skill() -> None:
 def test_installer_packages_execution_tracked_files() -> None:
     installer = (REPOSITORY_ROOT / "scripts" / "install-cua-midscene-skill.ps1").read_text(encoding="utf-8")
     assert "Join-Path $repositoryRoot 'execution'" in installer
-    assert "git -C $repositoryRoot ls-files -- execution" in installer
+    assert "$publishDirectories" in installer
+    assert "'cua', 'executors', 'projects', 'references', 'schemas'" in installer
+    assert "'tests', 'node_modules', '.venv', '__pycache__', 'reports', 'runs', 'cache', 'midscene_run'" in installer
+    assert "git -C $repositoryRoot ls-files -- execution" not in installer
     assert "skills\\cua-midscene" not in installer

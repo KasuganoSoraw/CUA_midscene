@@ -7,13 +7,20 @@ from pathlib import Path
 
 import pytest
 
-from cua.domain.types import ExecutionOptions, ResolveTaskOptions
+from cua.domain.types import ExecutionOptions, ResolveTaskOptions, TaskCatalogRoots
 from cua.task.executor import execute_yaml, run_prompt, run_recorded_task_ai_act, run_task
 from cua.task.resolver import resolve_task
 from cua.task.yaml_task import read_yaml_document
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
 AIR_TASK = EXECUTION_ROOT / "projects" / "browser-demo" / "air-tickets-demo"
+
+
+def user_catalog(projects_root: Path) -> TaskCatalogRoots:
+    return TaskCatalogRoots(
+        builtin_projects_root=projects_root.parent / "empty-builtin",
+        user_projects_root=projects_root,
+    )
 
 
 def copy_air_scene(projects_root: Path) -> None:
@@ -31,6 +38,7 @@ def write_fake_executor(path: Path, behavior: str) -> None:
         f"""
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 import yaml
@@ -42,6 +50,7 @@ parser.add_argument('--dry-run', action='store_true')
 args = parser.parse_args()
 behavior = {behavior!r}
 document = yaml.safe_load(Path(args.yaml).read_text(encoding='utf-8'))
+Path(args.result).parent.joinpath('midscene-env.txt').write_text(os.environ['MIDSCENE_RUN_DIR'], encoding='utf-8')
 if behavior == 'invalid-result':
     Path(args.result).write_text('{{}}', encoding='utf-8')
     raise SystemExit(0)
@@ -69,13 +78,14 @@ def test_run_task_uses_same_resolved_yaml_as_inspect(tmp_path: Path) -> None:
     write_fake_executor(fake_executor, "success")
     inputs = {"step-002-input": "GOOGLE"}
     inspected = resolve_task(
-        ResolveTaskOptions(scene="browser-demo", task="air-tickets-demo", projects_root=tmp_path, inputs=inputs)
+        ResolveTaskOptions(scene="browser-demo", task="air-tickets-demo", catalog=user_catalog(tmp_path), inputs=inputs)
     )
     resolved, snapshot_path, result = run_task(
         ExecutionOptions(
             scene="browser-demo",
             task="air-tickets-demo",
-            projects_root=tmp_path,
+            catalog=user_catalog(tmp_path),
+            runs_root=tmp_path / "runs",
             inputs=inputs,
             dry_run=True,
             command_prefix=(sys.executable, str(fake_executor)),
@@ -85,6 +95,10 @@ def test_run_task_uses_same_resolved_yaml_as_inspect(tmp_path: Path) -> None:
     assert result.status == "succeeded"
     assert result.task_count == 16
     assert snapshot_path.name == "resolved-task.yaml"
+    assert snapshot_path.parent.parent == tmp_path / "runs"
+    assert (snapshot_path.parent / "midscene-env.txt").read_text(encoding="utf-8") == str(
+        (snapshot_path.parent / "midscene").resolve()
+    )
     assert not (tmp_path / "browser-demo" / "air-tickets-demo" / "resolved-flow.json").exists()
 
 
@@ -97,10 +111,41 @@ def test_executor_nonzero_exit_preserves_original_error(tmp_path: Path) -> None:
             ExecutionOptions(
                 scene="browser-demo",
                 task="air-tickets-demo",
-                projects_root=tmp_path,
+                catalog=user_catalog(tmp_path),
+                runs_root=tmp_path / "runs",
                 command_prefix=(sys.executable, str(fake_executor)),
             )
         )
+
+
+def test_builtin_task_run_preserves_skill_tree_and_uses_external_run(tmp_path: Path) -> None:
+    fake_executor = tmp_path / "success.py"
+    write_fake_executor(fake_executor, "success")
+    before = {
+        path.relative_to(AIR_TASK): path.read_bytes()
+        for path in AIR_TASK.rglob("*")
+        if path.is_file()
+    }
+    _, snapshot_path, _ = run_task(
+        ExecutionOptions(
+            scene="browser-demo",
+            task="air-tickets-demo",
+            catalog=TaskCatalogRoots(builtin_projects_root=EXECUTION_ROOT / "projects"),
+            runs_root=tmp_path / "runs",
+            dry_run=True,
+            command_prefix=(sys.executable, str(fake_executor)),
+        )
+    )
+    after = {
+        path.relative_to(AIR_TASK): path.read_bytes()
+        for path in AIR_TASK.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+    assert snapshot_path.parent.parent == tmp_path / "runs"
+    assert (snapshot_path.parent / "midscene-env.txt").read_text(encoding="utf-8") == str(
+        (snapshot_path.parent / "midscene").resolve()
+    )
 
 
 def test_executor_rejects_invalid_or_mismatched_result(tmp_path: Path) -> None:
@@ -123,7 +168,7 @@ def test_natural_language_prompt_generates_one_action_yaml(tmp_path: Path) -> No
     yaml_path, result = run_prompt(
         "打开 Chrome 并搜索 GUI agent",
         dry_run=True,
-        reports_root=tmp_path / "reports",
+        runs_root=tmp_path / "runs",
         command_prefix=(sys.executable, str(fake_executor)),
     )
     document = read_yaml_document(yaml_path)
@@ -131,7 +176,7 @@ def test_natural_language_prompt_generates_one_action_yaml(tmp_path: Path) -> No
     assert "KeyboardTypeText" in document["agent"]["aiActContext"]
     assert result.status == "succeeded"
     with pytest.raises(ValueError, match="prompt 不能为空"):
-        run_prompt("   ", reports_root=tmp_path / "empty")
+        run_prompt("   ", runs_root=tmp_path / "runs")
 
 
 def test_recorded_task_ai_act_uses_resolved_inputs_and_writes_runtime_projection(
@@ -144,7 +189,8 @@ def test_recorded_task_ai_act_uses_resolved_inputs_and_writes_runtime_projection
         ExecutionOptions(
             scene="browser-demo",
             task="air-tickets-demo",
-            projects_root=tmp_path,
+            catalog=user_catalog(tmp_path),
+            runs_root=tmp_path / "runs",
             inputs={"step-002-input": "GOOGLE"},
             dry_run=True,
             command_prefix=(sys.executable, str(fake_executor)),
@@ -183,7 +229,8 @@ def test_recorded_task_ai_act_rejects_unknown_action_before_creating_report(tmp_
             ExecutionOptions(
                 scene="browser-demo",
                 task="air-tickets-demo",
-                projects_root=tmp_path,
+                catalog=user_catalog(tmp_path),
+                runs_root=tmp_path / "runs",
                 dry_run=True,
             )
         )

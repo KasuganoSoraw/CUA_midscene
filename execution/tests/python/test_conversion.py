@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from cua.conversion.showui_trace import clamp_recorded_wait_ms, convert_trace
-from cua.domain.types import ConvertOptions
+from cua.domain.types import ConvertOptions, TaskCatalogRoots
 from cua.models.task import TaskManifest
 from cua.task.yaml_task import read_yaml_document
 
@@ -21,9 +21,16 @@ def options(projects_root: Path, task: str) -> ConvertOptions:
         scene="browser-demo",
         task=task,
         goal=AIR_GOAL,
-        projects_root=projects_root,
+        catalog=TaskCatalogRoots(
+            builtin_projects_root=tmp_builtin_root(projects_root),
+            user_projects_root=projects_root,
+        ),
         conversion_command=f"uv run cua task init-from-trace --scene browser-demo --task {task}",
     )
+
+
+def tmp_builtin_root(projects_root: Path) -> Path:
+    return projects_root.parent / f"{projects_root.name}-builtin"
 
 
 def copy_source(projects_root: Path, task: str) -> Path:
@@ -100,6 +107,23 @@ def test_converter_rejects_existing_assets(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="任务资产已存在，拒绝覆盖"):
         convert_trace(options(tmp_path, "existing-task"))
     assert (task_root / "task.yaml").read_text(encoding="utf-8") == "preserve: true\n"
+
+
+def test_converter_rejects_overwriting_builtin_task(tmp_path: Path) -> None:
+    builtin = tmp_path / "builtin"
+    user = tmp_path / "user"
+    shutil.copytree(AIR_TASK, builtin / "browser-demo" / "air-tickets-demo")
+    shutil.copy2(AIR_TASK.parent / "scene.json", builtin / "browser-demo" / "scene.json")
+    copy_source(user, "air-tickets-demo")
+    convert_options = ConvertOptions(
+        scene="browser-demo",
+        task="air-tickets-demo",
+        goal=AIR_GOAL,
+        catalog=TaskCatalogRoots(builtin_projects_root=builtin, user_projects_root=user),
+        conversion_command="uv run cua task init-from-trace",
+    )
+    with pytest.raises(ValueError, match="builtin|内置"):
+        convert_trace(convert_options)
 
 
 def test_converter_rejects_missing_operation_and_does_not_guess(tmp_path: Path) -> None:

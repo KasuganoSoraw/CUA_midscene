@@ -104,7 +104,7 @@ description: 调用和维护 {scene}/{task} 本地 CUA 任务。
 
 # {task} 任务
 
-使用 `uv run cua task describe --scene {scene} --task {task} --json` 读取输入定义。
+本文件属于 Executor 管理的用户任务数据包，不作为独立 GDE Claw Skill 注册。使用 `uv run cua task describe --scene {scene} --task {task} --json` 读取输入定义和 `origin`、`writable`。
 
 本任务的执行流程是 `task.yaml`，输入契约是 `task.json`，`source/` 是只读录制证据。调用、校准和执行模式遵循执行器根 `SKILL.md`；本文件只提供任务特有信息，不覆盖根 Skill 的确认与只读规则。
 """
@@ -237,7 +237,15 @@ def build_task_assets(
 
 
 def convert_trace(options: ConvertOptions) -> Path:
-    task_root = (options.projects_root / options.scene / options.task).resolve()
+    if options.catalog.user_projects_root is None:
+        raise ValueError("初始化任务需要用户 projects 目录")
+    user_projects_root = options.catalog.user_projects_root.resolve()
+    task_root = (user_projects_root / options.scene / options.task).resolve()
+    if not task_root.is_relative_to(user_projects_root):
+        raise ValueError(f"任务路径越出用户 catalog：{task_root}")
+    builtin_task = (options.catalog.builtin_projects_root / options.scene / options.task).resolve()
+    if (builtin_task / "task.json").is_file():
+        raise ValueError(f"内置任务不可覆盖：{builtin_task}")
     source_root = task_root / "source"
     task_yaml_path = task_root / "task.yaml"
     task_manifest_path = task_root / "task.json"
@@ -252,12 +260,18 @@ def convert_trace(options: ConvertOptions) -> Path:
 
     write_yaml_document(task_yaml_path, document)
     write_model(task_manifest_path, manifest)
-    scene_manifest = SceneManifest(
-        schema_version=SCENE_SCHEMA_VERSION,
-        scene=options.scene,
-        title=options.scene,
-        description=f"{options.scene} 场景任务集合",
+    builtin_scene_manifest = options.catalog.builtin_projects_root / options.scene / "scene.json"
+    scene_manifest = (
+        read_json_model(builtin_scene_manifest, SceneManifest)
+        if builtin_scene_manifest.is_file()
+        else SceneManifest(
+            schema_version=SCENE_SCHEMA_VERSION,
+            scene=options.scene,
+            title=options.scene,
+            description=f"{options.scene} 场景任务集合",
+        )
     )
+    assert isinstance(scene_manifest, SceneManifest)
     if not (task_root.parent / "scene.json").exists():
         write_model(task_root.parent / "scene.json", scene_manifest)
     write_text_if_missing(task_root.parent / "SKILL.md", scene_skill_content(options.scene))

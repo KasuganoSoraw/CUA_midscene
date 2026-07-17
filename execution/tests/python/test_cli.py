@@ -13,9 +13,9 @@ PROJECTS_ROOT = EXECUTION_ROOT / "projects"
 
 
 def test_scene_and_task_list_json(capsys: pytest.CaptureFixture[str]) -> None:
-    main(["scene", "list", "--projects-root", str(PROJECTS_ROOT), "--json"])
+    main(["scene", "list", "--json"])
     assert json.loads(capsys.readouterr().out)["scenes"][0]["scene"] == "browser-demo"
-    main(["task", "list", "--scene", "browser-demo", "--projects-root", str(PROJECTS_ROOT), "--json"])
+    main(["task", "list", "--scene", "browser-demo", "--json"])
     result = json.loads(capsys.readouterr().out)
     assert result["tasks"][0]["task"] == "air-tickets-demo"
     assert list(result["tasks"][0]["inputs"]) == [
@@ -35,8 +35,6 @@ def test_task_inspect_applies_only_explicit_input(capsys: pytest.CaptureFixture[
             "browser-demo",
             "--task",
             "air-tickets-demo",
-            "--projects-root",
-            str(PROJECTS_ROOT),
             "--input",
             "step-002-input=GOOGLE",
             "--json",
@@ -102,11 +100,12 @@ def test_act_recorded_task_routes_inputs_and_outputs_artifacts(
 ) -> None:
     executor_result = SimpleNamespace(to_json_dict=lambda: {"status": "succeeded"})
     run = SimpleNamespace(
-        resolved=SimpleNamespace(inputs={"step-002-input": "GOOGLE"}),
+        resolved=SimpleNamespace(inputs={"step-002-input": "GOOGLE"}, origin="builtin", writable=False),
         resolved_task_path=tmp_path / "resolved-task.yaml",
         prompt_path=tmp_path / "ai-act-prompt.txt",
         ai_act_yaml_path=tmp_path / "ai-act-task.yaml",
         executor_result=executor_result,
+        run_dir=tmp_path,
     )
 
     def fake_run(options: object) -> object:
@@ -123,8 +122,8 @@ def test_act_recorded_task_routes_inputs_and_outputs_artifacts(
             "browser-demo",
             "--task",
             "air-tickets-demo",
-            "--projects-root",
-            str(PROJECTS_ROOT),
+            "--data-root",
+            str(tmp_path),
             "--input",
             "step-002-input=GOOGLE",
             "--dry-run",
@@ -137,7 +136,9 @@ def test_act_recorded_task_routes_inputs_and_outputs_artifacts(
     assert result["aiActYamlPath"].endswith("ai-act-task.yaml")
 
 
-def test_task_rejects_unknown_input_before_executor(capsys: pytest.CaptureFixture[str]) -> None:
+def test_task_rejects_unknown_input_before_executor(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
     with pytest.raises(SystemExit) as error:
         main(
             [
@@ -147,8 +148,8 @@ def test_task_rejects_unknown_input_before_executor(capsys: pytest.CaptureFixtur
                 "browser-demo",
                 "--task",
                 "air-tickets-demo",
-                "--projects-root",
-                str(PROJECTS_ROOT),
+                "--data-root",
+                str(tmp_path),
                 "--input",
                 "unknown=value",
                 "--dry-run",
@@ -159,7 +160,7 @@ def test_task_rejects_unknown_input_before_executor(capsys: pytest.CaptureFixtur
 
 
 def test_act_recorded_task_rejects_unknown_input_before_executor(
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], tmp_path: Path,
 ) -> None:
     with pytest.raises(SystemExit) as error:
         main(
@@ -170,8 +171,8 @@ def test_act_recorded_task_rejects_unknown_input_before_executor(
                 "browser-demo",
                 "--task",
                 "air-tickets-demo",
-                "--projects-root",
-                str(PROJECTS_ROOT),
+                "--data-root",
+                str(tmp_path),
                 "--input",
                 "unknown=value",
                 "--dry-run",

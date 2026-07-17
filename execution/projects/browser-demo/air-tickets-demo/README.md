@@ -6,4 +6,5 @@
 - `task.json`：任务说明、trace 来源、输入 ID 和录制默认值。
 - `SKILL.md`：Agent 调用和长期修改规则。
 - `source/`：本任务的 trace、处理日志和截图证据。
-- `reports/`：参数解析后的 YAML 快照与执行结果，不纳入 Git。
+
+本目录是 Skill 内只读 builtin 任务。用户任务存放在 `<CUA_DATA_ROOT>/projects`，运行快照、执行结果、Midscene 报告和截图存放在 `<CUA_DATA_ROOT>/runs/<run-id>`。

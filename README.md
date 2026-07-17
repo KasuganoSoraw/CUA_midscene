@@ -12,7 +12,7 @@ CUA/
 ├── execution/              # 可独立发布的 CUA Midscene Skill
 │   ├── cua/                # Python 转换、任务解析和 CLI
 │   ├── executors/          # 极薄的 Midscene YAML runner 与 customActions
-│   ├── projects/           # 本地场景与任务 Skill
+│   ├── projects/           # 随 Skill 发布的只读内置任务
 │   ├── schemas/            # Pydantic 生成的稳定 JSON 契约
 │   ├── SKILL.md            # 执行器 Skill 入口
 │   └── references/         # Agent 按需读取的任务契约
@@ -28,7 +28,7 @@ CUA/
   -> record：日志、截图、trace
   -> Python converter：task.yaml + task.json
   -> 人、Agent 或未来前端确认后直接维护 task.yaml
-  -> Python 解析本次输入：reports/<run-id>/resolved-task.yaml
+  -> Python 解析本次输入：<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml
   -> task run：按多个 Midscene task 顺序执行
   -> act run --scene/--task：投影为完整步骤 prompt，再执行单个 ai action
 
@@ -46,6 +46,7 @@ cd execution
 uv sync
 npm install
 npm run check
+$env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 uv run cua scene list --json
 uv run cua task list --scene browser-demo --json
@@ -73,23 +74,30 @@ uv run cua task init-from-trace --scene <scene> --task <task> --goal "<任务目
 
 若 `task.yaml` 或 `task.json` 已存在，初始化直接失败，不覆盖人工或前端修改。
 
-## 任务资产
+## Skill 与用户数据
 
 ```text
-execution/projects/<scene>/
+execution/projects/<scene>/          # 随 Skill 发布，只读
 ├── scene.json
 ├── SKILL.md
 └── <task>/
     ├── task.yaml                 # 唯一长期执行事实源
     ├── task.json                 # 元数据、trace 来源和输入默认值
     ├── SKILL.md
-    ├── source/                   # trace、日志和截图
-    └── reports/<run-id>/         # Git 忽略
+    └── source/                   # trace、日志和截图
+
+<CUA_DATA_ROOT>/
+├── projects/<scene>/<task>/      # 用户创建和长期维护的任务数据包
+├── cache/
+└── runs/<run-id>/
         ├── resolved-task.yaml
         ├── ai-act-prompt.txt          # 仅整体 aiAct 模式
         ├── ai-act-task.yaml           # 仅整体 aiAct 模式
-        └── execution-result.json
+        ├── execution-result.json
+        └── midscene/             # Midscene 原生报告、截图等产物
 ```
+
+数据根解析优先级为 `--data-root`、进程环境变量 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。路径必须是 Skill 目录外的绝对路径。发现命令可只读取内置任务；创建、验证和执行命令必须配置数据根。同一 scene 可同时包含内置和用户任务，但同一 `scene/task` 在两处重复会显式失败。
 
 trace 每个 step 必须包含结构化 `operation`。converter 不从 observation、Action、Expectation 或关键词猜测动作。每个 trace step 生成一个名为 `step-NNN | <operation-type>` 的 Midscene task，整体目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`。录制事件 `LDoubleClick` 必须生成 `operation.type=doubleClick`，并转换为 Midscene 原生 `aiDoubleClick`；不允许退化为普通点击。input 必须显式提供 `operation.locatePrompt` 和 `operation.value`，并生成 `KeyboardTypeText` action；该动作通过底层键盘事件输入 ASCII，不使用剪贴板。
 

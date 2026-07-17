@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from secrets import token_hex
 from typing import Any
 
 from cua.domain.types import ExecutionOptions, ResolveTaskOptions, ResolvedTaskResult
 from cua.models.task import ExecutorResult
 from cua.task.ai_act_prompt import build_recorded_task_ai_act_prompt
 from cua.task.io import read_model
-from cua.task.resolver import create_run_directory, resolve_task, task_paths
+from cua.task.resolver import resolve_task
 from cua.task.yaml_task import write_yaml_document
 
 EXECUTION_ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +31,10 @@ class RecordedTaskAiActRun:
     prompt_path: Path
     ai_act_yaml_path: Path
     executor_result: ExecutorResult
+
+    @property
+    def run_dir(self) -> Path:
+        return self.resolved_task_path.parent
 
 
 def default_executor_command() -> tuple[str, ...]:
@@ -53,7 +60,10 @@ def execute_yaml(
     ]
     if dry_run:
         command.append("--dry-run")
-    completed = subprocess.run(command, cwd=EXECUTION_ROOT, check=False)
+    midscene_run_dir = (result_path.parent / "midscene").resolve()
+    environment = os.environ.copy()
+    environment["MIDSCENE_RUN_DIR"] = str(midscene_run_dir)
+    completed = subprocess.run(command, cwd=EXECUTION_ROOT, check=False, env=environment)
 
     result: ExecutorResult | None = None
     result_error: Exception | None = None
@@ -76,8 +86,22 @@ def execute_yaml(
     return result
 
 
-def write_task_run_snapshot(resolved: ResolvedTaskResult, reports_dir: Path) -> Path:
-    run_dir = create_run_directory(reports_dir)
+def create_run_directory(runs_root: Path) -> Path:
+    root = runs_root.resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S-%fZ")
+    for _ in range(4):
+        run_dir = root / f"{now}-{token_hex(4)}"
+        try:
+            run_dir.mkdir(exist_ok=False)
+            return run_dir
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"无法创建唯一运行目录：{root}")
+
+
+def write_task_run_snapshot(resolved: ResolvedTaskResult, runs_root: Path) -> Path:
+    run_dir = create_run_directory(runs_root)
     snapshot_path = run_dir / "resolved-task.yaml"
     write_yaml_document(snapshot_path, resolved.document)
     return snapshot_path
@@ -88,12 +112,11 @@ def run_task(options: ExecutionOptions) -> tuple[ResolvedTaskResult, Path, Execu
         ResolveTaskOptions(
             scene=options.scene,
             task=options.task,
-            projects_root=options.projects_root,
+            catalog=options.catalog,
             inputs=options.inputs,
         )
     )
-    paths = task_paths(options.scene, options.task, options.projects_root)
-    snapshot_path = write_task_run_snapshot(resolved, paths.reports_dir)
+    snapshot_path = write_task_run_snapshot(resolved, options.runs_root)
     result = execute_yaml(
         snapshot_path,
         snapshot_path.parent / "execution-result.json",
@@ -132,13 +155,12 @@ def run_recorded_task_ai_act(options: ExecutionOptions) -> RecordedTaskAiActRun:
         ResolveTaskOptions(
             scene=options.scene,
             task=options.task,
-            projects_root=options.projects_root,
+            catalog=options.catalog,
             inputs=options.inputs,
         )
     )
     prompt = build_recorded_task_ai_act_prompt(resolved.document)
-    paths = task_paths(options.scene, options.task, options.projects_root)
-    run_dir = create_run_directory(paths.reports_dir)
+    run_dir = create_run_directory(options.runs_root)
     resolved_task_path = run_dir / "resolved-task.yaml"
     prompt_path = run_dir / "ai-act-prompt.txt"
     ai_act_yaml_path = run_dir / "ai-act-task.yaml"
@@ -172,13 +194,13 @@ def run_prompt(
     prompt: str,
     *,
     dry_run: bool = False,
-    reports_root: Path | None = None,
+    runs_root: Path,
     command_prefix: tuple[str, ...] | None = None,
 ) -> tuple[Path, ExecutorResult]:
     normalized_prompt = prompt.strip()
     if not normalized_prompt:
         raise ValueError("自然语言 prompt 不能为空")
-    run_dir = create_run_directory(reports_root or EXECUTION_ROOT / "reports")
+    run_dir = create_run_directory(runs_root)
     yaml_path = run_dir / "resolved-task.yaml"
     write_yaml_document(
         yaml_path,
