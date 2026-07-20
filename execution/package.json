@@ -1,24 +1,35 @@
 {
-  "name": "cua_midscene",
+  "name": "cua-midscene",
   "version": "1.0.0",
-  "description": "CUA 的 Midscene computer use TypeScript 执行适配器。",
+  "description": "基于 TypeScript 与 Midscene computer use 的 CUA 任务执行器。",
   "type": "module",
+  "bin": {
+    "cua": "./dist/cua/cli/main.js"
+  },
+  "exports": {
+    ".": "./dist/cua/index.js"
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "cua": "tsx cua/cli/main.ts",
     "check": "tsx executors/check-env.ts",
-    "test:keyboard-type": "tsx tests/executors/keyboard-type-action.test.ts",
-    "test:yaml-runner": "tsx tests/executors/yaml-runner.test.ts",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck && npm run test:keyboard-type && npm run test:yaml-runner"
+    "test": "npm run typecheck && tsx --test tests/**/*.test.ts"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@midscene/computer": "^1.10.0",
-    "dotenv": "^16.4.7"
+    "@midscene/core": "^1.10.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "dotenv": "^16.4.7",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@types/node": "^18.19.68",
+    "@types/proper-lockfile": "^4.1.4",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }

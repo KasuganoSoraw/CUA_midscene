@@ -6,9 +6,9 @@
 
 ## 2. 建立 TypeScript 工程与契约边界
 
-- [ ] 2.1 调整 `package.json`、TypeScript 配置和测试入口，直接声明 `@midscene/core`、YAML、Ajv 与 `ajv-formats` 依赖
-- [ ] 2.2 在 `cua/contracts` 定义精简 TypeScript 类型和持久化 JSON Schema 读取器，统一输出包含文件路径与字段路径的中文 Ajv 错误
-- [ ] 2.3 实现 trace、scene、task 和 execution result 的边界校验，并验证内部函数不会重复执行完整契约校验
+- [x] 2.1 调整 `package.json`、TypeScript 配置和测试入口，直接声明 `@midscene/core`、YAML、Ajv 与 `ajv-formats` 依赖
+- [x] 2.2 在 `cua/contracts` 定义精简 TypeScript 类型和持久化 JSON Schema 读取器，统一输出包含文件路径与字段路径的中文 Ajv 错误
+- [x] 2.3 实现 trace、scene、task 和 execution result 的边界校验，并验证内部函数不会重复执行完整契约校验
 
 ## 3. 迁移任务数据与解析核心
 
@@ -28,7 +28,7 @@
 
 - [ ] 5.1 将录制任务有序 aiAct prompt 和无录制 prompt 临时 YAML 生成迁移到 TypeScript
 - [ ] 5.2 将 YAML runner 重构为接收显式参数并返回结构化结果的可导入 API，复用现有 ComputerAgent 与 `KeyboardTypeText`
-- [ ] 5.3 实现同一工具服务与独立 CLI 进程共享的本地电脑独占锁、绝对 run directory 设置和 `finally` 清理，验证任何时刻最多只有一个 ComputerAgent 且报告不会混写
+- [ ] 5.3 实现本次绝对 run directory 设置和 `finally` 环境恢复，明确第一版实际 computer use 由上层串行调用且执行器不实现锁
 - [ ] 5.4 验证 dry-run 不创建设备或调用模型，实际失败不自动切换模式、不修改任务且始终销毁 Agent
 
 ## 6. 建立 Node.js CLI 与工具 API
