@@ -28,7 +28,7 @@
 
 - [ ] 5.1 将录制任务有序 aiAct prompt 和无录制 prompt 临时 YAML 生成迁移到 TypeScript
 - [ ] 5.2 将 YAML runner 重构为接收显式参数并返回结构化结果的可导入 API，复用现有 ComputerAgent 与 `KeyboardTypeText`
-- [ ] 5.3 实现进程内 Midscene 执行互斥、绝对 run directory 设置和 `finally` 环境恢复，验证并发请求不会混写报告
+- [ ] 5.3 实现同一工具服务与独立 CLI 进程共享的本地电脑独占锁、绝对 run directory 设置和 `finally` 清理，验证任何时刻最多只有一个 ComputerAgent 且报告不会混写
 - [ ] 5.4 验证 dry-run 不创建设备或调用模型，实际失败不自动切换模式、不修改任务且始终销毁 Agent
 
 ## 6. 建立 Node.js CLI 与工具 API

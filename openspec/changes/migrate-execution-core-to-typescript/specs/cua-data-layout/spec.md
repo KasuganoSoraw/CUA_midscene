@@ -8,7 +8,7 @@ TypeScript 执行编排 SHALL 为每次调用显式提供绝对 run directory，
 - **THEN** 这些文件 SHALL 位于 `<run-dir>/midscene/`
 - **AND** 静态环境文件中的同名配置 SHALL NOT 将其重定向到共享 Skill 目录
 
-#### Scenario: 同进程收到并发执行请求
-- **WHEN** Midscene 仅支持进程级 `MIDSCENE_RUN_DIR` 且已有电脑操作正在执行
-- **THEN** 后续执行 SHALL 等待前一执行完成后再设置自己的目录
+#### Scenario: 多个进程请求同一本地电脑
+- **WHEN** 已有电脑操作正在执行且同一工具服务或独立 CLI 进程发起另一次实际执行
+- **THEN** 后续执行 SHALL 通过同一主机级独占锁等待前一执行完成后再设置自己的目录
 - **AND** 执行器 SHALL 在 `finally` 中恢复调用前的环境值
