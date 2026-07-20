@@ -2,7 +2,7 @@
 
 - [ ] 1.1 为当前 scene/task 列表、describe、validate、inspect、dry-run 和非法参数输出建立不依赖 Python 实现细节的 CLI fixtures
 - [ ] 1.2 为 trace 转换后的 `task.yaml`、`task.json`、任务 Skill、resolved YAML 和 aiAct prompt 建立代表性 golden fixtures
-- [ ] 1.3 记录现有 JSON Schema 的有效与无效样例，并覆盖未知字段、错误类型、缺失字段和重复标识
+- [x] 1.3 记录现有 JSON Schema 的有效与无效样例，并覆盖未知字段、错误类型、缺失字段和重复标识
 
 ## 2. 建立 TypeScript 工程与契约边界
 
@@ -12,10 +12,10 @@
 
 ## 3. 迁移任务数据与解析核心
 
-- [ ] 3.1 将数据根优先级、绝对路径约束、目录派生和写入检查迁移到 TypeScript
-- [ ] 3.2 将 builtin/user 双 catalog 发现、确定排序、来源标记和重复 scene/task 冲突迁移到 TypeScript
-- [ ] 3.3 将 YAML 读取写出、稳定 step 身份检查、`continueOnError` 禁止规则和 Midscene parser 最终校验迁移到 TypeScript
-- [ ] 3.4 将稀疏 `--input`/`--inputs` 解析、默认值合并、严格占位符替换和 resolved task 快照迁移到 TypeScript
+- [x] 3.1 将数据根优先级、绝对路径约束、目录派生和写入检查迁移到 TypeScript
+- [x] 3.2 将 builtin/user 双 catalog 发现、确定排序、来源标记和重复 scene/task 冲突迁移到 TypeScript
+- [x] 3.3 将 YAML 读取写出、稳定 step 身份检查、`continueOnError` 禁止规则和 Midscene parser 最终校验迁移到 TypeScript
+- [x] 3.4 将稀疏 `--input`/`--inputs` 解析、默认值合并、严格占位符替换和 resolved task 快照迁移到 TypeScript
 
 ## 4. 迁移 trace 转换与任务生成
 
