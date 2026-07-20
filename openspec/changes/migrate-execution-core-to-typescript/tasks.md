@@ -1,7 +1,7 @@
 ## 1. 固化迁移基线
 
 - [ ] 1.1 为当前 scene/task 列表、describe、validate、inspect、dry-run 和非法参数输出建立不依赖 Python 实现细节的 CLI fixtures
-- [ ] 1.2 为 trace 转换后的 `task.yaml`、`task.json`、任务 Skill、resolved YAML 和 aiAct prompt 建立代表性 golden fixtures
+- [x] 1.2 为 trace 转换后的 `task.yaml`、`task.json`、任务 Skill、resolved YAML 和 aiAct prompt 建立代表性 golden fixtures
 - [x] 1.3 记录现有 JSON Schema 的有效与无效样例，并覆盖未知字段、错误类型、缺失字段和重复标识
 
 ## 2. 建立 TypeScript 工程与契约边界
@@ -26,10 +26,10 @@
 
 ## 5. 迁移 aiAct 投影与 Midscene 直接执行
 
-- [ ] 5.1 将录制任务有序 aiAct prompt 和无录制 prompt 临时 YAML 生成迁移到 TypeScript
-- [ ] 5.2 将 YAML runner 重构为接收显式参数并返回结构化结果的可导入 API，复用现有 ComputerAgent 与 `KeyboardTypeText`
-- [ ] 5.3 实现本次绝对 run directory 设置和 `finally` 环境恢复，明确第一版实际 computer use 由上层串行调用且执行器不实现锁
-- [ ] 5.4 验证 dry-run 不创建设备或调用模型，实际失败不自动切换模式、不修改任务且始终销毁 Agent
+- [x] 5.1 将录制任务有序 aiAct prompt 和无录制 prompt 临时 YAML 生成迁移到 TypeScript
+- [x] 5.2 将 YAML runner 重构为接收显式参数并返回结构化结果的可导入 API，复用现有 ComputerAgent 与 `KeyboardTypeText`
+- [x] 5.3 实现本次绝对 run directory 设置和 `finally` 环境恢复，明确第一版实际 computer use 由上层串行调用且执行器不实现锁
+- [x] 5.4 验证 dry-run 不创建设备或调用模型，实际失败不自动切换模式、不修改任务且始终销毁 Agent
 
 ## 6. 建立 Node.js CLI 与工具 API
 
