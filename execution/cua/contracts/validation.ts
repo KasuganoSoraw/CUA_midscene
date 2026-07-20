@@ -1,7 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 import type {
   ExecutorResult,
@@ -10,9 +9,9 @@ import type {
   ShowuiTrace,
   TaskManifest,
 } from './types.js';
+import { packageRoot } from '../package-root.js';
 
-const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const schemaDirectory = path.join(executionRoot, 'schemas');
+const schemaDirectory = path.join(packageRoot, 'schemas');
 const require = createRequire(import.meta.url);
 const addFormats = require('ajv-formats') as (instance: Ajv) => void;
 const ajv = new Ajv({ allErrors: true, strict: true });

@@ -1,6 +1,6 @@
 ## 1. 固化迁移基线
 
-- [ ] 1.1 为当前 scene/task 列表、describe、validate、inspect、dry-run 和非法参数输出建立不依赖 Python 实现细节的 CLI fixtures
+- [x] 1.1 为当前 scene/task 列表、describe、validate、inspect、dry-run 和非法参数输出建立不依赖 Python 实现细节的 CLI fixtures
 - [x] 1.2 为 trace 转换后的 `task.yaml`、`task.json`、任务 Skill、resolved YAML 和 aiAct prompt 建立代表性 golden fixtures
 - [x] 1.3 记录现有 JSON Schema 的有效与无效样例，并覆盖未知字段、错误类型、缺失字段和重复标识
 
@@ -33,10 +33,10 @@
 
 ## 6. 建立 Node.js CLI 与工具 API
 
-- [ ] 6.1 实现 scene、task 和 act 子命令，保持当前参数互斥、必填规则、退出码和 JSON 字段语义
-- [ ] 6.2 提供编译后的 package exports 与 `cua` bin，并配置开发期 `npm run cua -- ...` 入口
-- [ ] 6.3 确保 CLI 机器结果只写 stdout、诊断只写 stderr，Midscene 日志不会破坏 JSON 输出
-- [ ] 6.4 导出供 GDE Claw 直接调用的任务发现、初始化、inspect、逐 task 执行和 aiAct API，并验证其不启动子进程
+- [x] 6.1 实现 scene、task 和 act 子命令，保持当前参数互斥、必填规则、退出码和 JSON 字段语义
+- [x] 6.2 提供编译后的 package exports 与 `cua` bin，并配置开发期 `npm run cua -- ...` 入口
+- [x] 6.3 确保 CLI 机器结果只写 stdout、诊断只写 stderr，Midscene 日志不会破坏 JSON 输出
+- [x] 6.4 导出供 GDE Claw 直接调用的任务发现、初始化、inspect、逐 task 执行和 aiAct API，并验证其不启动子进程
 
 ## 7. 删除 Python 与更新发布单元
 

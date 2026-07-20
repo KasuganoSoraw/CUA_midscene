@@ -1,11 +1,11 @@
 import { access, mkdir, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import type { DataPaths, RuntimeLayout } from '../contracts/types.js';
+import { packageRoot } from '../package-root.js';
 
-export const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+export const executionRoot = packageRoot;
 export const builtinProjectsRoot = path.join(executionRoot, 'projects');
 export const dataRootEnv = 'CUA_DATA_ROOT';
 

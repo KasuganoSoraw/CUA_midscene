@@ -1,6 +1,19 @@
 import dotenv from 'dotenv';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { packageRoot } from '../cua/package-root.js';
 
-dotenv.config({ path: ['.env.local', '.env'] });
+const fileValues: Record<string, string> = {};
+for (const filename of ['.env', '.env.local']) {
+  try {
+    Object.assign(fileValues, dotenv.parse(readFileSync(path.join(packageRoot, filename))));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+}
+for (const [key, value] of Object.entries(fileValues)) {
+  if (key !== 'CUA_DATA_ROOT' && process.env[key] === undefined) process.env[key] = value;
+}
 
 export function warnIfNodeVersionIsOld(): void {
   const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);

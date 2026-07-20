@@ -14,7 +14,7 @@
     "cua": "tsx cua/cli/main.ts",
     "check": "tsx executors/check-env.ts",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck && tsx --test tests/**/*.test.ts"
+    "test": "npm run typecheck && tsx --test tests/all.test.ts"
   },
   "keywords": [],
   "author": "",
