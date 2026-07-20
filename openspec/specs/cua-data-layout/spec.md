@@ -2,9 +2,7 @@
 
 ## Purpose
 定义 Executor Skill 发布资产与用户可写数据之间的稳定边界，规定数据根配置优先级、内置与用户任务目录、统一运行产物目录以及 Midscene 输出位置，确保安装目录在运行期间保持只读且可安全替换升级。
-
 ## Requirements
-
 ### Requirement: 用户数据根具有确定配置优先级
 系统 SHALL 按显式 CLI 参数、进程环境变量 `CUA_DATA_ROOT`、Skill 根目录 `.env.local`、Skill 根目录 `.env` 的顺序解析用户数据根，并将其规范化为绝对路径。
 
@@ -49,9 +47,15 @@
 - **THEN** 发布内容 SHALL 排除用户数据、运行报告、Midscene 输出、依赖目录、缓存和真实环境文件
 
 ### Requirement: Midscene 输出绑定本次运行
-Python 执行编排 SHALL 为每个 TypeScript runner 子进程动态设置该次运行专属的绝对 `MIDSCENE_RUN_DIR`。
+TypeScript 执行编排 SHALL 为每次调用显式提供绝对 run directory，并在本次执行结束后恢复进程原有的 Midscene 报告目录配置。
 
 #### Scenario: 实际运行生成 Midscene 报告
 - **WHEN** Midscene runner 创建报告、截图或日志
 - **THEN** 这些文件 SHALL 位于 `<run-dir>/midscene/`
 - **AND** 静态环境文件中的同名配置 SHALL NOT 将其重定向到共享 Skill 目录
+
+#### Scenario: 执行结束或失败
+- **WHEN** Midscene 实际执行成功、失败或抛出异常
+- **THEN** 执行器 SHALL 销毁本次 Agent
+- **AND** 执行器 SHALL 在 `finally` 中恢复调用前的环境值
+

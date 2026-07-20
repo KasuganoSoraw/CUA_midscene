@@ -3,7 +3,7 @@
 定义从 `record` 教学录制产物到 `execution` 中 Midscene computer use 执行流程的转换边界、项目产物组织方式、IR 要求和 runner 行为。
 ## Requirements
 ### Requirement: Converter 直接生成 Midscene YAML
-Python converter SHALL 只根据 ShowUI-Aloha trace 的结构化 operation 与录制时间生成任务根目录的 `task.yaml`。
+TypeScript converter SHALL 只根据 ShowUI-Aloha trace 的结构化 operation 与录制时间生成任务根目录的 `task.yaml`。
 
 #### Scenario: 转换受支持的 trace
 - **WHEN** trace 包含 click、input、keyboard 或 wait operation
@@ -34,3 +34,4 @@ converter SHALL 将每个 trace step 按原顺序生成一个 Midscene `tasks[]`
 #### Scenario: trace step 标识非法
 - **WHEN** step ID 非正整数、重复或未按轨迹顺序严格递增
 - **THEN** converter SHALL 失败且不写出任务资产
+

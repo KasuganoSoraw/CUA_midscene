@@ -30,12 +30,12 @@ TBD - created by archiving change simplify-local-task-skills. Update Purpose aft
 - **THEN** resolver SHALL 使用 `task.json` 中的录制默认值
 
 ### Requirement: execution 发布单元只包含当前实现
-execution Skill 安装包 SHALL 包含 Python 核心、YAML runner、只读内置项目任务、引用文档和必要契约，不得包含用户任务、运行时可变数据或已删除架构的代码与说明。
+execution Skill 安装包 SHALL 包含 TypeScript 核心、Midscene YAML runner、只读内置项目任务、引用文档、编译运行入口和必要契约，不得包含 Python 环境、用户任务、运行时可变数据或已删除架构的代码与说明。
 
 #### Scenario: 安装 Skill
 - **WHEN** 执行可重复安装或 staging 命令
 - **THEN** 本机 Skill 副本 SHALL 与明确的当前发布文件集合一致
-- **AND** 安装包 SHALL NOT 包含 node_modules、`.venv`、用户 data root、reports、midscene_run、缓存、真实环境文件、测试或旧 flow 文件
+- **AND** 安装包 SHALL NOT 包含 Python 源码与锁文件、node_modules、用户 data root、reports、midscene_run、缓存、真实环境文件、测试或旧 flow 文件
 
 ### Requirement: Agent 显式选择电脑操作执行模式
 执行器 Skill SHALL 向上层 Agent 说明录制 YAML 逐 task 执行、录制任务整体 aiAct 和无录制自然语言 aiAct 三种调用方式，并禁止隐式切换。

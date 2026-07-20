@@ -37,17 +37,17 @@ TBD - created by archiving change replace-flow-dsl-with-midscene-yaml. Update Pu
 - **THEN** 系统 SHALL 在启动 Midscene 前失败
 
 ### Requirement: 单一 TypeScript runner 执行 YAML
-TypeScript 执行适配器 SHALL 注册 `KeyboardTypeText`、创建 ComputerAgent 并调用 `agent.runYaml()`，且不得解释业务 step 或 route。
+TypeScript 执行适配器 SHALL 暴露可直接导入的 YAML 执行 API，注册 `KeyboardTypeText`、创建 ComputerAgent 并调用 `agent.runYaml()`，且不得解释业务 step 或 route。
 
 #### Scenario: 执行录制任务
-- **WHEN** Python 提供参数已解析的任务 YAML
-- **THEN** runner SHALL 将完整 YAML 内容交给 `agent.runYaml()`
-- **AND** runner SHALL 在结束时销毁 Agent
+- **WHEN** TypeScript 核心提供参数已解析的任务 YAML 和本次 run directory
+- **THEN** 执行 API SHALL 将完整 YAML 内容交给 `agent.runYaml()`
+- **AND** 执行 API SHALL 在结束时销毁 Agent 并返回结构化结果
 
 #### Scenario: dry-run
 - **WHEN** 使用 `--dry-run`
-- **THEN** runner SHALL 解析和验证 YAML
-- **AND** runner SHALL NOT 创建 ComputerDevice、ComputerAgent 或调用模型
+- **THEN** 执行 API SHALL 解析和验证 YAML
+- **AND** 执行 API SHALL NOT 创建 ComputerDevice、ComputerAgent 或调用模型
 
 ### Requirement: 运行缺陷不得被兜底隐藏
 系统 SHALL 原样暴露 YAML 解析、输入解析、Midscene 动作和模型执行错误，不得自动切换模式、修改任务、跳过动作或调用替代输入方式。
@@ -58,10 +58,10 @@ TypeScript 执行适配器 SHALL 注册 `KeyboardTypeText`、创建 ComputerAgen
 - **AND** 系统 SHALL NOT 回退到剪贴板 Input
 
 ### Requirement: 自然语言任务复用 YAML runner
-无录制自然语言操作 SHALL 被包装为包含单个 Midscene `ai` action 的临时 YAML，并通过统一 runner 执行。
+无录制自然语言操作 SHALL 被 TypeScript 核心包装为包含单个 Midscene `ai` action 的临时 YAML，并通过统一 runner API 执行。
 
 #### Scenario: 运行自然语言操作
-- **WHEN** 用户调用 `cua act run --prompt <要求>`
-- **THEN** Python SHALL 生成临时 YAML 和报告目录
-- **AND** 系统 SHALL 使用与录制任务相同的 TS runner
+- **WHEN** 用户调用 `cua act run --prompt <要求>` 或对应工具 API
+- **THEN** TypeScript 核心 SHALL 生成临时 YAML 和报告目录
+- **AND** 系统 SHALL 使用与录制任务相同的 TypeScript runner API
 
