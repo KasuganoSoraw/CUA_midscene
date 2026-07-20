@@ -19,10 +19,10 @@
 
 ## 4. 迁移 trace 转换与任务生成
 
-- [ ] 4.1 将结构化 trace operation 到 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress` 和 `aiWaitFor` 的确定性转换迁移到 TypeScript
-- [ ] 4.2 迁移录制时间间隔裁剪、稳定 step/input ID、整体目标和任务清单生成逻辑
-- [ ] 4.3 迁移场景与任务 `SKILL.md` 生成，并验证转换失败不会写出半成品资产
-- [ ] 4.4 使用 golden fixtures 对比 Python 与 TypeScript 转换结果，确认无关键词路由、猜测动作或兼容兜底
+- [x] 4.1 将结构化 trace operation 到 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress` 和 `aiWaitFor` 的确定性转换迁移到 TypeScript
+- [x] 4.2 迁移录制时间间隔裁剪、稳定 step/input ID、整体目标和任务清单生成逻辑
+- [x] 4.3 迁移场景与任务 `SKILL.md` 生成，并验证转换失败不会写出半成品资产
+- [x] 4.4 使用 golden fixtures 对比 Python 与 TypeScript 转换结果，确认无关键词路由、猜测动作或兼容兜底
 
 ## 5. 迁移 aiAct 投影与 Midscene 直接执行
 
