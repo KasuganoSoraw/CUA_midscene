@@ -6,3 +6,4 @@ import './task/task-core.test.js';
 import './task/execution.test.js';
 import './executors/keyboard-type-action.test.js';
 import './executors/yaml-runner.test.js';
+import './skill/package.test.js';

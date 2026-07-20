@@ -1,6 +1,6 @@
 # CUA
 
-本项目探索面向真实桌面环境的 Computer Use Agent（CUA）：`record` 将教学录制处理为结构化日志与 trace，`execution` 将 trace 直接初始化为 Midscene YAML 任务，并通过 Midscene computer use 操作 Chrome、堡垒机、远程桌面或企业内网页系统。
+本项目探索面向真实桌面环境的 Computer Use Agent（CUA）：`record` 将教学录制处理为结构化日志与 trace，`execution` 将 trace 初始化为 Midscene YAML 任务，并通过 Midscene computer use 操作 Chrome、堡垒机、远程桌面或企业内网页系统。
 
 项目不使用 browser-use、Playwright、Puppeteer 或 CDP 作为执行底座。企业内网中“先经过堡垒机，再操作目标网页”的链路必须基于真实屏幕与键盘鼠标事件。
 
@@ -9,67 +9,62 @@
 ```text
 CUA/
 ├── record/                 # 教学录制处理：视频、日志、截图 -> trace
-├── execution/              # 可独立发布的 CUA Midscene Skill
-│   ├── cua/                # Python 转换、任务解析和 CLI
-│   ├── executors/          # 极薄的 Midscene YAML runner 与 customActions
+├── execution/              # 可独立发布的 TypeScript CUA Midscene Skill
+│   ├── cua/                # 转换、任务解析、CLI 和公开工具 API
+│   ├── executors/          # Midscene 适配与 KeyboardTypeText
 │   ├── projects/           # 随 Skill 发布的只读内置任务
-│   ├── schemas/            # Pydantic 生成的稳定 JSON 契约
+│   ├── schemas/            # Ajv 在文件边界使用的 JSON Schema
 │   ├── SKILL.md            # 执行器 Skill 入口
 │   └── references/         # Agent 按需读取的任务契约
 └── openspec/               # 规格与变更记录
 ```
 
-`record` 基于 ShowUI-Aloha Learn，只保留录制处理，不包含 Act、Actor、Executor 或回放能力。`execution` 以 Python 为主体；TypeScript 仅用于注册 Midscene customAction 和调用 `agent.runYaml()`。
+`record` 基于 ShowUI-Aloha Learn，只保留录制处理，不包含 Act、Actor、Executor 或回放能力。`execution` 全面使用 TypeScript：同一核心同时服务 CLI、GDE Claw 工具 API 和 Midscene 执行，不再经过 Python 或子进程协议。
 
 ## 数据流
 
 ```text
 教学录制
   -> record：日志、截图、trace
-  -> Python converter：task.yaml + task.json
+  -> TypeScript converter：task.yaml + task.json
   -> 人、Agent 或未来前端确认后直接维护 task.yaml
-  -> Python 解析本次输入：<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml
+  -> TypeScript resolver：<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml
   -> task run：按多个 Midscene task 顺序执行
   -> act run --scene/--task：投影为完整步骤 prompt，再执行单个 ai action
 
 无录制自然语言要求
   -> 临时单 action YAML
-  -> 同一个 agent.runYaml()
+  -> 同一个 TypeScript Midscene 执行 API
 ```
 
-`task.yaml` 是任务唯一长期可执行流程，直接使用 Midscene 原生 YAML action。`task.json` 是参数契约，保存任务说明、trace 来源、输入 ID 和录制默认值；`source/` 是校准时的只读录制证据。系统不维护自定义 route、resolved flow、override、proposal 或 history。
+`task.yaml` 是任务唯一长期可执行流程，直接使用 Midscene 原生 YAML action。`task.json` 保存任务说明、trace 来源、输入 ID 和录制默认值；`source/` 是校准时的只读录制证据。系统不维护自定义 route、resolved flow、override、proposal 或 history。
 
 ## 快速开始
 
 ```powershell
 cd execution
-uv sync
 npm install
 npm run check
 $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
-uv run cua scene list --json
-uv run cua task list --scene browser-demo --json
-uv run cua task describe --scene browser-demo --task air-tickets-demo --json
-uv run cua task validate --scene browser-demo --task air-tickets-demo
-uv run cua task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
-uv run cua task run --scene browser-demo --task air-tickets-demo --dry-run
-uv run cua act run --scene browser-demo --task air-tickets-demo --dry-run
-uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
+npm run cua -- scene list --json
+npm run cua -- task list --scene browser-demo --json
+npm run cua -- task describe --scene browser-demo --task air-tickets-demo --json
+npm run cua -- task validate --scene browser-demo --task air-tickets-demo
+npm run cua -- task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
+npm run cua -- task run --scene browser-demo --task air-tickets-demo --dry-run
+npm run cua -- act run --scene browser-demo --task air-tickets-demo --dry-run
+npm run cua -- act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 ```
 
-实际操作电脑时去掉 `--dry-run`：
+执行器要求 Node.js `>=18.19.0`，该下限与当前 Midscene `1.10.0` 保持一致。
+
+实际操作电脑时去掉 `--dry-run`。第一版不实现并发锁，上层调用方必须串行发起真实 computer use；查询、转换、inspect 和 dry-run 不操作电脑。
+
+从已放入 user task `source/` 的 trace 初始化任务：
 
 ```powershell
-uv run cua task run --scene browser-demo --task air-tickets-demo
-uv run cua act run --scene browser-demo --task air-tickets-demo
-uv run cua act run --prompt "打开 Chrome 并搜索 GUI agent"
-```
-
-从已放入任务 `source/` 的 trace 初始化任务：
-
-```powershell
-uv run cua task init-from-trace --scene <scene> --task <task> --goal "<任务目标>"
+npm run cua -- task init-from-trace --scene <scene> --task <task> --goal "<任务目标>"
 ```
 
 若 `task.yaml` 或 `task.json` 已存在，初始化直接失败，不覆盖人工或前端修改。
@@ -78,40 +73,35 @@ uv run cua task init-from-trace --scene <scene> --task <task> --goal "<任务目
 
 ```text
 execution/projects/<scene>/          # 随 Skill 发布，只读
-├── scene.json
-├── SKILL.md
 └── <task>/
-    ├── task.yaml                 # 唯一长期执行事实源
-    ├── task.json                 # 元数据、trace 来源和输入默认值
+    ├── task.yaml                    # 唯一长期执行事实源
+    ├── task.json                    # 元数据、trace 来源和输入默认值
     ├── SKILL.md
-    └── source/                   # trace、日志和截图
+    └── source/                      # trace、日志和截图
 
 <CUA_DATA_ROOT>/
-├── projects/<scene>/<task>/      # 用户创建和长期维护的任务数据包
+├── projects/<scene>/<task>/         # 用户创建和长期维护的任务数据包
 ├── cache/
 └── runs/<run-id>/
-        ├── resolved-task.yaml
-        ├── ai-act-prompt.txt          # 仅整体 aiAct 模式
-        ├── ai-act-task.yaml           # 仅整体 aiAct 模式
-        ├── execution-result.json
-        └── midscene/             # Midscene 原生报告、截图等产物
+    ├── resolved-task.yaml
+    ├── ai-act-prompt.txt            # 仅录制任务整体 aiAct
+    ├── ai-act-task.yaml             # 仅录制任务整体 aiAct
+    ├── execution-result.json
+    └── midscene/                    # Midscene 报告、截图等产物
 ```
 
-数据根解析优先级为 `--data-root`、进程环境变量 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。路径必须是 Skill 目录外的绝对路径。发现命令可只读取内置任务；创建、验证和执行命令必须配置数据根。同一 scene 可同时包含内置和用户任务，但同一 `scene/task` 在两处重复会显式失败。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。路径必须是 Skill 目录外的绝对路径。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
 
-trace 每个 step 必须包含结构化 `operation`。converter 不从 observation、Action、Expectation 或关键词猜测动作。每个 trace step 生成一个名为 `step-NNN | <operation-type>` 的 Midscene task，整体目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`。录制事件 `LDoubleClick` 必须生成 `operation.type=doubleClick`，并转换为 Midscene 原生 `aiDoubleClick`；不允许退化为普通点击。input 必须显式提供 `operation.locatePrompt` 和 `operation.value`，并生成 `KeyboardTypeText` action；该动作通过底层键盘事件输入 ASCII，不使用剪贴板。
+trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 
-输入参数 ID 由对应步骤派生，例如 `step-002-input`，YAML 使用显式 `{{step-002-input}}` 占位符。同一参数需要影响后续动作时，应经确认后在相关 YAML prompt 中复用同一个占位符；系统不会根据业务文本自动猜测关联。
+## 验证与安装
 
-## 模型与验证
-
-当前实验使用火山 Ark OpenAI 兼容接口与 `minimax-m3`。真实 API Key 只放在 `record/.env` 和 `execution/.env.local`，不得提交。
+真实密钥只放在 `record/.env` 和 `execution/.env.local`，不得提交。
 
 ```powershell
 cd execution
-uv run pytest
-uv run python -m cua.models.schema --check
 npm test
+npm run build
 ```
 
 安装本地 Skill 副本：

@@ -8,8 +8,8 @@
   "source": {
     "tracePath": "source/showui-trace.json",
     "processedLogPath": "source/processed-log-sc.json",
-    "conversionCommand": "uv run cua task init-from-trace --scene browser-demo --task air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\" --recording-preparation-command \"将 record 生成的 trace、processed log 和截图复制到 execution\\projects\\browser-demo\\air-tickets-demo\\source\" --trace-generation-command \"未记录；当前录制样例未保留 trace 生成命令\"",
-    "recordingPreparationCommand": "将 record 生成的 trace、processed log 和截图复制到 execution\\projects\\browser-demo\\air-tickets-demo\\source",
+    "conversionCommand": "node dist/cua/cli/main.js task init-from-trace --scene browser-demo --task air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\" --recording-preparation-command \"将 record 生成的 trace、processed log 和截图复制到用户数据根的 browser-demo/air-tickets-demo/source\" --trace-generation-command \"未记录；当前录制样例未保留 trace 生成命令\"",
+    "recordingPreparationCommand": "将 record 生成的 trace、processed log 和截图复制到用户数据根的 browser-demo/air-tickets-demo/source",
     "traceGenerationCommand": "未记录；当前录制样例未保留 trace 生成命令"
   },
   "inputs": {

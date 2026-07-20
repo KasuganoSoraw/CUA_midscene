@@ -2,18 +2,20 @@
 
 ## 项目简介
 
-本项目用于探索基于真实桌面环境的 Computer Use Agent（CUA）工作流。整体方向是：由 `record` 负责教学录制信息处理，将录制视频、输入日志和截图转换为结构化日志与 trace；由 `execution` 负责任务初始化、参数化调用和执行，并通过 Midscene computer use 操作本地 Chrome、堡垒机、远程桌面或企业内网页系统。
+本项目探索基于真实桌面环境的 Computer Use Agent 工作流。`record` 负责将录制视频、输入日志和截图转换为结构化日志与 trace；`execution` 负责任务初始化、参数化调用和执行，并通过 Midscene computer use 操作本地 Chrome、堡垒机、远程桌面或企业内网页系统。
 
-当前项目不以 browser-use、Playwright、Puppeteer 或 CDP 作为执行底座。主执行路径应围绕 Midscene computer use 展开。
+项目不以 browser-use、Playwright、Puppeteer 或 CDP 作为执行底座。主执行路径围绕 Midscene computer use 展开。
 
 ## 规范
 
-1. 开发过程、文档、提交说明和面向用户的回复均应使用中文；必要的代码标识、API 名称、命令、文件路径和第三方专有名词可以保留英文。
-2. 当前项目处于开发探索阶段，不应通过兜底实现、静默跳过、硬编码成功路径或伪造结果来掩盖实际执行逻辑的缺陷；遇到不确定、不可执行或模型能力不足的步骤，应显式暴露问题并保留可诊断信息。
-3. 方案设计和代码实现不应只针对单一演示用例构造特化逻辑；样例可以用于验证链路，但抽象、目录结构、Midscene YAML 契约和执行器设计应优先保持面向后续多业务流程的泛化能力。
-4. Agent 应将任务交互区分为创建、长期修改和单次调用。长期修改必须先展示 YAML 原值、新值和原因并等待用户确认，确认后直接编辑任务的 `task.yaml` 并验证；未经确认不得修改、自动重试或操作电脑。
-5. `execution/cua` 是 Python 业务核心，负责转换、场景与任务发现、参数解析和 CLI；`execution/executors` 只保存 TypeScript Midscene 适配器和 customActions。持久化契约使用 Pydantic 并生成 `execution/schemas`，仅在 Python 内部使用的 VO 不生成 JSON Schema。对应测试分别放在 `execution/tests/python` 和 `execution/tests/executors`。
-6. 任务根目录的 `task.yaml` 是唯一长期执行事实源，不维护自定义 flow、route、overrides、proposal 或 history。`task.json` 保存输入定义和录制默认值；本次参数只解析到运行快照，不回写任务资产。
-7. Python 与 TypeScript 的唯一执行边界是 `<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml`。Skill 内的 `execution/projects` 是只读 builtin catalog，用户任务只写入 `<CUA_DATA_ROOT>/projects`；全部运行快照、结果、Midscene 报告和截图都写入本次外部 run。TypeScript executor 只注册 customActions、创建 ComputerAgent 并调用 `agent.runYaml()`，不得解释业务步骤、读取任务清单或实现兼容与兜底逻辑。
-8. 录制任务中每个 trace step 对应一个 Midscene task，名称固定为 `step-NNN | <operation-type>`；输入 ID 固定为对应的 `step-NNN-input`。长期修改应使用该名称定位步骤，不得重编号、复用编号、打乱顺序或启用 `continueOnError`。整体业务目标保存在 `task.json.goal` 和 YAML `agent.groupDescription`，不得用整体目标替代步骤名称。
-9. 上层 Agent 必须显式选择执行模式：稳定的录制任务使用 `task run` 逐 task 执行；需要模型统一规划完整录制步骤时使用 `act run --scene/--task`；无录制任务使用 `act run --prompt`。任一模式失败后不得自动切换、修改任务或重试。
+1. 开发过程、文档、提交说明和面向用户的回复均使用中文；代码标识、API、命令、路径和第三方专有名词可以保留英文。
+2. 当前项目处于开发探索阶段，不通过兜底、静默跳过、硬编码成功路径或伪造结果掩盖执行缺陷；不确定、不可执行或模型能力不足时应显式失败并保留诊断信息。
+3. 不为单一演示用例构造特化逻辑。样例可验证链路，但任务契约、目录和执行器设计必须面向后续业务流程。
+4. Agent 应区分创建、长期修改和单次调用。长期修改必须先展示 YAML 原值、新值和原因并等待确认；未经确认不得修改、自动重试或操作电脑。
+5. `execution` 全面使用 TypeScript。`execution/cua` 保存转换、任务解析、CLI 和公开工具 API；`execution/executors` 只保存 Midscene 适配与 customActions。持久化 JSON 契约只在文件边界通过 Ajv 校验，Midscene YAML 最终由 Midscene parser 校验。
+6. `task.yaml` 是唯一长期执行事实源，不维护自定义 flow、route、overrides、proposal 或 history。`task.json` 保存输入定义和录制默认值；本次参数只进入运行快照。
+7. Skill 内的 `execution/projects` 是只读 builtin catalog，用户任务只写入 `<CUA_DATA_ROOT>/projects`；运行快照、结果、报告和截图只写入 `<CUA_DATA_ROOT>/runs/<run-id>`。TypeScript 核心直接调用 Midscene API，不启动 Python 或 runner 子进程。
+8. 每个 trace step 对应一个 `step-NNN | <operation-type>` Midscene task；输入 ID 为 `step-NNN-input`。不得重编号、复用编号、打乱顺序或启用 `continueOnError`。
+9. 上层 Agent 必须显式选择执行模式：稳定录制任务使用 `task run`，需要统一规划时使用 `act run --scene/--task`，无录制使用 `act run --prompt`。失败后不得自动切换、修改任务或重试。
+10. 第一版不实现 computer use 并发锁。上层调用方必须保证真实桌面操作串行执行，不得把执行器描述为并发安全。
+11. TypeScript 主流程应保持可顺读。单次使用且只做参数转发的函数默认不抽取；只有复用、隔离 I/O/第三方边界、承载独立业务规则或显著降低复杂度时才抽象。函数通常不超过约 200 行，但不得为满足行数机械拆出无意义调用层。

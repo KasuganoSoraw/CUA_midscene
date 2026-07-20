@@ -42,8 +42,8 @@
 
 - [x] 7.1 在 TypeScript 行为测试通过后删除 `execution/cua` 下全部 Python 文件和 `tests/python`
 - [x] 7.2 删除 `pyproject.toml`、`uv.lock`、Pydantic/PyYAML/pytest 命令及 Python 到 Node.js 执行协议
-- [ ] 7.3 更新 Skill 安装脚本与 staging 校验，使发布物只包含 TypeScript 源码或编译产物、契约、references 和只读内置任务
-- [ ] 7.4 更新根 README、execution README、AGENT、Skill 和任务契约，删除 `uv run cua`、Python 核心和子进程边界等过时说明
+- [x] 7.3 更新 Skill 安装脚本与 staging 校验，使发布物只包含 TypeScript 源码或编译产物、契约、references 和只读内置任务
+- [x] 7.4 更新根 README、execution README、AGENT、Skill 和任务契约，删除 `uv run cua`、Python 核心和子进程边界等过时说明
 
 ## 8. 完整验证与收尾
 

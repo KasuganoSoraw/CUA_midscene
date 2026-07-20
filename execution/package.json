@@ -9,8 +9,26 @@
   "exports": {
     ".": "./dist/cua/index.js"
   },
+  "files": [
+    ".env.example",
+    "agents",
+    "cua",
+    "dist",
+    "executors",
+    "projects",
+    "references",
+    "schemas",
+    "README.md",
+    "SKILL.md",
+    "tsconfig.build.json",
+    "tsconfig.json"
+  ],
+  "engines": {
+    "node": ">=18.19.0"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "cua": "tsx cua/cli/main.ts",
     "check": "tsx executors/check-env.ts",
     "typecheck": "tsc --noEmit",
@@ -29,7 +47,6 @@
   },
   "devDependencies": {
     "@types/node": "^18.19.68",
-    "@types/proper-lockfile": "^4.1.4",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }

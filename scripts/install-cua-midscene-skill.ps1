@@ -9,6 +9,17 @@ $resolvedDestinationRoot = [System.IO.Path]::GetFullPath($DestinationRoot)
 $destination = Join-Path $resolvedDestinationRoot 'cua-midscene'
 $allowedPrefix = $resolvedDestinationRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
 
+Push-Location $source
+try {
+    & npm run build
+    if ($LASTEXITCODE -ne 0) {
+        throw "TypeScript Skill 构建失败"
+    }
+}
+finally {
+    Pop-Location
+}
+
 if (-not (Test-Path -LiteralPath (Join-Path $source 'SKILL.md'))) {
     throw "Skill source not found: $source"
 }
@@ -19,15 +30,16 @@ if (-not $destination.StartsWith($allowedPrefix, [System.StringComparison]::Ordi
 
 $publishFiles = @(
     '.env.example',
+    '.gitignore',
+    '.npmrc',
     'README.md',
     'SKILL.md',
     'package.json',
     'package-lock.json',
-    'pyproject.toml',
-    'tsconfig.json',
-    'uv.lock'
+    'tsconfig.build.json',
+    'tsconfig.json'
 )
-$publishDirectories = @('agents', 'cua', 'executors', 'projects', 'references', 'schemas')
+$publishDirectories = @('agents', 'cua', 'dist', 'executors', 'projects', 'references', 'schemas')
 $packageFiles = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
 
 foreach ($relativeFile in $publishFiles) {
@@ -71,4 +83,15 @@ foreach ($packageFile in $packageFiles) {
     Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
 }
 
-Write-Output "Installed cua-midscene Skill package: $destination ($($packageFiles.Count) files)"
+Push-Location $destination
+try {
+    & npm ci --omit=dev --ignore-scripts
+    if ($LASTEXITCODE -ne 0) {
+        throw "Skill 运行时依赖安装失败"
+    }
+}
+finally {
+    Pop-Location
+}
+
+Write-Output "已安装 cua-midscene Skill：$destination（$($packageFiles.Count) 个文件）"
