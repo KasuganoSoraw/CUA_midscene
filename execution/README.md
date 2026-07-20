@@ -22,7 +22,7 @@ record trace
 - `schemas/`：CUA 自有持久化 JSON 契约；不复制 Midscene action 类型系统。
 - `tests/`：契约、转换、任务、CLI 和执行器测试。
 
-TypeScript 内部不使用 Pydantic 式运行时类。Ajv 只校验从磁盘进入系统的 scene、task、trace 和执行结果；resolved YAML 最终交给 Midscene parser。
+TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv 只校验从磁盘进入系统的 scene、task、trace 和执行结果；resolved YAML 最终交给 Midscene parser。
 
 ## 环境
 
@@ -71,7 +71,7 @@ node dist/cua/cli/main.js scene list --json
 - `task run` 直接执行参数已解析的多 task YAML，适合稳定页面。
 - `act run --scene/--task` 将相同 resolved YAML 投影为有序完整 prompt，再执行单个 `ai` action。
 - `act run --prompt` 将自然语言要求包装为单 `ai` action，不读取任务资产。
-- 三种路径复用 `executors/midscene-yaml.ts`，没有 Python 或 Node 子进程协议。
+- 三种路径复用 `executors/midscene-yaml.ts`，在同一进程内直接调用 Midscene。
 - 每次实际执行设置 `MIDSCENE_RUN_DIR=<run-dir>/midscene`，并在 `finally` 中销毁 Agent、恢复原环境。
 - 第一版不实现并发锁，上层必须串行调用真实 computer use。
 - 不兼容旧 flow，不自动切换模式、修改任务、重试或调用替代输入动作。

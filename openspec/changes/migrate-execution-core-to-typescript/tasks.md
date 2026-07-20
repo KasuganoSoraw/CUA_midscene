@@ -47,8 +47,8 @@
 
 ## 8. 完整验证与收尾
 
-- [ ] 8.1 运行 TypeScript 类型检查、契约测试、转换测试、CLI 测试、runner/customAction 测试和 Skill 包测试
-- [ ] 8.2 对内置 `air-tickets-demo` 完成 init/validate/inspect/task dry-run/act dry-run 链路验证，确认任务资产与目录结构不变
-- [ ] 8.3 安装本机 `cua-midscene` Skill 副本并验证其命令、references、内置任务和发布排除项
-- [ ] 8.4 严格验证 OpenSpec change，检索并清除 Python、Pydantic、uv、子进程 runner 和旧命令的代码与文档残留
-- [ ] 8.5 审查 trace 转换、任务解析和执行编排主路径的调用深度，内联无独立语义的单次使用包装函数，并检查超过约 200 行的函数是否确有保持完整控制流的理由
+- [x] 8.1 运行 TypeScript 类型检查、契约测试、转换测试、CLI 测试、runner/customAction 测试和 Skill 包测试
+- [x] 8.2 对内置 `air-tickets-demo` 完成 init/validate/inspect/task dry-run/act dry-run 链路验证，确认任务资产与目录结构不变
+- [x] 8.3 安装本机 `cua-midscene` Skill 副本并验证其命令、references、内置任务和发布排除项
+- [x] 8.4 严格验证 OpenSpec change，检索并清除 Python、Pydantic、uv、子进程 runner 和旧命令的代码与文档残留
+- [x] 8.5 审查 trace 转换、任务解析和执行编排主路径的调用深度，内联无独立语义的单次使用包装函数，并检查超过约 200 行的函数是否确有保持完整控制流的理由

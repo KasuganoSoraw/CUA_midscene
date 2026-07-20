@@ -13,7 +13,7 @@ Push-Location $source
 try {
     & npm run build
     if ($LASTEXITCODE -ne 0) {
-        throw "TypeScript Skill 构建失败"
+        throw "Failed to build TypeScript Skill package"
     }
 }
 finally {
@@ -87,11 +87,11 @@ Push-Location $destination
 try {
     & npm ci --omit=dev --ignore-scripts
     if ($LASTEXITCODE -ne 0) {
-        throw "Skill 运行时依赖安装失败"
+        throw "Failed to install Skill runtime dependencies"
     }
 }
 finally {
     Pop-Location
 }
 
-Write-Output "已安装 cua-midscene Skill：$destination（$($packageFiles.Count) 个文件）"
+Write-Output "Installed cua-midscene Skill package: $destination ($($packageFiles.Count) files)"

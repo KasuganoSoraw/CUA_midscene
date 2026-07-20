@@ -19,7 +19,7 @@ CUA/
 └── openspec/               # 规格与变更记录
 ```
 
-`record` 基于 ShowUI-Aloha Learn，只保留录制处理，不包含 Act、Actor、Executor 或回放能力。`execution` 全面使用 TypeScript：同一核心同时服务 CLI、GDE Claw 工具 API 和 Midscene 执行，不再经过 Python 或子进程协议。
+`record` 基于 ShowUI-Aloha Learn，只保留录制处理，不包含 Act、Actor、Executor 或回放能力。`execution` 全面使用 TypeScript：同一核心同时服务 CLI、GDE Claw 工具 API，并在进程内直接调用 Midscene。
 
 ## 数据流
 
