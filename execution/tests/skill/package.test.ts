@@ -33,18 +33,20 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
     scripts?: Record<string, string>;
   };
 
-  assert.equal(packageJson.bin?.cua, './dist/cua/cli/main.js');
+  assert.equal(packageJson.bin?.cua, './dist/cli/main.js');
   assert.equal(packageJson.scripts?.prepack, 'npm run build');
   assert.deepEqual(
     new Set(packageJson.files),
     new Set([
       '.env.example',
       'agents',
+      'cli',
       'cua',
       'dist',
       'executors',
       'projects',
       'references',
+      'review',
       'schemas',
       'README.md',
       'SKILL.md',
@@ -70,7 +72,7 @@ test('Skill 文档和安装器使用编译后的 Node CLI', async () => {
     'utf8',
   );
 
-  assert.match(skill, /node dist\/cua\/cli\/main\.js/);
+  assert.match(skill, /node dist\/cli\/main\.js/);
   assert.match(skill, /提出 `task\.yaml` 修改建议，展示原值、新值和原因，等待明确确认/);
   assert.match(skill, /停止并等待用户明确确认/);
   assert.doesNotMatch(skill, /uv run cua|python\s+-m/i);

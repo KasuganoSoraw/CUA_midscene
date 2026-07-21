@@ -20,6 +20,7 @@ export interface TaskSource {
   conversionCommand: string;
   recordingPreparationCommand?: string | null;
   traceGenerationCommand?: string | null;
+  stepBindings?: Record<string, number | null>;
 }
 
 export interface TaskManifest {

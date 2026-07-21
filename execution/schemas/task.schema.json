@@ -61,6 +61,24 @@
           "default": null,
           "title": "Recordingpreparationcommand"
         },
+        "stepBindings": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "pattern": "^step-[0-9]{3,}$"
+          },
+          "title": "Stepbindings",
+          "type": "object"
+        },
         "traceGenerationCommand": {
           "anyOf": [
             {

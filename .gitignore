@@ -14,5 +14,6 @@
 **/*.log
 
 .codex/
+.local/
 
 record/Aloha_Learn/projects/

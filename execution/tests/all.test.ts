@@ -7,3 +7,6 @@ import './task/execution.test.js';
 import './executors/keyboard-type-action.test.js';
 import './executors/yaml-runner.test.js';
 import './skill/package.test.js';
+import './review/service.test.js';
+import './review/server.test.js';
+import './review/step-editor.test.js';

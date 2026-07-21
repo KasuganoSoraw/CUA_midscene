@@ -59,6 +59,9 @@ test('转换器生成与录制 operation 对应的 Midscene YAML 和输入契约
   assert.equal(tasks[1].flow[1].KeyboardTypeText.value, '{{step-002-input}}');
   assert.deepEqual(Object.keys(manifest.inputs), ['step-002-input', 'step-008-input', 'step-010-input']);
   assert.equal(manifest.inputs['step-002-input'].default, 'QATAR AIRWAYS');
+  assert.equal(manifest.source.stepBindings?.['step-001'], 1);
+  assert.equal(manifest.source.stepBindings?.['step-016'], 16);
+  assert.equal(Object.keys(manifest.source.stepBindings ?? {}).length, 16);
   assert.match(await readFile(path.join(fixture.taskRoot, 'SKILL.md'), 'utf8'), /npm run cua -- task describe/);
 });
 

@@ -21,6 +21,7 @@ test('现有场景、任务和 trace 通过边界契约', async () => {
 
   assert.equal(scene.scene, 'browser-demo');
   assert.equal(task.task, 'air-tickets-demo');
+  assert.equal(task.source.stepBindings, undefined);
   assert.equal(trace.trajectory.length, 16);
 });
 
