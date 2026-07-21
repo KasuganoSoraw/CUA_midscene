@@ -173,6 +173,12 @@ export function buildTaskAssets(
         tracePath: 'source/showui-trace.json',
         processedLogPath: 'source/processed-log-sc.json',
         conversionCommand: options.conversionCommand,
+        stepBindings: Object.fromEntries(
+          trace.trajectory.map((item) => [
+            `step-${String(item.step_idx).padStart(3, '0')}`,
+            item.step_idx,
+          ]),
+        ),
         ...(options.recordingPreparationCommand
           ? { recordingPreparationCommand: options.recordingPreparationCommand }
           : {}),

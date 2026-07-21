@@ -4,7 +4,7 @@
   "description": "基于 TypeScript 与 Midscene computer use 的 CUA 任务执行器。",
   "type": "module",
   "bin": {
-    "cua": "./dist/cua/cli/main.js"
+    "cua": "./dist/cli/main.js"
   },
   "exports": {
     ".": "./dist/cua/index.js"
@@ -12,11 +12,13 @@
   "files": [
     ".env.example",
     "agents",
+    "cli",
     "cua",
     "dist",
     "executors",
     "projects",
     "references",
+    "review",
     "schemas",
     "README.md",
     "SKILL.md",
@@ -27,11 +29,14 @@
     "node": ">=18.19.0"
   },
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build:node": "tsc -p tsconfig.build.json",
+    "build:web": "vite build --config review/web/vite.config.ts",
+    "build": "npm run clean && npm run build:node && npm run build:web",
     "prepack": "npm run build",
-    "cua": "tsx cua/cli/main.ts",
+    "cua": "tsx cli/main.ts",
     "check": "tsx executors/check-env.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p review/web/tsconfig.json",
     "test": "npm run typecheck && tsx --test tests/all.test.ts"
   },
   "keywords": [],
@@ -47,7 +52,11 @@
   },
   "devDependencies": {
     "@types/node": "^18.19.68",
+    "@vitejs/plugin-vue": "^5.2.4",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vite": "^6.4.1",
+    "vue": "^3.5.0",
+    "vue-tsc": "^2.2.12"
   }
 }

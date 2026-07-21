@@ -28,16 +28,17 @@
 安装后的 Skill 从根目录运行：
 
 ```powershell
-node dist/cua/cli/main.js scene list --json
-node dist/cua/cli/main.js task list --scene <scene> --json
-node dist/cua/cli/main.js task describe --scene <scene> --task <task> --json
-node dist/cua/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"
-node dist/cua/cli/main.js task validate --scene <scene> --task <task>
-node dist/cua/cli/main.js task inspect --scene <scene> --task <task> --input <input-id>=<value>
-node dist/cua/cli/main.js task run --scene <scene> --task <task> --dry-run
-node dist/cua/cli/main.js task run --scene <scene> --task <task>
-node dist/cua/cli/main.js act run --scene <scene> --task <task> --input <input-id>=<value>
-node dist/cua/cli/main.js act run --prompt "打开 Chrome 并搜索 GUI agent"
+node dist/cli/main.js scene list --json
+node dist/cli/main.js task list --scene <scene> --json
+node dist/cli/main.js task describe --scene <scene> --task <task> --json
+node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"
+node dist/cli/main.js task validate --scene <scene> --task <task>
+node dist/cli/main.js task inspect --scene <scene> --task <task> --input <input-id>=<value>
+node dist/cli/main.js task run --scene <scene> --task <task> --dry-run
+node dist/cli/main.js task run --scene <scene> --task <task>
+node dist/cli/main.js act run --scene <scene> --task <task> --input <input-id>=<value>
+node dist/cli/main.js act run --prompt "打开 Chrome 并搜索 GUI agent"
+node dist/cli/main.js review --no-open
 ```
 
 源码开发入口是对应的 `npm run cua -- ...`。`--input` 可以重复；`--inputs` 必须是字符串值 JSON 对象，两种来源不得重复同一 ID。
@@ -55,7 +56,7 @@ node dist/cua/cli/main.js act run --prompt "打开 Chrome 并搜索 GUI agent"
   "source": {
     "tracePath": "source/showui-trace.json",
     "processedLogPath": "source/processed-log-sc.json",
-    "conversionCommand": "node dist/cua/cli/main.js task init-from-trace ..."
+    "conversionCommand": "node dist/cli/main.js task init-from-trace ..."
   },
   "inputs": {
     "step-002-input": {

@@ -4,6 +4,6 @@
     "declaration": true,
     "sourceMap": true
   },
-  "include": ["cua/**/*.ts", "executors/**/*.ts"],
+  "include": ["cli/**/*.ts", "cua/**/*.ts", "executors/**/*.ts", "review/shared/**/*.ts", "review/service/**/*.ts", "review/server/**/*.ts"],
   "exclude": ["tests"]
 }

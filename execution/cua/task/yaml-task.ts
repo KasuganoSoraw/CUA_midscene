@@ -86,6 +86,7 @@ export function validateRecordedTaskDocument(
       throw new Error(`录制任务 YAML tasks[${index + 1}] 的 step ID 非法：${source}`);
     }
     if (number <= previous) throw new Error(`录制任务 YAML step ID 必须唯一且严格递增：${source}`);
+    if (number !== index + 1) throw new Error(`录制任务 YAML step ID 必须从 step-001 开始连续编号：${source}`);
     if (task.continueOnError === true) throw new Error(`录制任务 YAML 不允许启用 continueOnError：${source}`);
     operationByStep.set(stepId, operationType);
     previous = number;
@@ -102,6 +103,18 @@ export function validateRecordedTaskDocument(
     if (operationByStep.get(stepId) !== 'input') {
       throw new Error(`录制任务输入 ${inputId} 未对应 input 类型步骤`);
     }
+  }
+
+  if (manifest.source.stepBindings) {
+    const taskStepIds = [...operationByStep.keys()];
+    const bindingStepIds = Object.keys(manifest.source.stepBindings);
+    const missing = taskStepIds.filter((stepId) => !Object.hasOwn(manifest.source.stepBindings!, stepId));
+    const extra = bindingStepIds.filter((stepId) => !operationByStep.has(stepId));
+    if (missing.length || extra.length) {
+      throw new Error(`录制证据绑定必须与 YAML 步骤一致：missing=${missing.join(',') || '-'} extra=${extra.join(',') || '-'}`);
+    }
+    const recorded = Object.values(manifest.source.stepBindings).filter((value): value is number => value !== null);
+    if (new Set(recorded).size !== recorded.length) throw new Error('录制证据绑定中的 trace step 不得重复');
   }
 }
 

@@ -8,15 +8,17 @@
 record trace
   -> cua/conversion：caption.operation -> task.yaml + task.json
   -> cua/task：数据根、catalog、YAML、输入、aiAct 投影与执行编排
-  -> cua/cli：开发命令和安装后 bin 的统一入口
+  -> cli：开发命令和安装后 bin 的统一入口
   -> cua/index.ts：GDE Claw 等上层工具直接导入的 API
+  -> review：Vue 本地复核应用、localhost 服务与复核专属 service
   -> executors：ComputerAgent、KeyboardTypeText、agent.runYaml()
 ```
 
 - `cua/contracts/`：普通 TypeScript 类型和 Ajv 文件边界校验。
 - `cua/conversion/`：只根据结构化 trace operation 初始化任务。
 - `cua/task/`：双 catalog、YAML、输入、运行快照和执行编排。
-- `cua/cli/`：参数解析与 stdout/stderr 输出协议。
+- `cli/`：统一命令分发与 stdout/stderr 输出协议。
+- `review/`：与 `cua/` 平级的本地复核应用；`service/` 组合任务资产，`server/` 提供受控 HTTP，`web/` 使用 Vue 3。
 - `executors/`：Midscene 薄适配器、环境读取和 customAction。
 - `projects/`：随 Skill 发布的只读内置任务。
 - `schemas/`：CUA 自有持久化 JSON 契约；不复制 Midscene action 类型系统。
@@ -56,13 +58,17 @@ npm run cua -- task inspect --scene browser-demo --task air-tickets-demo --input
 npm run cua -- task run --scene browser-demo --task air-tickets-demo --dry-run
 npm run cua -- act run --scene browser-demo --task air-tickets-demo --dry-run
 npm run cua -- act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
+npm run cua -- review --no-open
 ```
 
 安装后的 Skill 使用编译入口：
 
 ```powershell
-node dist/cua/cli/main.js scene list --json
+node dist/cli/main.js scene list --json
+node dist/cli/main.js review --no-open
 ```
+
+`review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。页面读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。Agent 仍可在确认后直接修改 canonical 资产并运行 `task validate`。
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。inspect 与 run 使用同一个 resolver，不调用模型、不回写任务。`--dry-run` 只构建并解析 YAML，不操作电脑，也不是模拟执行。
 

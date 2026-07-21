@@ -39,7 +39,7 @@ $publishFiles = @(
     'tsconfig.build.json',
     'tsconfig.json'
 )
-$publishDirectories = @('agents', 'cua', 'dist', 'executors', 'projects', 'references', 'schemas')
+$publishDirectories = @('agents', 'cli', 'cua', 'dist', 'executors', 'projects', 'references', 'review', 'schemas')
 $packageFiles = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
 
 foreach ($relativeFile in $publishFiles) {

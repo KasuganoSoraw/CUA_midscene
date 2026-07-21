@@ -12,5 +12,5 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["cua/**/*.ts", "executors/**/*.ts", "tests/**/*.ts"]
+  "include": ["cli/**/*.ts", "cua/**/*.ts", "executors/**/*.ts", "review/shared/**/*.ts", "review/service/**/*.ts", "review/server/**/*.ts", "tests/**/*.ts"]
 }
