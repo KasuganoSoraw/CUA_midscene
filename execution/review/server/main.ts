@@ -1,12 +1,12 @@
 import { spawn } from 'node:child_process';
-import { createServer, type Server } from 'node:http';
 import path from 'node:path';
+import type { FastifyInstance } from 'fastify';
 import { packageRoot } from '../../cua/package-root.js';
 import { requireDataPaths, resolveRuntimeLayout } from '../../cua/task/data-paths.js';
 import { createReviewApp } from './app.js';
 
 export interface StartedReviewServer {
-  server: Server;
+  server: FastifyInstance;
   url: string;
   close(): Promise<void>;
 }
@@ -19,21 +19,13 @@ export async function startReviewServer(options: {
   const layout = await resolveRuntimeLayout(options.dataRoot);
   await requireDataPaths(layout);
   const staticRoot = path.resolve(options.staticRoot ?? path.join(packageRoot, 'dist', 'review', 'web'));
-  const server = createServer(createReviewApp({ layout, staticRoot }));
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(options.port ?? 0, '127.0.0.1', () => {
-      server.off('error', reject);
-      resolve();
-    });
-  });
-  const address = server.address();
-  if (!address || typeof address === 'string') throw new Error('无法读取 review 服务监听地址');
-  const url = `http://127.0.0.1:${address.port}/`;
+  const server = await createReviewApp({ layout, staticRoot });
+  const address = await server.listen({ host: '127.0.0.1', port: options.port ?? 0 });
+  const url = `${address.replace(/\/$/, '')}/`;
   return {
     server,
     url,
-    close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
+    close: () => server.close(),
   };
 }
 

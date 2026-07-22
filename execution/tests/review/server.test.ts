@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { runCliCommand } from '../../cli/main.js';
+import { reviewBodyLimit } from '../../review/server/app.js';
 import { startReviewServer } from '../../review/server/main.js';
 import { createTaskFixture } from '../helpers/task-fixture.js';
 
@@ -31,6 +32,34 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     assert.equal((await fetch(evidence)).status, 200);
     evidence.searchParams.set('path', '../package.json');
     assert.equal((await fetch(evidence)).status, 404);
+
+    const missingApi = await fetch(new URL('/api/missing', base));
+    assert.equal(missingApi.status, 404);
+    assert.deepEqual(await missingApi.json(), { error: '接口不存在' });
+
+    const spaFallback = await fetch(new URL('/tasks/browser-demo/example', base));
+    assert.equal(spaFallback.status, 200);
+    assert.match(await spaFallback.text(), /<title>review<\/title>/);
+
+    const readonly = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo', base), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        expectedRevision: view.revision,
+        manifest: view.manifest,
+        document: view.document,
+      }),
+    });
+    assert.equal(readonly.status, 403);
+    assert.match(String((await readonly.json() as { error: string }).error), /内置任务不可修改/);
+
+    const tooLarge = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo/validate', base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ value: 'x'.repeat(reviewBodyLimit) }),
+    });
+    assert.equal(tooLarge.status, 413);
+    assert.equal(typeof (await tooLarge.json() as { error: string }).error, 'string');
   } finally {
     await started.close();
   }
