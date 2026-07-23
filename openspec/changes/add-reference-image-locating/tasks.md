@@ -1,7 +1,7 @@
 ## 1. 录制参考图
 
-- [ ] 1.1 为 click/doubleClick 生成 `96×96` 无标注 PNG reference patch，并在 processed log 记录路径
-- [ ] 1.2 增加截图处理测试，验证现有红叉 crop 不变、参考图干净且非点击动作不生成参考图
+- [x] 1.1 为 click/doubleClick 生成 `96×96` 无标注 PNG reference patch，并在 processed log 记录路径
+- [x] 1.2 增加截图处理测试，验证现有红叉 crop 不变、参考图干净且非点击动作不生成参考图
 
 ## 2. Trace 契约
 

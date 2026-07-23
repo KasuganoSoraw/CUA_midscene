@@ -8,11 +8,21 @@ import numpy as np
 class VideoScreenshotExtractor:
     """Extract full + crop screenshots per action and scale coordinates to a target resolution."""
 
-    def __init__(self, target_width=1920, target_height=1080, jpeg_quality=95, crop_size=256, x_size=30, x_thick=6):
+    def __init__(
+        self,
+        target_width=1920,
+        target_height=1080,
+        jpeg_quality=95,
+        crop_size=256,
+        reference_crop_size=96,
+        x_size=30,
+        x_thick=6,
+    ):
         self.target_width = target_width
         self.target_height = target_height
         self.jpeg_quality = jpeg_quality
         self.crop_size = crop_size
+        self.reference_crop_size = reference_crop_size
         self.x_size = x_size
         self.x_thick = x_thick
 
@@ -58,6 +68,10 @@ class VideoScreenshotExtractor:
     def _save_jpg(self, path, img):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         return cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
+
+    def _save_png(self, path, img):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        return cv2.imwrite(path, img, [cv2.IMWRITE_PNG_COMPRESSION, 3])
 
     def _safe_crop(self, frame, x, y, crop_size=256):
         if x is None or y is None:
@@ -133,9 +147,11 @@ class VideoScreenshotExtractor:
             base = f"{timestamp:.3f}s"
             full_fn = f"{base}.jpg"
             crop_fn = f"{base}.crop.jpg"
+            reference_fn = f"{base}.reference.png"
 
             full_path = screenshots_path / full_fn
             crop_path = screenshots_path / crop_fn
+            reference_path = screenshots_path / reference_fn
 
             frame = self._get_frame_at(video_path, timestamp)
             if frame is None:
@@ -145,6 +161,12 @@ class VideoScreenshotExtractor:
             pt = self._primary_point_from_coords(ua.get('coords'))
             actt = act_str.lower()
             no_coor = ("scroll" in actt) or ("wheel" in actt) or ("hotkey" in actt) or ("type" in actt) or ("presss" in actt)
+            is_reference_action = (
+                "doubleclick" in actt
+                or "dblclick" in actt
+                or ("click" in actt and "right" not in actt and "rclick" not in actt)
+            )
+            reference_ok = True
 
             if act_str == "DragStart at" and ua.get('path') and len(ua['path']) >= 2:
                 # === DragStart special handling ===
@@ -191,6 +213,17 @@ class VideoScreenshotExtractor:
                 cx_raw, cy_raw = pt
                 crop_img = self._crop_with_black_padding(draw_frame, cx_raw, cy_raw, crop_size=self.crop_size)
 
+                if is_reference_action:
+                    reference_img = self._crop_with_black_padding(
+                        frame,
+                        cx_raw,
+                        cy_raw,
+                        crop_size=self.reference_crop_size,
+                    )
+                    reference_ok = self._save_png(str(reference_path), reference_img)
+                    if reference_ok:
+                        ua['screenshot_reference'] = f"screenshots/{reference_fn}"
+
                 # 2) Draw semi-transparent X AFTER padding so it's fully visible
                 # X centered in the crop
                 cx = cy = self.crop_size // 2
@@ -213,7 +246,7 @@ class VideoScreenshotExtractor:
                 crop_ok = self._save_jpg(str(crop_path), crop_img)
 
 
-            if not full_ok or not crop_ok:
+            if not full_ok or not crop_ok or not reference_ok:
                 raise RuntimeError(f"Could not save screenshots for action at {timestamp}s: {act_str}")
             ua['screenshot_full'] = f"screenshots/{full_fn}"
             ua['screenshot_crop'] = f"screenshots/{crop_fn}"
