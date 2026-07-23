@@ -10,6 +10,7 @@
     ],
     "current_software": "electron.exe - electron-screen-recorder",
     "path": null,
+    "screenshot_reference": "screenshots/0.329s.reference.png",
     "screenshot_full": "screenshots/0.329s.jpg",
     "screenshot_crop": "screenshots/0.329s.crop.jpg"
   },
@@ -52,6 +53,7 @@
     ],
     "current_software": "chrome.exe - qatar airways - Google Search - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/6.853s.reference.png",
     "screenshot_full": "screenshots/6.853s.jpg",
     "screenshot_crop": "screenshots/6.853s.crop.jpg"
   },
@@ -66,6 +68,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/9.212s.reference.png",
     "screenshot_full": "screenshots/9.212s.jpg",
     "screenshot_crop": "screenshots/9.212s.crop.jpg"
   },
@@ -80,6 +83,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/10.854s.reference.png",
     "screenshot_full": "screenshots/10.854s.jpg",
     "screenshot_crop": "screenshots/10.854s.crop.jpg"
   },
@@ -94,6 +98,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/11.824s.reference.png",
     "screenshot_full": "screenshots/11.824s.jpg",
     "screenshot_crop": "screenshots/11.824s.crop.jpg"
   },
@@ -122,6 +127,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/16.530s.reference.png",
     "screenshot_full": "screenshots/16.530s.jpg",
     "screenshot_crop": "screenshots/16.530s.crop.jpg"
   },
@@ -150,6 +156,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/24.818s.reference.png",
     "screenshot_full": "screenshots/24.818s.jpg",
     "screenshot_crop": "screenshots/24.818s.crop.jpg"
   },
@@ -164,6 +171,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/26.861s.reference.png",
     "screenshot_full": "screenshots/26.861s.jpg",
     "screenshot_crop": "screenshots/26.861s.crop.jpg"
   },
@@ -178,6 +186,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/27.861s.reference.png",
     "screenshot_full": "screenshots/27.861s.jpg",
     "screenshot_crop": "screenshots/27.861s.crop.jpg"
   },
@@ -192,6 +201,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/30.414s.reference.png",
     "screenshot_full": "screenshots/30.414s.jpg",
     "screenshot_crop": "screenshots/30.414s.crop.jpg"
   },
@@ -206,6 +216,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/31.726s.reference.png",
     "screenshot_full": "screenshots/31.726s.jpg",
     "screenshot_crop": "screenshots/31.726s.crop.jpg"
   },
@@ -220,6 +231,7 @@
     ],
     "current_software": "chrome.exe - Book Flights - Book & Fly from Singapore | Qatar Airways - Google Chrome",
     "path": null,
+    "screenshot_reference": "screenshots/33.400s.reference.png",
     "screenshot_full": "screenshots/33.400s.jpg",
     "screenshot_crop": "screenshots/33.400s.crop.jpg"
   }

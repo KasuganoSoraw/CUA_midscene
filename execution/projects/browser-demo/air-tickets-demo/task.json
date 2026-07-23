@@ -8,27 +8,45 @@
   "source": {
     "tracePath": "source/showui-trace.json",
     "processedLogPath": "source/processed-log-sc.json",
-    "conversionCommand": "node dist/cua/cli/main.js task init-from-trace --scene browser-demo --task air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\" --recording-preparation-command \"将 record 生成的 trace、processed log 和截图复制到用户数据根的 browser-demo/air-tickets-demo/source\" --trace-generation-command \"未记录；当前录制样例未保留 trace 生成命令\"",
+    "conversionCommand": "npm run cua -- task init-from-trace --scene browser-demo --task air-tickets-demo --goal \"将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索\"",
+    "stepBindings": {
+      "step-001": 1,
+      "step-002": 2,
+      "step-003": 3,
+      "step-004": 4,
+      "step-005": 5,
+      "step-006": 6,
+      "step-007": 7,
+      "step-008": 8,
+      "step-009": 9,
+      "step-010": 10,
+      "step-011": 11,
+      "step-012": 12,
+      "step-013": 13,
+      "step-014": 14,
+      "step-015": 15,
+      "step-016": 16
+    },
     "recordingPreparationCommand": "将 record 生成的 trace、processed log 和截图复制到用户数据根的 browser-demo/air-tickets-demo/source",
-    "traceGenerationCommand": "未记录；当前录制样例未保留 trace 生成命令"
+    "traceGenerationCommand": "cd record; uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets"
   },
   "inputs": {
     "step-002-input": {
       "type": "string",
-      "label": "Chrome 地址栏/搜索栏",
-      "description": "在 Chrome 地址栏/搜索栏中输入 {{value}}",
+      "label": "Chrome 浏览器顶部标签栏下方、页面顶部的地址栏（左侧带 Google G Logo 的白色长输入框）",
+      "description": "在 Chrome 浏览器顶部标签栏下方、页面顶部的地址栏（带 Google G Logo 的白色长输入框）中输入 {{value}}，以执行 Google 搜索或导航",
       "default": "QATAR AIRWAYS"
     },
     "step-008-input": {
       "type": "string",
-      "label": "Book a flight 预订组件的 From（出发地）输入框",
-      "description": "在 Book a flight 预订组件的 From（出发地）输入框中输入 {{value}}",
+      "label": "页面中部 'Book a flight' 预订表单卡片内、'Return' 单选按钮正下方、'To' 输入框左侧的白色长方形 'From' 出发地输入框（带紫色高亮边框和 'From' 标签）",
+      "description": "在页面中部 'Book a flight' 预订表单卡片内、'Return' 单选按钮正下方、'To' 输入框左侧的白色长方形 'From' 出发地输入框（已聚焦，带紫色高亮边框和 'From' 标签）中输入 {{value}}，以将出发地设置为 Singapore",
       "default": "SINGAPORE"
     },
     "step-010-input": {
       "type": "string",
-      "label": "Book a flight 预订组件的 To（目的地）输入框",
-      "description": "在 Book a flight 预订组件的 To（目的地）输入框中继续输入 {{value}}，以进一步过滤到 Los/Lagos 等匹配项",
+      "label": "页面中部 'Book a flight' 预订表单卡片内、'From' 输入框右侧、Departure 日期字段左侧的白色长方形 'To' 到达地输入框（带紫色高亮边框和 'To' 标签）",
+      "description": "在页面中部 'Book a flight' 预订表单卡片内、'From' 输入框右侧、Departure 日期字段左侧的白色长方形 'To' 到达地输入框（已聚焦，带紫色高亮边框和 'To' 标签）中输入 {{value}}，以将到达地关键词补全为 LOS",
       "default": "LOS"
     }
   }

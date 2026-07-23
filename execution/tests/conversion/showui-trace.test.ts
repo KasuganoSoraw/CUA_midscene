@@ -9,7 +9,7 @@ import {
   convertTrace,
   type ConvertOptions,
 } from '../../cua/conversion/showui-trace.js';
-import { readTaskManifest } from '../../cua/contracts/validation.js';
+import { readShowuiTrace, readTaskManifest } from '../../cua/contracts/validation.js';
 import { readYamlDocument } from '../../cua/task/yaml-task.js';
 
 const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -46,6 +46,7 @@ test('转换器生成与录制 operation 对应的 Midscene YAML 和输入契约
   const output = await convertTrace(fixture.options);
   const document = await readYamlDocument(output);
   const golden = await readYamlDocument(path.join(airTask, 'task.yaml'));
+  const trace = await readShowuiTrace(path.join(airTask, 'source', 'showui-trace.json'));
   const manifest = await readTaskManifest(path.join(fixture.taskRoot, 'task.json'));
   const tasks = document.tasks as Array<Record<string, any>>;
 
@@ -53,7 +54,7 @@ test('转换器生成与录制 operation 对应的 Midscene YAML 和输入契约
   assert.deepEqual(document.tasks, golden.tasks);
   assert.deepEqual(tasks[0], {
     name: 'step-001 | click',
-    flow: [{ aiTap: '点击 Chrome 浏览器顶部的地址栏/搜索栏区域以聚焦输入框' }],
+    flow: [{ aiTap: trace.trajectory[0].caption.operation.prompt }],
   });
   assert.equal(tasks[1].flow[0].sleep, 4101);
   assert.equal(tasks[1].flow[1].KeyboardTypeText.value, '{{step-002-input}}');
@@ -127,7 +128,8 @@ test('视觉参考证据缺失、绝对路径和越界路径均拒绝写出任�
     const trace = JSON.parse(await readFile(tracePath, 'utf8'));
     const processed = JSON.parse(await readFile(logPath, 'utf8'));
     trace.trajectory[0].caption.operation.useReferenceImage = true;
-    if (referencePath !== undefined) processed[0].screenshot_reference = referencePath;
+    if (referencePath === undefined) delete processed[0].screenshot_reference;
+    else processed[0].screenshot_reference = referencePath;
     await writeFile(tracePath, JSON.stringify(trace), 'utf8');
     await writeFile(logPath, JSON.stringify(processed), 'utf8');
 

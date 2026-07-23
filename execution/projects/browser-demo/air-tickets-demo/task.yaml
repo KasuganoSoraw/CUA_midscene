@@ -4,79 +4,88 @@ agent:
   groupDescription: 将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索
   generateReport: true
 tasks:
-- name: step-001 | click
-  flow:
-  - aiTap: 点击 Chrome 浏览器顶部的地址栏/搜索栏区域以聚焦输入框
-- name: step-002 | input
-  flow:
-  - sleep: 4101
-  - KeyboardTypeText:
-      locate: Chrome 地址栏/搜索栏
-      value: '{{step-002-input}}'
-      mode: replace
-- name: step-003 | keyboard
-  flow:
-  - sleep: 394
-  - KeyboardPress:
-      keyName: Enter
-- name: step-004 | click
-  flow:
-  - sleep: 2029
-  - aiTap: 点击 Google 搜索结果中第一条 Sponsored 广告链接'Qatar Airways Official Website'（来自 qatarairways.com）以打开卡塔尔航空官网
-- name: step-005 | click
-  flow:
-  - sleep: 2359
-  - aiTap: 点击 Book a flight 预订组件中的 From（出发地）输入框以使其获得焦点，准备输入出发城市或机场
-- name: step-006 | click
-  flow:
-  - sleep: 1642
-  - aiTap: 点击卡塔尔航空官网底部 Cookie 同意横幅中的 Accept all 按钮以接受全部 Cookie 并关闭横幅
-- name: step-007 | click
-  flow:
-  - sleep: 970
-  - aiTap: 点击 Book a flight 预订组件中的 From（出发地）输入框以使其获得焦点，准备输入出发城市或机场
-- name: step-008 | input
-  flow:
-  - sleep: 2860
-  - KeyboardTypeText:
-      locate: Book a flight 预订组件的 From（出发地）输入框
-      value: '{{step-008-input}}'
-      mode: replace
-- name: step-009 | click
-  flow:
-  - sleep: 1846
-  - aiTap: 点击 From 输入框自动补全下拉列表中的 'Singapore, Singapore — Singapore Changi Airport (SIN)' 候选项以确认出发地为 Singapore Changi Airport
-- name: step-010 | input
-  flow:
-  - sleep: 6425
-  - KeyboardTypeText:
-      locate: Book a flight 预订组件的 To（目的地）输入框
-      value: '{{step-010-input}}'
-      mode: replace
-- name: step-011 | click
-  flow:
-  - sleep: 1863
-  - aiTap: 点击 To 输入框自动补全下拉列表中的 'Los Angeles, United States of America — Los Angeles / Tom Bradley International Airport (LAX)'
-      候选项以确认目的地为 Los Angeles (LAX)
-- name: step-012 | click
-  flow:
-  - sleep: 2043
-  - aiTap: 点击 Book a flight 预订组件顶部的 One way 单选按钮，将行程类型从 Return 切换为单程（One way）
-- name: step-013 | click
-  flow:
-  - sleep: 1000
-  - aiTap: 点击 Book a flight 预订组件中的 Departure '12 Sep 2025' 日期输入框，打开日期选择日历浮层以确认或调整出发日期
-- name: step-014 | click
-  flow:
-  - sleep: 2553
-  - aiTap: 点击 Book a flight 预订组件弹出的 September 2025 日历中的 15 号日期格，将出发日期从 12 Sep 2025 调整为 15 Sep 2025
-- name: step-015 | click
-  flow:
-  - sleep: 1312
-  - aiTap: 点击 Book a flight 预订组件日历浮层底部的紫色 Continue 按钮，确认出发日期 15 Sep 2025、One way 单程、Singapore SIN → Los Angeles LAX、1 Passenger
-      Economy 并继续到航班搜索结果页
-- name: step-016 | click
-  flow:
-  - sleep: 1674
-  - aiTap: 点击 Book a flight 预订组件底部的紫红色 Search flights 主操作按钮，提交当前查询参数（One way 单程、Singapore SIN → Los Angeles LAX、15 Sep 2025
-      出发、1 Passenger Economy）并进入航班搜索结果页
+  - name: step-001 | click
+    flow:
+      - aiTap: 点击 Chrome 浏览器顶部标签栏中显示 'New Tab' 文字的活动标签页（深色标题栏下方、地址栏上方那条浅蓝灰色标签条带中央位置的标签），以确保该标签页被选中并获得焦点
+  - name: step-002 | input
+    flow:
+      - sleep: 4101
+      - KeyboardTypeText:
+          locate: Chrome 浏览器顶部标签栏下方、页面顶部的地址栏（左侧带 Google G Logo 的白色长输入框）
+          value: "{{step-002-input}}"
+          mode: replace
+  - name: step-003 | keyboard
+    flow:
+      - sleep: 394
+      - KeyboardPress:
+          keyName: Enter
+  - name: step-004 | click
+    flow:
+      - sleep: 2029
+      - aiTap: 点击 Google 搜索结果主区第一条标记为 'Sponsored' 的广告卡片中央、显示为蓝色标题文字 'Qatar Airways Official Website' 的链接（该链接位于
+          'qatarairways.com' 来源与 'www.qatarairways.com › sg' 面包屑下方、描述文字 'Book on the Official Website — Explore the
+          world...' 上方），以跳转到卡塔尔航空官方网站
+  - name: step-005 | click
+    flow:
+      - sleep: 2359
+      - aiTap: 点击页面中部 'Book a flight' 预订表单卡片内、'Return' 单选按钮正下方、'To' 输入框左侧的白色长方形 'From' 出发地输入框（带 'From' 占位文字），以聚焦该输入框并准备输入出发城市或机场
+  - name: step-006 | click
+    flow:
+      - sleep: 1642
+      - aiTap: 点击页面底部白色 Cookie 同意横幅右下角、'Cookie preferences' 白底紫字描边按钮右侧的紫色实心圆角矩形按钮（按钮上为白色加粗文字 'Accept all'），以接受全部 Cookie 并关闭
+          Cookie 同意横幅，恢复页面正常交互
+  - name: step-007 | click
+    flow:
+      - sleep: 970
+      - aiTap: 点击页面中部 'Book a flight' 预订表单卡片内、'Return' 单选按钮正下方、'To' 输入框左侧的白色长方形 'From' 出发地输入框（带浅灰色 'From'
+          占位文字），以聚焦该输入框并准备输入出发城市或机场
+  - name: step-008 | input
+    flow:
+      - sleep: 2860
+      - KeyboardTypeText:
+          locate: 页面中部 'Book a flight' 预订表单卡片内、'Return' 单选按钮正下方、'To' 输入框左侧的白色长方形 'From' 出发地输入框（带紫色高亮边框和 'From' 标签）
+          value: "{{step-008-input}}"
+          mode: replace
+  - name: step-009 | click
+    flow:
+      - sleep: 1846
+      - aiTap: 点击 'From' 出发地输入框正下方机场搜索建议下拉框中的唯一候选项（上方紫红色加粗文字 'Singapore, Singapore'，下方浅灰色小字 'Singapore Changi Airport'，最右侧灰色机场代码
+          'SIN'），以将其选为出发地机场
+  - name: step-010 | input
+    flow:
+      - sleep: 6425
+      - KeyboardTypeText:
+          locate: 页面中部 'Book a flight' 预订表单卡片内、'From' 输入框右侧、Departure 日期字段左侧的白色长方形 'To' 到达地输入框（带紫色高亮边框和 'To' 标签）
+          value: "{{step-010-input}}"
+          mode: replace
+  - name: step-011 | click
+    flow:
+      - sleep: 1863
+      - aiTap: 点击页面中部 'Book a flight' 预订表单卡片内、'To' 到达地输入框正下方机场搜索建议下拉框中列表顶部的第一项候选项（左侧带飞机图标，上方紫红色加粗文字 'Los Angeles, United States
+          of America'，下方浅灰色小字 'Los Angeles / Tom Bradley International Airport'，最右侧灰色机场代码 'LAX'），以将其选为到达地机场
+  - name: step-012 | click
+    flow:
+      - sleep: 2043
+      - aiTap: 点击页面中部 'Book a flight' 预订表单卡片顶部 'Book a flight'（带紫色飞机图标）标签下方、行程类型选择行中 'Return' 单选按钮（带紫红色填充圆点，已选中）右侧的 'One way'
+          单选按钮（带空心圆圈，未选中），以将行程类型从 Return 往返切换为 One way 单程
+  - name: step-013 | click
+    flow:
+      - sleep: 1000
+      - aiTap: 点击页面中部 'Book a flight' 预订表单卡片内、'To' 输入框右侧、'Passengers / Class' 字段左侧的白色长方形 Departure 出发日期输入框（上方浅灰色 'Departure'
+          标签、下方黑色加粗 '12 Sep 2025' 文字、左侧带紫红色聚焦竖条），以打开日期选择弹窗并重新选择出发日期
+  - name: step-014 | click
+    flow:
+      - sleep: 2553
+      - aiTap: 点击页面中部 'Book a flight' 预订表单卡片内、Departure 字段下方打开的日期选择弹窗中 September 2025 日历第二行、'12' 右侧的 '15'
+          日期方块（紫红色实心高亮背景、下方浅灰色小字价格 '1,453'、上方黑色加粗数字 '15'），以将出发日期从 12 Sep 2025 更改为 15 Sep 2025
+  - name: step-015 | click
+    flow:
+      - sleep: 1312
+      - aiTap: 点击页面中部 'Book a flight' 预订表单卡片内、Departure 字段下方打开的日期选择弹窗底部、价格文本 'From SGD 1453.9 per adult' 右侧、白色描边 'Clear all'
+          按钮右侧的紫红色实心圆角 'Continue' 按钮（白色加粗 'Continue' 文字），以确认选中的出发日期 15 Sep 2025 并关闭日期选择弹窗
+  - name: step-016 | click
+    flow:
+      - sleep: 1674
+      - aiTap: 点击页面中部 'Book a flight' 预订表单卡片内、'Book using Avios' 复选框右侧、'+ Add promo code' 文字链接右侧的紫红色实心圆角 'Search flights'
+          按钮（白色加粗 'Search flights' 文字），以提交当前 One way 单程搜索（Singapore SIN → Los Angeles LAX、Departure 15 Sep 2025、1
+          Passenger Economy）并跳转到单程航班搜索结果页
