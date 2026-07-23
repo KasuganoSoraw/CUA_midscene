@@ -5,7 +5,8 @@
     "type": "object",
     "required": ["timestamp"],
     "properties": {
-      "timestamp": { "type": "number" }
+      "timestamp": { "type": "number" },
+      "screenshot_reference": { "type": "string", "minLength": 1 }
     },
     "additionalProperties": true
   }

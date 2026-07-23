@@ -96,10 +96,39 @@ export function clampRecordedWaitMs(recordedGapMs: number): number {
 function actionFromOperation(
   operation: ShowuiTraceOperation,
   step: number,
+  processedStep: ProcessedLogStep,
 ): { action: JsonObject; input?: [string, TaskInputDefinition] } {
   if (operation.type === 'click' || operation.type === 'doubleClick') {
     const prompt = requiredOperationText(operation.prompt, 'prompt', step);
+    if (operation.useReferenceImage) {
+      const rawReferencePath = processedStep.screenshot_reference?.trim();
+      if (!rawReferencePath) {
+        throw new Error(`trace step ${step} 请求视觉参考，但 processed log 缺少 screenshot_reference`);
+      }
+      const normalized = rawReferencePath.replaceAll('\\', '/');
+      if (path.win32.isAbsolute(rawReferencePath) || path.posix.isAbsolute(normalized)) {
+        throw new Error(`trace step ${step} 的 screenshot_reference 必须是 source 内相对路径：${rawReferencePath}`);
+      }
+      const referenceUrl = path.posix.normalize(`source/${normalized}`);
+      if (!referenceUrl.startsWith('source/') || referenceUrl === 'source') {
+        throw new Error(`trace step ${step} 的 screenshot_reference 越出 source：${rawReferencePath}`);
+      }
+      const stepId = `step-${String(step).padStart(3, '0')}`;
+      const imageName = `${stepId}-target`;
+      return {
+        action: {
+          [operation.type === 'click' ? 'aiTap' : 'aiDoubleClick']: null,
+          locate: {
+            prompt: `${prompt}。目标外观应匹配参考图“${imageName}”正中央的主要图标，参考图周边仅用于辅助理解`,
+            images: [{ name: imageName, url: referenceUrl }],
+          },
+        },
+      };
+    }
     return { action: { [operation.type === 'click' ? 'aiTap' : 'aiDoubleClick']: prompt } };
+  }
+  if (operation.useReferenceImage) {
+    throw new Error(`trace step ${step} 只有 click 或 doubleClick 可以使用视觉参考`);
   }
   if (operation.type === 'input') {
     const prompt = requiredOperationText(operation.prompt, 'prompt', step);
@@ -148,7 +177,7 @@ export function buildTaskAssets(
       const wait = clampRecordedWaitMs(gap);
       if (wait) flow.push({ sleep: wait });
     }
-    const mapped = actionFromOperation(traceStep.caption.operation, step);
+    const mapped = actionFromOperation(traceStep.caption.operation, step, processedSteps[index]);
     flow.push(mapped.action);
     tasks.push({ name: `step-${String(step).padStart(3, '0')} | ${traceStep.caption.operation.type}`, flow });
     if (mapped.input) inputs[mapped.input[0]] = mapped.input[1];
@@ -211,6 +240,27 @@ export async function convertTrace(options: ConvertOptions): Promise<string> {
     readProcessedLog(path.join(sourceRoot, 'processed-log-sc.json')),
   ]);
   const assets = buildTaskAssets(trace, processedSteps, options);
+  for (const task of assets.document.tasks as JsonObject[]) {
+    for (const action of task.flow as JsonObject[]) {
+      const locate = action.locate;
+      if (!locate || typeof locate !== 'object' || Array.isArray(locate)) continue;
+      const images = (locate as JsonObject).images;
+      if (!Array.isArray(images)) continue;
+      for (const image of images) {
+        if (!image || typeof image !== 'object' || Array.isArray(image) || typeof image.url !== 'string') {
+          throw new Error(`${String(task.name)} 包含非法参考图定义`);
+        }
+        const absoluteImagePath = path.resolve(taskRoot, image.url);
+        const relative = path.relative(taskRoot, absoluteImagePath);
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
+          throw new Error(`${String(task.name)} 的参考图越出任务目录：${image.url}`);
+        }
+        if (!(await pathExists(absoluteImagePath)) || !(await stat(absoluteImagePath)).isFile()) {
+          throw new Error(`${String(task.name)} 的参考图不存在：${absoluteImagePath}`);
+        }
+      }
+    }
+  }
   const builtinScenePath = path.join(options.catalog.builtinProjectsRoot, scene, 'scene.json');
   const sceneManifest: SceneManifest = (await pathExists(builtinScenePath))
     ? await readSceneManifest(builtinScenePath)

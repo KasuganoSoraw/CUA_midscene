@@ -9,7 +9,7 @@ import {
   convertTrace,
   type ConvertOptions,
 } from '../../cua/conversion/showui-trace.js';
-import { readTaskManifest } from '../../cua/contracts/validation.js';
+import { readShowuiTrace, readTaskManifest } from '../../cua/contracts/validation.js';
 import { readYamlDocument } from '../../cua/task/yaml-task.js';
 
 const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -46,6 +46,7 @@ test('转换器生成与录制 operation 对应的 Midscene YAML 和输入契约
   const output = await convertTrace(fixture.options);
   const document = await readYamlDocument(output);
   const golden = await readYamlDocument(path.join(airTask, 'task.yaml'));
+  const trace = await readShowuiTrace(path.join(airTask, 'source', 'showui-trace.json'));
   const manifest = await readTaskManifest(path.join(fixture.taskRoot, 'task.json'));
   const tasks = document.tasks as Array<Record<string, any>>;
 
@@ -53,7 +54,7 @@ test('转换器生成与录制 operation 对应的 Midscene YAML 和输入契约
   assert.deepEqual(document.tasks, golden.tasks);
   assert.deepEqual(tasks[0], {
     name: 'step-001 | click',
-    flow: [{ aiTap: '点击 Chrome 浏览器顶部的地址栏/搜索栏区域以聚焦输入框' }],
+    flow: [{ aiTap: trace.trajectory[0].caption.operation.prompt }],
   });
   assert.equal(tasks[1].flow[0].sleep, 4101);
   assert.equal(tasks[1].flow[1].KeyboardTypeText.value, '{{step-002-input}}');
@@ -79,6 +80,62 @@ test('双击 operation 映射为 aiDoubleClick', async () => {
     name: 'step-001 | doubleClick',
     flow: [{ aiDoubleClick: '双击页面中部文件列表里的 report.xlsx 文件行以打开文件' }],
   });
+});
+
+test('视觉参考 click 和 doubleClick 生成原生 Midscene locate.images', async () => {
+  for (const [taskName, operationType, actionName] of [
+    ['reference-click', 'click', 'aiTap'],
+    ['reference-double-click', 'doubleClick', 'aiDoubleClick'],
+  ] as const) {
+    const fixture = await prepare(taskName);
+    const tracePath = path.join(fixture.taskRoot, 'source', 'showui-trace.json');
+    const logPath = path.join(fixture.taskRoot, 'source', 'processed-log-sc.json');
+    const trace = JSON.parse(await readFile(tracePath, 'utf8'));
+    const processed = JSON.parse(await readFile(logPath, 'utf8'));
+    trace.trajectory[0].caption.operation = {
+      type: operationType,
+      prompt: '点击页面右上角无文字告警图标以打开告警列表',
+      useReferenceImage: true,
+    };
+    processed[0].screenshot_reference = 'screenshots/0.329s.reference.png';
+    await writeFile(tracePath, JSON.stringify(trace), 'utf8');
+    await writeFile(logPath, JSON.stringify(processed), 'utf8');
+    await writeFile(
+      path.join(fixture.taskRoot, 'source', 'screenshots', '0.329s.reference.png'),
+      'reference-image',
+      'utf8',
+    );
+
+    const document = await readYamlDocument(await convertTrace(fixture.options));
+    const action = (document.tasks as Array<Record<string, any>>)[0].flow[0];
+    assert.equal(action[actionName], null);
+    assert.match(action.locate.prompt, /匹配参考图“step-001-target”正中央的主要图标/);
+    assert.deepEqual(action.locate.images, [
+      { name: 'step-001-target', url: 'source/screenshots/0.329s.reference.png' },
+    ]);
+  }
+});
+
+test('视觉参考证据缺失、绝对路径和越界路径均拒绝写出任务', async () => {
+  for (const [taskName, referencePath, message] of [
+    ['missing-reference', undefined, /缺少 screenshot_reference/],
+    ['absolute-reference', 'E:/outside.png', /必须是 source 内相对路径/],
+    ['escaped-reference', '../outside.png', /越出 source/],
+  ] as const) {
+    const fixture = await prepare(taskName);
+    const tracePath = path.join(fixture.taskRoot, 'source', 'showui-trace.json');
+    const logPath = path.join(fixture.taskRoot, 'source', 'processed-log-sc.json');
+    const trace = JSON.parse(await readFile(tracePath, 'utf8'));
+    const processed = JSON.parse(await readFile(logPath, 'utf8'));
+    trace.trajectory[0].caption.operation.useReferenceImage = true;
+    if (referencePath === undefined) delete processed[0].screenshot_reference;
+    else processed[0].screenshot_reference = referencePath;
+    await writeFile(tracePath, JSON.stringify(trace), 'utf8');
+    await writeFile(logPath, JSON.stringify(processed), 'utf8');
+
+    await assert.rejects(convertTrace(fixture.options), message);
+    await assert.rejects(readFile(path.join(fixture.taskRoot, 'task.yaml')), /ENOENT/);
+  }
 });
 
 test('转换器只消费 operation，不根据其他自然语言字段猜测动作', async () => {

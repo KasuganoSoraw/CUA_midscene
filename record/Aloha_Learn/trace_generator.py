@@ -119,6 +119,13 @@ class TraceGenerator:
             if isinstance(value, str) and value.strip():
                 sanitized[key] = value.strip()
 
+        if "useReferenceImage" in operation:
+            reference_value = operation.get("useReferenceImage")
+            if reference_value is True:
+                sanitized["useReferenceImage"] = True
+            elif reference_value not in (False, None):
+                sanitized["useReferenceImage"] = reference_value
+
         return sanitized
 
     def _recorded_operation_type(self, action: str) -> str | None:
@@ -153,6 +160,11 @@ class TraceGenerator:
         missing = [field for field in required_fields[operation_type] if not operation.get(field)]
         if missing:
             return f"Operation 缺少非空字段：{', '.join(missing)}"
+        if "useReferenceImage" in operation:
+            if operation["useReferenceImage"] is not True:
+                return "Operation.useReferenceImage 只能是布尔值 true；不需要时应省略"
+            if operation_type not in {"click", "doubleClick"}:
+                return "只有 click 或 doubleClick operation 可以使用 useReferenceImage"
         return None
 
     def _sanitize_caption(self, cap: Dict[str, Any]) -> Dict[str, Any]:
@@ -199,6 +211,7 @@ class TraceGenerator:
         base = self.default_prompt.get("Base Prompt", "")
         deltas_cfg = self.default_prompt.get("Deltas", {})
         modifier_guide = self.default_prompt.get("Modifier_Guide", "")
+        reference_image_guide = self.default_prompt.get("Reference_Image_Guide", "")
         sw = action.get("current_software") or ""
         ts = action.get("timestamp")
         act = (action.get("action") or "").strip()
@@ -218,6 +231,8 @@ Timestamp: {ts}s
 Overall Task: {overall_task}
 
 {delta}
+
+{reference_image_guide}
 
 只输出 JSON。JSON 字段名必须保持为 Observation、Think、Action、Expectation、Operation。
 前四个字段的字段值必须使用中文；Operation.prompt 也应使用中文，只有界面原文、品牌名、按钮名、机场名、URL、快捷键和专有名词可以保留英文。

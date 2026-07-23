@@ -177,6 +177,127 @@ class TraceGeneratorOperationTest(unittest.TestCase):
             else:
                 os.environ["OPENAI_API_KEY"] = previous_key
 
+    def test_sanitize_operation_preserves_required_reference_image(self):
+        previous_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                prompt_path = Path(tmp) / "default_prompt.json"
+                prompt_path.write_text(json.dumps({"Base Prompt": ""}), encoding="utf-8")
+                generator = StubTraceGenerator(
+                    default_prompt_path=str(prompt_path),
+                    api_provider="openai",
+                )
+
+                operation = generator._sanitize_operation(
+                    {
+                        "type": "click",
+                        "prompt": "点击页面右上角无文字告警图标",
+                        "useReferenceImage": True,
+                    }
+                )
+
+                self.assertTrue(operation["useReferenceImage"])
+                self.assertIsNone(generator._operation_error(operation))
+        finally:
+            if previous_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = previous_key
+
+    def test_reference_image_false_is_omitted(self):
+        previous_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                prompt_path = Path(tmp) / "default_prompt.json"
+                prompt_path.write_text(json.dumps({"Base Prompt": ""}), encoding="utf-8")
+                generator = StubTraceGenerator(
+                    default_prompt_path=str(prompt_path),
+                    api_provider="openai",
+                )
+
+                operation = generator._sanitize_operation(
+                    {
+                        "type": "click",
+                        "prompt": "点击带文字的继续按钮",
+                        "useReferenceImage": False,
+                    }
+                )
+
+                self.assertNotIn("useReferenceImage", operation)
+        finally:
+            if previous_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = previous_key
+
+    def test_reference_image_rejects_non_boolean_and_non_click_operation(self):
+        previous_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                prompt_path = Path(tmp) / "default_prompt.json"
+                prompt_path.write_text(json.dumps({"Base Prompt": ""}), encoding="utf-8")
+                generator = StubTraceGenerator(
+                    default_prompt_path=str(prompt_path),
+                    api_provider="openai",
+                )
+
+                invalid_type = generator._sanitize_operation(
+                    {
+                        "type": "click",
+                        "prompt": "点击告警图标",
+                        "useReferenceImage": "true",
+                    }
+                )
+                invalid_operation = generator._sanitize_operation(
+                    {
+                        "type": "input",
+                        "prompt": "输入 {{value}}",
+                        "locatePrompt": "搜索框",
+                        "value": "告警",
+                        "useReferenceImage": True,
+                    }
+                )
+
+                self.assertIn("只能是布尔值 true", generator._operation_error(invalid_type))
+                self.assertIn("只有 click 或 doubleClick", generator._operation_error(invalid_operation))
+        finally:
+            if previous_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = previous_key
+
+    def test_prompt_explains_reference_image_selection(self):
+        previous_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            prompt_path = Path(__file__).resolve().parents[1] / "default_prompt.json"
+            generator = StubTraceGenerator(
+                default_prompt_path=str(prompt_path),
+                api_provider="openai",
+            )
+
+            prompt = generator._prompt(
+                {"action": "LClick at", "current_software": "Chrome", "timestamp": 1.0},
+                "打开告警页面",
+                1,
+                [],
+            )
+
+            self.assertIn("useReferenceImage: true", prompt)
+            self.assertIn("目标本身没有可见文字标签，必须输出", prompt)
+            self.assertIn("不要再额外判断纯文字 prompt 是否已经足够", prompt)
+            self.assertIn("设置齿轮", prompt)
+            self.assertIn("带相邻可见文字标签的单选框/复选框", prompt)
+            self.assertIn("不要输出 false、字符串、路径、Base64", prompt)
+        finally:
+            if previous_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = previous_key
+
     def test_generate_trace_preserves_operation_field(self):
         previous_key = os.environ.get("OPENAI_API_KEY")
         os.environ["OPENAI_API_KEY"] = "test-key"

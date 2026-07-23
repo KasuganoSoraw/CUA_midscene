@@ -25,8 +25,20 @@
                   "locatePrompt": { "type": ["string", "null"] },
                   "value": { "type": ["string", "null"] },
                   "key": { "type": ["string", "null"] },
-                  "condition": { "type": ["string", "null"] }
+                  "condition": { "type": ["string", "null"] },
+                  "useReferenceImage": { "const": true }
                 },
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": { "useReferenceImage": { "const": true } },
+                      "required": ["useReferenceImage"]
+                    },
+                    "then": {
+                      "properties": { "type": { "enum": ["click", "doubleClick"] } }
+                    }
+                  }
+                ],
                 "additionalProperties": true
               }
             },
