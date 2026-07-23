@@ -54,6 +54,7 @@ export interface ShowuiTraceOperation {
   value?: string | null;
   key?: string | null;
   condition?: string | null;
+  useReferenceImage?: boolean;
 }
 
 export interface ShowuiTraceStep {
