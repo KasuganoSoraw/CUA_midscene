@@ -81,6 +81,61 @@ test('双击 operation 映射为 aiDoubleClick', async () => {
   });
 });
 
+test('视觉参考 click 和 doubleClick 生成原生 Midscene locate.images', async () => {
+  for (const [taskName, operationType, actionName] of [
+    ['reference-click', 'click', 'aiTap'],
+    ['reference-double-click', 'doubleClick', 'aiDoubleClick'],
+  ] as const) {
+    const fixture = await prepare(taskName);
+    const tracePath = path.join(fixture.taskRoot, 'source', 'showui-trace.json');
+    const logPath = path.join(fixture.taskRoot, 'source', 'processed-log-sc.json');
+    const trace = JSON.parse(await readFile(tracePath, 'utf8'));
+    const processed = JSON.parse(await readFile(logPath, 'utf8'));
+    trace.trajectory[0].caption.operation = {
+      type: operationType,
+      prompt: '点击页面右上角无文字告警图标以打开告警列表',
+      useReferenceImage: true,
+    };
+    processed[0].screenshot_reference = 'screenshots/0.329s.reference.png';
+    await writeFile(tracePath, JSON.stringify(trace), 'utf8');
+    await writeFile(logPath, JSON.stringify(processed), 'utf8');
+    await writeFile(
+      path.join(fixture.taskRoot, 'source', 'screenshots', '0.329s.reference.png'),
+      'reference-image',
+      'utf8',
+    );
+
+    const document = await readYamlDocument(await convertTrace(fixture.options));
+    const action = (document.tasks as Array<Record<string, any>>)[0].flow[0];
+    assert.equal(action[actionName], null);
+    assert.match(action.locate.prompt, /匹配参考图“step-001-target”正中央的主要图标/);
+    assert.deepEqual(action.locate.images, [
+      { name: 'step-001-target', url: 'source/screenshots/0.329s.reference.png' },
+    ]);
+  }
+});
+
+test('视觉参考证据缺失、绝对路径和越界路径均拒绝写出任务', async () => {
+  for (const [taskName, referencePath, message] of [
+    ['missing-reference', undefined, /缺少 screenshot_reference/],
+    ['absolute-reference', 'E:/outside.png', /必须是 source 内相对路径/],
+    ['escaped-reference', '../outside.png', /越出 source/],
+  ] as const) {
+    const fixture = await prepare(taskName);
+    const tracePath = path.join(fixture.taskRoot, 'source', 'showui-trace.json');
+    const logPath = path.join(fixture.taskRoot, 'source', 'processed-log-sc.json');
+    const trace = JSON.parse(await readFile(tracePath, 'utf8'));
+    const processed = JSON.parse(await readFile(logPath, 'utf8'));
+    trace.trajectory[0].caption.operation.useReferenceImage = true;
+    if (referencePath !== undefined) processed[0].screenshot_reference = referencePath;
+    await writeFile(tracePath, JSON.stringify(trace), 'utf8');
+    await writeFile(logPath, JSON.stringify(processed), 'utf8');
+
+    await assert.rejects(convertTrace(fixture.options), message);
+    await assert.rejects(readFile(path.join(fixture.taskRoot, 'task.yaml')), /ENOENT/);
+  }
+});
+
 test('转换器只消费 operation，不根据其他自然语言字段猜测动作', async () => {
   const fixture = await prepare('structured-only');
   const tracePath = path.join(fixture.taskRoot, 'source', 'showui-trace.json');

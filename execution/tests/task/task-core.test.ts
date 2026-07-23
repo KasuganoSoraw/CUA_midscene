@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { loadRuntimeInputs } from '../../cua/task/inputs.js';
 import { describeTask, listScenes, listTasks, resolveTask } from '../../cua/task/tasks.js';
+import { readYamlDocument, writeYamlDocument } from '../../cua/task/yaml-task.js';
 import { createTaskFixture } from '../helpers/task-fixture.js';
 
 test('resolver 使用默认值并替换所有显式占位符', async () => {
@@ -45,6 +46,80 @@ test('resolver 拒绝未知、未声明、未使用和非法占位符', async ()
   await assert.rejects(resolveTask({ scene: 'browser-demo', task: 'search-demo', catalog }), /任务清单输入未在 YAML 中使用/);
   await writeFile(yamlPath, original.replaceAll('{{step-001-input}}', '{{StepInput}}'), 'utf8');
   await assert.rejects(resolveTask({ scene: 'browser-demo', task: 'search-demo', catalog }), /非法输入占位符/);
+});
+
+test('resolver 只在 resolved YAML 中解析任务内本地参考图路径', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-task-images-'));
+  const builtin = path.join(root, 'builtin');
+  const user = path.join(root, 'user');
+  await mkdir(builtin, { recursive: true });
+  const taskRoot = await createTaskFixture(user);
+  const imagePath = path.join(taskRoot, 'source', 'screenshots', 'target.png');
+  await mkdir(path.dirname(imagePath), { recursive: true });
+  await writeFile(imagePath, 'image');
+  const yamlPath = path.join(taskRoot, 'task.yaml');
+  const document = await readYamlDocument(yamlPath);
+  (document.tasks as Array<Record<string, any>>)[1].flow = [
+    {
+      aiTap: null,
+      locate: {
+        prompt: '点击与参考图匹配的图标',
+        images: [
+          { name: 'local-target', url: 'source/screenshots/target.png' },
+          { name: 'remote-target', url: 'https://example.com/target.png' },
+          { name: 'inline-target', url: 'data:image/png;base64,AAAA' },
+        ],
+      },
+    },
+  ];
+  await writeYamlDocument(yamlPath, document);
+
+  const resolved = await resolveTask({
+    scene: 'browser-demo',
+    task: 'search-demo',
+    catalog: { builtinProjectsRoot: builtin, userProjectsRoot: user },
+  });
+  const resolvedImages = ((resolved.document.tasks as Array<Record<string, any>>)[1].flow[0].locate.images);
+  assert.equal(resolvedImages[0].url, path.resolve(imagePath));
+  assert.equal(resolvedImages[1].url, 'https://example.com/target.png');
+  assert.equal(resolvedImages[2].url, 'data:image/png;base64,AAAA');
+
+  const canonical = await readYamlDocument(yamlPath);
+  assert.equal((canonical.tasks as Array<Record<string, any>>)[1].flow[0].locate.images[0].url, 'source/screenshots/target.png');
+});
+
+test('resolver 拒绝缺失和越出任务目录的本地参考图', async () => {
+  for (const [name, imageUrl, message] of [
+    ['missing', 'source/screenshots/missing.png', /本地图片不存在/],
+    ['escaped', '../outside.png', /越出任务目录/],
+  ] as const) {
+    const root = await mkdtemp(path.join(os.tmpdir(), `cua-task-image-${name}-`));
+    const builtin = path.join(root, 'builtin');
+    const user = path.join(root, 'user');
+    await mkdir(builtin, { recursive: true });
+    const taskRoot = await createTaskFixture(user);
+    const yamlPath = path.join(taskRoot, 'task.yaml');
+    const document = await readYamlDocument(yamlPath);
+    (document.tasks as Array<Record<string, any>>)[1].flow = [
+      {
+        aiTap: null,
+        locate: {
+          prompt: '点击参考图目标',
+          images: [{ name: 'target', url: imageUrl }],
+        },
+      },
+    ];
+    await writeYamlDocument(yamlPath, document);
+
+    await assert.rejects(
+      resolveTask({
+        scene: 'browser-demo',
+        task: 'search-demo',
+        catalog: { builtinProjectsRoot: builtin, userProjectsRoot: user },
+      }),
+      message,
+    );
+  }
 });
 
 test('稳定步骤身份和 continueOnError 被严格检查', async () => {

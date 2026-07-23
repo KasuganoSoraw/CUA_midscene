@@ -15,6 +15,10 @@ import {
   validateRecordedTaskDocument,
 } from './yaml-task.js';
 
+function isJsonObject(value: unknown): value is JsonObject {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 async function isFile(sourcePath: string): Promise<boolean> {
   try {
     return (await stat(sourcePath)).isFile();
@@ -104,6 +108,51 @@ function validateManifests(
   }
 }
 
+async function resolveTaskImagePaths(value: unknown, taskRoot: string, context = 'task.yaml'): Promise<unknown> {
+  if (Array.isArray(value)) {
+    return Promise.all(value.map((item, index) => resolveTaskImagePaths(item, taskRoot, `${context}[${index}]`)));
+  }
+  if (!isJsonObject(value)) return value;
+
+  const result: JsonObject = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (key !== 'images') {
+      result[key] = await resolveTaskImagePaths(item, taskRoot, `${context}.${key}`);
+      continue;
+    }
+    if (!Array.isArray(item) || item.length === 0) {
+      throw new Error(`${context}.images 必须是非空数组`);
+    }
+    result[key] = await Promise.all(
+      item.map(async (image, index) => {
+        const imageContext = `${context}.images[${index}]`;
+        if (!isJsonObject(image)) throw new Error(`${imageContext} 必须是对象`);
+        if (typeof image.name !== 'string' || !image.name.trim()) {
+          throw new Error(`${imageContext}.name 必须是非空字符串`);
+        }
+        if (typeof image.url !== 'string' || !image.url.trim()) {
+          throw new Error(`${imageContext}.url 必须是非空字符串`);
+        }
+        const imageUrl = image.url.trim();
+        if (/^(https?:|data:)/i.test(imageUrl)) return { ...image, name: image.name.trim(), url: imageUrl };
+
+        const absolutePath = path.isAbsolute(imageUrl)
+          ? path.resolve(imageUrl)
+          : path.resolve(taskRoot, imageUrl);
+        if (!path.isAbsolute(imageUrl)) {
+          const relative = path.relative(taskRoot, absolutePath);
+          if (relative.startsWith('..') || path.isAbsolute(relative)) {
+            throw new Error(`${imageContext}.url 越出任务目录：${imageUrl}`);
+          }
+        }
+        if (!(await isFile(absolutePath))) throw new Error(`${imageContext}.url 指向的本地图片不存在：${absolutePath}`);
+        return { ...image, name: image.name.trim(), url: absolutePath };
+      }),
+    );
+  }
+  return result;
+}
+
 export async function resolveTask(options: {
   scene: string;
   task: string;
@@ -119,8 +168,10 @@ export async function resolveTask(options: {
   validateManifests(scene, manifest, options.scene, options.task);
   validateRecordedTaskDocument(document, manifest, paths.taskYamlPath);
   const resolved = resolveYamlInputs(document, manifest, options.inputs);
+  const documentWithResolvedImages = await resolveTaskImagePaths(resolved.document, paths.taskRoot);
+  if (!isJsonObject(documentWithResolvedImages)) throw new Error('resolved task 根节点不是对象');
   return {
-    document: resolved.document,
+    document: documentWithResolvedImages,
     manifest,
     sourcePath: paths.taskYamlPath,
     inputs: resolved.inputs,

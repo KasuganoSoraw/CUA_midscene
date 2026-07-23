@@ -73,6 +73,7 @@ export interface ShowuiTrace {
 
 export interface ProcessedLogStep {
   timestamp: number;
+  screenshot_reference?: string;
   [key: string]: unknown;
 }
 

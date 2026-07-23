@@ -30,7 +30,10 @@
                 },
                 "allOf": [
                   {
-                    "if": { "required": ["useReferenceImage"] },
+                    "if": {
+                      "properties": { "useReferenceImage": { "const": true } },
+                      "required": ["useReferenceImage"]
+                    },
                     "then": {
                       "properties": { "type": { "enum": ["click", "doubleClick"] } }
                     }

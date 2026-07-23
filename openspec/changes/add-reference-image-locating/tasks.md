@@ -11,10 +11,10 @@
 
 ## 3. Midscene YAML 转换与执行
 
-- [ ] 3.1 转换视觉参考 click/doubleClick 为原生 `locate.prompt` 与 `locate.images`，缺失证据时显式失败
-- [ ] 3.2 在 resolver 中将任务内本地图片路径解析为经过验证的绝对路径，保留 HTTP(S) 与 data URL
-- [ ] 3.3 扩展录制任务整体 aiAct 投影，汇总并保留参考图片 prompt
-- [ ] 3.4 增加转换、resolver、YAML parser 和 aiAct prompt 测试
+- [x] 3.1 转换视觉参考 click/doubleClick 为原生 `locate.prompt` 与 `locate.images`，缺失证据时显式失败
+- [x] 3.2 在 resolver 中将任务内本地图片路径解析为经过验证的绝对路径，保留 HTTP(S) 与 data URL
+- [x] 3.3 扩展录制任务整体 aiAct 投影，汇总并保留参考图片 prompt
+- [x] 3.4 增加转换、resolver、YAML parser 和 aiAct prompt 测试
 
 ## 4. 文档与验证
 
