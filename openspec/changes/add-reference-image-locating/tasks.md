@@ -8,6 +8,7 @@
 - [x] 2.1 更新中文 trace prompt，约束模型仅在必要点击步骤输出 `useReferenceImage: true`
 - [x] 2.2 扩展 trace 清洗、类型和 JSON Schema，拒绝非点击动作或非法类型使用视觉参考
 - [x] 2.3 增加 trace 生成测试，覆盖保留、忽略和拒绝视觉参考建议
+- [x] 2.4 将无可见文字的小图标改为强制视觉参考规则，并更新测试与文档
 
 ## 3. Midscene YAML 转换与执行
 

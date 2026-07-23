@@ -287,7 +287,10 @@ class TraceGeneratorOperationTest(unittest.TestCase):
             )
 
             self.assertIn("useReferenceImage: true", prompt)
-            self.assertIn("不是判断目标尺寸是否较小", prompt)
+            self.assertIn("目标本身没有可见文字标签，必须输出", prompt)
+            self.assertIn("不要再额外判断纯文字 prompt 是否已经足够", prompt)
+            self.assertIn("设置齿轮", prompt)
+            self.assertIn("带相邻可见文字标签的单选框/复选框", prompt)
             self.assertIn("不要输出 false、字符串、路径、Base64", prompt)
         finally:
             if previous_key is None:

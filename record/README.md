@@ -10,7 +10,7 @@
 - 解析鼠标、键盘、窗口切换等原始事件。
 - 从录制视频中抽取关键截图；click/doubleClick 同时保留现有 `256×256` 带红叉 trace crop，并生成 `96×96` 无标注 PNG reference patch。
 - 调用 OpenAI 兼容接口生成语义化 trace，并为每一步输出面向 Midscene 的最小 `operation` 动作结构；`LDoubleClick` 录制事件生成 `doubleClick`，input 操作需要同时输出完整动作 `prompt` 和只用于定位输入框的 `locatePrompt`。
-- trace 生成 prompt 会约束 `operation.prompt` 按“目标视觉特征 + 所在区域 + 相对锚点 + 动作意图”组织，以提升弱视觉模型下 Midscene computer use 的定位稳定性。对于缺少稳定文字、主要依赖外观且纯文字仍易混淆的 click/doubleClick，模型可以额外输出 `useReferenceImage: true`；不得为其他动作设置该字段，也不得让模型生成图片路径。
+- trace 生成 prompt 会约束 `operation.prompt` 按“目标视觉特征 + 所在区域 + 相对锚点 + 动作意图”组织，以提升弱视觉模型下 Midscene computer use 的定位稳定性。对于红叉下方目标本体是无可见文字标签的紧凑纯图标或符号控件，模型必须额外输出 `useReferenceImage: true`；带文字按钮、链接、列表项及带相邻文字标签的单选框/复选框不自动启用。不得为其他动作设置该字段，也不得让模型生成图片路径。
 
 ## 已移除的能力
 

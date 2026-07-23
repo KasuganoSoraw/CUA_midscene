@@ -9,5 +9,5 @@
     "Type": "ActionTypeDelta (Type)：描述可见文本输入区域和正在输入的内容。如果文字只部分可见，应推断输入框用途，例如搜索框或表单字段。说明是替换已有内容还是追加内容。即使红色 X 标记了字段，也不要把 Type 改写为 click；该操作是输入。字段值必须用中文。"
   },
   "Modifier_Guide": "修饰键说明（仅在确实涉及修饰键时使用）：Shift 表示追加选择、约束比例或约束方向；Ctrl 表示多选、特殊功能或精确控制；Alt 表示替代模式、临时工具或特殊功能。字段值必须用中文。",
-  "Reference_Image_Guide": "视觉参考建议：\n• 只有 Operation.type 为 click 或 doubleClick 时才允许按需增加 useReferenceImage: true。\n• useReferenceImage 表示回放时需要把录制点击位置附近的干净参考图提供给 Midscene；它不是判断目标尺寸是否较小。\n• 仅当目标没有稳定可见文字，主要依靠形状、颜色、Logo 或企业自定义图形识别，并且即使 prompt 已描述区域和相对锚点仍容易混淆时，才输出 useReferenceImage: true。\n• 对可由稳定文字定位的按钮、菜单项、页签、列表项、表格行，以及输入框、空白区域，不要输出 useReferenceImage。\n• useReferenceImage 只能是 JSON 布尔值 true；不需要时省略该字段，不要输出 false、字符串、路径、Base64、图片名称或置信度。\n• 无论是否使用参考图，Operation.prompt 都必须保持完整、可独立理解。"
+  "Reference_Image_Guide": "视觉参考建议：\n• 只有 Operation.type 为 click 或 doubleClick 时才允许增加 useReferenceImage: true。\n• useReferenceImage 表示回放时需要把录制点击位置附近的干净参考图提供给 Midscene。\n• 直接判断红色 X 正下方的目标本体：如果它是紧凑的纯图标或符号控件，并且目标本身没有可见文字标签，必须输出 useReferenceImage: true；不要再额外判断纯文字 prompt 是否已经足够。\n• 典型正例包括：无文字的关闭 X、设置齿轮、更多三点、告警铃铛、查看眼睛、展开/收起箭头、工具栏图标或企业自定义图标按钮。\n• 对带稳定可见文字的按钮、链接、菜单项、页签、列表项、表格行，以及带相邻可见文字标签的单选框/复选框，不要输出 useReferenceImage；不要因为控件内部也含有小图形就启用参考图。\n• 对输入框、空白区域、滚动和键盘动作不要输出 useReferenceImage。\n• useReferenceImage 只能是 JSON 布尔值 true；不需要时省略该字段，不要输出 false、字符串、路径、Base64、图片名称或置信度。\n• 无论是否使用参考图，Operation.prompt 都必须保持完整、可独立理解。"
 }
