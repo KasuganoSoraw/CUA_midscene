@@ -159,7 +159,8 @@
         "expectation": "'One way' 单选按钮变为选中态（空心圆圈变为紫红色填充圆点），'Return' 单选按钮取消选中（紫红色填充圆点变为空心圆圈），Return 回程日期字段随之隐藏或置灰，Departure 出发日期字段保留，可能出现提示表明当前为单程搜索；当前打开的日期选择弹窗可能随之关闭或仅保留 Departure 一个高亮日期，'Search flights' 按钮仍可继续点击以发起单程航班搜索。",
         "operation": {
           "type": "click",
-          "prompt": "点击页面中部 'Book a flight' 预订表单卡片顶部 'Book a flight'（带紫色飞机图标）标签下方、行程类型选择行中 'Return' 单选按钮（带紫红色填充圆点，已选中）右侧的 'One way' 单选按钮（带空心圆圈，未选中），以将行程类型从 Return 往返切换为 One way 单程"
+          "prompt": "点击页面中部 'Book a flight' 预订表单卡片顶部 'Book a flight'（带紫色飞机图标）标签下方、行程类型选择行中 'Return' 单选按钮（带紫红色填充圆点，已选中）右侧的 'One way' 单选按钮（带空心圆圈，未选中），以将行程类型从 Return 往返切换为 One way 单程",
+          "useReferenceImage": true
         }
       }
     },

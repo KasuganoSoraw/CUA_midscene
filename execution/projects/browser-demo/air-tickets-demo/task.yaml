@@ -66,8 +66,13 @@ tasks:
   - name: step-012 | click
     flow:
       - sleep: 2043
-      - aiTap: 点击页面中部 'Book a flight' 预订表单卡片顶部 'Book a flight'（带紫色飞机图标）标签下方、行程类型选择行中 'Return' 单选按钮（带紫红色填充圆点，已选中）右侧的 'One way'
-          单选按钮（带空心圆圈，未选中），以将行程类型从 Return 往返切换为 One way 单程
+      - aiTap: null
+        locate:
+          prompt: 点击页面中部 'Book a flight' 预订表单卡片顶部 'Book a flight'（带紫色飞机图标）标签下方、行程类型选择行中 'Return' 单选按钮（带紫红色填充圆点，已选中）右侧的 'One way'
+            单选按钮（带空心圆圈，未选中），以将行程类型从 Return 往返切换为 One way 单程。目标外观应匹配参考图“step-012-target”正中央的主要图标，参考图周边仅用于辅助理解
+          images:
+            - name: step-012-target
+              url: source/screenshots/26.861s.reference.png
   - name: step-013 | click
     flow:
       - sleep: 1000

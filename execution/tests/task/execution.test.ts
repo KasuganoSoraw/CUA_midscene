@@ -80,10 +80,11 @@ test('录制任务整体 aiAct 复用 resolved 输入并保存临时投影', asy
   });
   const prompt = await readFile(run.promptPath, 'utf8');
   const aiAct = await readYamlDocument(run.aiActYamlPath);
-  assert.equal(prompt.match(/step-/g)?.length, 16);
+  assert.equal(prompt.match(/^step-\d{3} \|/gm)?.length, 16);
   assert.match(prompt, /替换输入 "GOOGLE"/);
   assert.doesNotMatch(prompt, /sleep/);
-  assert.equal((aiAct.tasks as Array<Record<string, any>>)[0].flow[0].ai, prompt);
+  const actionPrompt = (aiAct.tasks as Array<Record<string, any>>)[0].flow[0].ai;
+  assert.equal(typeof actionPrompt === 'string' ? actionPrompt : actionPrompt.prompt, prompt);
   assert.equal(run.executorResult.taskCount, 1);
 });
 
