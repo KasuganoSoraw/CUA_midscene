@@ -15,7 +15,7 @@ record trace
 ```
 
 - `cua/contracts/`：普通 TypeScript 类型和 Ajv 文件边界校验。
-- `cua/conversion/`：只根据结构化 trace operation 初始化任务。
+- `cua/conversion/`：只根据结构化 trace operation 初始化任务；被标记的 click/doubleClick 会绑定 processed log 中的 reference patch。
 - `cua/task/`：双 catalog、YAML、输入、运行快照和执行编排。
 - `cli/`：统一命令分发与 stdout/stderr 输出协议。
 - `review/`：与 `cua/` 平级的本地复核应用；`service/` 组合任务资产，`server/` 使用 Fastify 提供受控 HTTP，`web/` 使用 Vue 3。
@@ -72,6 +72,8 @@ node dist/cli/main.js review --no-open
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。inspect 与 run 使用同一个 resolver，不调用模型、不回写任务。`--dry-run` 只构建并解析 YAML，不操作电脑，也不是模拟执行。
 
+参考图步骤使用 Midscene 原生图片 prompt：canonical `task.yaml` 的 `images[].url` 保存相对任务根目录的路径（通常位于 `source/screenshots/`），resolver 验证文件和目录边界后在 resolved YAML 中改为绝对路径。HTTP(S) 与 data URL 保持不变。图片只用于语义定位，Midscene 仍结合文字 prompt、参考图和当前屏幕寻找目标，并点击定位结果；系统不执行像素模板匹配或录制坐标回放。
+
 ## 执行语义
 
 - `task run` 直接执行参数已解析的多 task YAML，适合稳定页面。
@@ -81,6 +83,7 @@ node dist/cli/main.js review --no-open
 - 每次实际执行设置 `MIDSCENE_RUN_DIR=<run-dir>/midscene`，并在 `finally` 中销毁 Agent、恢复原环境。
 - 第一版不实现并发锁，上层必须串行调用真实 computer use。
 - 不兼容旧 flow，不自动切换模式、修改任务、重试或调用替代输入动作。
+- 逐步 YAML 和录制任务整体 aiAct 都保留被明确选择的参考图片；图片缺失、路径越界或同名图片指向不同 URL 时启动前失败，不降级为纯文字动作。
 
 ## 验证
 

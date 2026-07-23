@@ -25,7 +25,7 @@ CUA/
 
 ```text
 教学录制
-  -> record：日志、截图、trace
+  -> record：日志、全屏截图、带红叉 trace crop、干净 reference patch、trace
   -> TypeScript converter：task.yaml + task.json
   -> 人、Agent 或未来前端确认后直接维护 task.yaml
   -> TypeScript resolver：<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml
@@ -37,7 +37,7 @@ CUA/
   -> 同一个 TypeScript Midscene 执行 API
 ```
 
-`task.yaml` 是任务唯一长期可执行流程，直接使用 Midscene 原生 YAML action。`task.json` 保存任务说明、trace 来源、输入 ID 和录制默认值；`source/` 是校准时的只读录制证据。系统不维护自定义 route、resolved flow、override、proposal 或 history。
+`task.yaml` 是任务唯一长期可执行流程，直接使用 Midscene 原生 YAML action。`task.json` 保存任务说明、trace 来源、输入 ID 和录制默认值；`source/` 是校准时的只读录制证据。必要的 click/doubleClick 可以在 YAML 中使用 Midscene 原生 `locate.images` 引用 `source/` 下的干净 reference patch；它是语义定位参考，不是坐标模板。系统不维护自定义 route、resolved flow、override、proposal 或 history。
 
 ## 快速开始
 
@@ -57,7 +57,7 @@ npm run cua -- act run --scene browser-demo --task air-tickets-demo --dry-run
 npm run cua -- act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 ```
 
-执行器要求 Node.js `>=18.19.0`，该下限与当前 Midscene `1.10.0` 保持一致。
+执行器要求 Node.js `>=22.18.0`。
 
 实际操作电脑时去掉 `--dry-run`。第一版不实现并发锁，上层调用方必须串行发起真实 computer use；查询、转换、inspect 和 dry-run 不操作电脑。
 
@@ -77,7 +77,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
     ├── task.yaml                    # 唯一长期执行事实源
     ├── task.json                    # 元数据、trace 来源和输入默认值
     ├── SKILL.md
-    └── source/                      # trace、日志和截图
+    └── source/                      # trace、日志、截图和 reference patch
 
 <CUA_DATA_ROOT>/
 ├── projects/<scene>/<task>/         # 用户创建和长期维护的任务数据包
@@ -92,7 +92,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
 
 数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。路径必须是 Skill 目录外的绝对路径。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
 
-trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
+trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 
 ## 验证与安装
 

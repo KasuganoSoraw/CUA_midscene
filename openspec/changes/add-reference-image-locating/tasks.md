@@ -18,5 +18,5 @@
 
 ## 4. 文档与验证
 
-- [ ] 4.1 更新根 README、record README、execution README、Skill 和任务契约，说明参考图资产与执行边界
+- [x] 4.1 更新根 README、record README、execution README、Skill 和任务契约，说明参考图资产与执行边界
 - [ ] 4.2 运行 Python 测试、TypeScript 类型检查与测试、OpenSpec 严格验证，并检查没有引入兜底路径
