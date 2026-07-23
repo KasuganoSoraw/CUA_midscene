@@ -94,7 +94,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
 
 trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 
-## 验证与安装
+## 验证与打包
 
 真实密钥只放在 `record/.env` 和 `execution/.env.local`，不得提交。
 
@@ -102,10 +102,5 @@ trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 o
 cd execution
 npm test
 npm run build
-```
-
-安装本地 Skill 副本：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-cua-midscene-skill.ps1
+npm pack --dry-run
 ```
