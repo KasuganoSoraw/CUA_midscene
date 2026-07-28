@@ -109,7 +109,7 @@ footer code { color: #8a958f; }
 .recording-config-empty { padding: 24px 10px; border: 1px dashed #cfd8d1; border-radius: 12px; background: #f4f7f4; }
 .recording-config-empty strong { color: #34463b; }
 .recording-config-empty p, .recording-detail-empty p { font-size: 12px; line-height: 1.5; }
-.recording-config-empty code { padding: 7px 9px; border-radius: 7px; color: #24613c; background: white; }
+.recording-config-empty code { padding: 7px 9px; border-radius: 7px; color: #24613c; background: white; font-family: inherit; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
 .recording-config-empty small { color: #89948e; }
 .recording-root-picker { margin-top: 4px; color: white; background: #286c45; box-shadow: 0 5px 13px #286c4529; }
 .recording-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 10px; }
