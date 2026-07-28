@@ -117,13 +117,28 @@ test('录制详情与目录解析拒绝越界和不存在目标', async () => {
 test('打开录制目录使用无 shell 系统命令', async () => {
   const child = new EventEmitter() as EventEmitter & { unref(): void };
   child.unref = () => undefined;
-  let invocation: { command: string; args: readonly string[]; shell: unknown } | undefined;
-  const fakeSpawn = ((command: string, args: readonly string[], options: { shell?: boolean }) => {
-    invocation = { command, args, shell: options.shell };
+  let invocation: {
+    command: string;
+    args: readonly string[];
+    shell: unknown;
+    windowsHide: unknown;
+  } | undefined;
+  const fakeSpawn = ((
+    command: string,
+    args: readonly string[],
+    options: { shell?: boolean; windowsHide?: boolean },
+  ) => {
+    invocation = {
+      command,
+      args,
+      shell: options.shell,
+      windowsHide: options.windowsHide,
+    };
     setImmediate(() => child.emit('spawn'));
     return child;
   }) as unknown as typeof spawn;
   await openRecordingDirectory('E:\\recordings\\demo', fakeSpawn);
   assert.equal(invocation?.shell, false);
+  assert.equal(invocation?.windowsHide, false);
   assert.deepEqual(invocation?.args, ['E:\\recordings\\demo']);
 });

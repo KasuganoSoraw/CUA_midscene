@@ -262,7 +262,7 @@ export async function openRecordingDirectory(
       detached: true,
       shell: false,
       stdio: 'ignore',
-      windowsHide: true,
+      windowsHide: false,
     });
     child.once('error', reject);
     child.once('spawn', () => {
