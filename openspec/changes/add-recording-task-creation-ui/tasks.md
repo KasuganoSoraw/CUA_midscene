@@ -6,9 +6,9 @@
 
 ## 2. Review 服务
 
-- [ ] 2.1 增加录制列表、详情和打开系统目录的 Fastify API
-- [ ] 2.2 增加完整任务创建 API，并复用 `createTaskFromRecording()` 与现有 runtime layout
-- [ ] 2.3 增加服务组合测试，覆盖目录打开、创建成功、创建失败和安全边界
+- [x] 2.1 增加录制列表、详情和打开系统目录的 Fastify API
+- [x] 2.2 增加完整任务创建 API，并复用 `createTaskFromRecording()` 与现有 runtime layout
+- [x] 2.3 增加服务组合测试，覆盖目录打开、创建成功、创建失败和安全边界
 
 ## 3. Vue 录制创建页
 

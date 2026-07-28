@@ -2,6 +2,13 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyPluginAsync } from 'fastify';
 import type { JsonObject, RuntimeLayout } from '../../cua/contracts/types.js';
+import { createTaskFromRecording } from '../../cua/recording/create-task.js';
+import {
+  describeRecording,
+  listRecordings,
+  openRecordingDirectory,
+  resolveRecordingDirectory,
+} from '../../cua/recording/recording-catalog.js';
 import { listScenes, listTasks, requireIdentifier } from '../../cua/task/tasks.js';
 import type { ReviewMutation, ReviewTaskDraft, SaveReviewTaskRequest } from '../shared/types.js';
 import { applyReviewMutation } from '../service/task-mutations.js';
@@ -10,6 +17,14 @@ import { saveReviewTask, validateReviewDraft } from '../service/task-save.js';
 
 interface ReviewRouteOptions {
   layout: RuntimeLayout;
+  recordingsRoot?: string;
+  executionRoot?: string;
+  dependencies?: ReviewRouteDependencies;
+}
+
+export interface ReviewRouteDependencies {
+  createFromRecording?: typeof createTaskFromRecording;
+  openDirectory?: typeof openRecordingDirectory;
 }
 
 interface SceneParams {
@@ -18,6 +33,16 @@ interface SceneParams {
 
 interface TaskParams extends SceneParams {
   task: string;
+}
+
+interface RecordingParams {
+  recording: string;
+}
+
+interface CreateRecordingTaskBody {
+  scene: string;
+  task: string;
+  goal?: string;
 }
 
 interface EvidenceQuery {
@@ -42,6 +67,23 @@ const taskParamsSchema = {
     scene: { type: 'string', minLength: 1 },
     task: { type: 'string', minLength: 1 },
   },
+} as const;
+
+const recordingParamsSchema = {
+  type: 'object',
+  required: ['recording'],
+  properties: { recording: { type: 'string', minLength: 1 } },
+} as const;
+
+const createRecordingTaskBodySchema = {
+  type: 'object',
+  required: ['scene', 'task'],
+  properties: {
+    scene: { type: 'string', minLength: 1 },
+    task: { type: 'string', minLength: 1 },
+    goal: { type: 'string' },
+  },
+  additionalProperties: false,
 } as const;
 
 const draftBodySchema = {
@@ -93,9 +135,66 @@ async function evidenceFile(
 }
 
 export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = async (app, options) => {
+  const recordingOptions = {
+    recordingsRoot: options.recordingsRoot,
+    executionRoot: options.executionRoot,
+  };
+
   app.get('/api/scenes', async () => ({
     scenes: await listScenes(options.layout.catalog),
   }));
+
+  app.get('/api/recordings', async () => listRecordings(recordingOptions));
+
+  app.get<{ Params: RecordingParams }>('/api/recordings/:recording', {
+    schema: { params: recordingParamsSchema },
+  }, async (request) => describeRecording(request.params.recording, recordingOptions));
+
+  app.post<{ Params: RecordingParams }>('/api/recordings/:recording/open-folder', {
+    schema: { params: recordingParamsSchema },
+  }, async (request) => {
+    const recordingPath = await resolveRecordingDirectory(request.params.recording, recordingOptions);
+    await (options.dependencies?.openDirectory ?? openRecordingDirectory)(recordingPath);
+    return { opened: true, recording: request.params.recording };
+  });
+
+  app.post<{ Params: RecordingParams; Body: JsonObject }>(
+    '/api/recordings/:recording/tasks',
+    {
+      schema: {
+        params: recordingParamsSchema,
+        body: createRecordingTaskBodySchema,
+      },
+    },
+    async (request) => {
+      if (!options.layout.data) throw new Error('从录制创建任务需要配置 CUA_DATA_ROOT');
+      const body = requireObjectBody<CreateRecordingTaskBody>(request.body);
+      const scene = requireIdentifier(body.scene, 'scene');
+      const task = requireIdentifier(body.task, 'task');
+      const entry = await describeRecording(request.params.recording, recordingOptions);
+      if (!entry.ready) {
+        throw new Error(`录制不可生成：${entry.id}\n${entry.errors.join('\n')}`);
+      }
+      const recordingPath = await resolveRecordingDirectory(request.params.recording, recordingOptions);
+      const result = await (options.dependencies?.createFromRecording ?? createTaskFromRecording)({
+        scene,
+        task,
+        goal: body.goal,
+        recording: recordingPath,
+        catalog: options.layout.catalog,
+        runsRoot: options.layout.data.runsRoot,
+        executionRoot: options.executionRoot,
+        creationCommand: 'review web',
+      });
+      return {
+        created: result.created,
+        valid: result.valid,
+        scene: result.scene,
+        task: result.task,
+        goal: result.goal,
+      };
+    },
+  );
 
   app.get<{ Params: SceneParams }>('/api/scenes/:scene/tasks', {
     schema: { params: sceneParamsSchema },

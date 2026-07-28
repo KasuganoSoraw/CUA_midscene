@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { packageRoot } from '../../cua/package-root.js';
 import { requireDataPaths, resolveRuntimeLayout } from '../../cua/task/data-paths.js';
 import { createReviewApp } from './app.js';
+import type { ReviewRouteDependencies } from './routes.js';
 
 export interface StartedReviewServer {
   server: FastifyInstance;
@@ -13,13 +14,22 @@ export interface StartedReviewServer {
 
 export async function startReviewServer(options: {
   dataRoot?: string;
+  recordingsRoot?: string;
+  executionRoot?: string;
   port?: number;
   staticRoot?: string;
+  dependencies?: ReviewRouteDependencies;
 } = {}): Promise<StartedReviewServer> {
   const layout = await resolveRuntimeLayout(options.dataRoot);
   await requireDataPaths(layout);
   const staticRoot = path.resolve(options.staticRoot ?? path.join(packageRoot, 'dist', 'review', 'web'));
-  const server = await createReviewApp({ layout, staticRoot });
+  const server = await createReviewApp({
+    layout,
+    staticRoot,
+    recordingsRoot: options.recordingsRoot,
+    executionRoot: options.executionRoot ?? packageRoot,
+    dependencies: options.dependencies,
+  });
   const address = await server.listen({ host: '127.0.0.1', port: options.port ?? 0 });
   const url = `${address.replace(/\/$/, '')}/`;
   return {

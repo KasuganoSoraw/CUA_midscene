@@ -2,7 +2,7 @@ import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import type { RuntimeLayout } from '../../cua/contracts/types.js';
 import { ReviewConflictError, ReviewReadonlyError } from '../service/task-save.js';
-import { registerReviewRoutes } from './routes.js';
+import { registerReviewRoutes, type ReviewRouteDependencies } from './routes.js';
 
 export const reviewBodyLimit = 2 * 1024 * 1024;
 
@@ -16,6 +16,9 @@ function errorStatus(error: unknown): number {
 export async function createReviewApp(options: {
   layout: RuntimeLayout;
   staticRoot: string;
+  recordingsRoot?: string;
+  executionRoot?: string;
+  dependencies?: ReviewRouteDependencies;
 }): Promise<FastifyInstance> {
   const app = Fastify({
     bodyLimit: reviewBodyLimit,
@@ -28,7 +31,12 @@ export async function createReviewApp(options: {
     });
   });
 
-  await app.register(registerReviewRoutes, { layout: options.layout });
+  await app.register(registerReviewRoutes, {
+    layout: options.layout,
+    recordingsRoot: options.recordingsRoot,
+    executionRoot: options.executionRoot,
+    dependencies: options.dependencies,
+  });
   await app.register(fastifyStatic, {
     root: options.staticRoot,
     redirect: false,
