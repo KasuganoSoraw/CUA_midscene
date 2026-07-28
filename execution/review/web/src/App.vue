@@ -21,7 +21,9 @@ import {
 } from '../../shared/step-editor';
 import { ApiError, api } from './api';
 import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
+import RecordingWorkspace from './components/RecordingWorkspace.vue';
 
+const mode = ref<'review' | 'recordings'>('review');
 const scenes = ref<Array<Record<string, unknown>>>([]);
 const tasks = ref<Array<Record<string, unknown>>>([]);
 const scene = ref('');
@@ -120,6 +122,13 @@ async function loadScenes(): Promise<void> {
   } catch (error) {
     status.value = error instanceof Error ? error.message : String(error);
   } finally { busy.value = false; }
+}
+
+async function openCreatedTask(result: { scene: string; task: string }): Promise<void> {
+  scene.value = result.scene;
+  task.value = result.task;
+  mode.value = 'review';
+  await loadScenes();
 }
 
 async function loadTasks(): Promise<void> {
@@ -307,19 +316,27 @@ onMounted(loadScenes);
         <p class="eyebrow">GDE CLAW · LOCAL REVIEW</p>
         <h1>Midscene 任务复核</h1>
       </div>
-      <div class="top-actions">
+      <div v-if="mode === 'review'" class="top-actions">
         <span class="status-chip" :class="{ readonly: !writable }">{{ writable ? '用户任务 · 可写' : '内置任务 · 只读' }}</span>
         <button class="secondary" :disabled="busy || !draft" @click="validate">校验草稿</button>
         <button class="primary" :disabled="busy || !dirty || !writable" @click="save">确认并写入</button>
       </div>
+      <div v-else class="top-actions">
+        <span class="status-chip">本地录制 · 创建任务</span>
+      </div>
     </header>
 
-    <div v-if="conflict" class="conflict">
+    <nav class="mode-tabs" aria-label="复核控制台功能">
+      <button :class="{ active: mode === 'review' }" @click="mode = 'review'">任务复核</button>
+      <button :class="{ active: mode === 'recordings' }" @click="mode = 'recordings'">从录制创建任务</button>
+    </nav>
+
+    <div v-if="mode === 'review' && conflict" class="conflict">
       Agent 已在外部修改任务，当前草稿不会覆盖磁盘内容。
       <button @click="loadTask">重新载入</button>
     </div>
 
-    <main class="workspace">
+    <main v-if="mode === 'review'" class="workspace">
       <aside class="catalog panel">
         <label>场景</label>
         <select v-model="scene" @change="loadTasks">
@@ -538,6 +555,10 @@ onMounted(loadScenes);
       </section>
     </main>
 
-    <footer><span :class="{ error: conflict }">{{ status }}</span><code>{{ view?.revision }}</code></footer>
+    <main v-else class="workspace recording-layout">
+      <RecordingWorkspace :scenes="scenes" @created="openCreatedTask" />
+    </main>
+
+    <footer v-if="mode === 'review'"><span :class="{ error: conflict }">{{ status }}</span><code>{{ view?.revision }}</code></footer>
   </div>
 </template>

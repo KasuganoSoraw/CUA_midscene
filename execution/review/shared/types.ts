@@ -84,3 +84,42 @@ export interface ReviewTaskListResponse {
   scene: string;
   tasks: JsonObject[];
 }
+
+export interface ReviewRecordingFile {
+  name: string;
+  size: number;
+}
+
+export interface ReviewRecording {
+  id: string;
+  ready: boolean;
+  errors: string[];
+  video?: ReviewRecordingFile;
+  eventLog?: ReviewRecordingFile;
+  startedAt?: string;
+  screen?: {
+    width: number;
+    height: number;
+    scaleFactor?: number;
+  };
+}
+
+export interface ReviewRecordingCatalog {
+  configured: boolean;
+  envName: string;
+  recordings: ReviewRecording[];
+}
+
+export interface CreateRecordingTaskRequest {
+  scene: string;
+  task: string;
+  goal?: string;
+}
+
+export interface CreateRecordingTaskResult {
+  created: true;
+  valid: true;
+  scene: string;
+  task: string;
+  goal: string;
+}

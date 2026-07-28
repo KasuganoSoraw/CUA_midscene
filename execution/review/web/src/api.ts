@@ -1,6 +1,10 @@
 import type {
+  CreateRecordingTaskRequest,
+  CreateRecordingTaskResult,
   ReviewMutation,
   ReviewMutationResult,
+  ReviewRecording,
+  ReviewRecordingCatalog,
   ReviewTaskDraft,
   ReviewTaskView,
   SaveReviewTaskResult,
@@ -27,6 +31,19 @@ async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> 
 
 export const api = {
   scenes: () => request<{ scenes: Array<Record<string, unknown>> }>('/api/scenes'),
+  recordings: () => request<ReviewRecordingCatalog>('/api/recordings'),
+  recording: (recording: string) =>
+    request<ReviewRecording>(`/api/recordings/${encodeURIComponent(recording)}`),
+  openRecordingFolder: (recording: string) =>
+    request<{ opened: true; recording: string }>(
+      `/api/recordings/${encodeURIComponent(recording)}/open-folder`,
+      { method: 'POST' },
+    ),
+  createRecordingTask: (recording: string, body: CreateRecordingTaskRequest) =>
+    request<CreateRecordingTaskResult>(
+      `/api/recordings/${encodeURIComponent(recording)}/tasks`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   tasks: (scene: string) => request<{ tasks: Array<Record<string, unknown>> }>(`/api/scenes/${encodeURIComponent(scene)}/tasks`),
   task: (scene: string, task: string) => request<ReviewTaskView>(`/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}`),
   mutate: (scene: string, task: string, draft: ReviewTaskDraft, mutation: ReviewMutation) =>
