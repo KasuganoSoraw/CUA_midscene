@@ -246,10 +246,15 @@ onMounted(loadRecordings);
               <button
                 type="button"
                 class="scene-combobox-toggle"
+                :class="{ open: sceneMenuOpen }"
                 :disabled="busy"
                 aria-label="展开场景列表"
                 @click="sceneMenuOpen = !sceneMenuOpen"
-              >⌄</button>
+              >
+                <svg aria-hidden="true" viewBox="0 0 20 20">
+                  <path d="m5.5 7.5 4.5 4.5 4.5-4.5"></path>
+                </svg>
+              </button>
               <div
                 v-if="sceneMenuOpen"
                 id="recording-scene-options"

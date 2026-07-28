@@ -142,8 +142,10 @@ footer code { color: #8a958f; }
 .recording-form .wide { grid-column: 1 / -1; }
 .scene-combobox { position: relative; }
 .scene-combobox input { padding-right: 43px; }
-.scene-combobox-toggle { position: absolute; top: 5px; right: 5px; display: grid; width: 31px; height: 31px; place-items: center; border: 0; border-radius: 7px; color: #52645a; background: #edf2ee; font-size: 17px; line-height: 1; }
-.scene-combobox-toggle:hover:not(:disabled) { color: #1f5937; background: #dfeae2; }
+.scene-combobox-toggle { position: absolute; top: 1px; right: 1px; display: grid; width: 38px; height: 38px; place-items: center; border: 0; border-radius: 0 8px 8px 0; color: #66756d; background: transparent; }
+.scene-combobox-toggle:hover:not(:disabled) { color: #1f5937; background: #edf3ef; }
+.scene-combobox-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .16s ease; }
+.scene-combobox-toggle.open svg { transform: rotate(180deg); }
 .scene-options { position: absolute; z-index: 8; top: calc(100% + 6px); right: 0; left: 0; max-height: 210px; overflow-y: auto; padding: 5px; border: 1px solid #ced9d1; border-radius: 10px; background: white; box-shadow: 0 12px 28px #26372d24; }
 .scene-options button { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 9px 10px; border: 0; border-radius: 7px; text-align: left; color: #25352c; background: transparent; }
 .scene-options button:hover, .scene-options button[aria-selected="true"] { background: #e8f2eb; }
