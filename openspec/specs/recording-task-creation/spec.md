@@ -75,4 +75,3 @@ TBD - created by archiving change add-task-create-from-recording. Update Purpose
 - **WHEN** Python 在 trace 生成期间持续输出进度
 - **THEN** stdout SHALL 仍可被直接解析为单个 JSON 文档
 - **AND** Python 非零退出 SHALL 使命令以失败状态结束
-
