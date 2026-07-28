@@ -63,3 +63,54 @@ test('无法识别的 Flow 保留为自定义结构', () => {
   assert.equal(parsed.custom, true);
   assert.deepEqual(buildStepContent(parsed, 'step-001').flow, flow);
 });
+
+test('带参考图的点击类 Flow 通过普通表单无损往返', () => {
+  const parsed = parseStepEditor({
+    id: 'step-012',
+    operation: 'click',
+    flow: [
+      { sleep: 1000 },
+      {
+        aiTap: null,
+        locate: {
+          prompt: '点击无文字图标',
+          images: [{ name: 'step-012-target', url: 'source/screenshots/target.reference.png' }],
+          convertHttpImage2Base64: true,
+        },
+      },
+    ],
+  });
+  assert.equal(parsed.custom, false);
+  assert.equal(parsed.target, '点击无文字图标');
+  assert.deepEqual(parsed.referenceImages, [{
+    name: 'step-012-target',
+    url: 'source/screenshots/target.reference.png',
+  }]);
+
+  parsed.target = '点击工具栏中的无文字图标';
+  assert.deepEqual(buildStepContent(parsed, 'step-012').flow, [
+    { sleep: 1000 },
+    {
+      aiTap: null,
+      locate: {
+        prompt: '点击工具栏中的无文字图标',
+        images: [{ name: 'step-012-target', url: 'source/screenshots/target.reference.png' }],
+        convertHttpImage2Base64: true,
+      },
+    },
+  ]);
+
+  const doubleClick = parseStepEditor({
+    id: 'step-003',
+    operation: 'doubleClick',
+    flow: [{
+      aiDoubleClick: null,
+      locate: {
+        prompt: '双击图标',
+        images: [{ name: 'step-003-target', url: 'https://example.com/target.png' }],
+      },
+    }],
+  });
+  assert.equal(doubleClick.custom, false);
+  assert.equal(doubleClick.referenceImages[0].name, 'step-003-target');
+});

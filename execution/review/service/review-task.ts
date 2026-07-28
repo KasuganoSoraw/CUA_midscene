@@ -5,7 +5,14 @@ import type { JsonObject, ProcessedLogStep, ShowuiTrace, TaskCatalogRoots, TaskM
 import { readProcessedLog, readShowuiTrace, readTaskManifest } from '../../cua/contracts/validation.js';
 import { describeTask } from '../../cua/task/tasks.js';
 import { readYamlDocument } from '../../cua/task/yaml-task.js';
-import type { ReviewEvidence, ReviewOperation, ReviewStep, ReviewTaskView } from '../shared/types.js';
+import { referenceImagesFromFlow } from '../shared/step-editor.js';
+import type {
+  ReviewEvidence,
+  ReviewOperation,
+  ReviewReferenceImage,
+  ReviewStep,
+  ReviewTaskView,
+} from '../shared/types.js';
 
 const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|input|keyboard|wait)$/;
 
@@ -27,6 +34,19 @@ function sourceAsset(taskRoot: string, sourceRoot: string, reference: unknown): 
   return path.relative(taskRoot, absolute).replaceAll('\\', '/');
 }
 
+function referenceImagesFor(
+  flow: JsonObject[],
+  operation: ReviewOperation,
+  taskRoot: string,
+  sourceRoot: string,
+): ReviewReferenceImage[] {
+  return referenceImagesFromFlow(flow, operation).map((image) => {
+    if (/^(?:https?:|data:)/i.test(image.url)) return image;
+    assertInside(sourceRoot, path.resolve(taskRoot, image.url), '参考图路径');
+    return image;
+  });
+}
+
 function evidenceFor(
   sourceStep: number,
   processedByStep: Map<number, ProcessedLogStep>,
@@ -40,6 +60,9 @@ function evidenceFor(
     timestamp: item.timestamp,
     ...(sourceAsset(taskRoot, sourceRoot, item.screenshot_full) ? { full: sourceAsset(taskRoot, sourceRoot, item.screenshot_full) } : {}),
     ...(sourceAsset(taskRoot, sourceRoot, item.screenshot_crop) ? { crop: sourceAsset(taskRoot, sourceRoot, item.screenshot_crop) } : {}),
+    ...(sourceAsset(taskRoot, sourceRoot, item.screenshot_reference)
+      ? { reference: sourceAsset(taskRoot, sourceRoot, item.screenshot_reference) }
+      : {}),
   };
 }
 
@@ -92,31 +115,25 @@ export async function loadReviewTask(
   if (recording.trace && recording.processed && recording.trace.trajectory.length === recording.processed.length) {
     recording.trace.trajectory.forEach((item, index) => processedByStep.set(item.step_idx, recording.processed![index]));
   }
-  let latestEvidence: ReviewEvidence | undefined;
-  let latestStepId: string | undefined;
   const steps: ReviewStep[] = tasks.map((item, index) => {
     const match = stepNamePattern.exec(String(item.name));
     if (!match) throw new Error(`无法构造复核步骤：tasks[${index + 1}].name 非法`);
     const [, id, , operation] = match;
+    const reviewOperation = operation as ReviewOperation;
+    const flow = structuredClone(item.flow as JsonObject[]);
     const sourceStep = bindings[id];
     const evidence = typeof sourceStep === 'number'
       ? evidenceFor(sourceStep, processedByStep, taskRoot, recording.sourceRoot)
       : undefined;
-    const contextEvidence = !evidence && latestEvidence
-      ? { ...latestEvidence, context: true, fromStepId: latestStepId }
-      : undefined;
-    if (evidence) {
-      latestEvidence = evidence;
-      latestStepId = id;
-    }
+    const referenceImages = referenceImagesFor(flow, reviewOperation, taskRoot, recording.sourceRoot);
     return {
       id,
       name: String(item.name),
-      operation: operation as ReviewOperation,
-      flow: structuredClone(item.flow as JsonObject[]),
+      operation: reviewOperation,
+      flow,
       ...(manifest.inputs[`${id}-input`] ? { input: structuredClone(manifest.inputs[`${id}-input`]) } : {}),
       ...(evidence ? { evidence } : {}),
-      ...(contextEvidence ? { contextEvidence } : {}),
+      ...(referenceImages.length ? { referenceImages } : {}),
     };
   });
   return {

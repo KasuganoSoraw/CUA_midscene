@@ -56,7 +56,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 ## 本地复核页面
 
-运行 `node dist/cli/main.js review` 启动仅监听 loopback 的 Vue 复核页面；GDE Claw 可用 `--no-open` 获取 URL 后调用系统浏览器。页面只写入 user catalog，builtin task 与 `source/` 始终只读。Agent 不需要通过 review CLI 编辑任务，仍按本 Skill 的确认协议直接修改 canonical 资产并运行 `task validate`。
+运行 `node dist/cli/main.js review` 启动仅监听 loopback 的 Vue 复核页面；GDE Claw 可用 `--no-open` 获取 URL 后调用系统浏览器。页面会区分展示全局录制图、带点击标记的局部图和 `locate.images` 执行参考图，并在修改点击目标描述时保留图片引用。页面只写入 user catalog，builtin task 与 `source/` 始终只读。Agent 不需要通过 review CLI 编辑任务，仍按本 Skill 的确认协议直接修改 canonical 资产并运行 `task validate`。
 
 ## 调用与执行
 
