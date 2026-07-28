@@ -8,8 +8,6 @@ import {
   listRecordings,
   openRecordingDirectory,
   resolveRecordingDirectory,
-  saveRecordingsRoot,
-  selectRecordingRootDirectory,
 } from '../../cua/recording/recording-catalog.js';
 import { listScenes, listTasks, requireIdentifier } from '../../cua/task/tasks.js';
 import type { ReviewMutation, ReviewTaskDraft, SaveReviewTaskRequest } from '../shared/types.js';
@@ -27,7 +25,6 @@ interface ReviewRouteOptions {
 export interface ReviewRouteDependencies {
   createFromRecording?: typeof createTaskFromRecording;
   openDirectory?: typeof openRecordingDirectory;
-  selectDirectory?: typeof selectRecordingRootDirectory;
 }
 
 interface SceneParams {
@@ -149,25 +146,6 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   }));
 
   app.get('/api/recordings', async () => listRecordings(recordingOptions()));
-
-  app.post('/api/recordings/select-root', async () => {
-    const selected = await (
-      options.dependencies?.selectDirectory ?? selectRecordingRootDirectory
-    )();
-    if (!selected) {
-      return {
-        selected: false,
-        catalog: await listRecordings(recordingOptions()),
-      };
-    }
-    activeRecordingsRoot = await saveRecordingsRoot(selected, {
-      executionRoot: options.executionRoot,
-    });
-    return {
-      selected: true,
-      catalog: await listRecordings(recordingOptions()),
-    };
-  });
 
   app.get<{ Params: RecordingParams }>('/api/recordings/:recording', {
     schema: { params: recordingParamsSchema },

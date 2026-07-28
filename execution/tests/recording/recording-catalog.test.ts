@@ -4,7 +4,6 @@ import { EventEmitter } from 'node:events';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import dotenv from 'dotenv';
 import {
@@ -13,8 +12,6 @@ import {
   openRecordingDirectory,
   resolveRecordingDirectory,
   resolveRecordingsRoot,
-  saveRecordingsRoot,
-  selectRecordingRootDirectory,
 } from '../../cua/recording/recording-catalog.js';
 
 async function recording(
@@ -145,73 +142,4 @@ test('打开录制目录使用无 shell 系统命令', async () => {
   assert.equal(invocation?.shell, false);
   assert.equal(invocation?.windowsHide, false);
   assert.deepEqual(invocation?.args, ['E:\\recordings\\demo']);
-});
-
-test('系统目录选择器使用无 shell 原生命令并支持取消', async () => {
-  let invocation: {
-    command: string;
-    args: readonly string[];
-    shell: unknown;
-    windowsHide: unknown;
-  } | undefined;
-  const selectedSpawn = ((command: string, args: readonly string[], options: {
-    shell?: boolean;
-    windowsHide?: boolean;
-  }) => {
-    const child = new EventEmitter() as EventEmitter & {
-      stdout: PassThrough;
-      stderr: PassThrough;
-    };
-    child.stdout = new PassThrough();
-    child.stderr = new PassThrough();
-    invocation = {
-      command,
-      args,
-      shell: options.shell,
-      windowsHide: options.windowsHide,
-    };
-    setImmediate(() => {
-      child.stdout.end('C:\\recordings');
-      child.emit('close', 0);
-    });
-    return child;
-  }) as unknown as typeof spawn;
-  assert.equal(await selectRecordingRootDirectory(selectedSpawn, 'win32'), 'C:\\recordings');
-  assert.equal(invocation?.command, 'powershell.exe');
-  assert.equal(invocation?.shell, false);
-  assert.equal(invocation?.windowsHide, false);
-  assert.ok(invocation?.args.includes('-STA'));
-
-  const cancelledSpawn = (() => {
-    const child = new EventEmitter() as EventEmitter & {
-      stdout: PassThrough;
-      stderr: PassThrough;
-    };
-    child.stdout = new PassThrough();
-    child.stderr = new PassThrough();
-    setImmediate(() => child.emit('close', 0));
-    return child;
-  }) as unknown as typeof spawn;
-  assert.equal(await selectRecordingRootDirectory(cancelledSpawn, 'win32'), undefined);
-});
-
-test('录制根配置原子更新 env.local 并保留其他内容', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-recordings-save-root-'));
-  const executionRoot = await mkdtemp(path.join(os.tmpdir(), 'cua-recordings-save-execution-'));
-  const envPath = path.join(executionRoot, '.env.local');
-  await writeFile(envPath, [
-    '# keep this comment',
-    'MIDSCENE_MODEL_NAME=test-model',
-    'CUA_RECORDINGS_ROOT=C:\\old',
-    'CUA_RECORDINGS_ROOT=C:\\duplicate',
-    '',
-  ].join('\n'), 'utf8');
-
-  assert.equal(await saveRecordingsRoot(root, { executionRoot }), root);
-  const content = await readFile(envPath, 'utf8');
-  assert.match(content, /# keep this comment/);
-  assert.match(content, /MIDSCENE_MODEL_NAME=test-model/);
-  assert.equal(content.match(/^CUA_RECORDINGS_ROOT=/gmu)?.length, 1);
-  assert.equal(dotenv.parse(content).CUA_RECORDINGS_ROOT, root);
-  assert.equal(await resolveRecordingsRoot(undefined, { executionRoot }), root);
 });

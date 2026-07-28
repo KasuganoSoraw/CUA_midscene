@@ -138,29 +138,18 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
   await createTaskFixture(path.join(root, 'projects'));
   const staticRoot = path.join(root, 'static');
   const executionRoot = path.join(root, 'execution');
-  const recordingsRoot = path.join(root, 'recordings');
-  const recordingInputs = path.join(recordingsRoot, 'Recording_selected', 'inputs');
   await Promise.all([
     mkdir(staticRoot, { recursive: true }),
     mkdir(executionRoot, { recursive: true }),
-    mkdir(recordingInputs, { recursive: true }),
-  ]);
-  await Promise.all([
-    writeFile(path.join(recordingInputs, 'capture.mp4'), 'video', 'utf8'),
-    writeFile(path.join(recordingInputs, 'capture.txt'), 'events', 'utf8'),
   ]);
   await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>review</title>', 'utf8');
   const previous = process.env.CUA_RECORDINGS_ROOT;
-  let selectedDirectory: string | undefined;
   try {
     delete process.env.CUA_RECORDINGS_ROOT;
     const started = await startReviewServer({
       dataRoot: root,
       staticRoot,
       executionRoot,
-      dependencies: {
-        selectDirectory: async () => selectedDirectory,
-      },
     });
     try {
       const recordings = await fetch(new URL('/api/recordings', started.url));
@@ -170,32 +159,6 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
         recordings: [],
       });
       assert.equal((await fetch(new URL('/api/scenes', started.url))).status, 200);
-
-      const cancelled = await fetch(new URL('/api/recordings/select-root', started.url), {
-        method: 'POST',
-      });
-      assert.deepEqual(await cancelled.json(), {
-        selected: false,
-        catalog: {
-          configured: false,
-          envName: 'CUA_RECORDINGS_ROOT',
-          recordings: [],
-        },
-      });
-
-      selectedDirectory = recordingsRoot;
-      const selected = await fetch(new URL('/api/recordings/select-root', started.url), {
-        method: 'POST',
-      });
-      const selectedResult = await selected.json() as any;
-      assert.equal(selectedResult.selected, true);
-      assert.equal(selectedResult.catalog.configured, true);
-      assert.equal(selectedResult.catalog.recordings[0].id, 'Recording_selected');
-      assert.equal(Object.hasOwn(selectedResult, 'recordingsRoot'), false);
-      assert.match(
-        await readFile(path.join(executionRoot, '.env.local'), 'utf8'),
-        new RegExp(`^CUA_RECORDINGS_ROOT=${recordingsRoot.replaceAll('\\', '\\\\')}$`, 'm'),
-      );
     } finally {
       await started.close();
     }

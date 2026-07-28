@@ -5,7 +5,6 @@ import type {
   ReviewMutationResult,
   ReviewRecording,
   ReviewRecordingCatalog,
-  SelectRecordingRootResult,
   ReviewTaskDraft,
   ReviewTaskView,
   SaveReviewTaskResult,
@@ -34,8 +33,6 @@ async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> 
 export const api = {
   scenes: () => request<{ scenes: Array<Record<string, unknown>> }>('/api/scenes'),
   recordings: () => request<ReviewRecordingCatalog>('/api/recordings'),
-  selectRecordingsRoot: () =>
-    request<SelectRecordingRootResult>('/api/recordings/select-root', { method: 'POST' }),
   recording: (recording: string) =>
     request<ReviewRecording>(`/api/recordings/${encodeURIComponent(recording)}`),
   openRecordingFolder: (recording: string) =>

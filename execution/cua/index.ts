@@ -12,8 +12,6 @@ export {
   listRecordings,
   openRecordingDirectory,
   recordingsRootEnv,
-  saveRecordingsRoot,
-  selectRecordingRootDirectory,
   resolveRecordingDirectory,
   resolveRecordingsRoot,
   type RecordingCatalog,
