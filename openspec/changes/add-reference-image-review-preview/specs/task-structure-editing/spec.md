@@ -8,7 +8,7 @@
 - **THEN** 新步骤的证据绑定 SHALL 为空
 - **AND** 后续录制步骤 SHALL 继续绑定其原始 trace step
 
-#### Scenario: 展示无证据人工步骤
+#### Scenario: 展示人工步骤上下文
 - **WHEN** 人工步骤没有独立录制证据
 - **THEN** 页面 SHALL 展示默认占位图
 - **AND** 页面 SHALL NOT 自动展示最近录制步骤的截图
