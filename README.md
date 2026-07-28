@@ -26,6 +26,7 @@ CUA/
 ```text
 教学录制
   -> record：日志、全屏截图、带红叉 trace crop、干净 reference patch、trace
+  -> task create-from-recording：自动规范化 source、初始化并静态验证任务
   -> TypeScript converter：task.yaml + task.json
   -> 人、Agent 或未来前端确认后直接维护 task.yaml
   -> TypeScript resolver：<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml
@@ -46,10 +47,12 @@ cd execution
 npm install
 npm run check
 $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
+$env:CUA_RECORD_ROOT = 'E:\HW\CUA\record'
 
 npm run cua -- scene list --json
 npm run cua -- task list --scene browser-demo --json
 npm run cua -- task describe --scene browser-demo --task air-tickets-demo --json
+npm run cua -- task create-from-recording --scene <scene> --task <task> --recording <录制目录> --goal "<推荐填写的任务目标>"
 npm run cua -- task validate --scene browser-demo --task air-tickets-demo
 npm run cua -- task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
 npm run cua -- task run --scene browser-demo --task air-tickets-demo --dry-run
@@ -61,7 +64,9 @@ npm run cua -- act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 
 实际操作电脑时去掉 `--dry-run`。第一版不实现并发锁，上层调用方必须串行发起真实 computer use；查询、转换、inspect 和 dry-run 不操作电脑。
 
-从已放入 user task `source/` 的 trace 初始化任务：
+`task create-from-recording` 是从原始录制创建任务的默认入口。`--goal` 推荐填写以帮助 trace 模型理解业务意图，但可以省略；省略时系统不会推测目标，任务 goal/description 与 YAML groupDescription 保存空字符串。命令会自动运行 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
+
+仅当 trace 与 processed log 已经放入 user task `source/` 时，使用高级初始化入口：
 
 ```powershell
 npm run cua -- task init-from-trace --scene <scene> --task <task> --goal "<任务目标>"
@@ -90,7 +95,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
     └── midscene/                    # Midscene 报告、截图等产物
 ```
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。路径必须是 Skill 目录外的绝对路径。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。录制器根优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、execution 环境文件、源码仓相邻 `record/`。配置路径必须是绝对路径；安装后的 execution Skill 不包含 Python，需要用 `CUA_RECORD_ROOT` 指向独立 record 目录。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
 
 trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 

@@ -72,6 +72,7 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
 
 test('Skill 文档和安装器使用编译后的 Node CLI', async () => {
   const skill = await readFile(path.join(executionRoot, 'SKILL.md'), 'utf8');
+  const envExample = await readFile(path.join(executionRoot, '.env.example'), 'utf8');
   const installer = await readFile(
     path.join(repositoryRoot, 'scripts/install-cua-midscene-skill.ps1'),
     'utf8',
@@ -80,9 +81,14 @@ test('Skill 文档和安装器使用编译后的 Node CLI', async () => {
   assert.match(skill, /node dist\/cli\/main\.js/);
   assert.match(skill, /Node\.js `>=22\.18\.0`/);
   assert.match(skill, /Fastify/);
+  assert.match(skill, /task create-from-recording/);
+  assert.match(skill, /CUA_RECORD_ROOT/);
+  assert.match(skill, /--goal.*推荐填写/);
   assert.match(skill, /提出 `task\.yaml` 修改建议，展示原值、新值和原因，等待明确确认/);
   assert.match(skill, /停止并等待用户明确确认/);
   assert.doesNotMatch(skill, /uv run cua|python\s+-m/i);
+  assert.doesNotMatch(skill, /uv run python|Aloha_Learn[\\/]parser\.py/i);
+  assert.match(envExample, /^CUA_RECORD_ROOT=.+$/m);
 
   assert.match(installer, /& npm run build/);
   assert.match(installer, /& npm ci --omit=dev --ignore-scripts/);

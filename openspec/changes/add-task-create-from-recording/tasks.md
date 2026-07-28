@@ -18,8 +18,8 @@
 ## 4. 测试与文档
 
 - [x] 4.1 增加根目录优先级、产物复制、拒绝覆盖、失败清理和 stdout 契约测试
-- [ ] 4.2 更新环境示例、README、任务契约与 Skill 创建指引
-- [ ] 4.3 验证 execution 发布物继续保持 TypeScript-only
+- [x] 4.2 更新环境示例、README、任务契约与 Skill 创建指引
+- [x] 4.3 验证 execution 发布物继续保持 TypeScript-only
 
 ## 5. 验证
 
