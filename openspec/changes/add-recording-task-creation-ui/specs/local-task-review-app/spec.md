@@ -12,7 +12,19 @@
 #### Scenario: 录制根未配置
 - **WHEN** 用户进入录制创建页且录制根不可用
 - **THEN** 页面 SHALL 展示 `CUA_RECORDINGS_ROOT` 配置提示
+- **AND** 页面 SHALL 提供选择本地录制目录的明确按钮
 - **AND** 任务复核页签 SHALL 继续可用
+
+#### Scenario: 通过系统选择录制目录
+- **WHEN** 用户在未配置状态点击选择录制目录并在系统原生选择框确认目录
+- **THEN** 系统 SHALL 将该目录保存为 `execution/.env.local` 中的 `CUA_RECORDINGS_ROOT`
+- **AND** 页面 SHALL 使用该目录刷新当前会话的录制列表
+- **AND** 页面 SHALL NOT 接收或展示所选目录的绝对路径
+
+#### Scenario: 取消选择录制目录
+- **WHEN** 用户关闭或取消系统原生文件夹选择框
+- **THEN** 页面 SHALL 保持未配置状态
+- **AND** 页面 SHALL NOT 将取消显示为错误
 
 ### Requirement: 用户通过语义表单创建完整任务
 录制创建页 SHALL 允许用户选择或输入场景、输入任务标识和可选目标，并 SHALL 在一次操作中创建完整可复核任务，而不暴露 trace 等内部产物。
@@ -42,4 +54,3 @@
 - **WHEN** 创建流程返回错误
 - **THEN** 页面 SHALL 恢复表单并在页面内展示错误
 - **AND** 页面 SHALL NOT 使用浏览器原生 alert
-
