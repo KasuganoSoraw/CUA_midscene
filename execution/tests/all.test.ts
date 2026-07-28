@@ -2,6 +2,7 @@ import './contracts/validation.test.js';
 import './cli/cli.test.js';
 import './conversion/showui-trace.test.js';
 import './recording/create-task.test.js';
+import './recording/recording-catalog.test.js';
 import './task/data-paths.test.js';
 import './task/task-core.test.js';
 import './task/execution.test.js';
