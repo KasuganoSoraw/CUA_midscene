@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { convertTrace } from '../conversion/showui-trace.js';
 import type { JsonObject } from '../contracts/types.js';
+import { createTaskFromRecording } from '../recording/create-task.js';
 import { requireDataPaths, resolveRuntimeLayout } from '../task/data-paths.js';
 import { runPrompt, runRecordedTaskAiAct, runTask } from '../task/execution.js';
 import { loadRuntimeInputs } from '../task/inputs.js';
@@ -26,6 +27,7 @@ export const helpText = `CUA 场景、任务与 Midscene YAML 执行工具
 任务：
   task list --scene <scene> [--data-root <path>] [--json]
   task describe --scene <scene> --task <task> [--data-root <path>] [--json]
+  task create-from-recording --scene <scene> --task <task> --recording <目录> [--goal <目标>] [--record-root <path>] [--data-root <path>]
   task init-from-trace --scene <scene> --task <task> --goal <目标> [--data-root <path>]
   task validate|inspect|run --scene <scene> --task <task> [--input key=value] [--inputs <file>]
 
@@ -38,6 +40,11 @@ const commandOptions: Record<string, { values: string[]; booleans: string[]; rep
   'scene list': { values: ['data-root'], booleans: ['json'] },
   'task list': { values: ['scene', 'data-root'], booleans: ['json'], required: ['scene'] },
   'task describe': { values: ['scene', 'task', 'data-root'], booleans: ['json'], required: ['scene', 'task'] },
+  'task create-from-recording': {
+    values: ['scene', 'task', 'recording', 'goal', 'record-root', 'data-root'],
+    booleans: [],
+    required: ['scene', 'task', 'recording'],
+  },
   'task init-from-trace': {
     values: ['scene', 'task', 'goal', 'data-root', 'recording-preparation-command', 'trace-generation-command'],
     booleans: [],
@@ -137,7 +144,24 @@ function buildConversionCommand(options: ParsedOptions): string {
   return parts.join(' ');
 }
 
-export async function runCliCommand(argv: string[]): Promise<string> {
+function buildCreationCommand(options: ParsedOptions): string {
+  const parts = [
+    'npm run cua -- task create-from-recording',
+    `--scene ${value(options, 'scene')}`,
+    `--task ${value(options, 'task')}`,
+    `--recording ${quoteCommandValue(value(options, 'recording')!)}`,
+  ];
+  for (const option of ['goal', 'record-root', 'data-root']) {
+    const optionValue = value(options, option);
+    if (optionValue !== undefined) parts.push(`--${option} ${quoteCommandValue(optionValue)}`);
+  }
+  return parts.join(' ');
+}
+
+export async function runCliCommand(
+  argv: string[],
+  dependencies: { createFromRecording?: typeof createTaskFromRecording } = {},
+): Promise<string> {
   const { domain, command, options } = parseCommand(argv);
   const layout = await resolveRuntimeLayout(value(options, 'data-root'));
 
@@ -154,6 +178,19 @@ export async function runCliCommand(argv: string[]): Promise<string> {
   }
   if (domain === 'task' && command === 'describe') {
     return json(await describeTask(value(options, 'scene')!, value(options, 'task')!, layout.catalog));
+  }
+  if (domain === 'task' && command === 'create-from-recording') {
+    const data = await requireDataPaths(layout);
+    return json(await (dependencies.createFromRecording ?? createTaskFromRecording)({
+      scene: value(options, 'scene')!,
+      task: value(options, 'task')!,
+      recording: value(options, 'recording')!,
+      ...(value(options, 'goal') !== undefined ? { goal: value(options, 'goal') } : {}),
+      ...(value(options, 'record-root') !== undefined ? { recordRoot: value(options, 'record-root') } : {}),
+      catalog: layout.catalog,
+      runsRoot: data.runsRoot,
+      creationCommand: buildCreationCommand(options),
+    }));
   }
   if (domain === 'task' && command === 'init-from-trace') {
     await requireDataPaths(layout);

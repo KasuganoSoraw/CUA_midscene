@@ -222,7 +222,6 @@ export async function convertTrace(options: ConvertOptions): Promise<string> {
   if (!options.catalog.userProjectsRoot) throw new Error('初始化任务需要用户 projects 目录');
   const scene = requireIdentifier(options.scene, 'scene');
   const task = requireIdentifier(options.task, 'task');
-  if (!options.goal.trim()) throw new Error('goal 必须是非空字符串');
   const userProjects = path.resolve(options.catalog.userProjectsRoot);
   const taskRoot = path.resolve(userProjects, scene, task);
   const builtinTask = path.resolve(options.catalog.builtinProjectsRoot, scene, task);
