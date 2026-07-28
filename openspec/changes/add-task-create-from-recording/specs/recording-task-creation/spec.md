@@ -5,19 +5,26 @@
 
 #### Scenario: 创建带目标的任务
 - **WHEN** 调用者提供不存在的 scene/task、有效录制目录和非空 goal
-- **THEN** 系统 SHALL 将 goal 传给 trace 生成器并创建通过静态验证的用户任务
+- **THEN** 系统 SHALL 使用不含 goal 的原有 parser 调用生成 trace
+- **AND** 系统 SHALL 将 goal 写入创建后的任务描述
+- **AND** 系统 SHALL 创建通过静态验证的用户任务
 - **AND** 最终 stdout SHALL 返回机器可读的创建与验证结果
 
 #### Scenario: 保留已有标准 source 入口
 - **WHEN** 调用者已经准备好标准化 task source
 - **THEN** 原有 `task init-from-trace` SHALL 继续可用且行为不变
 
-### Requirement: goal 为推荐但可选
-创建命令 SHALL 接受可选 goal，不得在 goal 缺失或仅含空白时推测业务目标。
+### Requirement: goal 为可选任务描述
+创建命令 SHALL 接受可选 goal，不得将其传给 trace 生成模型，也不得在 goal 缺失或仅含空白时推测业务目标。
+
+#### Scenario: 提供 goal
+- **WHEN** 调用者提供非空 goal
+- **THEN** parser 调用 SHALL NOT 包含 goal
+- **AND** `task.json` 的 goal、description 与 YAML agent.groupDescription SHALL 保存规范化后的 goal
 
 #### Scenario: 省略 goal
 - **WHEN** 调用者未提供 goal 或提供全空白 goal
-- **THEN** trace Overall Task SHALL 为空
+- **THEN** parser 调用 SHALL 与提供 goal 时保持相同
 - **AND** `task.json` 的 goal、description 与 YAML agent.groupDescription SHALL 保存空字符串
 - **AND** task title 与 YAML agent.groupName SHALL 继续使用 task 标识
 

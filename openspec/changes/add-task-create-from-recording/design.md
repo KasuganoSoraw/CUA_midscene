@@ -9,7 +9,7 @@
 - 由一个 TypeScript CLI 完成录制处理、source 规范化、任务初始化和静态验证。
 - 保留录制器与执行器的环境、依赖和发布边界。
 - 在已有任务、非法产物或验证失败时明确失败，不留下不可用任务。
-- goal 可选且不进行隐式推测。
+- goal 可选且不进行隐式推测，也不改变 trace 生成 prompt。
 
 **Non-Goals:**
 
@@ -30,9 +30,9 @@
 
 parser 继续在原录制目录生成以目录名为前缀的文件。编排器校验后将 trace、两份 processed log 规范化为固定文件名，并仅复制 processed log 的 `screenshot_full`、`screenshot_crop`、`screenshot_reference` 实际引用的相对截图。
 
-### goal 可选且不推测
+### goal 只描述任务，不参与 trace 生成
 
-CLI 与公开 API 接收可选 goal。非空 goal 传给 trace 的 Overall Task，并写入任务描述；省略或全空白时不向 parser 传 `--goal`，任务 `goal`、`description` 与 YAML `groupDescription` 保存空字符串。
+CLI 与公开 API 接收可选 goal，但录制器始终使用原有 `uv run python Aloha_Learn/parser.py <录制目录>` 调用，不把 goal 传给 trace 模型。goal 仅在 trace 生成后写入任务 `goal`、`description` 与 YAML `groupDescription`；省略或全空白时保存空字符串。
 
 ### 先预检，再创建并在失败时清理
 
@@ -47,7 +47,7 @@ CLI 与公开 API 接收可选 goal。非空 goal 传给 trace 的 Overall Task�
 - [安装后的 Skill 无法自动找到源码仓 record] → 要求配置 `CUA_RECORD_ROOT`，源码相邻目录仅作为开发环境默认值。
 - [parser 会在原录制目录写入生成文件] → 明确该目录是录制处理工作区，失败清理不删除这些诊断产物。
 - [验证失败后可能已有 run 报告] → 保留报告帮助排查，但删除 canonical task，防止不可用任务被发现。
-- [空 goal 降低 trace 判断质量] → CLI 帮助和 Skill 明确推荐填写，不生成虚假默认目标。
+- [高层 goal 干扰逐步视觉判断] → goal 不进入 trace prompt，只作为生成后任务描述。
 
 ## Migration Plan
 
