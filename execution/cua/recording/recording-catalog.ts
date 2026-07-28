@@ -310,7 +310,7 @@ export async function selectRecordingRootDirectory(
   return new Promise<string | undefined>((resolve, reject) => {
     const child = spawnProcess(picker.command, picker.args, {
       shell: false,
-      windowsHide: true,
+      windowsHide: false,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const stdout: Buffer[] = [];

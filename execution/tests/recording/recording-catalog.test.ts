@@ -179,7 +179,7 @@ test('系统目录选择器使用无 shell 原生命令并支持取消', async (
   assert.equal(await selectRecordingRootDirectory(selectedSpawn, 'win32'), 'C:\\recordings');
   assert.equal(invocation?.command, 'powershell.exe');
   assert.equal(invocation?.shell, false);
-  assert.equal(invocation?.windowsHide, true);
+  assert.equal(invocation?.windowsHide, false);
   assert.ok(invocation?.args.includes('-STA'));
 
   const cancelledSpawn = (() => {
