@@ -62,7 +62,9 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 运行 `node dist/cli/main.js review` 启动仅监听 loopback 的 Vue 复核页面；GDE Claw 可用 `--no-open` 获取 URL 后调用系统浏览器。“任务复核”会区分展示全局录制图、带点击标记的局部图和 `locate.images` 执行参考图，并在修改点击目标描述时保留图片引用。页面只写入 user catalog，builtin task 与 `source/` 始终只读。
 
-“从录制创建任务”列出 `CUA_RECORDINGS_ROOT` 的一级子目录，仅以占位卡片显示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并允许打开原始目录。用户填写场景、任务和可选目标后，页面复用完整创建流程；不播放媒体、不展开日志、不暴露 trace，也不提供流式日志。生成时只显示不可确定的进行中状态，成功后自动进入新任务复核。录制根未配置或单个目录不满足文件约束时不得阻止页面启动。Agent 不需要通过 review CLI 编辑任务，仍按本 Skill 的确认协议直接修改 canonical 资产并运行 `task validate`。
+“从录制创建任务”列出 `CUA_RECORDINGS_ROOT` 的一级子目录，仅以占位卡片显示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并允许打开原始目录。用户填写场景、任务和可选目标后，页面复用完整创建流程；不播放媒体、不展开日志、不暴露 trace，也不提供流式日志。生成时只显示不可确定的进行中状态，成功后自动进入新任务复核。
+
+录制根未配置时，页面只提示 `CUA_RECORDINGS_ROOT`、`execution/.env.local` 配置位置和路径示例，不直接修改本机环境，也不得通过后台服务进程唤起可能失焦或阻塞的桌面目录选择框。配置后需要重启 review 服务。录制根未配置或单个目录不满足文件约束时不得阻止页面启动。Agent 不需要通过 review CLI 编辑任务，仍按本 Skill 的确认协议直接修改 canonical 资产并运行 `task validate`。
 
 ## 调用与执行
 

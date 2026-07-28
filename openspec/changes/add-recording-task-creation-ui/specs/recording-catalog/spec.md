@@ -13,14 +13,6 @@
 - **THEN** 系统 SHALL 保持现有任务复核能力可用
 - **AND** 录制创建页面 SHALL 明确提示需要配置的环境变量名称
 
-#### Scenario: 通过页面路径表单配置录制根
-- **WHEN** 本地 review 服务收到用户在页面明确提交的可读绝对目录
-- **THEN** 系统 SHALL 使用既有录制根规则校验目录
-- **AND** 系统 SHALL 原子更新 `execution/.env.local` 中唯一的 `CUA_RECORDINGS_ROOT`
-- **AND** 系统 SHALL 保留该文件中的其他配置和注释
-- **AND** 系统 SHALL 将该目录用于当前服务进程和后续启动
-- **AND** 系统 SHALL NOT 从服务进程启动阻塞式桌面目录选择器
-
 ### Requirement: 动态发现一级录制目录
 系统 SHALL 扫描录制根的一级子目录，并根据 `inputs/` 中的实际文件动态构造录制列表与详情，不得依赖目录名称前缀。
 

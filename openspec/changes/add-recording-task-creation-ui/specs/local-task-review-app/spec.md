@@ -12,22 +12,12 @@
 #### Scenario: 录制根未配置
 - **WHEN** 用户进入录制创建页且录制根不可用
 - **THEN** 页面 SHALL 展示 `CUA_RECORDINGS_ROOT` 配置提示
-- **AND** 页面 SHALL 提供选择本地录制目录的明确按钮
+- **AND** 页面 SHALL 展示 `execution/.env.local` 配置位置、绝对路径示例和重启提示
+- **AND** 页面 SHALL NOT 提供修改环境文件或启动桌面目录选择器的操作
 - **AND** 任务复核页签 SHALL 继续可用
 
-#### Scenario: 通过页面配置录制目录
-- **WHEN** 用户在未配置状态输入录制目录的绝对路径并确认保存
-- **THEN** 系统 SHALL 将该目录保存为 `execution/.env.local` 中的 `CUA_RECORDINGS_ROOT`
-- **AND** 页面 SHALL 使用该目录刷新当前会话的录制列表
-- **AND** 后台 SHALL NOT 启动可能阻塞请求的桌面模态选择器
-
-#### Scenario: 录制目录路径无效
-- **WHEN** 用户提交空路径、相对路径、不存在或不可读取的目录
-- **THEN** 页面 SHALL 保持未配置状态
-- **AND** 页面 SHALL 在配置区域内显示可理解的校验错误
-
 ### Requirement: 下拉字段采用一致且可访问的交互样式
-本地 review 应用 SHALL 对原生 Select 与可编辑 Combobox 使用一致的字段尺寸、边框、尾部箭头和交互状态，同时 SHALL 保留二者各自正确的语义与键盘行为。
+本地 review 应用 SHALL 对 Select 与可编辑 Combobox 使用一致的字段尺寸、边框、尾部箭头和交互状态，同时 SHALL 保留二者各自正确的语义与键盘行为。
 
 #### Scenario: 悬浮或聚焦下拉字段
 - **WHEN** 用户悬浮或聚焦任一下拉字段

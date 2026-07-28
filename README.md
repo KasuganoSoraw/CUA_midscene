@@ -97,7 +97,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
     └── midscene/                    # Midscene 报告、截图等产物
 ```
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。处理器根优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、execution 环境文件、源码仓相邻 `record/`。`CUA_RECORDINGS_ROOT` 是 review 页面读取的原始录制集合，和 Python 处理器根不是同一目录；缺少它不会阻止任务复核启动。配置路径必须是绝对路径；安装后的 execution Skill 不包含 Python，需要用 `CUA_RECORD_ROOT` 指向独立 record 目录。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。处理器根优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、execution 环境文件、源码仓相邻 `record/`。`CUA_RECORDINGS_ROOT` 是 review 页面读取的原始录制集合，和 Python 处理器根不是同一目录；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。安装后的 execution Skill 不包含 Python，需要用 `CUA_RECORD_ROOT` 指向独立 record 目录。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
 
 trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 
