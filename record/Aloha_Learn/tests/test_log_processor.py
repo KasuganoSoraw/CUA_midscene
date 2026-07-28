@@ -32,6 +32,22 @@ class LogProcessorKeyboardMergeTest(unittest.TestCase):
             merged,
         )
 
+    def test_merge_numpad_decimal_into_typing_action(self):
+        actions = [
+            key_press(1.0, "NUMPAD_4"),
+            key_press(1.1, "NUMPAD_7"),
+            key_press(1.2, "NUMPAD_DECIMAL"),
+            key_press(1.3, "NUMPAD_0"),
+            key_press(1.4, "NUMPAD_5"),
+        ]
+
+        merged = LogProcessor().merge_keyboard_events(actions)
+
+        self.assertEqual(
+            [{"timestamp": 1.4, "action": "Type: 47.05", "coords": None, "current_software": "PcAccess.exe"}],
+            merged,
+        )
+
 
 class LogProcessorDoubleClickTest(unittest.TestCase):
     def test_cleanup_keeps_ldoubleclick_and_removes_preceding_single_click(self):

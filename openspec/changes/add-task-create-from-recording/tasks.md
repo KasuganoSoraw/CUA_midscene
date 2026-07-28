@@ -2,6 +2,7 @@
 
 - [x] 1.1 为 Python parser 增加可选 goal 并保持旧调用兼容
 - [x] 1.2 增加 parser 单元测试，验证 goal 传递与空目标行为
+- [x] 1.3 修复 `NUMPAD_DECIMAL` 在录制键盘合并中丢失的问题并增加回归测试
 
 ## 2. TypeScript 创建编排
 
