@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ElOption, ElSelect } from 'element-plus/es/components/select/index.mjs';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import type { JsonObject } from '../../../cua/contracts/types';
 import type {
@@ -199,10 +198,12 @@ function syncSemanticDraft(): void {
   status.value = '已更新浏览器草稿，尚未写入磁盘';
 }
 
-function changeOperation(value: unknown): void {
-  const next = String(value) as ReviewOperation;
+function changeOperation(event: Event): void {
+  const select = event.target as HTMLSelectElement;
+  const next = select.value as ReviewOperation;
   if (next === editor.operation) return;
   if (!confirm(`将 ${editor.operation} 改为 ${next} 会按新动作模板重建当前步骤，是否继续？`)) {
+    select.value = editor.operation;
     return;
   }
   const nextEditor = defaultStepEditor(next, editor.delayMs);
@@ -338,14 +339,13 @@ onMounted(loadScenes);
     <main v-if="mode === 'review'" class="workspace">
       <aside class="catalog panel">
         <label>场景</label>
-        <ElSelect v-model="scene" class="review-select catalog-select" @change="loadTasks">
-          <ElOption
+        <select v-model="scene" class="review-select catalog-select" @change="loadTasks">
+          <option
             v-for="item in scenes"
             :key="String(item.scene)"
-            :label="String(item.title)"
             :value="String(item.scene)"
-          />
-        </ElSelect>
+          >{{ item.title }}</option>
+        </select>
         <label>任务</label>
         <button
           v-for="item in tasks" :key="String(item.task)"
@@ -451,18 +451,18 @@ onMounted(loadScenes);
 
         <div class="form-grid" v-if="current">
           <label>动作类型
-            <ElSelect
-              :model-value="editor.operation"
+            <select
+              :value="editor.operation"
               class="review-select"
               :disabled="!writable || advancedEditing"
               @change="changeOperation"
             >
-              <ElOption label="click" value="click" />
-              <ElOption label="doubleClick" value="doubleClick" />
-              <ElOption label="input" value="input" />
-              <ElOption label="keyboard" value="keyboard" />
-              <ElOption label="wait" value="wait" />
-            </ElSelect>
+              <option value="click">click</option>
+              <option value="doubleClick">doubleClick</option>
+              <option value="input">input</option>
+              <option value="keyboard">keyboard</option>
+              <option value="wait">wait</option>
+            </select>
           </label>
           <label>动作前等待（毫秒）
             <input v-model.number="editor.delayMs" type="number" min="0" step="100" :readonly="!writable || advancedEditing" />
@@ -491,14 +491,14 @@ onMounted(loadScenes);
               <textarea v-model="editor.target" rows="3" :readonly="!writable || advancedEditing" placeholder="结合上方截图描述输入框位置"></textarea>
             </label>
             <label>输入方式
-              <ElSelect
+              <select
                 v-model="editor.inputMode"
                 class="review-select"
                 :disabled="!writable || advancedEditing"
               >
-                <ElOption label="替换原内容" value="replace" />
-                <ElOption label="追加到末尾" value="append" />
-              </ElSelect>
+                <option value="replace">替换原内容</option>
+                <option value="append">追加到末尾</option>
+              </select>
             </label>
             <fieldset class="input-options wide">
               <label class="checkbox">

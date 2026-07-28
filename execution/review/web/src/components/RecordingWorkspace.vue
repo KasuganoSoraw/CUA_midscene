@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ElOption, ElSelect } from 'element-plus/es/components/select/index.mjs';
 import { computed, onMounted, ref } from 'vue';
 import type {
   CreateRecordingTaskResult,
@@ -27,6 +26,7 @@ const taskId = ref('');
 const goal = ref('');
 const busy = ref(false);
 const opening = ref(false);
+const sceneMenuOpen = ref(false);
 const error = ref('');
 const message = ref('正在读取录制目录…');
 
@@ -36,6 +36,20 @@ const selected = computed<ReviewRecording | undefined>(() =>
 const canCreate = computed(() =>
   Boolean(selected.value?.ready && sceneId.value.trim() && taskId.value.trim() && !busy.value),
 );
+const sceneOptions = computed(() => {
+  const query = sceneId.value.trim().toLocaleLowerCase();
+  return props.scenes
+    .map((item) => ({
+      id: String(item.scene ?? ''),
+      title: String(item.title ?? ''),
+    }))
+    .filter((item) => item.id && (
+      !query
+      || item.id.toLocaleLowerCase().includes(query)
+      || item.title.toLocaleLowerCase().includes(query)
+    ));
+});
+
 function formatSize(size: number | undefined): string {
   if (size === undefined) return '未找到';
   if (size < 1024) return `${size} B`;
@@ -47,6 +61,17 @@ function formatTime(value: string | undefined): string {
   if (!value) return '录制时间未知';
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function selectScene(id: string): void {
+  sceneId.value = id;
+  sceneMenuOpen.value = false;
+}
+
+function closeSceneMenu(event: FocusEvent): void {
+  const container = event.currentTarget as HTMLElement;
+  const next = event.relatedTarget;
+  if (!(next instanceof Node) || !container.contains(next)) sceneMenuOpen.value = false;
 }
 
 function applyCatalog(next: ReviewRecordingCatalog): void {
@@ -125,7 +150,11 @@ onMounted(loadRecordings);
       <strong>未配置录制目录</strong>
       <p>请在 execution 的环境变量或 <code>.env.local</code> 中配置：</p>
       <code>{{ catalog.envName }}</code>
-      <small>示例：CUA_RECORDINGS_ROOT=C:\path\to\recorder-output</small>
+      <small>示例：</small>
+      <code class="recording-config-example" title="CUA_RECORDINGS_ROOT=C:\path\to\recorder-output">
+        <span>CUA_RECORDINGS_ROOT=</span>
+        <span>C:\path\to\recorder-output</span>
+      </code>
       <small>配置后重启本地 review 服务即可生效。</small>
       <small>任务复核功能不受影响。</small>
     </div>
@@ -209,33 +238,52 @@ onMounted(loadRecordings);
 
           <div class="recording-field">
             <label for="recording-scene-input">场景</label>
-            <ElSelect
-              id="recording-scene-input"
-              v-model="sceneId"
-              class="review-select recording-scene-select"
-              :disabled="busy"
-              filterable
-              allow-create
-              default-first-option
-              :reserve-keyword="false"
-              placeholder="选择已有场景或输入新场景 ID"
-              popper-class="review-select-dropdown"
-            >
-              <ElOption
-                v-for="item in props.scenes"
-                :key="String(item.scene)"
-                :label="String(item.scene)"
-                :value="String(item.scene)"
+            <div class="scene-combobox" @focusout="closeSceneMenu">
+              <input
+                id="recording-scene-input"
+                v-model="sceneId"
+                :disabled="busy"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls="recording-scene-options"
+                :aria-expanded="sceneMenuOpen"
+                placeholder="选择已有场景或输入新场景 ID"
+                @focus="sceneMenuOpen = true"
+                @input="sceneMenuOpen = true"
+                @keydown.esc="sceneMenuOpen = false"
+              />
+              <button
+                type="button"
+                class="scene-combobox-toggle"
+                :class="{ open: sceneMenuOpen }"
+                :disabled="busy"
+                :aria-expanded="sceneMenuOpen"
+                aria-label="展开场景列表"
+                @click="sceneMenuOpen = !sceneMenuOpen"
+              ></button>
+              <div
+                v-if="sceneMenuOpen"
+                id="recording-scene-options"
+                class="scene-options"
+                role="listbox"
               >
-                <div class="recording-scene-option">
-                  <strong>{{ item.scene }}</strong>
-                  <span v-if="item.title && item.title !== item.scene">{{ item.title }}</span>
+                <button
+                  v-for="item in sceneOptions"
+                  :key="item.id"
+                  type="button"
+                  role="option"
+                  :aria-selected="sceneId === item.id"
+                  @click="selectScene(item.id)"
+                >
+                  <strong>{{ item.id }}</strong>
+                  <span v-if="item.title && item.title !== item.id">{{ item.title }}</span>
+                </button>
+                <div v-if="!sceneOptions.length" class="scene-option-empty">
+                  按当前输入创建新场景
                 </div>
-              </ElOption>
-              <template #empty>
-                <div class="scene-option-empty">按 Enter 使用当前输入创建新场景</div>
-              </template>
-            </ElSelect>
+              </div>
+            </div>
           </div>
           <label>任务
             <input
