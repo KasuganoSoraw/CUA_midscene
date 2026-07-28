@@ -6,6 +6,7 @@ import type {
   ReviewEvidence,
   ReviewMutation,
   ReviewOperation,
+  ReviewReferenceImage,
   ReviewStep,
   ReviewTaskDraft,
   ReviewTaskView,
@@ -16,8 +17,10 @@ import {
   inputPreview,
   parseInputPreview,
   parseStepEditor,
+  referenceImagesFromFlow,
 } from '../../shared/step-editor';
 import { ApiError, api } from './api';
+import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
 
 const scenes = ref<Array<Record<string, unknown>>>([]);
 const tasks = ref<Array<Record<string, unknown>>>([]);
@@ -35,7 +38,7 @@ const changes = ref<ReviewChange[]>([]);
 const status = ref('正在加载本地任务…');
 const busy = ref(false);
 const conflict = ref(false);
-const evidenceMode = ref<'full' | 'crop'>('full');
+const evidenceMode = ref<'full' | 'crop' | 'reference' | 'placeholder'>('full');
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
 
@@ -44,6 +47,15 @@ function clone<T>(value: T): T {
 }
 
 const current = computed(() => steps.value[selected.value]);
+const displayedReferenceImages = computed<ReviewReferenceImage[]>(() => {
+  const step = current.value;
+  if (!step) return [];
+  if (step.referenceImages?.length) return step.referenceImages;
+  return step.evidence?.reference
+    ? [{ name: `${step.id}-recording-patch`, url: step.evidence.reference }]
+    : [];
+});
+const referenceImagesBound = computed(() => Boolean(current.value?.referenceImages?.length));
 const writable = computed(() => Boolean(view.value?.writable));
 const dirty = computed(() => changes.value.length > 0);
 const builtContent = computed(() => buildStepContent(editor, current.value?.id ?? 'step-001'));
@@ -57,29 +69,23 @@ const parameterPreview = computed(() => JSON.stringify(
 function rebuildSteps(): void {
   if (!draft.value) return;
   const bindings = draft.value.manifest.source.stepBindings ?? {};
-  let previousEvidence: ReviewEvidence | undefined;
-  let previousId: string | undefined;
   steps.value = (draft.value.document.tasks as JsonObject[]).map((item, index) => {
     const name = String(item.name);
     const match = /^(step-\d{3,}) \| (click|doubleClick|input|keyboard|wait)$/.exec(name);
     const id = match?.[1] ?? `step-${String(index + 1).padStart(3, '0')}`;
+    const operation = (match?.[2] ?? 'click') as ReviewOperation;
+    const flow = clone(item.flow as JsonObject[]);
+    const referenceImages = referenceImagesFromFlow(flow, operation);
     const sourceStep = bindings[id];
     const evidence = typeof sourceStep === 'number' ? evidenceBySource.get(sourceStep) : undefined;
-    const contextEvidence = !evidence && previousEvidence
-      ? { ...previousEvidence, context: true, fromStepId: previousId }
-      : undefined;
-    if (evidence) {
-      previousEvidence = evidence;
-      previousId = id;
-    }
     return {
       id,
       name,
-      operation: (match?.[2] ?? 'click') as ReviewOperation,
-      flow: clone(item.flow as JsonObject[]),
+      operation,
+      flow,
       ...(draft.value!.manifest.inputs[`${id}-input`] ? { input: clone(draft.value!.manifest.inputs[`${id}-input`]) } : {}),
       ...(evidence ? { evidence } : {}),
-      ...(contextEvidence ? { contextEvidence } : {}),
+      ...(referenceImages.length ? { referenceImages } : {}),
     };
   });
   if (selected.value >= steps.value.length) selected.value = steps.value.length - 1;
@@ -93,7 +99,10 @@ function populateEditor(): void {
   advancedEditing.value = false;
   advancedFlowText.value = JSON.stringify(step.flow, null, 2);
   advancedInputText.value = JSON.stringify(inputPreview(step.id, step.input), null, 2);
-  evidenceMode.value = step.evidence?.crop || step.contextEvidence?.crop ? 'crop' : 'full';
+  const evidence = step.evidence;
+  evidenceMode.value = evidence?.crop
+    ? 'crop'
+    : evidence?.full ? 'full' : 'placeholder';
   hydratingEditor = false;
 }
 
@@ -159,6 +168,7 @@ function syncSemanticDraft(): void {
   const step = current.value;
   if (!draft.value || !step || !writable.value) return;
   const content = buildStepContent(editor, step.id);
+  const referenceImages = referenceImagesFromFlow(content.flow, editor.operation);
   const taskItem = (draft.value.document.tasks as JsonObject[])[selected.value];
   taskItem.name = `${step.id} | ${editor.operation}`;
   taskItem.flow = clone(content.flow);
@@ -171,6 +181,7 @@ function syncSemanticDraft(): void {
     operation: editor.operation,
     flow: clone(content.flow),
     ...(content.input ? { input: clone(content.input) } : { input: undefined }),
+    ...(referenceImages.length ? { referenceImages } : { referenceImages: undefined }),
   };
   const summary = `修改第 ${selected.value + 1} 个步骤`;
   const existing = changes.value.find((item) => item.kind === 'update' && item.summary === summary);
@@ -276,8 +287,14 @@ async function save(): Promise<void> {
 }
 
 function evidencePath(step: ReviewStep | undefined): string | undefined {
-  const evidence = step?.evidence ?? step?.contextEvidence;
+  const evidence = step?.evidence;
   return evidenceMode.value === 'crop' ? evidence?.crop ?? evidence?.full : evidence?.full ?? evidence?.crop;
+}
+
+function referenceImageUrl(image: ReviewReferenceImage): string {
+  return /^(?:https?:|data:)/i.test(image.url)
+    ? image.url
+    : api.evidenceUrl(scene.value, task.value, image.url);
 }
 
 onMounted(loadScenes);
@@ -331,7 +348,19 @@ onMounted(loadScenes);
           >
             <span class="step-index">{{ String(index + 1).padStart(2, '0') }}</span>
             <span><strong>{{ item.operation }}</strong><small>{{ item.id }}</small></span>
-            <span v-if="item.evidence" class="evidence-dot" title="有录制证据"></span>
+            <span class="step-markers">
+              <span v-if="item.evidence" class="evidence-dot" title="有录制证据"></span>
+              <span
+                v-if="item.referenceImages?.length"
+                class="reference-mark"
+                title="YAML 已绑定执行定位参考图"
+              >▣</span>
+              <span
+                v-else-if="item.evidence?.reference"
+                class="reference-mark available"
+                title="有录制目标小图，当前 YAML 未绑定"
+              >▢</span>
+            </span>
           </button>
         </div>
         <div class="structure-actions">
@@ -345,23 +374,59 @@ onMounted(loadScenes);
       <section class="editor panel">
         <div class="panel-heading">
           <div><p class="eyebrow">STEP CONFIGURATION</p><h2>{{ current?.name ?? '未选择步骤' }}</h2></div>
-          <span v-if="current?.contextEvidence" class="context-badge">上下文参考</span>
         </div>
 
-        <div class="evidence-viewer" v-if="current?.evidence || current?.contextEvidence">
+        <div class="evidence-viewer" v-if="current?.evidence || displayedReferenceImages.length">
           <div class="evidence-tabs">
-            <button :class="{ active: evidenceMode === 'full' }" @click="evidenceMode = 'full'">全局图</button>
-            <button :class="{ active: evidenceMode === 'crop' }" @click="evidenceMode = 'crop'">局部图</button>
-            <small>source step {{ (current.evidence ?? current.contextEvidence)?.sourceStep }}</small>
+            <button
+              v-if="current.evidence?.full"
+              :class="{ active: evidenceMode === 'full' }"
+              @click="evidenceMode = 'full'"
+            >全局图</button>
+            <button
+              v-if="current.evidence?.crop"
+              :class="{ active: evidenceMode === 'crop' }"
+              @click="evidenceMode = 'crop'"
+            >局部图</button>
+            <button
+              v-if="!current.evidence?.full && !current.evidence?.crop"
+              :class="{ active: evidenceMode === 'placeholder' }"
+              @click="evidenceMode = 'placeholder'"
+            >无录制图</button>
+            <button
+              v-if="displayedReferenceImages.length"
+              :class="{ active: evidenceMode === 'reference' }"
+              @click="evidenceMode = 'reference'"
+            >{{ referenceImagesBound ? '参考图' : '目标小图' }} {{ displayedReferenceImages.length }}</button>
+            <small v-if="evidenceMode === 'reference'">{{ referenceImagesBound ? '执行定位资产' : '录制目标小图 · YAML 未绑定' }}</small>
+            <small v-else-if="current.evidence">source step {{ current.evidence.sourceStep }}</small>
+            <small v-else>当前步骤无独立证据</small>
           </div>
-          <img
-            v-if="evidencePath(current)"
-            :src="api.evidenceUrl(scene, task, evidencePath(current)!)"
-            :alt="`${current.name} 录制证据`"
-          />
-          <p v-if="current.contextEvidence" class="context-note">此图来自 {{ current.contextEvidence.fromStepId }}，仅用于描述新增步骤，不是本步骤录制证据。</p>
+          <div v-if="evidenceMode === 'reference'" class="reference-gallery">
+            <article v-for="image in displayedReferenceImages" :key="`${image.name}:${image.url}`">
+              <div class="reference-image-frame">
+                <img :src="referenceImageUrl(image)" :alt="`${image.name} 执行定位参考图`" />
+              </div>
+              <div>
+                <strong>{{ image.name }}</strong>
+                <code :title="image.url">{{ image.url }}</code>
+              </div>
+            </article>
+            <p v-if="referenceImagesBound">该图片已由当前 YAML 用于帮助 Midscene 识别目标外观，不表示固定点击坐标。</p>
+            <p v-else>这是录制时生成的干净目标小图；当前 YAML 尚未将它绑定为执行定位参考。</p>
+          </div>
+          <EvidencePlaceholder v-else-if="evidenceMode === 'placeholder'" />
+          <template v-else>
+            <img
+              v-if="evidencePath(current)"
+              :src="api.evidenceUrl(scene, task, evidencePath(current)!)"
+              :alt="`${current.name} 录制证据`"
+            />
+          </template>
         </div>
-        <div v-else class="empty-evidence">该步骤没有可用的录制证据</div>
+        <div v-else class="evidence-viewer placeholder-only">
+          <EvidencePlaceholder />
+        </div>
 
         <div class="form-grid" v-if="current">
           <label>动作类型
@@ -382,6 +447,14 @@ onMounted(loadScenes);
             <label class="wide">目标描述
               <textarea v-model="editor.target" rows="3" :readonly="!writable || advancedEditing" placeholder="结合上方截图描述要点击的目标"></textarea>
             </label>
+            <div v-if="editor.referenceImages.length" class="reference-binding-summary wide">
+              <strong>已绑定 {{ editor.referenceImages.length }} 张执行参考图</strong>
+              <span>修改目标描述时会保留图片引用；图片名称与路径可在“高级 JSON”中维护。</span>
+            </div>
+            <div v-else-if="current.evidence?.reference" class="reference-binding-summary available wide">
+              <strong>有可用的录制目标小图</strong>
+              <span>当前 Flow 未绑定该图片；可在上方“目标小图”查看，或在“高级 JSON”中配置 locate.images。</span>
+            </div>
           </template>
 
           <template v-else-if="editor.operation === 'input'">

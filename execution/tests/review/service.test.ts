@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import type { JsonObject, TaskManifest } from '../../cua/contracts/types.js';
-import { readTaskManifest } from '../../cua/contracts/validation.js';
-import { readYamlDocument } from '../../cua/task/yaml-task.js';
+import { readTaskManifest, writeJsonFile } from '../../cua/contracts/validation.js';
+import { readYamlDocument, writeYamlDocument } from '../../cua/task/yaml-task.js';
 import { loadReviewTask } from '../../review/service/review-task.js';
 import { applyReviewMutation } from '../../review/service/task-mutations.js';
 import {
@@ -26,7 +26,65 @@ test('复核视图组合 builtin 任务与录制证据', async () => {
   assert.equal(view.writable, false);
   assert.equal(view.steps.length, 16);
   assert.match(view.steps[0].evidence?.full ?? '', /source\/screenshots\/0\.329s\.jpg$/);
+  assert.match(view.steps[0].evidence?.reference ?? '', /source\/screenshots\/0\.329s\.reference\.png$/);
+  assert.deepEqual(view.steps[11].referenceImages, [{
+    name: 'step-012-target',
+    url: 'source/screenshots/26.861s.reference.png',
+  }]);
   assert.equal(view.manifest.source.stepBindings?.['step-016'], 16);
+});
+
+test('复核视图拒绝越出 source 的本地参考图', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-reference-boundary-'));
+  const taskRoot = await createTaskFixture(root);
+  const document = await readYamlDocument(path.join(taskRoot, 'task.yaml'));
+  const click = (document.tasks as JsonObject[])[1];
+  click.flow = [{
+    aiTap: null,
+    locate: {
+      prompt: '点击候选项',
+      images: [{ name: 'outside', url: 'task.yaml' }],
+    },
+  }];
+  await writeYamlDocument(path.join(taskRoot, 'task.yaml'), document);
+
+  await assert.rejects(
+    loadReviewTask('browser-demo', 'search-demo', { builtinProjectsRoot: root }),
+    /参考图路径 越出任务 source 目录/,
+  );
+});
+
+test('无证据步骤不继承其他步骤截图', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-no-context-evidence-'));
+  const taskRoot = await createTaskFixture(root);
+  const manifestPath = path.join(taskRoot, 'task.json');
+  const manifest = await readTaskManifest(manifestPath);
+  manifest.source.stepBindings = { 'step-001': 1, 'step-002': null };
+  await writeJsonFile(manifestPath, manifest);
+
+  const sourceRoot = path.join(taskRoot, 'source');
+  const screenshotsRoot = path.join(sourceRoot, 'screenshots');
+  await mkdir(screenshotsRoot, { recursive: true });
+  await writeJsonFile(path.join(sourceRoot, 'showui-trace.json'), {
+    trajectory: [{
+      step_idx: 1,
+      caption: { operation: { type: 'input', locatePrompt: '搜索框', value: '关键词' } },
+    }],
+  });
+  await writeJsonFile(path.join(sourceRoot, 'processed-log-sc.json'), [{
+    timestamp: 1,
+    screenshot_full: 'screenshots/full.png',
+    screenshot_crop: 'screenshots/crop.png',
+  }]);
+  await Promise.all([
+    writeFile(path.join(screenshotsRoot, 'full.png'), 'full'),
+    writeFile(path.join(screenshotsRoot, 'crop.png'), 'crop'),
+  ]);
+
+  const view = await loadReviewTask('browser-demo', 'search-demo', { builtinProjectsRoot: root });
+  assert.match(view.steps[0].evidence?.crop ?? '', /source\/screenshots\/crop\.png$/);
+  assert.equal(view.steps[1].evidence, undefined);
+  assert.equal(Object.hasOwn(view.steps[1], 'contextEvidence'), false);
 });
 
 test('插入步骤统一重编号并迁移输入与证据绑定', async () => {

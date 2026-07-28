@@ -8,8 +8,12 @@ export interface ReviewEvidence {
   timestamp: number;
   full?: string;
   crop?: string;
-  context?: boolean;
-  fromStepId?: string;
+  reference?: string;
+}
+
+export interface ReviewReferenceImage {
+  name: string;
+  url: string;
 }
 
 export interface ReviewStep {
@@ -19,7 +23,7 @@ export interface ReviewStep {
   flow: JsonObject[];
   input?: TaskInputDefinition;
   evidence?: ReviewEvidence;
-  contextEvidence?: ReviewEvidence;
+  referenceImages?: ReviewReferenceImage[];
 }
 
 export interface ReviewTaskDraft {

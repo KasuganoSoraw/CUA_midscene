@@ -30,6 +30,10 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     const evidence = new URL('/api/tasks/browser-demo/air-tickets-demo/evidence', base);
     evidence.searchParams.set('path', view.steps[0].evidence.full);
     assert.equal((await fetch(evidence)).status, 200);
+    evidence.searchParams.set('path', view.steps[11].referenceImages[0].url);
+    const reference = await fetch(evidence);
+    assert.equal(reference.status, 200);
+    assert.equal(reference.headers.get('content-type'), 'image/png');
     evidence.searchParams.set('path', '../package.json');
     assert.equal((await fetch(evidence)).status, 404);
 

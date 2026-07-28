@@ -1,5 +1,5 @@
 import type { JsonObject, TaskInputDefinition } from '../../cua/contracts/types.js';
-import type { ReviewOperation, ReviewStep } from './types.js';
+import type { ReviewOperation, ReviewReferenceImage, ReviewStep } from './types.js';
 
 export type InputMode = 'replace' | 'append';
 
@@ -16,6 +16,8 @@ export interface StepEditorModel {
   keyName: string;
   waitCondition: string;
   timeoutMs: number;
+  referenceImages: ReviewReferenceImage[];
+  convertHttpImage2Base64: boolean;
   custom: boolean;
   customFlow: JsonObject[];
 }
@@ -41,6 +43,26 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function referenceImageList(value: unknown): ReviewReferenceImage[] | undefined {
+  if (!Array.isArray(value) || !value.length) return undefined;
+  const images: ReviewReferenceImage[] = [];
+  for (const valueItem of value) {
+    const item = objectValue(valueItem);
+    if (
+      !item
+      || typeof item.name !== 'string'
+      || !item.name.trim()
+      || typeof item.url !== 'string'
+      || !item.url.trim()
+      || !Object.keys(item).every((key) => key === 'name' || key === 'url')
+    ) {
+      return undefined;
+    }
+    images.push({ name: item.name, url: item.url });
+  }
+  return images;
+}
+
 function splitFlow(flow: JsonObject[]): { delayMs: number; action?: JsonObject; standard: boolean } {
   const copied = clone(flow);
   let delayMs = 0;
@@ -64,9 +86,56 @@ export function defaultStepEditor(operation: ReviewOperation, delayMs = 0): Step
     keyName: 'Enter',
     waitCondition: '描述需要等待出现的状态',
     timeoutMs: 15_000,
+    referenceImages: [],
+    convertHttpImage2Base64: false,
     custom: false,
     customFlow: [],
   };
+}
+
+function parseClickAction(
+  action: JsonObject,
+  operation: 'click' | 'doubleClick',
+): { target: string; referenceImages: ReviewReferenceImage[]; convertHttpImage2Base64: boolean } | undefined {
+  const key = operation === 'click' ? 'aiTap' : 'aiDoubleClick';
+  if (typeof action[key] === 'string' && Object.keys(action).length === 1) {
+    return {
+      target: action[key] as string,
+      referenceImages: [],
+      convertHttpImage2Base64: false,
+    };
+  }
+
+  const locate = objectValue(action.locate);
+  if (
+    (action[key] !== null && action[key] !== undefined)
+    || !Object.hasOwn(action, key)
+    || !locate
+    || typeof locate.prompt !== 'string'
+    || !locate.prompt.trim()
+    || !Object.keys(action).every((name) => name === key || name === 'locate')
+    || !Object.keys(locate).every((name) => name === 'prompt' || name === 'images' || name === 'convertHttpImage2Base64')
+    || (locate.convertHttpImage2Base64 !== undefined && typeof locate.convertHttpImage2Base64 !== 'boolean')
+  ) {
+    return undefined;
+  }
+  const referenceImages = referenceImageList(locate.images);
+  if (!referenceImages) return undefined;
+  return {
+    target: locate.prompt,
+    referenceImages,
+    convertHttpImage2Base64: locate.convertHttpImage2Base64 === true,
+  };
+}
+
+export function referenceImagesFromFlow(
+  flow: JsonObject[],
+  operation: ReviewOperation,
+): ReviewReferenceImage[] {
+  if (operation !== 'click' && operation !== 'doubleClick') return [];
+  const { action, standard } = splitFlow(flow);
+  if (!standard || !action) return [];
+  return clone(parseClickAction(action, operation)?.referenceImages ?? []);
 }
 
 export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flow' | 'input'>): StepEditorModel {
@@ -82,11 +151,13 @@ export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flo
   }
 
   if (step.operation === 'click' || step.operation === 'doubleClick') {
-    const key = step.operation === 'click' ? 'aiTap' : 'aiDoubleClick';
-    if (typeof action[key] !== 'string' || Object.keys(action).length !== 1) {
+    const parsed = parseClickAction(action, step.operation);
+    if (!parsed) {
       return { ...result, custom: true, customFlow: clone(step.flow) };
     }
-    result.target = action[key] as string;
+    result.target = parsed.target;
+    result.referenceImages = clone(parsed.referenceImages);
+    result.convertHttpImage2Base64 = parsed.convertHttpImage2Base64;
     return result;
   }
   if (step.operation === 'input') {
@@ -135,8 +206,21 @@ export function buildStepContent(model: StepEditorModel, stepId: string): BuiltS
   const flow: JsonObject[] = [];
   const delayMs = Math.max(0, Math.round(model.delayMs || 0));
   if (delayMs) flow.push({ sleep: delayMs });
-  if (model.operation === 'click') flow.push({ aiTap: model.target });
-  else if (model.operation === 'doubleClick') flow.push({ aiDoubleClick: model.target });
+  if (model.operation === 'click' || model.operation === 'doubleClick') {
+    const key = model.operation === 'click' ? 'aiTap' : 'aiDoubleClick';
+    if (model.referenceImages.length) {
+      flow.push({
+        [key]: null,
+        locate: {
+          prompt: model.target,
+          images: clone(model.referenceImages),
+          ...(model.convertHttpImage2Base64 ? { convertHttpImage2Base64: true } : {}),
+        },
+      });
+    } else {
+      flow.push({ [key]: model.target });
+    }
+  }
   else if (model.operation === 'input') {
     flow.push({
       KeyboardTypeText: {

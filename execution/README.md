@@ -18,7 +18,7 @@ record trace
 - `cua/conversion/`：只根据结构化 trace operation 初始化任务；被标记的 click/doubleClick 会绑定 processed log 中的 reference patch。
 - `cua/task/`：双 catalog、YAML、输入、运行快照和执行编排。
 - `cli/`：统一命令分发与 stdout/stderr 输出协议。
-- `review/`：与 `cua/` 平级的本地复核应用；`service/` 组合任务资产，`server/` 使用 Fastify 提供受控 HTTP，`web/` 使用 Vue 3。
+- `review/`：与 `cua/` 平级的本地复核应用；`service/` 组合任务资产、录制证据和 `locate.images` 执行参考图，`server/` 使用 Fastify 提供受控 HTTP，`web/` 使用 Vue 3。
 - `executors/`：Midscene 薄适配器、环境读取和 customAction。
 - `projects/`：随 Skill 发布的只读内置任务。
 - `schemas/`：CUA 自有持久化 JSON 契约；不复制 Midscene action 类型系统。
