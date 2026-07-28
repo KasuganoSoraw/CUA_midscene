@@ -111,8 +111,10 @@ footer code { color: #8a958f; }
 .recording-config-empty p, .recording-detail-empty p { font-size: 12px; line-height: 1.5; }
 .recording-config-empty code { padding: 7px 9px; border-radius: 7px; color: #24613c; background: white; }
 .recording-config-empty small { color: #89948e; }
-.recording-row { position: relative; padding-right: 78px; }
-.recording-row > span { position: absolute; top: 50%; right: 9px; transform: translateY(-50%); border-radius: 999px; padding: 4px 7px; font-size: 10px; font-weight: 800; }
+.recording-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 10px; }
+.recording-row-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.recording-row-copy strong, .recording-row-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recording-status { flex: 0 0 auto; border-radius: 999px; padding: 4px 7px; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .recording-ready { color: #27663e; background: #dcefe2; }
 .recording-invalid { color: #95501d; background: #faead9; }
 .recording-detail { overflow-y: auto; }
@@ -134,10 +136,20 @@ footer code { color: #8a958f; }
 .recording-errors { display: flex; flex-direction: column; gap: 5px; margin-top: 13px; padding: 12px 13px; border: 1px solid #efc39d; border-radius: 11px; color: #88451e; background: #fff5e9; font-size: 12px; }
 .recording-form { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-top: 16px; padding: 16px; border: 1px solid #dce3de; border-radius: 14px; background: #f4f7f4; }
 .recording-form-heading { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; margin-bottom: 2px; }
-.recording-form label { display: flex; flex-direction: column; gap: 6px; color: #59675f; font-size: 12px; font-weight: 700; }
+.recording-form label, .recording-field { display: flex; flex-direction: column; gap: 6px; color: #59675f; font-size: 12px; font-weight: 700; }
 .recording-form input, .recording-form textarea { width: 100%; border: 1px solid #d4dcd6; border-radius: 9px; padding: 10px; background: white; }
 .recording-form textarea { resize: vertical; font: inherit; }
 .recording-form .wide { grid-column: 1 / -1; }
+.scene-combobox { position: relative; }
+.scene-combobox input { padding-right: 43px; }
+.scene-combobox-toggle { position: absolute; top: 5px; right: 5px; display: grid; width: 31px; height: 31px; place-items: center; border: 0; border-radius: 7px; color: #52645a; background: #edf2ee; font-size: 17px; line-height: 1; }
+.scene-combobox-toggle:hover:not(:disabled) { color: #1f5937; background: #dfeae2; }
+.scene-options { position: absolute; z-index: 8; top: calc(100% + 6px); right: 0; left: 0; max-height: 210px; overflow-y: auto; padding: 5px; border: 1px solid #ced9d1; border-radius: 10px; background: white; box-shadow: 0 12px 28px #26372d24; }
+.scene-options button { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 9px 10px; border: 0; border-radius: 7px; text-align: left; color: #25352c; background: transparent; }
+.scene-options button:hover, .scene-options button[aria-selected="true"] { background: #e8f2eb; }
+.scene-options button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-options button span { color: #738078; font-size: 11px; font-weight: 500; }
+.scene-option-empty { padding: 10px; color: #7a867f; font-size: 11px; font-weight: 500; }
 .generation-state { padding: 12px 13px; border: 1px solid #b9d5c2; border-radius: 11px; color: #2e5d3e; background: #eef7f1; }
 .generation-state strong { display: block; margin-top: 9px; }
 .generation-state p { margin-top: 4px; color: #678071; font-size: 12px; }

@@ -26,6 +26,7 @@ const taskId = ref('');
 const goal = ref('');
 const busy = ref(false);
 const opening = ref(false);
+const sceneMenuOpen = ref(false);
 const error = ref('');
 const message = ref('正在读取录制目录…');
 
@@ -35,6 +36,19 @@ const selected = computed<ReviewRecording | undefined>(() =>
 const canCreate = computed(() =>
   Boolean(selected.value?.ready && sceneId.value.trim() && taskId.value.trim() && !busy.value),
 );
+const sceneOptions = computed(() => {
+  const query = sceneId.value.trim().toLocaleLowerCase();
+  return props.scenes
+    .map((item) => ({
+      id: String(item.scene ?? ''),
+      title: String(item.title ?? ''),
+    }))
+    .filter((item) => item.id && (
+      !query
+      || item.id.toLocaleLowerCase().includes(query)
+      || item.title.toLocaleLowerCase().includes(query)
+    ));
+});
 
 function formatSize(size: number | undefined): string {
   if (size === undefined) return '未找到';
@@ -47,6 +61,17 @@ function formatTime(value: string | undefined): string {
   if (!value) return '录制时间未知';
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function selectScene(id: string): void {
+  sceneId.value = id;
+  sceneMenuOpen.value = false;
+}
+
+function closeSceneMenu(event: FocusEvent): void {
+  const container = event.currentTarget as HTMLElement;
+  const next = event.relatedTarget;
+  if (!(next instanceof Node) || !container.contains(next)) sceneMenuOpen.value = false;
 }
 
 async function loadRecordings(): Promise<void> {
@@ -136,9 +161,11 @@ onMounted(loadRecordings);
       :disabled="busy"
       @click="selectedId = item.id"
     >
-      <strong>{{ item.id }}</strong>
-      <small>{{ formatTime(item.startedAt) }}</small>
-      <span :class="item.ready ? 'recording-ready' : 'recording-invalid'">
+      <span class="recording-row-copy">
+        <strong :title="item.id">{{ item.id }}</strong>
+        <small>{{ formatTime(item.startedAt) }}</small>
+      </span>
+      <span class="recording-status" :class="item.ready ? 'recording-ready' : 'recording-invalid'">
         {{ item.ready ? '可生成' : '需要检查' }}
       </span>
     </button>
@@ -199,22 +226,53 @@ onMounted(loadRecordings);
             </button>
           </div>
 
-          <label>场景
-            <input
-              v-model="sceneId"
-              list="recording-scene-options"
-              :disabled="busy"
-              autocomplete="off"
-              placeholder="选择已有场景或输入新场景 ID"
-            />
-            <datalist id="recording-scene-options">
-              <option
-                v-for="item in props.scenes"
-                :key="String(item.scene)"
-                :value="String(item.scene)"
-              >{{ item.title }}</option>
-            </datalist>
-          </label>
+          <div class="recording-field">
+            <label for="recording-scene-input">场景</label>
+            <div class="scene-combobox" @focusout="closeSceneMenu">
+              <input
+                id="recording-scene-input"
+                v-model="sceneId"
+                :disabled="busy"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls="recording-scene-options"
+                :aria-expanded="sceneMenuOpen"
+                placeholder="选择已有场景或输入新场景 ID"
+                @focus="sceneMenuOpen = true"
+                @input="sceneMenuOpen = true"
+                @keydown.esc="sceneMenuOpen = false"
+              />
+              <button
+                type="button"
+                class="scene-combobox-toggle"
+                :disabled="busy"
+                aria-label="展开场景列表"
+                @click="sceneMenuOpen = !sceneMenuOpen"
+              >⌄</button>
+              <div
+                v-if="sceneMenuOpen"
+                id="recording-scene-options"
+                class="scene-options"
+                role="listbox"
+              >
+                <button
+                  v-for="item in sceneOptions"
+                  :key="item.id"
+                  type="button"
+                  role="option"
+                  :aria-selected="sceneId === item.id"
+                  @click="selectScene(item.id)"
+                >
+                  <strong>{{ item.id }}</strong>
+                  <span v-if="item.title && item.title !== item.id">{{ item.title }}</span>
+                </button>
+                <div v-if="!sceneOptions.length" class="scene-option-empty">
+                  按当前输入创建新场景
+                </div>
+              </div>
+            </div>
+          </div>
           <label>任务
             <input
               v-model="taskId"
