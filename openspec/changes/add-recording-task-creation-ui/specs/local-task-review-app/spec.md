@@ -15,16 +15,24 @@
 - **AND** 页面 SHALL 提供选择本地录制目录的明确按钮
 - **AND** 任务复核页签 SHALL 继续可用
 
-#### Scenario: 通过系统选择录制目录
-- **WHEN** 用户在未配置状态点击选择录制目录并在系统原生选择框确认目录
+#### Scenario: 通过页面配置录制目录
+- **WHEN** 用户在未配置状态输入录制目录的绝对路径并确认保存
 - **THEN** 系统 SHALL 将该目录保存为 `execution/.env.local` 中的 `CUA_RECORDINGS_ROOT`
 - **AND** 页面 SHALL 使用该目录刷新当前会话的录制列表
-- **AND** 页面 SHALL NOT 接收或展示所选目录的绝对路径
+- **AND** 后台 SHALL NOT 启动可能阻塞请求的桌面模态选择器
 
-#### Scenario: 取消选择录制目录
-- **WHEN** 用户关闭或取消系统原生文件夹选择框
+#### Scenario: 录制目录路径无效
+- **WHEN** 用户提交空路径、相对路径、不存在或不可读取的目录
 - **THEN** 页面 SHALL 保持未配置状态
-- **AND** 页面 SHALL NOT 将取消显示为错误
+- **AND** 页面 SHALL 在配置区域内显示可理解的校验错误
+
+### Requirement: 下拉字段采用一致且可访问的交互样式
+本地 review 应用 SHALL 对原生 Select 与可编辑 Combobox 使用一致的字段尺寸、边框、尾部箭头和交互状态，同时 SHALL 保留二者各自正确的语义与键盘行为。
+
+#### Scenario: 悬浮或聚焦下拉字段
+- **WHEN** 用户悬浮或聚焦任一下拉字段
+- **THEN** 完整字段 SHALL 显示统一的 hover 或 focus 状态
+- **AND** 尾部箭头 SHALL NOT 使用遮挡字段右下角圆角的大面积独立背景
 
 ### Requirement: 用户通过语义表单创建完整任务
 录制创建页 SHALL 允许用户选择或输入场景、输入任务标识和可选目标，并 SHALL 在一次操作中创建完整可复核任务，而不暴露 trace 等内部产物。
