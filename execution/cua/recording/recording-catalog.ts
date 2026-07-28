@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { constants } from 'node:fs';
 import type { Dirent } from 'node:fs';
-import { access, open, readFile, readdir, stat } from 'node:fs/promises';
+import { access, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import { packageRoot } from '../package-root.js';
@@ -270,4 +271,113 @@ export async function openRecordingDirectory(
       resolve();
     });
   });
+}
+
+function pickerCommand(platform: NodeJS.Platform): { command: string; args: string[] } {
+  if (platform === 'win32') {
+    const script = [
+      '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
+      'Add-Type -AssemblyName System.Windows.Forms',
+      '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
+      "$dialog.Description = '选择原始录制目录'",
+      '$dialog.ShowNewFolderButton = $false',
+      'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {',
+      '  [Console]::Write($dialog.SelectedPath)',
+      '}',
+    ].join('\n');
+    return {
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-NonInteractive', '-STA', '-WindowStyle', 'Hidden', '-Command', script],
+    };
+  }
+  if (platform === 'darwin') {
+    return {
+      command: 'osascript',
+      args: ['-e', 'POSIX path of (choose folder with prompt "选择原始录制目录")'],
+    };
+  }
+  return {
+    command: 'zenity',
+    args: ['--file-selection', '--directory', '--title=选择原始录制目录'],
+  };
+}
+
+export async function selectRecordingRootDirectory(
+  spawnProcess: typeof spawn = spawn,
+  platform: NodeJS.Platform = process.platform,
+): Promise<string | undefined> {
+  const picker = pickerCommand(platform);
+  return new Promise<string | undefined>((resolve, reject) => {
+    const child = spawnProcess(picker.command, picker.args, {
+      shell: false,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout?.on('data', (chunk: Buffer | string) => stdout.push(Buffer.from(chunk)));
+    child.stderr?.on('data', (chunk: Buffer | string) => stderr.push(Buffer.from(chunk)));
+    child.once('error', reject);
+    child.once('close', (code) => {
+      const selected = Buffer.concat(stdout).toString('utf8').trim();
+      if (code === 0) {
+        resolve(selected || undefined);
+        return;
+      }
+      if (code === 1 && platform !== 'win32') {
+        resolve(undefined);
+        return;
+      }
+      const detail = Buffer.concat(stderr).toString('utf8').trim();
+      reject(new Error(`无法打开系统文件夹选择框${detail ? `：${detail}` : ''}`));
+    });
+  });
+}
+
+function envAssignment(value: string): string {
+  if (/[\r\n]/u.test(value)) throw new Error('录制目录路径不能包含换行符');
+  if (!value.includes('#')) return `${recordingsRootEnv}=${value}`;
+  if (!value.includes("'")) return `${recordingsRootEnv}='${value}'`;
+  throw new Error("录制目录路径不能同时包含 # 和单引号");
+}
+
+export async function saveRecordingsRoot(
+  recordingsRoot: string,
+  options: { executionRoot?: string } = {},
+): Promise<string> {
+  const executionRoot = path.resolve(options.executionRoot ?? packageRoot);
+  const resolved = await resolveRecordingsRoot(recordingsRoot, { executionRoot });
+  if (!resolved) throw new Error('录制目录不能为空');
+  const envPath = path.join(executionRoot, '.env.local');
+  let original = '';
+  try {
+    original = await readFile(envPath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+
+  const newline = original.includes('\r\n') ? '\r\n' : '\n';
+  const assignment = envAssignment(resolved);
+  const lines = original.split(/\r?\n/u);
+  let replaced = false;
+  const nextLines = lines.flatMap((line) => {
+    if (!new RegExp(`^\\s*(?:export\\s+)?${recordingsRootEnv}\\s*=`).test(line)) return [line];
+    if (replaced) return [];
+    replaced = true;
+    return [assignment];
+  });
+  if (!replaced) {
+    if (nextLines.length === 1 && nextLines[0] === '') nextLines.length = 0;
+    nextLines.push(assignment);
+  }
+  const content = `${nextLines.join(newline).replace(/(?:\r?\n)+$/u, '')}${newline}`;
+  const temporary = `${envPath}.recordings-${randomBytes(6).toString('hex')}.tmp`;
+  await writeFile(temporary, content, 'utf8');
+  try {
+    await rename(temporary, envPath);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+  return resolved;
 }

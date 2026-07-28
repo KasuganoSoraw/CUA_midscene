@@ -8,6 +8,8 @@ import {
   listRecordings,
   openRecordingDirectory,
   resolveRecordingDirectory,
+  saveRecordingsRoot,
+  selectRecordingRootDirectory,
 } from '../../cua/recording/recording-catalog.js';
 import { listScenes, listTasks, requireIdentifier } from '../../cua/task/tasks.js';
 import type { ReviewMutation, ReviewTaskDraft, SaveReviewTaskRequest } from '../shared/types.js';
@@ -25,6 +27,7 @@ interface ReviewRouteOptions {
 export interface ReviewRouteDependencies {
   createFromRecording?: typeof createTaskFromRecording;
   openDirectory?: typeof openRecordingDirectory;
+  selectDirectory?: typeof selectRecordingRootDirectory;
 }
 
 interface SceneParams {
@@ -135,25 +138,45 @@ async function evidenceFile(
 }
 
 export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = async (app, options) => {
-  const recordingOptions = {
-    recordingsRoot: options.recordingsRoot,
+  let activeRecordingsRoot = options.recordingsRoot;
+  const recordingOptions = () => ({
+    recordingsRoot: activeRecordingsRoot,
     executionRoot: options.executionRoot,
-  };
+  });
 
   app.get('/api/scenes', async () => ({
     scenes: await listScenes(options.layout.catalog),
   }));
 
-  app.get('/api/recordings', async () => listRecordings(recordingOptions));
+  app.get('/api/recordings', async () => listRecordings(recordingOptions()));
+
+  app.post('/api/recordings/select-root', async () => {
+    const selected = await (
+      options.dependencies?.selectDirectory ?? selectRecordingRootDirectory
+    )();
+    if (!selected) {
+      return {
+        selected: false,
+        catalog: await listRecordings(recordingOptions()),
+      };
+    }
+    activeRecordingsRoot = await saveRecordingsRoot(selected, {
+      executionRoot: options.executionRoot,
+    });
+    return {
+      selected: true,
+      catalog: await listRecordings(recordingOptions()),
+    };
+  });
 
   app.get<{ Params: RecordingParams }>('/api/recordings/:recording', {
     schema: { params: recordingParamsSchema },
-  }, async (request) => describeRecording(request.params.recording, recordingOptions));
+  }, async (request) => describeRecording(request.params.recording, recordingOptions()));
 
   app.post<{ Params: RecordingParams }>('/api/recordings/:recording/open-folder', {
     schema: { params: recordingParamsSchema },
   }, async (request) => {
-    const recordingPath = await resolveRecordingDirectory(request.params.recording, recordingOptions);
+    const recordingPath = await resolveRecordingDirectory(request.params.recording, recordingOptions());
     await (options.dependencies?.openDirectory ?? openRecordingDirectory)(recordingPath);
     return { opened: true, recording: request.params.recording };
   });
@@ -171,11 +194,11 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
       const body = requireObjectBody<CreateRecordingTaskBody>(request.body);
       const scene = requireIdentifier(body.scene, 'scene');
       const task = requireIdentifier(body.task, 'task');
-      const entry = await describeRecording(request.params.recording, recordingOptions);
+      const entry = await describeRecording(request.params.recording, recordingOptions());
       if (!entry.ready) {
         throw new Error(`录制不可生成：${entry.id}\n${entry.errors.join('\n')}`);
       }
-      const recordingPath = await resolveRecordingDirectory(request.params.recording, recordingOptions);
+      const recordingPath = await resolveRecordingDirectory(request.params.recording, recordingOptions());
       const result = await (options.dependencies?.createFromRecording ?? createTaskFromRecording)({
         scene,
         task,
