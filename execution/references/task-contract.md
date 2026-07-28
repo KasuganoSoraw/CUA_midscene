@@ -34,6 +34,7 @@
 node dist/cli/main.js scene list --json
 node dist/cli/main.js task list --scene <scene> --json
 node dist/cli/main.js task describe --scene <scene> --task <task> --json
+node dist/cli/main.js task create-from-recording --scene <scene> --task <task> --recording <目录> [--goal "<目标>"]
 node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"
 node dist/cli/main.js task validate --scene <scene> --task <task>
 node dist/cli/main.js task inspect --scene <scene> --task <task> --input <input-id>=<value>
@@ -43,6 +44,10 @@ node dist/cli/main.js act run --scene <scene> --task <task> --input <input-id>=<
 node dist/cli/main.js act run --prompt "打开 Chrome 并搜索 GUI agent"
 node dist/cli/main.js review --no-open
 ```
+
+`task create-from-recording` 是原始录制的默认入口。它从 `--record-root`、`CUA_RECORD_ROOT`、execution 环境文件或源码相邻目录定位独立 record 环境，在其中按原有无 goal 方式运行 uv/Python，再将生成资产规范化到 user task `source/` 并完成初始化与静态验证。可选 `--goal` 只写入 task goal/description 与 YAML groupDescription，不进入 trace prompt；省略时这些字段均为空字符串。
+
+`task init-from-trace` 保留给 source 已经标准化的高级场景。两种创建方式都拒绝覆盖 user/builtin 任务。
 
 源码开发入口是对应的 `npm run cua -- ...`。`--input` 可以重复；`--inputs` 必须是字符串值 JSON 对象，两种来源不得重复同一 ID。
 
@@ -124,5 +129,7 @@ TypeScript resolver 写入 `<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml`，
 `act run --scene/--task` 从相同 resolved YAML 生成 `ai-act-prompt.txt` 和单 `ai` action 的 `ai-act-task.yaml`；其中会汇总各步骤引用的图片并保留图片名与文字指令的对应关系。sleep 不进入 prompt，未知 action、非法图片或同名图片冲突在创建设备前失败。`act run --prompt` 不读取任务资产。
 
 `task inspect` 不创建 run。`task validate` 和 `--dry-run` 会生成运行投影并经过 Midscene parser，但不调用模型、不创建设备、不验证页面定位，因此不是模拟执行。
+
+一键创建只复制 trace、两份 processed log 和被 processed log 引用的截图，不复制原始视频或事件日志。Python 进度进入 stderr，最终 stdout 是单个 JSON；复制、转换或验证失败时删除本次新建的 task 半成品，但保留原录制产物与已有 run 报告。
 
 第一版不实现并发锁，上层调用方必须串行发起真实 computer use。失败必须原样暴露，不自动切换模式、修改任务、重试或改用剪贴板 Input。

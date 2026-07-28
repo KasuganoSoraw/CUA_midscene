@@ -98,7 +98,6 @@ function validateManifests(
   for (const [field, value] of [
     ['scene.title', scene.title],
     ['task.title', task.title],
-    ['task.goal', task.goal],
   ]) {
     if (!value.trim()) throw new Error(`${field} 必须是非空字符串`);
   }

@@ -18,12 +18,13 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 - 第一版不实现并发锁，实际 computer use 必须由上层串行调用。
 - 本地复核页面由 Fastify 在 `127.0.0.1` 随机端口提供，只访问受控 catalog 和任务内证据。
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`.env.local`、`.env`。创建、验证和执行需要可写数据根。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`.env.local`、`.env`。创建、验证和执行需要可写数据根。原始录制创建还需要外部 record 根，优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、`.env.local`、`.env`、源码仓相邻 `record/`；安装版通常在 `.env.local` 配置绝对路径。
 
 ## 判断意图
 
 - **发现**：列出场景或任务，不读取无关资产。
-- **创建/重建**：从 user task 的 `source/` 初始化 `task.yaml` 和 `task.json`。已有资产不得自动覆盖。
+- **从原始录制创建**：使用单一命令生成 trace、规范化 source、初始化并验证任务。
+- **从标准 source 初始化**：仅当 source 已包含标准化 trace 与 processed log 时使用高级初始化命令。已有资产不得自动覆盖。
 - **校准**：提出 `task.yaml` 修改建议，展示原值、新值和原因，等待明确确认。
 - **参数契约修改**：长期改变默认值、标签或说明时单独提出 `task.json` 差异并等待确认。
 - **单次调用**：只通过已声明的 `--input` 传值，不修改任务资产。
@@ -35,8 +36,11 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 1. 运行 `node dist/cli/main.js scene list --json`，再运行 `node dist/cli/main.js task list --scene <scene> --json`。
 2. 只读取目标场景和任务的 `SKILL.md`、`task.json`；检查动作时再读取 `task.yaml` 和必要 source。
-3. 创建前确认 user task 的 `source/showui-trace.json` 和 `source/processed-log-sc.json` 已存在，且每个 step 有结构化 `caption.operation`。
-4. 运行 `node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，再运行 `task validate`。
+3. 用户提供原始录制目录时，运行 `node dist/cli/main.js task create-from-recording --scene <scene> --task <task> --recording "<录制目录>" [--goal "<任务描述>"]`。`--goal` 只保存为创建后的任务描述，不参与 trace 生成；用户未说明时可以省略且不得推测。
+4. 该命令内部运行外部 recorder、规范化 source、初始化并静态验证；Agent 不得再手工调用 Python、重命名或搬运录制产物。
+5. 只有 user task 的 `source/showui-trace.json` 和 `source/processed-log-sc.json` 已经标准化时，才运行 `node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，再运行 `task validate`。
+
+`task create-from-recording` 不复制原始视频和事件日志，不覆盖已有 user/builtin 任务。执行失败时报告原始错误；复制、转换或验证阶段产生的任务半成品会被删除，原录制目录中的生成产物保留用于排查。
 
 转换器不得从 observation、think、action、expectation 或关键词猜测动作；非法 operation 必须直接失败。
 `useReferenceImage: true` 只允许出现在 click/doubleClick。转换器必须使用同一步 processed log 的 `screenshot_reference` 生成 Midscene 原生 `locate.images`；不得猜路径、生成 Base64、改用录制坐标或在证据无效时回退纯文字点击。

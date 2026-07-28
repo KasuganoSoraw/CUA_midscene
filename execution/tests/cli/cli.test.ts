@@ -39,6 +39,7 @@ test('CLI 拒绝重复、旧命令和非法 aiAct 来源', async () => {
     [['task', 'inspect', '--scene', 'first', '--scene', 'second', '--task', 'demo'], /不能重复提供/],
     [['flow', 'inspect'], /不支持的命令/],
     [['calibration', 'apply'], /不支持的命令/],
+    [['task', 'create-from-recording', '--scene', 'demo', '--task', 'task'], /必须提供 --recording/],
     [['act', 'run'], /必须提供 --prompt/],
     [['act', 'run', '--scene', 'browser-demo'], /同时提供 --scene 和 --task/],
     [['act', 'run', '--prompt', '打开 Chrome', '--input', 'query=value'], /不能与任务参数混用/],
@@ -81,4 +82,59 @@ test('task validate、task run dry-run 与两种 aiAct dry-run 生成外部运�
 test('CLI 使用中文帮助', () => {
   assert.match(helpText, /CUA 场景、任务与 Midscene YAML 执行工具/);
   assert.match(helpText, /npm|cua/);
+  assert.match(helpText, /task create-from-recording/);
+  assert.match(helpText, /\[--goal <目标>\]/);
+});
+
+test('task create-from-recording 接受可选 goal 并保持 stdout JSON 契约', async () => {
+  const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'cua-cli-create-'));
+  let received: Record<string, unknown> | undefined;
+  const output = await runCliCommand([
+    'task',
+    'create-from-recording',
+    '--scene',
+    'network',
+    '--task',
+    'query-alarm',
+    '--recording',
+    'E:\\recordings\\alarm',
+    '--record-root',
+    'E:\\CUA\\record',
+    '--data-root',
+    dataRoot,
+  ], {
+    createFromRecording: async (options) => {
+      received = options as unknown as Record<string, unknown>;
+      return {
+        created: true,
+        valid: true,
+        scene: options.scene,
+        task: options.task,
+        goal: '',
+        recordRoot: options.recordRoot!,
+        recordingPath: options.recording,
+        taskRoot: path.join(dataRoot, 'projects', options.scene, options.task),
+        sourceRoot: path.join(dataRoot, 'projects', options.scene, options.task, 'source'),
+        taskYamlPath: path.join(dataRoot, 'projects', options.scene, options.task, 'task.yaml'),
+        taskManifestPath: path.join(dataRoot, 'projects', options.scene, options.task, 'task.json'),
+        runDir: path.join(dataRoot, 'runs', 'test'),
+        resolvedTaskPath: path.join(dataRoot, 'runs', 'test', 'resolved-task.yaml'),
+        executor: {
+          schemaVersion: '0.2',
+          status: 'succeeded',
+          sourceYamlPath: path.join(dataRoot, 'runs', 'test', 'resolved-task.yaml'),
+          dryRun: true,
+          taskCount: 1,
+          finishedAt: new Date(0).toISOString(),
+        },
+      };
+    },
+  });
+
+  const parsed = JSON.parse(output);
+  assert.equal(parsed.created, true);
+  assert.equal(parsed.goal, '');
+  assert.equal(received?.goal, undefined);
+  assert.match(String(received?.creationCommand), /task create-from-recording/);
+  assert.doesNotMatch(output, /trace progress/);
 });

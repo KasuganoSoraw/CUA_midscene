@@ -139,6 +139,8 @@ class LogProcessor:
 
     def normalize_typing_key(self, key):
         """Normalize recorder key names that should become typed characters."""
+        if key == "NUMPAD_DECIMAL":
+            return "."
         if key.startswith("NUMPAD_") and key[-1:].isdigit():
             return key[-1]
         return key

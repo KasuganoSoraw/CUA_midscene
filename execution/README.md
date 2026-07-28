@@ -1,11 +1,12 @@
 # Execution
 
-该目录是可独立发布的 `cua-midscene` Skill。TypeScript 核心负责把 record trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use。
+该目录是可独立发布的 `cua-midscene` Skill。TypeScript 核心负责调用外部 record 处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use。
 
 ## 模块职责
 
 ```text
 record trace
+  -> cua/recording：调用外部 Python recorder、规范化 source、初始化并验证任务
   -> cua/conversion：caption.operation -> task.yaml + task.json
   -> cua/task：数据根、catalog、YAML、输入、aiAct 投影与执行编排
   -> cli：开发命令和安装后 bin 的统一入口
@@ -15,6 +16,7 @@ record trace
 ```
 
 - `cua/contracts/`：普通 TypeScript 类型和 Ajv 文件边界校验。
+- `cua/recording/`：定位外部 record 环境、运行 parser、复制标准化生成资产并编排任务创建。
 - `cua/conversion/`：只根据结构化 trace operation 初始化任务；被标记的 click/doubleClick 会绑定 processed log 中的 reference patch。
 - `cua/task/`：双 catalog、YAML、输入、运行快照和执行编排。
 - `cli/`：统一命令分发与 stdout/stderr 输出协议。
@@ -35,14 +37,17 @@ npm install
 npm run check
 ```
 
-从 `.env.example` 创建 `.env.local`，配置模型和 Skill 外部的绝对数据根：
+从 `.env.example` 创建 `.env.local`，配置模型、Skill 外部的绝对数据根，以及独立的 record 根目录：
 
 ```text
 MIDSCENE_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
 MIDSCENE_MODEL_NAME=minimax-m3
 MIDSCENE_MODEL_FAMILY=doubao-vision
 CUA_DATA_ROOT=C:\path\to\cua-data
+CUA_RECORD_ROOT=C:\path\to\CUA\record
 ```
+
+`CUA_RECORD_ROOT` 指向包含 `pyproject.toml` 和 `Aloha_Learn/parser.py` 的目录。安装后的 execution Skill 不包含 Python；一键创建命令会在该目录运行 uv，并由 Python 自行读取 `record/.env`。
 
 ## CLI
 
@@ -52,6 +57,7 @@ CUA_DATA_ROOT=C:\path\to\cua-data
 npm run cua -- scene list --json
 npm run cua -- task list --scene browser-demo --json
 npm run cua -- task describe --scene browser-demo --task air-tickets-demo --json
+npm run cua -- task create-from-recording --scene <scene> --task <task> --recording <录制目录> [--goal "<任务描述>"]
 npm run cua -- task init-from-trace --scene <scene> --task <task> --goal "<目标>"
 npm run cua -- task validate --scene browser-demo --task air-tickets-demo
 npm run cua -- task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
@@ -67,6 +73,8 @@ npm run cua -- review --no-open
 node dist/cli/main.js scene list --json
 node dist/cli/main.js review --no-open
 ```
+
+`task create-from-recording` 是原始录制的默认创建入口，会按 record 原有无 goal 方式生成 trace、规范化 `source/`、初始化任务并完成静态验证。可选的 `--goal` 只写入任务 goal/description 和 YAML groupDescription，不进入 trace prompt；省略时这些字段保存空字符串。Python 进度写入 stderr，最终 stdout 保持为单个 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
 `review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。页面读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。Agent 仍可在确认后直接修改 canonical 资产并运行 `task validate`。
 
