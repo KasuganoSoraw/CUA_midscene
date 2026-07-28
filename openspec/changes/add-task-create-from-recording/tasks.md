@@ -1,7 +1,7 @@
 ## 1. 录制器入口
 
-- [ ] 1.1 为 Python parser 增加可选 goal 并保持旧调用兼容
-- [ ] 1.2 增加 parser 单元测试，验证 goal 传递与空目标行为
+- [x] 1.1 为 Python parser 增加可选 goal 并保持旧调用兼容
+- [x] 1.2 增加 parser 单元测试，验证 goal 传递与空目标行为
 
 ## 2. TypeScript 创建编排
 
