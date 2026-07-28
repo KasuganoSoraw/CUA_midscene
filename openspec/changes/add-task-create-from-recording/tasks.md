@@ -23,5 +23,5 @@
 
 ## 5. 验证
 
-- [ ] 5.1 运行 Python 单测、TypeScript 测试和构建
-- [ ] 5.2 运行 Skill 打包边界测试和 OpenSpec 严格校验
+- [x] 5.1 运行 Python 单测、TypeScript 测试和构建
+- [x] 5.2 运行 Skill 打包边界测试和 OpenSpec 严格校验
