@@ -28,7 +28,6 @@ export const recordRootEnv = 'CUA_RECORD_ROOT';
 export interface RecorderRunRequest {
   recordRoot: string;
   recordingPath: string;
-  goal: string;
   progress: Writable;
 }
 
@@ -141,7 +140,6 @@ export async function runRecordingParser(
     path.join('Aloha_Learn', 'parser.py'),
     request.recordingPath,
   ];
-  if (request.goal) args.push('--goal', request.goal);
 
   await new Promise<void>((resolve, reject) => {
     const child = spawnProcess('uv', args, {
@@ -252,12 +250,11 @@ function quoteCommandValue(value: string): string {
   return `"${value.replaceAll('"', '\\"')}"`;
 }
 
-function traceGenerationCommand(recordRoot: string, recordingPath: string, goal: string): string {
+function traceGenerationCommand(recordRoot: string, recordingPath: string): string {
   const parts = [
     `cd ${quoteCommandValue(recordRoot)}`,
     `uv run python Aloha_Learn/parser.py ${quoteCommandValue(recordingPath)}`,
   ];
-  if (goal) parts[1] += ` --goal ${quoteCommandValue(goal)}`;
   return parts.join('; ');
 }
 
@@ -292,7 +289,6 @@ export async function createTaskFromRecording(
   await (dependencies.runRecorder ?? runRecordingParser)({
     recordRoot,
     recordingPath,
-    goal,
     progress: options.progress ?? process.stderr,
   });
   const assets = await generatedAssets(recordingPath);
@@ -307,7 +303,7 @@ export async function createTaskFromRecording(
       catalog: options.catalog,
       conversionCommand: `npm run cua -- task init-from-trace --scene ${scene} --task ${task}${goal ? ` --goal ${quoteCommandValue(goal)}` : ''}`,
       recordingPreparationCommand: options.creationCommand ?? 'task create-from-recording',
-      traceGenerationCommand: traceGenerationCommand(recordRoot, recordingPath, goal),
+      traceGenerationCommand: traceGenerationCommand(recordRoot, recordingPath),
     });
     const validation = await (dependencies.validate ?? runTask)({
       scene,

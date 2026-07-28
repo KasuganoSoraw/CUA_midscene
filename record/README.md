@@ -60,13 +60,7 @@ uv sync
 uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
 ```
 
-可以推荐性地提供整体目标，帮助模型理解单步意图：
-
-```powershell
-uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets --goal "完成 Qatar Airways 单程航班搜索"
-```
-
-`--goal` 可省略；省略时 trace 的 Overall Task 保持为空。该直接 Python 命令主要用于独立调试 record，Agent 创建可执行任务时应调用 execution 的单一创建命令。
+parser 保持原有单一录制目录入口，生成 trace 时 Overall Task 固定为空，不接收业务 goal，避免高层目标干扰逐步视觉证据判断。该直接 Python 命令主要用于独立调试 record，Agent 创建可执行任务时应调用 execution 的单一创建命令；execution 的可选 `--goal` 只在 trace 生成后写入任务描述。
 
 生成物会落在对应 project 目录下，主要包括：
 

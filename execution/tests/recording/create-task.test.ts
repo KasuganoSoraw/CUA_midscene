@@ -145,7 +145,7 @@ test('录制器根必须是包含 uv 项目标记与 parser 的绝对目录', as
   await assert.rejects(resolveRecordRoot(root), /录制器根目录无效/);
 });
 
-test('录制器子进程不使用 shell，将 goal 和进度按约定传递', async () => {
+test('录制器子进程不使用 shell，按原有无 goal 方式运行并转发进度', async () => {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   const child = new EventEmitter() as EventEmitter & {
@@ -173,14 +173,13 @@ test('录制器子进程不使用 shell，将 goal 和进度按约定传递', as
   await runRecordingParser({
     recordRoot: 'E:\\record',
     recordingPath: 'E:\\recording',
-    goal: '查询告警',
     progress,
   }, fakeSpawn);
 
   assert.equal(invocation?.command, 'uv');
   assert.equal(invocation?.shell, false);
   assert.deepEqual(invocation?.args, [
-    'run', 'python', path.join('Aloha_Learn', 'parser.py'), 'E:\\recording', '--goal', '查询告警',
+    'run', 'python', path.join('Aloha_Learn', 'parser.py'), 'E:\\recording',
   ]);
   assert.match(forwarded, /trace progress/);
   assert.match(forwarded, /trace warning/);
@@ -188,7 +187,6 @@ test('录制器子进程不使用 shell，将 goal 和进度按约定传递', as
 
 test('一键创建规范化 source 并允许空 goal 通过 Midscene dry-run 校验', async () => {
   const setup = await fixture();
-  let recorderGoal: string | undefined;
   const result = await createTaskFromRecording({
     scene: 'network',
     task: 'open-settings',
@@ -201,12 +199,10 @@ test('一键创建规范化 source 并允许空 goal 通过 Midscene dry-run 校
     runsRoot: setup.runsRoot,
   }, {
     runRecorder: async (request) => {
-      recorderGoal = request.goal;
       await writeGeneratedRecording(request);
     },
   });
 
-  assert.equal(recorderGoal, '');
   assert.equal(result.goal, '');
   assert.equal(result.executor.status, 'succeeded');
   assert.equal(result.executor.dryRun, true);
@@ -220,9 +216,8 @@ test('一键创建规范化 source 并允许空 goal 通过 Midscene dry-run 校
   assert.equal(await exists(path.join(result.sourceRoot, 'inputs')), false);
 });
 
-test('非空 goal 传给录制器并写入任务资产', async () => {
+test('非空 goal 不传给录制器，只写入任务资产', async () => {
   const setup = await fixture();
-  let recorderGoal = '';
   const result = await createTaskFromRecording({
     scene: 'network',
     task: 'query-alarm',
@@ -236,13 +231,14 @@ test('非空 goal 传给录制器并写入任务资产', async () => {
     runsRoot: setup.runsRoot,
   }, {
     runRecorder: async (request) => {
-      recorderGoal = request.goal;
       await writeGeneratedRecording(request);
     },
   });
 
-  assert.equal(recorderGoal, '查询当前网管告警');
-  assert.equal((await readTaskManifest(result.taskManifestPath)).goal, '查询当前网管告警');
+  const manifest = await readTaskManifest(result.taskManifestPath);
+  assert.equal(manifest.goal, '查询当前网管告警');
+  assert.equal(manifest.description, '查询当前网管告警');
+  assert.doesNotMatch(manifest.source.traceGenerationCommand ?? '', /--goal/);
 });
 
 test('已有任务在录制器执行前失败，验证失败则清理本次任务', async () => {

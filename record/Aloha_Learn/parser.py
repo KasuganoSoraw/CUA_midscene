@@ -39,7 +39,7 @@ def _find_single_log(inputs_dir: Path) -> Path:
     return hits[0]
 
 
-def run_pipeline(project_name: str, overall_task: str = "") -> Path:
+def run_pipeline(project_name: str) -> Path:
     """
     Orchestrate the 3-step pipeline:
       1) parse & merge events -> {project}_processed_log.json
@@ -87,7 +87,7 @@ def run_pipeline(project_name: str, overall_task: str = "") -> Path:
         recording_json_path=str(log_sc),
         screenshots_dir=str(screenshots_dir),
         output_trace_path=str(out_trace),
-        overall_task=overall_task.strip()
+        overall_task=""
     )
 
     print("=== Pipeline Complete ===")
@@ -103,10 +103,5 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run full Parser pipeline (1) log → (2) screenshots → (3) trace")
     parser.add_argument("project_name", help="Either a bare name (e.g., 'Drag_0') or a full path to the project folder.")
-    parser.add_argument(
-        "--goal",
-        default="",
-        help="Optional overall task passed to trace generation. Recommended when the business goal is known.",
-    )
     args = parser.parse_args()
-    run_pipeline(args.project_name, args.goal)
+    run_pipeline(args.project_name)

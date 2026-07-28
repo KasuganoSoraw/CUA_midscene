@@ -83,7 +83,7 @@ test('Skill 文档和安装器使用编译后的 Node CLI', async () => {
   assert.match(skill, /Fastify/);
   assert.match(skill, /task create-from-recording/);
   assert.match(skill, /CUA_RECORD_ROOT/);
-  assert.match(skill, /--goal.*推荐填写/);
+  assert.match(skill, /--goal.*不参与 trace 生成/);
   assert.match(skill, /提出 `task\.yaml` 修改建议，展示原值、新值和原因，等待明确确认/);
   assert.match(skill, /停止并等待用户明确确认/);
   assert.doesNotMatch(skill, /uv run cua|python\s+-m/i);

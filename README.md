@@ -52,7 +52,7 @@ $env:CUA_RECORD_ROOT = 'E:\HW\CUA\record'
 npm run cua -- scene list --json
 npm run cua -- task list --scene browser-demo --json
 npm run cua -- task describe --scene browser-demo --task air-tickets-demo --json
-npm run cua -- task create-from-recording --scene <scene> --task <task> --recording <录制目录> --goal "<推荐填写的任务目标>"
+npm run cua -- task create-from-recording --scene <scene> --task <task> --recording <录制目录> [--goal "<任务描述>"]
 npm run cua -- task validate --scene browser-demo --task air-tickets-demo
 npm run cua -- task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
 npm run cua -- task run --scene browser-demo --task air-tickets-demo --dry-run
@@ -64,7 +64,7 @@ npm run cua -- act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 
 实际操作电脑时去掉 `--dry-run`。第一版不实现并发锁，上层调用方必须串行发起真实 computer use；查询、转换、inspect 和 dry-run 不操作电脑。
 
-`task create-from-recording` 是从原始录制创建任务的默认入口。`--goal` 推荐填写以帮助 trace 模型理解业务意图，但可以省略；省略时系统不会推测目标，任务 goal/description 与 YAML groupDescription 保存空字符串。命令会自动运行 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
+`task create-from-recording` 是从原始录制创建任务的默认入口。`--goal` 仅作为创建后任务的描述信息，不会进入 trace 生成 prompt；可以省略，省略时任务 goal/description 与 YAML groupDescription 保存空字符串。命令会自动运行原有 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
 
 仅当 trace 与 processed log 已经放入 user task `source/` 时，使用高级初始化入口：
 

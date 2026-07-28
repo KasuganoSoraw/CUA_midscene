@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from parser import run_pipeline
 
 
-class ParserGoalTest(unittest.TestCase):
-    def run_with_goal(self, goal=None):
+class ParserPipelineTest(unittest.TestCase):
+    def run_pipeline_fixture(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp) / "recording-demo"
             inputs = project / "inputs"
@@ -39,21 +39,14 @@ class ParserGoalTest(unittest.TestCase):
                     )
                 )
 
-                if goal is None:
-                    result = run_pipeline(str(project))
-                else:
-                    result = run_pipeline(str(project), goal)
+                result = run_pipeline(str(project))
 
                 call = trace_generator.return_value.generate_trace.call_args
                 return result.name, call.kwargs["overall_task"]
 
-    def test_goal_is_trimmed_and_passed_to_trace_generation(self):
-        trace_name, overall_task = self.run_with_goal("  查询网管告警  ")
+    def test_trace_generation_keeps_empty_overall_task(self):
+        trace_name, overall_task = self.run_pipeline_fixture()
         self.assertEqual(trace_name, "recording-demo_trace.json")
-        self.assertEqual(overall_task, "查询网管告警")
-
-    def test_missing_goal_keeps_empty_overall_task(self):
-        _, overall_task = self.run_with_goal()
         self.assertEqual(overall_task, "")
 
 

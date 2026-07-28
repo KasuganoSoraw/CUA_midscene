@@ -36,7 +36,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 1. 运行 `node dist/cli/main.js scene list --json`，再运行 `node dist/cli/main.js task list --scene <scene> --json`。
 2. 只读取目标场景和任务的 `SKILL.md`、`task.json`；检查动作时再读取 `task.yaml` 和必要 source。
-3. 用户提供原始录制目录时，运行 `node dist/cli/main.js task create-from-recording --scene <scene> --task <task> --recording "<录制目录>" --goal "<目标>"`。`--goal` 推荐填写以改善弱模型 trace 质量，但可以省略；省略时不得推测目标。
+3. 用户提供原始录制目录时，运行 `node dist/cli/main.js task create-from-recording --scene <scene> --task <task> --recording "<录制目录>" [--goal "<任务描述>"]`。`--goal` 只保存为创建后的任务描述，不参与 trace 生成；用户未说明时可以省略且不得推测。
 4. 该命令内部运行外部 recorder、规范化 source、初始化并静态验证；Agent 不得再手工调用 Python、重命名或搬运录制产物。
 5. 只有 user task 的 `source/showui-trace.json` 和 `source/processed-log-sc.json` 已经标准化时，才运行 `node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，再运行 `task validate`。
 

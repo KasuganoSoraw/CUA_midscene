@@ -57,7 +57,7 @@ CUA_RECORD_ROOT=C:\path\to\CUA\record
 npm run cua -- scene list --json
 npm run cua -- task list --scene browser-demo --json
 npm run cua -- task describe --scene browser-demo --task air-tickets-demo --json
-npm run cua -- task create-from-recording --scene <scene> --task <task> --recording <录制目录> --goal "<推荐填写的目标>"
+npm run cua -- task create-from-recording --scene <scene> --task <task> --recording <录制目录> [--goal "<任务描述>"]
 npm run cua -- task init-from-trace --scene <scene> --task <task> --goal "<目标>"
 npm run cua -- task validate --scene browser-demo --task air-tickets-demo
 npm run cua -- task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
@@ -74,7 +74,7 @@ node dist/cli/main.js scene list --json
 node dist/cli/main.js review --no-open
 ```
 
-`task create-from-recording` 是原始录制的默认创建入口，会生成 trace、规范化 `source/`、初始化任务并完成静态验证。`--goal` 推荐填写但可省略；省略时不会推测目标，任务 goal/description 和 YAML groupDescription 保存空字符串。Python 进度写入 stderr，最终 stdout 保持为单个 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
+`task create-from-recording` 是原始录制的默认创建入口，会按 record 原有无 goal 方式生成 trace、规范化 `source/`、初始化任务并完成静态验证。可选的 `--goal` 只写入任务 goal/description 和 YAML groupDescription，不进入 trace prompt；省略时这些字段保存空字符串。Python 进度写入 stderr，最终 stdout 保持为单个 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
 `review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。页面读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。Agent 仍可在确认后直接修改 canonical 资产并运行 `task validate`。
 
