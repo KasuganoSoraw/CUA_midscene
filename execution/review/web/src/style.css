@@ -111,6 +111,7 @@ footer code { color: #8a958f; }
 .recording-config-empty p, .recording-detail-empty p { font-size: 12px; line-height: 1.5; }
 .recording-config-empty code { padding: 7px 9px; border-radius: 7px; color: #24613c; background: white; }
 .recording-config-empty small { color: #89948e; }
+.recording-root-picker { margin-top: 4px; color: white; background: #286c45; box-shadow: 0 5px 13px #286c4529; }
 .recording-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 10px; }
 .recording-row-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .recording-row-copy strong, .recording-row-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

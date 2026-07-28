@@ -110,6 +110,11 @@ export interface ReviewRecordingCatalog {
   recordings: ReviewRecording[];
 }
 
+export interface SelectRecordingRootResult {
+  selected: boolean;
+  catalog: ReviewRecordingCatalog;
+}
+
 export interface CreateRecordingTaskRequest {
   scene: string;
   task: string;

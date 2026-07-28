@@ -26,6 +26,7 @@ const taskId = ref('');
 const goal = ref('');
 const busy = ref(false);
 const opening = ref(false);
+const choosingRoot = ref(false);
 const sceneMenuOpen = ref(false);
 const error = ref('');
 const message = ref('正在读取录制目录…');
@@ -74,23 +75,47 @@ function closeSceneMenu(event: FocusEvent): void {
   if (!(next instanceof Node) || !container.contains(next)) sceneMenuOpen.value = false;
 }
 
+function applyCatalog(next: ReviewRecordingCatalog): void {
+  catalog.value = next;
+  if (!next.configured) {
+    selectedId.value = '';
+    message.value = `尚未配置录制目录，请设置 ${next.envName}`;
+    return;
+  }
+  selectedId.value = next.recordings.some((item) => item.id === selectedId.value)
+    ? selectedId.value
+    : next.recordings[0]?.id ?? '';
+  message.value = next.recordings.length
+    ? `已发现 ${next.recordings.length} 个录制目录`
+    : '录制目录中尚无可展示内容';
+}
+
 async function loadRecordings(): Promise<void> {
   error.value = '';
   try {
-    catalog.value = await api.recordings();
-    if (!catalog.value.configured) {
-      selectedId.value = '';
-      message.value = `尚未配置录制目录，请设置 ${catalog.value.envName}`;
-      return;
-    }
-    selectedId.value = catalog.value.recordings.some((item) => item.id === selectedId.value)
-      ? selectedId.value
-      : catalog.value.recordings[0]?.id ?? '';
-    message.value = catalog.value.recordings.length
-      ? `已发现 ${catalog.value.recordings.length} 个录制目录`
-      : '录制目录中尚无可展示内容';
+    applyCatalog(await api.recordings());
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
+  }
+}
+
+async function selectRecordingsRoot(): Promise<void> {
+  if (choosingRoot.value || busy.value) return;
+  choosingRoot.value = true;
+  error.value = '';
+  message.value = '正在等待选择录制目录…';
+  try {
+    const result = await api.selectRecordingsRoot();
+    if (!result.selected) {
+      message.value = '未选择录制目录，现有配置保持不变';
+      return;
+    }
+    applyCatalog(result.catalog);
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : String(caught);
+    message.value = '录制目录配置失败，请检查提示后重试';
+  } finally {
+    choosingRoot.value = false;
   }
 }
 
@@ -139,13 +164,22 @@ onMounted(loadRecordings);
         <p class="eyebrow">RECORDINGS</p>
         <h2>原始录制</h2>
       </div>
-      <button class="icon-button" :disabled="busy" title="刷新录制目录" @click="loadRecordings">↻</button>
+      <button class="icon-button" :disabled="busy || choosingRoot" title="刷新录制目录" @click="loadRecordings">↻</button>
     </div>
 
     <div v-if="!catalog.configured" class="recording-config-empty">
       <strong>未配置录制目录</strong>
       <p>请在 execution 环境中设置：</p>
       <code>{{ catalog.envName }}</code>
+      <button
+        type="button"
+        class="secondary recording-root-picker"
+        :disabled="busy || choosingRoot"
+        @click="selectRecordingsRoot"
+      >
+        {{ choosingRoot ? '等待选择…' : '选择录制目录' }}
+      </button>
+      <small>选择后会保存到 execution/.env.local。</small>
       <small>任务复核功能不受影响。</small>
     </div>
     <div v-else-if="!catalog.recordings.length" class="recording-config-empty">
