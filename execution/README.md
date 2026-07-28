@@ -37,7 +37,7 @@ npm install
 npm run check
 ```
 
-从 `.env.example` 创建 `.env.local`，配置模型、Skill 外部的绝对数据根，以及独立的 record 根目录：
+从 `.env.example` 创建 `.env.local`，配置模型、Skill 外部的绝对数据根、独立的 record 处理器根目录，以及可选的原始录制集合：
 
 ```text
 MIDSCENE_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
@@ -45,9 +45,10 @@ MIDSCENE_MODEL_NAME=minimax-m3
 MIDSCENE_MODEL_FAMILY=doubao-vision
 CUA_DATA_ROOT=C:\path\to\cua-data
 CUA_RECORD_ROOT=C:\path\to\CUA\record
+CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
 ```
 
-`CUA_RECORD_ROOT` 指向包含 `pyproject.toml` 和 `Aloha_Learn/parser.py` 的目录。安装后的 execution Skill 不包含 Python；一键创建命令会在该目录运行 uv，并由 Python 自行读取 `record/.env`。
+`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 指向包含 `pyproject.toml` 和 `Aloha_Learn/parser.py` 的 Python 处理器目录；`CUA_RECORDINGS_ROOT` 指向录制器生成的一级目录集合。安装后的 execution Skill 不包含 Python；一键创建命令会在 `CUA_RECORD_ROOT` 运行 uv，并由 Python 自行读取 `record/.env`。
 
 ## CLI
 
@@ -76,7 +77,9 @@ node dist/cli/main.js review --no-open
 
 `task create-from-recording` 是原始录制的默认创建入口，会按 record 原有无 goal 方式生成 trace、规范化 `source/`、初始化任务并完成静态验证。可选的 `--goal` 只写入任务 goal/description 和 YAML groupDescription，不进入 trace prompt；省略时这些字段保存空字符串。Python 进度写入 stderr，最终 stdout 保持为单个 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
-`review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。页面读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。Agent 仍可在确认后直接修改 canonical 资产并运行 `task validate`。
+`review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。“任务复核”读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。“从录制创建任务”读取 `CUA_RECORDINGS_ROOT` 的一级子目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，可打开系统目录，并复用 `createTaskFromRecording()` 创建完整用户任务。页面不播放视频、不展示完整日志，也不流式转发 Python 日志；创建期间只显示不可确定的“正在生成”状态，成功后自动进入新任务复核。同一录制可以用于创建不同任务，每次都会重新处理。
+
+未配置 `CUA_RECORDINGS_ROOT` 不会阻止 review 服务和任务复核启动，录制页会提示需要配置的环境变量。存在零个或多个视频/事件文件的录制目录仍会显示，但不能生成任务。
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。inspect 与 run 使用同一个 resolver，不调用模型、不回写任务。`--dry-run` 只构建并解析 YAML，不操作电脑，也不是模拟执行。
 
