@@ -12,3 +12,4 @@ import './skill/package.test.js';
 import './review/service.test.js';
 import './review/server.test.js';
 import './review/step-editor.test.js';
+import './review/web-api.test.js';

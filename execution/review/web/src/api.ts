@@ -8,7 +8,7 @@ import type {
   ReviewTaskDraft,
   ReviewTaskView,
   SaveReviewTaskResult,
-} from '../../shared/types';
+} from '../../shared/types.js';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -17,12 +17,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body !== undefined && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
   const response = await fetch(pathname, {
     ...init,
-    headers: {
-      'content-type': 'application/json',
-      ...(init.headers ?? {}),
-    },
+    headers,
   });
   const value = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new ApiError(value.error ?? `请求失败：${response.status}`, response.status);
