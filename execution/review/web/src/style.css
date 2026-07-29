@@ -32,27 +32,41 @@ h2 { font-size: 18px; }
 .catalog { padding: 16px; overflow-y: auto; }
 .catalog > label { display: block; margin: 0 0 7px; color: #748078; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .form-grid input:not([type="checkbox"]) { width: 100%; border: 1px solid #d4dcd6; border-radius: 9px; background: white; padding: 9px 10px; }
-.review-select {
-  min-height: 38px;
+.review-select { position: relative; width: 100%; }
+.review-select-control {
+  display: flex;
   width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   border: 1px solid #d4dcd6;
   border-radius: 9px;
-  padding: 8px 38px 8px 10px;
+  padding: 8px 10px;
+  text-align: left;
   color: #27362e;
-  background-color: white;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath d='m4 5.5 3 3 3-3' fill='none' stroke='%2368786f' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 11px center;
-  appearance: none;
+  background: white;
   transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
 }
-.review-select:hover:not(:disabled) { border-color: #9eb8a7; background-color: #fcfdfc; }
-.review-select:focus-visible {
+.review-select-control:hover:not(:disabled) { border-color: #9eb8a7; background: #fcfdfc; }
+.review-select-control:focus-visible {
   border-color: #6f9e7d;
   outline: none;
   box-shadow: 0 0 0 3px #c4decba8;
 }
-.review-select:disabled { color: #87918b; background-color: #f3f5f3; cursor: not-allowed; }
+.review-select-control:disabled { color: #87918b; background: #f3f5f3; cursor: not-allowed; }
+.review-select-control > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-select-control .placeholder { color: #8a958e; }
+.review-select-arrow {
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+  border-top: 5px solid #68786f;
+  transition: transform .16s ease;
+}
+.review-select-arrow.open { transform: rotate(180deg); }
 .catalog-select { margin-bottom: 19px; }
 .task-row { display: flex; width: 100%; flex-direction: column; gap: 4px; margin-bottom: 6px; padding: 10px; text-align: left; border: 1px solid transparent; border-radius: 10px; background: transparent; }
 .task-row small, .step-row small { color: #849089; }
@@ -203,7 +217,7 @@ footer code { color: #8a958f; }
   transition: transform .16s ease;
 }
 .scene-combobox-toggle.open::before { transform: rotate(180deg); }
-.scene-options {
+.scene-options, .review-select-options {
   position: absolute;
   z-index: 8;
   top: calc(100% + 6px);
@@ -217,7 +231,7 @@ footer code { color: #8a958f; }
   background: white;
   box-shadow: 0 12px 28px #26372d24;
 }
-.scene-options button {
+.scene-options button, .review-select-options button {
   display: grid;
   width: 100%;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -230,9 +244,13 @@ footer code { color: #8a958f; }
   color: #25352c;
   background: transparent;
 }
-.scene-options button:hover, .scene-options button[aria-selected="true"] { background: #e8f2eb; }
-.scene-options button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scene-options button span { color: #738078; font-size: 11px; font-weight: 500; }
+.scene-options button:hover,
+.scene-options button[aria-selected="true"],
+.review-select-options button:hover,
+.review-select-options button.highlighted,
+.review-select-options button[aria-selected="true"] { background: #e8f2eb; }
+.scene-options button strong, .review-select-options button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-options button span, .review-select-options button span { color: #738078; font-size: 11px; font-weight: 500; }
 .scene-option-empty { padding: 10px; color: #7a867f; font-size: 11px; font-weight: 500; }
 .generation-state { padding: 12px 13px; border: 1px solid #b9d5c2; border-radius: 11px; color: #2e5d3e; background: #eef7f1; }
 .generation-state strong { display: block; margin-top: 9px; }

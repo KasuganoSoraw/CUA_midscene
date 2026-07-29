@@ -22,12 +22,30 @@ import {
 import { ApiError, api } from './api';
 import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
 import RecordingWorkspace from './components/RecordingWorkspace.vue';
+import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect.vue';
 
 const mode = ref<'review' | 'recordings'>('review');
 const scenes = ref<Array<Record<string, unknown>>>([]);
 const tasks = ref<Array<Record<string, unknown>>>([]);
 const scene = ref('');
 const task = ref('');
+const sceneSelectOptions = computed<ReviewSelectOption[]>(() =>
+  scenes.value.map((item) => ({
+    value: String(item.scene),
+    label: String(item.title),
+  })),
+);
+const operationOptions: ReviewSelectOption[] = [
+  { value: 'click', label: 'click' },
+  { value: 'doubleClick', label: 'doubleClick' },
+  { value: 'input', label: 'input' },
+  { value: 'keyboard', label: 'keyboard' },
+  { value: 'wait', label: 'wait' },
+];
+const inputModeOptions: ReviewSelectOption[] = [
+  { value: 'replace', label: '替换原内容' },
+  { value: 'append', label: '追加到末尾' },
+];
 const view = ref<ReviewTaskView>();
 const draft = ref<ReviewTaskDraft>();
 const steps = ref<ReviewStep[]>([]);
@@ -198,12 +216,10 @@ function syncSemanticDraft(): void {
   status.value = '已更新浏览器草稿，尚未写入磁盘';
 }
 
-function changeOperation(event: Event): void {
-  const select = event.target as HTMLSelectElement;
-  const next = select.value as ReviewOperation;
+function changeOperation(value: string): void {
+  const next = value as ReviewOperation;
   if (next === editor.operation) return;
   if (!confirm(`将 ${editor.operation} 改为 ${next} 会按新动作模板重建当前步骤，是否继续？`)) {
-    select.value = editor.operation;
     return;
   }
   const nextEditor = defaultStepEditor(next, editor.delayMs);
@@ -339,13 +355,13 @@ onMounted(loadScenes);
     <main v-if="mode === 'review'" class="workspace">
       <aside class="catalog panel">
         <label>场景</label>
-        <select v-model="scene" class="review-select catalog-select" @change="loadTasks">
-          <option
-            v-for="item in scenes"
-            :key="String(item.scene)"
-            :value="String(item.scene)"
-          >{{ item.title }}</option>
-        </select>
+        <ReviewSelect
+          v-model="scene"
+          class="catalog-select"
+          aria-label="场景"
+          :options="sceneSelectOptions"
+          @change="loadTasks"
+        />
         <label>任务</label>
         <button
           v-for="item in tasks" :key="String(item.task)"
@@ -451,18 +467,13 @@ onMounted(loadScenes);
 
         <div class="form-grid" v-if="current">
           <label>动作类型
-            <select
-              :value="editor.operation"
-              class="review-select"
+            <ReviewSelect
+              :model-value="editor.operation"
+              aria-label="动作类型"
+              :options="operationOptions"
               :disabled="!writable || advancedEditing"
               @change="changeOperation"
-            >
-              <option value="click">click</option>
-              <option value="doubleClick">doubleClick</option>
-              <option value="input">input</option>
-              <option value="keyboard">keyboard</option>
-              <option value="wait">wait</option>
-            </select>
+            />
           </label>
           <label>动作前等待（毫秒）
             <input v-model.number="editor.delayMs" type="number" min="0" step="100" :readonly="!writable || advancedEditing" />
@@ -491,14 +502,12 @@ onMounted(loadScenes);
               <textarea v-model="editor.target" rows="3" :readonly="!writable || advancedEditing" placeholder="结合上方截图描述输入框位置"></textarea>
             </label>
             <label>输入方式
-              <select
+              <ReviewSelect
                 v-model="editor.inputMode"
-                class="review-select"
+                aria-label="输入方式"
+                :options="inputModeOptions"
                 :disabled="!writable || advancedEditing"
-              >
-                <option value="replace">替换原内容</option>
-                <option value="append">追加到末尾</option>
-              </select>
+              />
             </label>
             <fieldset class="input-options wide">
               <label class="checkbox">
