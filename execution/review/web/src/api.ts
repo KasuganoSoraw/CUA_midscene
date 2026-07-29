@@ -1,10 +1,14 @@
 import type {
+  CreateRecordingTaskRequest,
+  CreateRecordingTaskResult,
   ReviewMutation,
   ReviewMutationResult,
+  ReviewRecording,
+  ReviewRecordingCatalog,
   ReviewTaskDraft,
   ReviewTaskView,
   SaveReviewTaskResult,
-} from '../../shared/types';
+} from '../../shared/types.js';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -13,12 +17,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body !== undefined && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
   const response = await fetch(pathname, {
     ...init,
-    headers: {
-      'content-type': 'application/json',
-      ...(init.headers ?? {}),
-    },
+    headers,
   });
   const value = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new ApiError(value.error ?? `请求失败：${response.status}`, response.status);
@@ -27,6 +32,19 @@ async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> 
 
 export const api = {
   scenes: () => request<{ scenes: Array<Record<string, unknown>> }>('/api/scenes'),
+  recordings: () => request<ReviewRecordingCatalog>('/api/recordings'),
+  recording: (recording: string) =>
+    request<ReviewRecording>(`/api/recordings/${encodeURIComponent(recording)}`),
+  openRecordingFolder: (recording: string) =>
+    request<{ opened: true; recording: string }>(
+      `/api/recordings/${encodeURIComponent(recording)}/open-folder`,
+      { method: 'POST' },
+    ),
+  createRecordingTask: (recording: string, body: CreateRecordingTaskRequest) =>
+    request<CreateRecordingTaskResult>(
+      `/api/recordings/${encodeURIComponent(recording)}/tasks`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   tasks: (scene: string) => request<{ tasks: Array<Record<string, unknown>> }>(`/api/scenes/${encodeURIComponent(scene)}/tasks`),
   task: (scene: string, task: string) => request<ReviewTaskView>(`/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}`),
   mutate: (scene: string, task: string, draft: ReviewTaskDraft, mutation: ReviewMutation) =>

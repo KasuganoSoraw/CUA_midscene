@@ -105,6 +105,34 @@ class DoubleClickRetryTraceGenerator(TraceGenerator):
 
 
 class TraceGeneratorOperationTest(unittest.TestCase):
+    def test_recorded_input_and_press_actions_mandate_operation_types(self):
+        previous_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                prompt_path = Path(tmp) / "default_prompt.json"
+                prompt_path.write_text(json.dumps({"Base Prompt": ""}), encoding="utf-8")
+                generator = StubTraceGenerator(
+                    default_prompt_path=str(prompt_path),
+                    api_provider="openai",
+                )
+
+                self.assertEqual("input", generator._recorded_operation_type("Type: ADMIN"))
+                self.assertEqual("keyboard", generator._recorded_operation_type("Press ENTER"))
+                self.assertIsNone(generator._recorded_operation_type("Hotkey: CTRL+S"))
+                self.assertIn(
+                    "录制事件要求 Operation.type 为 input",
+                    generator._operation_error(
+                        {"type": "click", "prompt": "点击输入框"},
+                        generator._recorded_operation_type("Type: ADMIN"),
+                    ),
+                )
+        finally:
+            if previous_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = previous_key
+
     def test_env_bool_is_strict(self):
         with patch.dict(os.environ, {"OPENAI_VERIFY_SSL": "false"}):
             self.assertFalse(env_bool("OPENAI_VERIFY_SSL", True))

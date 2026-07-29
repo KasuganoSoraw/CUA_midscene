@@ -7,10 +7,20 @@
 ### Requirement: 本地复核应用随执行器发布
 系统 SHALL 将复核应用的 Fastify 服务端与 Vue 3 前端构建产物随 `cua-midscene` 包发布，并通过统一命令启动仅监听 loopback 的临时本地服务；服务端框架迁移 SHALL 保持既有 CLI 和 HTTP 契约兼容。
 
-#### Scenario: 启动复核控制台
-- **WHEN** 用户在 Node.js 22.18.0 或更高版本调用 `cua review` 并具有有效的 `CUA_DATA_ROOT`
-- **THEN** 系统 SHALL 在 `127.0.0.1` 上使用系统分配的随机可用端口启动服务
+#### Scenario: 首次启动复核控制台
+- **WHEN** 用户在 Node.js 22.18.0 或更高版本调用 `cua review`、具有有效的 `CUA_DATA_ROOT`，且 `127.0.0.1:47831` 空闲
+- **THEN** 系统 SHALL 在 `127.0.0.1:47831` 启动服务
 - **AND** 系统 SHALL 提供不含访问 token、可由系统浏览器打开的本地 URL
+
+#### Scenario: 重复启动相同复核服务
+- **WHEN** `127.0.0.1:47831` 已运行协议兼容且数据根一致的 CUA review 服务
+- **THEN** 新的 `cua review` 调用 SHALL 复用现有 URL
+- **AND** 调用 SHALL NOT 创建新的 Fastify listener 或 Node 服务进程
+
+#### Scenario: 默认端口由其他服务占用
+- **WHEN** `127.0.0.1:47831` 被其他程序、协议不兼容或数据根不同的 review 服务占用
+- **THEN** 启动 SHALL 明确失败并说明端口冲突
+- **AND** 系统 SHALL NOT 自动尝试其他端口或终止占用进程
 
 #### Scenario: 发布环境离线使用
 - **WHEN** 目标机器无法访问远程服务器
@@ -46,6 +56,40 @@
 - **WHEN** 当前步骤没有自身绑定的局部图和全局图
 - **THEN** 页面 SHALL 展示中性的默认占位图
 - **AND** 页面 SHALL NOT 使用其他步骤的截图冒充或替代当前步骤证据
+
+### Requirement: 定位参考图通过普通界面管理
+本地 review 页面 SHALL 将录制阶段可用的 `screenshot_reference` 与 YAML 已绑定的 `locate.images` 统一呈现为“定位参考图”，并 SHALL 允许用户在受支持的可写步骤中通过普通界面决定单张录制定位参考图是否参与执行定位，而无需直接编辑 JSON。
+
+#### Scenario: 展示单张定位参考图
+- **WHEN** 当前步骤存在一张录制定位参考图或一张已绑定定位参考图
+- **THEN** 页面 SHALL 使用“定位参考图”作为页签和区域名称
+- **AND** 页面 SHALL NOT 显示“目标小图 1”或其他单图数量描述
+- **AND** 页面 SHALL 说明该图片帮助 Midscene 识别目标外观且不表示固定点击坐标
+- **AND** 当前步骤存在局部录制图时 SHALL 继续默认展示局部图
+
+#### Scenario: 将录制定位参考图用于定位
+- **WHEN** 可写的标准 click 或 doubleClick 步骤存在一张未绑定的录制定位参考图，且用户点击“用于定位”
+- **THEN** 页面 SHALL 将该图片作为唯一候选加入当前步骤草稿的 `locate.images`
+- **AND** 页面 SHALL 保留目标描述与动作前等待时间
+- **AND** 高级 JSON、变更对比和绑定状态 SHALL 立即联动
+- **AND** 页面 SHALL NOT 在用户确认写入前修改磁盘资产
+
+#### Scenario: 取消使用已绑定定位参考图
+- **WHEN** 可写的标准 click 或 doubleClick 步骤只绑定一张定位参考图，且用户点击“取消使用”
+- **THEN** 页面 SHALL 从当前步骤草稿中移除 `locate.images`
+- **AND** 页面 SHALL 保留目标描述、动作前等待时间和 `source/` 中的图片文件
+- **AND** 高级 JSON、变更对比和绑定状态 SHALL 立即联动
+
+#### Scenario: 只读或不支持的步骤
+- **WHEN** 当前任务为 builtin、步骤不是标准 click/doubleClick、页面处于高级编辑或保存忙碌状态
+- **THEN** 页面 SHALL 继续展示可用的定位参考图和当前绑定状态
+- **AND** 页面 SHALL 禁用绑定操作并说明不可操作原因
+
+#### Scenario: 已有 YAML 绑定多张定位参考图
+- **WHEN** 当前步骤的 canonical `locate.images` 包含两张或更多图片
+- **THEN** 页面 SHALL 完整展示并无损保留全部图片引用
+- **AND** 普通界面 SHALL NOT 提供会将多图静默替换、压缩或全部移除的单图绑定操作
+- **AND** 页面 SHALL 提示该步骤需要通过高级 JSON 维护多图配置
 
 ### Requirement: 保存必须校验版本与任务契约
 复核服务 SHALL 使用 `task.json` 与 `task.yaml` 内容计算 revision，并只在客户端 revision 仍为当前版本时联合校验和原子保存 user task。
@@ -90,4 +134,62 @@
 - **THEN** 页面 SHALL 先解析并校验两个 JSON 缓冲区
 - **AND** 只有校验成功时才 SHALL 反向更新语义表单、参考图展示和 review 草稿
 - **AND** 默认只读的高级预览 SHALL 随普通表单内容实时变化
+
+### Requirement: 本地复核应用提供从录制创建任务页
+本地 review 应用 SHALL 提供独立于任务步骤编辑器的“从录制创建任务”页签，并 SHALL 使用与现有任务选择一致的左侧列表和右侧详情布局。
+
+#### Scenario: 浏览录制目录
+- **WHEN** 用户进入录制创建页且录制根可用
+- **THEN** 左侧 SHALL 展示动态发现的录制目录
+- **AND** 右侧 SHALL 使用占位卡片展示视频和事件日志名称、大小及录制基本信息
+- **AND** 页面 SHALL NOT 尝试播放视频或加载完整事件日志正文
+
+#### Scenario: 录制根未配置
+- **WHEN** 用户进入录制创建页且录制根不可用
+- **THEN** 页面 SHALL 展示 `CUA_RECORDINGS_ROOT` 配置提示
+- **AND** 页面 SHALL 展示 `execution/.env.local` 配置位置、绝对路径示例和重启提示
+- **AND** 页面 SHALL NOT 提供修改环境文件或启动桌面目录选择器的操作
+- **AND** 任务复核页签 SHALL 继续可用
+
+### Requirement: 下拉字段采用一致且可访问的交互样式
+本地 review 应用 SHALL 对 Select 与可编辑 Combobox 使用一致的字段尺寸、边框、尾部箭头和交互状态，同时 SHALL 保留二者各自正确的语义与键盘行为。
+
+#### Scenario: 悬浮或聚焦下拉字段
+- **WHEN** 用户悬浮或聚焦任一下拉字段
+- **THEN** 完整字段 SHALL 显示统一的 hover 或 focus 状态
+- **AND** 尾部箭头 SHALL NOT 使用遮挡字段右下角圆角的大面积独立背景
+
+#### Scenario: 展开任务复核纯选择字段
+- **WHEN** 用户展开任务复核页的场景、动作类型或输入方式字段
+- **THEN** 页面 SHALL 使用与录制创建场景 Combobox 一致的弹层、选项和选中状态
+- **AND** 控件 SHALL 支持方向键移动、Enter 或 Space 选择以及 Escape 关闭
+
+### Requirement: 用户通过语义表单创建完整任务
+录制创建页 SHALL 允许用户选择或输入场景、输入任务标识和可选目标，并 SHALL 在一次操作中创建完整可复核任务，而不暴露 trace 等内部产物。
+
+#### Scenario: 创建到已有场景
+- **WHEN** 用户从 Combobox 选择已有 scene、输入不存在的 task 并选择有效录制
+- **THEN** 页面 SHALL 提交完整任务创建请求
+- **AND** goal 留空时 SHALL 以空任务描述创建
+
+#### Scenario: 创建到新场景
+- **WHEN** 用户在 Combobox 输入合法的新 scene ID
+- **THEN** 系统 SHALL 使用该 ID 创建新用户场景和任务
+- **AND** 新场景初始 title SHALL 使用该 scene ID
+
+#### Scenario: 生成任务期间
+- **WHEN** 完整任务创建请求尚未结束
+- **THEN** 页面 SHALL 展示“正在生成任务”的不确定进度状态
+- **AND** 页面 SHALL 禁用录制选择、表单和重复提交
+- **AND** 页面 SHALL NOT 展示虚假百分比或要求流式日志
+
+#### Scenario: 创建成功
+- **WHEN** 服务成功创建并验证完整任务
+- **THEN** 页面 SHALL 刷新任务 catalog
+- **AND** 页面 SHALL 自动切换到任务复核页并打开新任务
+
+#### Scenario: 创建失败
+- **WHEN** 创建流程返回错误
+- **THEN** 页面 SHALL 恢复表单并在页面内展示错误
+- **AND** 页面 SHALL NOT 使用浏览器原生 alert
 
