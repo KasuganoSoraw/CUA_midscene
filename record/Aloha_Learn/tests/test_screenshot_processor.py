@@ -76,6 +76,30 @@ class ScreenshotProcessorReferenceImageTest(unittest.TestCase):
             self.assertIn("screenshot_reference", processed[0])
             self.assertNotIn("screenshot_reference", processed[1])
 
+    def test_keyboard_action_uses_unmarked_full_frame_crop(self):
+        actions = [
+            {
+                "timestamp": 1.0,
+                "action": "Press ENTER",
+                "coords": [{"x": 500, "y": 500}],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            with patch.object(self.extractor, "_get_frame_at", return_value=self.frame.copy()):
+                processed = self.extractor.process_actions(
+                    actions,
+                    "recording.mp4",
+                    output,
+                    False,
+                    1.0,
+                    1.0,
+                )
+
+            crop = cv2.imread(str(output / "0.900s.crop.jpg"))
+            self.assertEqual(self.frame.shape[:2], crop.shape[:2])
+            self.assertNotIn("screenshot_reference", processed[0])
+
     def test_reference_save_failure_aborts_processing(self):
         actions = [
             {

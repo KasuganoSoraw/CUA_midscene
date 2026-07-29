@@ -133,6 +133,10 @@ class TraceGenerator:
         event_name = re.split(r"\s+|:", action.strip(), maxsplit=1)[0].lower()
         if event_name in {"ldoubleclick", "ldblclick", "doubleclick", "dblclick"}:
             return "doubleClick"
+        if event_name == "type":
+            return "input"
+        if event_name == "press":
+            return "keyboard"
         return None
 
     def _operation_error(
