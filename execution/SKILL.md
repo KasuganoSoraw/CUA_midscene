@@ -60,7 +60,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 ## 本地复核页面
 
-运行 `node dist/cli/main.js review` 启动仅监听 loopback 的 Vue 复核页面；GDE Claw 可用 `--no-open` 获取 URL 后调用系统浏览器。“任务复核”会区分展示全局录制图、带点击标记的局部图和 `locate.images` 执行参考图，并在修改点击目标描述时保留图片引用。页面只写入 user catalog，builtin task 与 `source/` 始终只读。
+运行 `node dist/cli/main.js review` 启动仅监听 `127.0.0.1:47831` 的 Vue 复核页面；相同数据目录的已有 review 服务会被复用，不得重复启动新的监听进程。端口被其他程序或不同数据目录占用时应报告冲突，不自动递增端口。GDE Claw 可用 `--no-open` 获取 URL 后调用系统浏览器。“任务复核”会区分展示全局录制图、带点击标记的局部图和 `locate.images` 执行参考图，并在修改点击目标描述时保留图片引用。页面只写入 user catalog，builtin task 与 `source/` 始终只读。
 
 “从录制创建任务”列出 `CUA_RECORDINGS_ROOT` 的一级子目录，仅以占位卡片显示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并允许打开原始目录。用户填写场景、任务和可选目标后，页面复用完整创建流程；不播放媒体、不展开日志、不暴露 trace，也不提供流式日志。生成时只显示不可确定的进行中状态，成功后自动进入新任务复核。
 

@@ -5,7 +5,13 @@ import path from 'node:path';
 import test from 'node:test';
 import { runCliCommand } from '../../cli/main.js';
 import { reviewBodyLimit } from '../../review/server/app.js';
-import { startReviewServer } from '../../review/server/main.js';
+import {
+  defaultReviewPort,
+  reviewDataRootKey,
+  reviewProtocolVersion,
+  reviewServiceName,
+  startReviewServer,
+} from '../../review/server/main.js';
 import { createTaskFixture } from '../helpers/task-fixture.js';
 
 test('review server 在 loopback 随机端口暴露 catalog，并安全提供静态资源与证据', async () => {
@@ -25,6 +31,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
   let createRequest: Record<string, unknown> | undefined;
   const started = await startReviewServer({
     dataRoot: root,
+    port: 0,
     recordingsRoot,
     staticRoot,
     dependencies: {
@@ -50,6 +57,11 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     const scenes = await fetch(new URL('/api/scenes', base));
     assert.equal(scenes.status, 200);
     assert.equal((await scenes.json() as any).scenes[0].scene, 'browser-demo');
+    assert.deepEqual(await (await fetch(new URL('/api/review/identity', base))).json(), {
+      service: reviewServiceName,
+      protocolVersion: reviewProtocolVersion,
+      dataRootKey: reviewDataRootKey(root),
+    });
 
     const recordings = await fetch(new URL('/api/recordings', base));
     assert.equal(recordings.status, 200);
@@ -148,6 +160,7 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
     delete process.env.CUA_RECORDINGS_ROOT;
     const started = await startReviewServer({
       dataRoot: root,
+      port: 0,
       staticRoot,
       executionRoot,
     });
@@ -168,6 +181,37 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
   }
 });
 
+test('review server 在固定端口复用相同数据根并拒绝不同数据根', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-fixed-port-'));
+  const otherRoot = await mkdtemp(path.join(os.tmpdir(), 'cua-review-fixed-port-other-'));
+  const staticRoot = path.join(root, 'static');
+  await Promise.all([
+    createTaskFixture(path.join(root, 'projects')),
+    mkdir(staticRoot, { recursive: true }),
+  ]);
+  await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>review</title>', 'utf8');
+
+  const first = await startReviewServer({ dataRoot: root, staticRoot });
+  try {
+    assert.equal(first.reused, false);
+    assert.equal(first.url, `http://127.0.0.1:${defaultReviewPort}/`);
+
+    const second = await startReviewServer({ dataRoot: root, staticRoot });
+    assert.equal(second.reused, true);
+    assert.equal(second.url, first.url);
+    assert.equal(second.server, undefined);
+    await second.close();
+    assert.equal((await fetch(first.url)).status, 200);
+
+    await assert.rejects(
+      startReviewServer({ dataRoot: otherRoot, staticRoot }),
+      new RegExp(`${defaultReviewPort}.*占用`),
+    );
+  } finally {
+    await first.close();
+  }
+});
+
 test('顶层 CLI 保持旧命令并只增加 review 启动分发', async () => {
   const scenes = JSON.parse(await runCliCommand(['scene', 'list', '--json']));
   assert.equal(scenes.scenes[0].scene, 'browser-demo');
@@ -176,10 +220,12 @@ test('顶层 CLI 保持旧命令并只增加 review 启动分发', async () => {
     startReview: async () => ({
       server: {} as any,
       url: 'http://127.0.0.1:43127/',
+      reused: false,
       close: async () => undefined,
     }),
     openBrowser: (url) => { opened = url; },
   }));
   assert.equal(output.host, '127.0.0.1');
+  assert.equal(output.reused, false);
   assert.equal(opened, '');
 });

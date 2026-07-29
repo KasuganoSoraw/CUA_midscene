@@ -77,7 +77,7 @@ node dist/cli/main.js review --no-open
 
 `task create-from-recording` 是原始录制的默认创建入口，会按 record 原有无 goal 方式生成 trace、规范化 `source/`、初始化任务并完成静态验证。可选的 `--goal` 只写入任务 goal/description 和 YAML groupDescription，不进入 trace prompt；省略时这些字段保存空字符串。Python 进度写入 stderr，最终 stdout 保持为单个 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
-`review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。“任务复核”读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。“从录制创建任务”读取 `CUA_RECORDINGS_ROOT` 的一级子目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，可打开系统目录，并复用 `createTaskFromRecording()` 创建完整用户任务。页面不播放视频、不展示完整日志，也不流式转发 Python 日志；创建期间只显示不可确定的“正在生成”状态，成功后自动进入新任务复核。同一录制可以用于创建不同任务，每次都会重新处理。
+`review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT` 调用时会识别并复用已有服务，不创建新的 Node 监听进程。若该端口由其他程序或不同数据目录的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。“任务复核”读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。“从录制创建任务”读取 `CUA_RECORDINGS_ROOT` 的一级子目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，可打开系统目录，并复用 `createTaskFromRecording()` 创建完整用户任务。页面不播放视频、不展示完整日志，也不流式转发 Python 日志；创建期间只显示不可确定的“正在生成”状态，成功后自动进入新任务复核。同一录制可以用于创建不同任务，每次都会重新处理。
 
 未配置 `CUA_RECORDINGS_ROOT` 不会阻止 review 服务和任务复核启动。录制页只提示需要配置的环境变量、`execution/.env.local` 配置位置和路径示例，不直接修改环境文件，也不从后台服务进程唤起可能失焦或阻塞的桌面目录选择框。配置后重启 review 服务即可生效。存在零个或多个视频/事件文件的录制目录仍会显示，但不能生成任务。
 

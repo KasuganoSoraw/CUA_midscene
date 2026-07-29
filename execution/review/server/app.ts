@@ -16,6 +16,11 @@ function errorStatus(error: unknown): number {
 export async function createReviewApp(options: {
   layout: RuntimeLayout;
   staticRoot: string;
+  identity: {
+    service: string;
+    protocolVersion: number;
+    dataRootKey: string;
+  };
   recordingsRoot?: string;
   executionRoot?: string;
   dependencies?: ReviewRouteDependencies;
@@ -30,6 +35,8 @@ export async function createReviewApp(options: {
       error: error instanceof Error ? error.message : String(error),
     });
   });
+
+  app.get('/api/review/identity', async () => options.identity);
 
   await app.register(registerReviewRoutes, {
     layout: options.layout,

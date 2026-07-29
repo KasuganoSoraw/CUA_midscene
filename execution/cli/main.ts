@@ -12,6 +12,7 @@ export const helpText = `${cuaHelpText.trimEnd()}
 
 本地复核：
   review [--data-root <path>] [--no-open] [--json]
+    默认使用 127.0.0.1:47831；相同数据目录的现有服务将被复用
 `;
 
 function reviewOptions(argv: string[]): { dataRoot?: string; noOpen: boolean; json: boolean } {
@@ -44,8 +45,8 @@ export async function runCliCommand(
   });
   if (!options.noOpen) (dependencies.openBrowser ?? openSystemBrowser)(started.url);
   return options.json
-    ? `${JSON.stringify({ url: started.url, host: '127.0.0.1' }, null, 2)}\n`
-    : `复核页面已启动：${started.url}\n`;
+    ? `${JSON.stringify({ url: started.url, host: '127.0.0.1', reused: started.reused }, null, 2)}\n`
+    : `${started.reused ? '复核页面已复用' : '复核页面已启动'}：${started.url}\n`;
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {

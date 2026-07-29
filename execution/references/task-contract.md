@@ -45,6 +45,8 @@ node dist/cli/main.js act run --prompt "打开 Chrome 并搜索 GUI agent"
 node dist/cli/main.js review --no-open
 ```
 
+`review` 默认使用 `127.0.0.1:47831`。相同数据目录的服务已运行时返回并复用同一 URL；端口被其他程序或不同数据目录占用时直接失败，不扫描后续端口。
+
 `task create-from-recording` 是原始录制的默认入口。它从 `--record-root`、`CUA_RECORD_ROOT`、execution 环境文件或源码相邻目录定位独立 record 环境，在其中按原有无 goal 方式运行 uv/Python，再将生成资产规范化到 user task `source/` 并完成初始化与静态验证。可选 `--goal` 只写入 task goal/description 与 YAML groupDescription，不进入 trace prompt；省略时这些字段均为空字符串。
 
 `task init-from-trace` 保留给 source 已经标准化的高级场景。两种创建方式都拒绝覆盖 user/builtin 任务。
