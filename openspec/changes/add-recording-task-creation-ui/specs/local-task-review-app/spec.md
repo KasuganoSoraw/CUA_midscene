@@ -24,6 +24,11 @@
 - **THEN** 完整字段 SHALL 显示统一的 hover 或 focus 状态
 - **AND** 尾部箭头 SHALL NOT 使用遮挡字段右下角圆角的大面积独立背景
 
+#### Scenario: 展开任务复核纯选择字段
+- **WHEN** 用户展开任务复核页的场景、动作类型或输入方式字段
+- **THEN** 页面 SHALL 使用与录制创建场景 Combobox 一致的弹层、选项和选中状态
+- **AND** 控件 SHALL 支持方向键移动、Enter 或 Space 选择以及 Escape 关闭
+
 ### Requirement: 用户通过语义表单创建完整任务
 录制创建页 SHALL 允许用户选择或输入场景、输入任务标识和可选目标，并 SHALL 在一次操作中创建完整可复核任务，而不暴露 trace 等内部产物。
 
