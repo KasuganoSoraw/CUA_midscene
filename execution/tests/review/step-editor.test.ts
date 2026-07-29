@@ -114,3 +114,71 @@ test('带参考图的点击类 Flow 通过普通表单无损往返', () => {
   assert.equal(doubleClick.custom, false);
   assert.equal(doubleClick.referenceImages[0].name, 'step-003-target');
 });
+
+test('点击步骤绑定和解绑单张定位参考图时保留语义字段', () => {
+  const parsed = parseStepEditor({
+    id: 'step-006',
+    operation: 'click',
+    flow: [{ sleep: 850 }, { aiTap: '点击右上角的个人头像' }],
+  });
+
+  parsed.referenceImages = [{
+    name: 'step-006-reference',
+    url: 'source/screenshots/step-006.reference.png',
+  }];
+  const bound = buildStepContent(parsed, 'step-006');
+  assert.deepEqual(bound.flow, [
+    { sleep: 850 },
+    {
+      aiTap: null,
+      locate: {
+        prompt: '点击右上角的个人头像',
+        images: [{
+          name: 'step-006-reference',
+          url: 'source/screenshots/step-006.reference.png',
+        }],
+      },
+    },
+  ]);
+
+  const rebound = parseStepEditor({
+    id: 'step-006',
+    operation: 'click',
+    flow: bound.flow,
+  });
+  rebound.referenceImages = [];
+  assert.deepEqual(buildStepContent(rebound, 'step-006').flow, [
+    { sleep: 850 },
+    { aiTap: '点击右上角的个人头像' },
+  ]);
+});
+
+test('多张定位参考图在普通字段更新时保持顺序和内容', () => {
+  const flow = [{
+    aiTap: null,
+    locate: {
+      prompt: '点击工具栏图标',
+      images: [
+        { name: 'dark-theme', url: 'source/screenshots/dark.png' },
+        { name: 'light-theme', url: 'source/screenshots/light.png' },
+      ],
+      convertHttpImage2Base64: true,
+    },
+  }];
+  const parsed = parseStepEditor({
+    id: 'step-009',
+    operation: 'click',
+    flow,
+  });
+  parsed.target = '点击工具栏中的目标图标';
+
+  const built = buildStepContent(parsed, 'step-009');
+  assert.deepEqual((built.flow[0].locate as Record<string, unknown>).images, [
+    { name: 'dark-theme', url: 'source/screenshots/dark.png' },
+    { name: 'light-theme', url: 'source/screenshots/light.png' },
+  ]);
+  assert.equal(
+    (built.flow[0].locate as Record<string, unknown>).convertHttpImage2Base64,
+    true,
+  );
+});

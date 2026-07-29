@@ -67,16 +67,39 @@ function clone<T>(value: T): T {
 }
 
 const current = computed(() => steps.value[selected.value]);
-const displayedReferenceImages = computed<ReviewReferenceImage[]>(() => {
-  const step = current.value;
-  if (!step) return [];
-  if (step.referenceImages?.length) return step.referenceImages;
-  return step.evidence?.reference
-    ? [{ name: `${step.id}-recording-patch`, url: step.evidence.reference }]
-    : [];
-});
-const referenceImagesBound = computed(() => Boolean(current.value?.referenceImages?.length));
 const writable = computed(() => Boolean(view.value?.writable));
+const referenceImageCandidate = computed<ReviewReferenceImage | undefined>(() => {
+  const step = current.value;
+  return step?.evidence?.reference
+    ? { name: `${step.id}-reference`, url: step.evidence.reference }
+    : undefined;
+});
+const displayedReferenceImages = computed<ReviewReferenceImage[]>(() => {
+  if (editor.referenceImages.length) return editor.referenceImages;
+  return referenceImageCandidate.value ? [referenceImageCandidate.value] : [];
+});
+const referenceImagesBound = computed(() => editor.referenceImages.length > 0);
+const multipleReferenceImages = computed(() => editor.referenceImages.length > 1);
+const referenceBindingStatus = computed(() => {
+  if (multipleReferenceImages.value) return `已使用 ${editor.referenceImages.length} 张 · 兼容模式`;
+  return referenceImagesBound.value ? '已用于执行定位' : '可用，尚未用于定位';
+});
+const referenceBindingDisabledReason = computed<string | undefined>(() => {
+  if (!writable.value) return '内置任务为只读模式，无法修改定位参考图。';
+  if (busy.value) return '任务正在处理中，请稍后再试。';
+  if (advancedEditing.value) return '请先应用或取消高级 JSON 编辑。';
+  if (editor.custom) return '当前 Flow 不是标准动作模板，请通过高级 JSON 维护。';
+  if (editor.operation !== 'click' && editor.operation !== 'doubleClick') {
+    return '仅点击和双击动作支持定位参考图。';
+  }
+  if (multipleReferenceImages.value) {
+    return '当前步骤包含多张定位参考图，请通过高级 JSON 维护，系统不会自动合并或删除。';
+  }
+  if (!referenceImagesBound.value && !referenceImageCandidate.value) {
+    return '当前步骤没有可用的录制定位参考图。';
+  }
+  return undefined;
+});
 const dirty = computed(() => changes.value.length > 0);
 const builtContent = computed(() => buildStepContent(editor, current.value?.id ?? 'step-001'));
 const flowPreview = computed(() => JSON.stringify(builtContent.value.flow, null, 2));
@@ -322,6 +345,22 @@ function referenceImageUrl(image: ReviewReferenceImage): string {
     : api.evidenceUrl(scene.value, task.value, image.url);
 }
 
+function bindReferenceImage(): void {
+  const candidate = referenceImageCandidate.value;
+  if (!candidate || referenceBindingDisabledReason.value) return;
+  editor.referenceImages = [clone(candidate)];
+  editor.convertHttpImage2Base64 = false;
+}
+
+function unbindReferenceImage(): void {
+  if (
+    editor.referenceImages.length !== 1
+    || referenceBindingDisabledReason.value
+  ) return;
+  editor.referenceImages = [];
+  editor.convertHttpImage2Base64 = false;
+}
+
 onMounted(loadScenes);
 </script>
 
@@ -390,12 +429,12 @@ onMounted(loadScenes);
               <span
                 v-if="item.referenceImages?.length"
                 class="reference-mark"
-                title="YAML 已绑定执行定位参考图"
+                title="YAML 已使用定位参考图"
               >▣</span>
               <span
                 v-else-if="item.evidence?.reference"
                 class="reference-mark available"
-                title="有录制目标小图，当前 YAML 未绑定"
+                title="有可用定位参考图，当前 YAML 尚未使用"
               >▢</span>
             </span>
           </button>
@@ -434,23 +473,55 @@ onMounted(loadScenes);
               v-if="displayedReferenceImages.length"
               :class="{ active: evidenceMode === 'reference' }"
               @click="evidenceMode = 'reference'"
-            >{{ referenceImagesBound ? '参考图' : '目标小图' }} {{ displayedReferenceImages.length }}</button>
-            <small v-if="evidenceMode === 'reference'">{{ referenceImagesBound ? '执行定位资产' : '录制目标小图 · YAML 未绑定' }}</small>
+            >定位参考图</button>
+            <small v-if="evidenceMode === 'reference'">{{ referenceBindingStatus }}</small>
             <small v-else-if="current.evidence">source step {{ current.evidence.sourceStep }}</small>
             <small v-else>当前步骤无独立证据</small>
           </div>
           <div v-if="evidenceMode === 'reference'" class="reference-gallery">
-            <article v-for="image in displayedReferenceImages" :key="`${image.name}:${image.url}`">
+            <article
+              v-for="(image, imageIndex) in displayedReferenceImages"
+              :key="`${image.name}:${image.url}`"
+              :class="{ 'compatibility-item': multipleReferenceImages }"
+            >
               <div class="reference-image-frame">
-                <img :src="referenceImageUrl(image)" :alt="`${image.name} 执行定位参考图`" />
+                <img :src="referenceImageUrl(image)" alt="定位参考图" />
               </div>
-              <div>
-                <strong>{{ image.name }}</strong>
-                <code :title="image.url">{{ image.url }}</code>
+              <div class="reference-card-content">
+                <div class="reference-card-heading">
+                  <strong>{{ multipleReferenceImages ? `定位参考图 ${imageIndex + 1}` : '定位参考图' }}</strong>
+                  <span class="reference-state" :class="{ bound: referenceImagesBound }">
+                    {{ referenceBindingStatus }}
+                  </span>
+                </div>
+                <template v-if="multipleReferenceImages">
+                  <code :title="image.name">{{ image.name }}</code>
+                  <code :title="image.url">{{ image.url }}</code>
+                </template>
+                <p v-if="imageIndex === 0">
+                  定位参考图帮助 Midscene 识别目标外观；执行时仍会结合当前页面和目标描述判断位置，不代表固定点击坐标。
+                </p>
+                <div v-if="imageIndex === 0" class="reference-actions">
+                  <button
+                    v-if="referenceImagesBound"
+                    class="reference-action secondary"
+                    :disabled="Boolean(referenceBindingDisabledReason)"
+                    :title="referenceBindingDisabledReason"
+                    @click="unbindReferenceImage"
+                  >取消使用</button>
+                  <button
+                    v-else
+                    class="reference-action primary"
+                    :disabled="Boolean(referenceBindingDisabledReason)"
+                    :title="referenceBindingDisabledReason"
+                    @click="bindReferenceImage"
+                  >用于定位</button>
+                </div>
+                <small v-if="imageIndex === 0 && referenceBindingDisabledReason" class="reference-disabled-reason">
+                  {{ referenceBindingDisabledReason }}
+                </small>
               </div>
             </article>
-            <p v-if="referenceImagesBound">该图片已由当前 YAML 用于帮助 Midscene 识别目标外观，不表示固定点击坐标。</p>
-            <p v-else>这是录制时生成的干净目标小图；当前 YAML 尚未将它绑定为执行定位参考。</p>
           </div>
           <EvidencePlaceholder v-else-if="evidenceMode === 'placeholder'" />
           <template v-else>
@@ -487,14 +558,6 @@ onMounted(loadScenes);
             <label class="wide">目标描述
               <textarea v-model="editor.target" rows="3" :readonly="!writable || advancedEditing" placeholder="结合上方截图描述要点击的目标"></textarea>
             </label>
-            <div v-if="editor.referenceImages.length" class="reference-binding-summary wide">
-              <strong>已绑定 {{ editor.referenceImages.length }} 张执行参考图</strong>
-              <span>修改目标描述时会保留图片引用；图片名称与路径可在“高级 JSON”中维护。</span>
-            </div>
-            <div v-else-if="current.evidence?.reference" class="reference-binding-summary available wide">
-              <strong>有可用的录制目标小图</strong>
-              <span>当前 Flow 未绑定该图片；可在上方“目标小图”查看，或在“高级 JSON”中配置 locate.images。</span>
-            </div>
           </template>
 
           <template v-else-if="editor.operation === 'input'">
