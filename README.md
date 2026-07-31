@@ -34,8 +34,8 @@ CUA/
   -> act run --scene/--task：投影为完整步骤 prompt，再执行单个 ai action
 
 无录制自然语言要求
-  -> 临时单 action YAML
-  -> 同一个 TypeScript Midscene 执行 API
+  -> CLI act run --prompt：保留现有临时单 action YAML 路径
+  -> TypeScript runNaturalLanguageAiAct()：直接调用原生 agent.aiAct()
 ```
 
 `task.yaml` 是任务唯一长期可执行流程，直接使用 Midscene 原生 YAML action。`task.json` 保存任务说明、trace 来源、输入 ID 和录制默认值；`source/` 是校准时的只读录制证据。必要的 click/doubleClick 可以在 YAML 中使用 Midscene 原生 `locate.images` 引用 `source/` 下的干净 reference patch；它是语义定位参考，不是坐标模板。系统不维护自定义 route、resolved flow、override、proposal 或 history。
@@ -66,6 +66,19 @@ npm run cua -- review --no-open
 
 实际操作电脑时去掉 `--dry-run`。第一版不实现并发锁，上层调用方必须串行发起真实 computer use；查询、转换、inspect 和 dry-run 不操作电脑。
 
+GDE Claw 等进程内集成方可以从 execution 包根入口导入独立 API，不需要生成 YAML，也不需要启动子进程：
+
+```ts
+import { runNaturalLanguageAiAct } from 'cua-midscene';
+
+const run = await runNaturalLanguageAiAct({
+  prompt: '打开 Chrome 并搜索 GUI agent',
+  runsRoot: 'C:\\path\\to\\cua-data\\runs',
+});
+```
+
+该 API 保存 `ai-act-prompt.txt` 和 `ai-act-result.json`，随后由 `executors/midscene-ai-act.ts` 直接调用一次 `agent.aiAct()`。现有三个 CLI 执行模式和任务资产格式均未改变。
+
 `task create-from-recording` 是从原始录制创建任务的默认入口。`--goal` 仅作为创建后任务的描述信息，不会进入 trace 生成 prompt；可以省略，省略时任务 goal/description 与 YAML groupDescription 保存空字符串。命令会自动运行原有 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
 
 仅当 trace 与 processed log 已经放入 user task `source/` 时，使用高级初始化入口：
@@ -94,6 +107,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
     ├── ai-act-prompt.txt            # 仅录制任务整体 aiAct
     ├── ai-act-task.yaml             # 仅录制任务整体 aiAct
     ├── execution-result.json
+    ├── ai-act-result.json           # 仅原生 aiAct API
     └── midscene/                    # Midscene 报告、截图等产物
 ```
 

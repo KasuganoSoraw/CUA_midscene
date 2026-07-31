@@ -9,16 +9,18 @@ record trace
   -> cua/recording：调用外部 Python recorder、规范化 source、初始化并验证任务
   -> cua/conversion：caption.operation -> task.yaml + task.json
   -> cua/task：数据根、catalog、YAML、输入、aiAct 投影与执行编排
+  -> cua/act：无录制自然语言原生 aiAct 公开 API
   -> cli：开发命令和安装后 bin 的统一入口
   -> cua/index.ts：GDE Claw 等上层工具直接导入的 API
   -> review：Vue 本地复核应用、localhost 服务与复核专属 service
-  -> executors：ComputerAgent、KeyboardTypeText、agent.runYaml()
+  -> executors：ComputerAgent、KeyboardTypeText、agent.runYaml()、agent.aiAct()
 ```
 
 - `cua/contracts/`：普通 TypeScript 类型和 Ajv 文件边界校验。
 - `cua/recording/`：定位外部 record 环境、运行 parser、复制标准化生成资产并编排任务创建。
 - `cua/conversion/`：只根据结构化 trace operation 初始化任务；被标记的 click/doubleClick 会绑定 processed log 中的 reference patch。
 - `cua/task/`：双 catalog、YAML、输入、运行快照和执行编排。
+- `cua/act/`：不依赖录制任务或 YAML 的自然语言原生 aiAct 调用。
 - `cli/`：统一命令分发与 stdout/stderr 输出协议。
 - `review/`：与 `cua/` 平级的本地复核应用；`service/` 组合任务资产、录制证据和 `locate.images` 执行参考图，`server/` 使用 Fastify 提供受控 HTTP，`web/` 使用 Vue 3。
 - `executors/`：Midscene 薄适配器、环境读取和 customAction。
@@ -90,11 +92,26 @@ node dist/cli/main.js review --no-open
 - `task run` 直接执行参数已解析的多 task YAML，适合稳定页面。
 - `act run --scene/--task` 将相同 resolved YAML 投影为有序完整 prompt，再执行单个 `ai` action。
 - `act run --prompt` 将自然语言要求包装为单 `ai` action，不读取任务资产。
-- 三种路径复用 `executors/midscene-yaml.ts`，在同一进程内直接调用 Midscene。
+- 现有三种 CLI 路径复用 `executors/midscene-yaml.ts`，在同一进程内直接调用 Midscene。
+- `runNaturalLanguageAiAct()` 是面向 GDE Claw 等进程内集成方的独立 API，由 `executors/midscene-ai-act.ts` 直接调用一次 `agent.aiAct()`，不生成 YAML。
 - 每次实际执行设置 `MIDSCENE_RUN_DIR=<run-dir>/midscene`，并在 `finally` 中销毁 Agent、恢复原环境。
 - 第一版不实现并发锁，上层必须串行调用真实 computer use。
 - 不兼容旧 flow，不自动切换模式、修改任务、重试或调用替代输入动作。
 - 逐步 YAML 和录制任务整体 aiAct 都保留被明确选择的参考图片；图片缺失、路径越界或同名图片指向不同 URL 时启动前失败，不降级为纯文字动作。
+
+原生 aiAct API 从包根入口导入：
+
+```ts
+import { runNaturalLanguageAiAct } from 'cua-midscene';
+
+const run = await runNaturalLanguageAiAct({
+  prompt: '打开 Chrome 并搜索 GUI agent',
+  runsRoot: 'C:\\path\\to\\cua-data\\runs',
+  dryRun: false,
+});
+```
+
+它会保存 `ai-act-prompt.txt`、`ai-act-result.json` 和 Midscene 报告。`dryRun: true` 只校验 prompt 并写入结果，不初始化 ComputerDevice 或调用模型。
 
 ## 验证
 
