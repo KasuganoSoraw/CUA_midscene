@@ -45,6 +45,16 @@ export interface ExecutorResult {
   error?: string | null;
 }
 
+export interface NativeAiActExecutorResult {
+  schemaVersion: '0.1';
+  status: 'succeeded' | 'failed';
+  sourcePromptPath: string;
+  dryRun: boolean;
+  midsceneResult?: string | null;
+  finishedAt: string;
+  error?: string | null;
+}
+
 export type TraceOperationType = 'click' | 'doubleClick' | 'input' | 'keyboard' | 'wait';
 
 export interface ShowuiTraceOperation {

@@ -1,4 +1,9 @@
 export type * from './contracts/types.js';
+export {
+  runNaturalLanguageAiAct,
+  type NaturalLanguageAiActOptions,
+  type NaturalLanguageAiActRun,
+} from './act/execution.js';
 export { convertTrace, buildTaskAssets, clampRecordedWaitMs } from './conversion/showui-trace.js';
 export {
   createTaskFromRecording,

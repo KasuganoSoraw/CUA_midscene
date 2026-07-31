@@ -1,15 +1,13 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { randomBytes } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ExecutorResult, JsonObject, ResolvedTaskResult, TaskCatalogRoots } from '../contracts/types.js';
 import { executeMidsceneYaml, type MidsceneYamlExecutionOptions } from '../../executors/midscene-yaml.js';
+import { keyboardInputAiActContext } from '../../executors/computer-agent.js';
+import { createRunDirectory } from '../run-directory.js';
 import { resolveTask } from './tasks.js';
 import { validateYamlDocument, writeYamlDocument } from './yaml-task.js';
 
-export const aiActContext = `文本输入必须遵守以下规则：
-1. 仅使用 KeyboardTypeText 输入 ASCII 文本，不使用默认 Input 或剪贴板。
-2. 待输入文本包含 KeyboardTypeText 不支持的字符时直接失败，不切换输入动作。
-3. 不得因为定位失败或一般执行失败改用其他输入方式。`;
+export const aiActContext = keyboardInputAiActContext;
 
 export interface ExecutionOptions {
   scene: string;
@@ -171,22 +169,6 @@ export function aiActYamlDocument(
     agent: { groupName, groupDescription, generateReport: true, aiActContext },
     tasks: [{ name: taskName, flow: [{ ai: prompt }] }],
   };
-}
-
-export async function createRunDirectory(runsRoot: string): Promise<string> {
-  const root = path.resolve(runsRoot);
-  await mkdir(root, { recursive: true });
-  const now = new Date().toISOString().replaceAll(':', '-').replace('.', '-');
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const runDirectory = path.join(root, `${now}-${randomBytes(4).toString('hex')}`);
-    try {
-      await mkdir(runDirectory);
-      return runDirectory;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    }
-  }
-  throw new Error(`无法创建唯一运行目录：${root}`);
 }
 
 async function execute(

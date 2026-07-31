@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 import type {
   ExecutorResult,
+  NativeAiActExecutorResult,
   ProcessedLogStep,
   SceneManifest,
   ShowuiTrace,
@@ -75,6 +76,13 @@ export const readTaskManifest = (sourcePath: string) =>
 
 export const readExecutorResult = (sourcePath: string) =>
   readJsonContract<ExecutorResult>(sourcePath, 'execution-result.schema.json', '执行结果');
+
+export const readNativeAiActExecutorResult = (sourcePath: string) =>
+  readJsonContract<NativeAiActExecutorResult>(
+    sourcePath,
+    'native-ai-act-result.schema.json',
+    '原生 aiAct 执行结果',
+  );
 
 export const readShowuiTrace = (sourcePath: string) =>
   readJsonContract<ShowuiTrace>(sourcePath, 'showui-trace.schema.json', 'ShowUI trace');

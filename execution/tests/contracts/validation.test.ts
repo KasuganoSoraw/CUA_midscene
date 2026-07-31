@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   readExecutorResult,
+  readNativeAiActExecutorResult,
   readSceneManifest,
   readShowuiTrace,
   readTaskManifest,
@@ -39,6 +42,21 @@ test('任务清单未知字段会暴露文件和字段路径', async () => {
 test('执行结果错误类型和时间格式被拒绝', async () => {
   const source = path.join(fixtures, 'invalid-execution-result.json');
   await assert.rejects(readExecutorResult(source), /\/dryRun.*must be boolean|\/finishedAt/);
+});
+
+test('原生 aiAct 执行结果通过独立文件契约校验', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-ai-act-contract-'));
+  const source = path.join(root, 'ai-act-result.json');
+  await writeFile(source, JSON.stringify({
+    schemaVersion: '0.1',
+    status: 'succeeded',
+    sourcePromptPath: path.join(root, 'ai-act-prompt.txt'),
+    dryRun: true,
+    finishedAt: new Date().toISOString(),
+  }), 'utf8');
+  const result = await readNativeAiActExecutorResult(source);
+  assert.equal(result.status, 'succeeded');
+  assert.equal(result.dryRun, true);
 });
 
 test('trace 缺少结构化 operation 时直接失败', async () => {

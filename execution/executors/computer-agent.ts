@@ -4,6 +4,11 @@ import { createKeyboardTypeTextAction } from './keyboard-type-action.js';
 export type ComputerAgent = Awaited<ReturnType<typeof agentForComputer>>;
 export type ComputerAgentOptions = NonNullable<Parameters<typeof agentForComputer>[0]>;
 
+export const keyboardInputAiActContext = `文本输入必须遵守以下规则：
+1. 仅使用 KeyboardTypeText 输入 ASCII 文本，不使用默认 Input 或剪贴板。
+2. 待输入文本包含 KeyboardTypeText 不支持的字符时直接失败，不切换输入动作。
+3. 不得因为定位失败或一般执行失败改用其他输入方式。`;
+
 export async function createKeyboardEnabledComputerAgent(
   options: ComputerAgentOptions,
 ): Promise<ComputerAgent> {
