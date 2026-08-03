@@ -5,7 +5,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 # CUA Midscene
 
-本目录是完整 TypeScript Skill 交付单元，要求 Node.js `>=22.18.0`。安装后从 Skill 根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
+本目录是供 GDE Claw 等外部 Agent 或 Agent Host 集成的完整 TypeScript Skill 交付单元，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。本项目不要求安装为 Codex 本机 Skill。
 
 ## 核心事实
 
@@ -16,9 +16,9 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 - Skill 内 `projects/` 是只读 builtin catalog；用户任务只写入 `<CUA_DATA_ROOT>/projects/`。
 - 运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`。
 - 第一版不实现并发锁，实际 computer use 必须由上层串行调用。
-- 本地复核页面由 Fastify 在 `127.0.0.1` 随机端口提供，只访问受控 catalog 和任务内证据。
+- 本地复核页面由 Fastify 固定监听 `127.0.0.1:47831`，只访问受控 catalog 和任务内证据；相同数据目录复用已有服务，端口冲突时直接失败。
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`.env.local`、`.env`。创建、验证和执行需要可写数据根。原始录制创建还需要外部 record 处理器根，优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、`.env.local`、`.env`、源码仓相邻 `record/`；安装版通常在 `.env.local` 配置绝对路径。复核页面通过 `CUA_RECORDINGS_ROOT` 定位原始录制集合，优先读取进程环境变量，再读取 `.env.local` 和 `.env`；未配置时只禁用录制创建页，不影响任务复核。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`.env.local`、`.env`。创建、验证和执行需要可写数据根。原始录制创建还需要外部 record 处理器根，优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、`.env.local`、`.env`、源码仓相邻 `record/`；外部 Agent 部署时通常在 `.env.local` 配置绝对路径。复核页面通过 `CUA_RECORDINGS_ROOT` 定位原始录制集合，优先读取进程环境变量，再读取 `.env.local` 和 `.env`；未配置时只禁用录制创建页，不影响任务复核。
 
 ## 判断意图
 
@@ -68,11 +68,16 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 ## 调用与执行
 
-1. 使用 `task describe --json` 读取 input ID 和默认值。
-2. 只传用户本次明确改变的输入；未提供项保持录制默认值。
-3. 使用 `task inspect ... --input <id>=<value>` 查看 resolved YAML，使用 `task validate` 静态验证。
-4. 稳定录制任务默认使用 `task run`；用户明确要求统一规划时使用 `act run --scene/--task`。
-5. 无录制时使用 `act run --prompt "<电脑操作要求>"`。
+所有任务命令中的本次输入都使用相同的稀疏参数：可重复传入 `--input "<input-id>=<value>"`，或使用 `--inputs <json-file>`；未提供项保持录制默认值。Agent 不得只在执行命令中传值，而用默认值执行 inspect 或 validate。
+
+1. 读取输入定义：`node dist/cli/main.js task describe --scene <scene> --task <task> --json`。
+2. 检查本次解析结果：`node dist/cli/main.js task inspect --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>] --json`。
+3. 使用同一组输入静态验证：`node dist/cli/main.js task validate --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>] --json`。
+4. 稳定录制任务逐步执行：`node dist/cli/main.js task run --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>]`。
+5. 录制任务需要统一规划时：`node dist/cli/main.js act run --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>]`。
+6. 无录制时：`node dist/cli/main.js act run --prompt "<电脑操作要求>"`。
+
+仅验证命令形状和运行投影时，可在 `task run` 或两种 `act run` 后增加 `--dry-run`。需要详细任务结构、输入契约、参考图和运行产物说明时，读取 `references/task-contract.md`。
 
 `--dry-run` 不调用模型、不创建设备、不验证页面定位，不得描述为模拟执行。执行失败后报告原始错误并等待决定，不得自动切换模式、修改任务或重试。
 

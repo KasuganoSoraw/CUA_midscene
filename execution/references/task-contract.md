@@ -36,11 +36,11 @@ node dist/cli/main.js task list --scene <scene> --json
 node dist/cli/main.js task describe --scene <scene> --task <task> --json
 node dist/cli/main.js task create-from-recording --scene <scene> --task <task> --recording <目录> [--goal "<目标>"]
 node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"
-node dist/cli/main.js task validate --scene <scene> --task <task>
-node dist/cli/main.js task inspect --scene <scene> --task <task> --input <input-id>=<value>
-node dist/cli/main.js task run --scene <scene> --task <task> --dry-run
-node dist/cli/main.js task run --scene <scene> --task <task>
-node dist/cli/main.js act run --scene <scene> --task <task> --input <input-id>=<value>
+node dist/cli/main.js task validate --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>] --json
+node dist/cli/main.js task inspect --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>] --json
+node dist/cli/main.js task run --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>] --dry-run
+node dist/cli/main.js task run --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>]
+node dist/cli/main.js act run --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>]
 node dist/cli/main.js act run --prompt "打开 Chrome 并搜索 GUI agent"
 node dist/cli/main.js review --no-open
 ```

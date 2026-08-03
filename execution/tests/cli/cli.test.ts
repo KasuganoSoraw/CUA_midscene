@@ -84,6 +84,10 @@ test('CLI 使用中文帮助', () => {
   assert.match(helpText, /npm|cua/);
   assert.match(helpText, /task create-from-recording/);
   assert.match(helpText, /\[--goal <目标>\]/);
+  assert.match(helpText, /task validate.+--inputs <file>.+--json/);
+  assert.match(helpText, /task inspect.+--inputs <file>.+--json/);
+  assert.match(helpText, /task run.+--data-root <path>.+--dry-run.+--json/);
+  assert.match(helpText, /act run --scene.+--inputs <file>.+--data-root <path>.+--dry-run/);
 });
 
 test('task create-from-recording 接受可选 goal 并保持 stdout JSON 契约', async () => {

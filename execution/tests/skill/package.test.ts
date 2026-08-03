@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdir, readFile } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +44,6 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
     new Set(packageJson.files),
     new Set([
       '.env.example',
-      'agents',
       'cli',
       'cua',
       'dist',
@@ -70,15 +69,13 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
   );
 });
 
-test('Skill 文档和安装器使用编译后的 Node CLI', async () => {
+test('Skill 文档面向外部 Agent 并使用编译后的 Node CLI', async () => {
   const skill = await readFile(path.join(executionRoot, 'SKILL.md'), 'utf8');
   const envExample = await readFile(path.join(executionRoot, '.env.example'), 'utf8');
-  const installer = await readFile(
-    path.join(repositoryRoot, 'scripts/install-cua-midscene-skill.ps1'),
-    'utf8',
-  );
 
   assert.match(skill, /node dist\/cli\/main\.js/);
+  assert.match(skill, /外部 Agent|Agent Host/);
+  assert.match(skill, /不要求安装为 Codex 本机 Skill/);
   assert.match(skill, /Node\.js `>=22\.18\.0`/);
   assert.match(skill, /Fastify/);
   assert.match(skill, /task create-from-recording/);
@@ -89,10 +86,5 @@ test('Skill 文档和安装器使用编译后的 Node CLI', async () => {
   assert.doesNotMatch(skill, /uv run cua|python\s+-m/i);
   assert.doesNotMatch(skill, /uv run python|Aloha_Learn[\\/]parser\.py/i);
   assert.match(envExample, /^CUA_RECORD_ROOT=.+$/m);
-
-  assert.match(installer, /& npm run build/);
-  assert.match(installer, /& npm ci --omit=dev --ignore-scripts/);
-  assert.match(installer, /'dist'/);
-  assert.match(installer, /'reports', 'runs', 'cache', 'midscene_run'/);
-  assert.doesNotMatch(installer, /pyproject\.toml|uv\.lock/);
+  await assert.rejects(access(path.join(repositoryRoot, 'scripts/install-cua-midscene-skill.ps1')));
 });

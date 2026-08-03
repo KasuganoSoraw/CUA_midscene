@@ -1,6 +1,6 @@
 # Execution
 
-该目录是可独立发布的 `cua-midscene` Skill。TypeScript 核心负责调用外部 record 处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use。
+该目录是供 GDE Claw 等外部 Agent 或 Agent Host 集成的可独立发布 `cua-midscene` Skill。TypeScript 核心负责调用外部 record 处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use。它不安装为本机 Codex Skill，也不包含 Codex 专用的 `agents/openai.yaml`。
 
 ## 模块职责
 

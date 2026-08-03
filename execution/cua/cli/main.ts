@@ -29,11 +29,13 @@ export const helpText = `CUA 场景、任务与 Midscene YAML 执行工具
   task describe --scene <scene> --task <task> [--data-root <path>] [--json]
   task create-from-recording --scene <scene> --task <task> --recording <目录> [--goal <目标>] [--record-root <path>] [--data-root <path>]
   task init-from-trace --scene <scene> --task <task> --goal <目标> [--data-root <path>]
-  task validate|inspect|run --scene <scene> --task <task> [--input key=value] [--inputs <file>]
+  task validate --scene <scene> --task <task> [--input key=value] [--inputs <file>] [--data-root <path>] [--json]
+  task inspect --scene <scene> --task <task> [--input key=value] [--inputs <file>] [--data-root <path>] [--json]
+  task run --scene <scene> --task <task> [--input key=value] [--inputs <file>] [--data-root <path>] [--dry-run] [--json]
 
 整体 aiAct：
-  act run --prompt <要求> [--dry-run]
-  act run --scene <scene> --task <task> [--input key=value] [--dry-run]
+  act run --prompt <要求> [--data-root <path>] [--dry-run]
+  act run --scene <scene> --task <task> [--input key=value] [--inputs <file>] [--data-root <path>] [--dry-run]
 `;
 
 const commandOptions: Record<string, { values: string[]; booleans: string[]; repeated?: string[]; required?: string[] }> = {

@@ -11,9 +11,10 @@ description: 使用 Midscene YAML 在 Qatar Airways 页面设置出发地、目�
 
 ## 调用
 
-1. 运行 `node dist/cua/cli/main.js task describe --scene browser-demo --task air-tickets-demo --json` 读取输入定义。
-2. 用户只修改本次搜索条件时，通过 `--input key=value` 传入明确变化的值；未传入项保持录制默认值。
-3. 使用 `node dist/cua/cli/main.js task inspect --scene browser-demo --task air-tickets-demo` 检查 resolved YAML，再按执行器根 Skill 选择执行模式。
+1. 运行 `node dist/cli/main.js task describe --scene browser-demo --task air-tickets-demo --json` 读取输入定义。
+2. 用户只修改本次搜索条件时，通过可重复的 `--input "<input-id>=<value>"` 传入明确变化的值；未传入项保持录制默认值。
+3. 使用 `node dist/cli/main.js task inspect --scene browser-demo --task air-tickets-demo [--input "<input-id>=<value>"] --json` 检查 resolved YAML。
+4. 使用同一组 `--input` 运行 `task validate`，确认后再将同一组输入传给 `task run`；用户明确要求整体规划时才改用 `act run --scene browser-demo --task air-tickets-demo`。
 
 ## 长期修改限制
 
