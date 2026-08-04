@@ -76,6 +76,8 @@ test('Skill 文档面向外部 Agent 并使用编译后的 Node CLI', async () =
   assert.match(skill, /node dist\/cli\/main\.js/);
   assert.match(skill, /外部 Agent|Agent Host/);
   assert.match(skill, /Node\.js `>=22\.18\.0`/);
+  assert.match(skill, /设置较长的任务超时/);
+  assert.match(skill, /持续较长时间没有新增输出/);
   assert.match(skill, /task create-from-recording/);
   assert.match(skill, /CUA_RECORD_ROOT/);
   assert.match(skill, /--goal.*不参与 trace 生成/);

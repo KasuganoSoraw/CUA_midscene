@@ -16,6 +16,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 - Skill 内 `projects/` 是只读 builtin catalog；用户任务只写入 `<CUA_DATA_ROOT>/projects/`。
 - 运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`。
 - computer use 必须由上层串行调用。
+- Agent Host 调用本 Skill 命令时必须设置较长的任务超时。录制处理、模型规划和真实 computer use 可能长时间运行，不得因控制台短暂无输出而提前终止；只有控制台持续较长时间没有新增输出且任务明显无进展时，才尝试终止并原样报告。
 
 `CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 定位外部录制处理器；`CUA_RECORDINGS_ROOT` 定位原始录制集合。命令行参数优先于环境配置，完整优先级见 `references/task-contract.md`。
 
