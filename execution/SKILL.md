@@ -1,11 +1,11 @@
 ---
 name: cua-midscene
-description: 使用本地场景/任务与 Midscene computer use 发现、创建、校准或执行桌面任务。用户要求从录制 trace 创建任务、修正长期步骤、临时改变输入、运行已有任务，或在无录制时直接操作电脑时使用。
+description: 使用本地场景/任务与 Midscene computer use 发现、创建、校准或执行桌面任务。用户要求从原始录制目录或标准化 trace 创建任务、修正长期步骤、临时改变输入、运行已有任务，或在无录制时直接操作电脑时使用。
 ---
 
 # CUA Midscene
 
-本目录是供 GDE Claw 等外部 Agent 或 Agent Host 集成的完整 TypeScript Skill 交付单元，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。本项目不要求安装为 Codex 本机 Skill。
+本目录是供 GDE Claw 等外部 Agent 或 Agent Host 集成的完整 TypeScript Skill 交付单元，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
 
 ## 核心事实
 
@@ -15,10 +15,9 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 - `source/screenshots/*.reference.png` 是可选的干净定位参考；带红叉 crop 只用于理解录制点击点，不能作为 Midscene reference patch。
 - Skill 内 `projects/` 是只读 builtin catalog；用户任务只写入 `<CUA_DATA_ROOT>/projects/`。
 - 运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`。
-- 第一版不实现并发锁，实际 computer use 必须由上层串行调用。
-- 本地复核页面由 Fastify 固定监听 `127.0.0.1:47831`，只访问受控 catalog 和任务内证据；相同数据目录复用已有服务，端口冲突时直接失败。
+- computer use 必须由上层串行调用。
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`.env.local`、`.env`。创建、验证和执行需要可写数据根。原始录制创建还需要外部 record 处理器根，优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、`.env.local`、`.env`、源码仓相邻 `record/`；外部 Agent 部署时通常在 `.env.local` 配置绝对路径。复核页面通过 `CUA_RECORDINGS_ROOT` 定位原始录制集合，优先读取进程环境变量，再读取 `.env.local` 和 `.env`；未配置时只禁用录制创建页，不影响任务复核。
+`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 定位外部录制处理器；`CUA_RECORDINGS_ROOT` 定位原始录制集合。命令行参数优先于环境配置，完整优先级见 `references/task-contract.md`。
 
 ## 判断意图
 
@@ -38,12 +37,9 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 2. 只读取目标场景和任务的 `SKILL.md`、`task.json`；检查动作时再读取 `task.yaml` 和必要 source。
 3. 用户提供原始录制目录时，运行 `node dist/cli/main.js task create-from-recording --scene <scene> --task <task> --recording "<录制目录>" [--goal "<任务描述>"]`。`--goal` 只保存为创建后的任务描述，不参与 trace 生成；用户未说明时可以省略且不得推测。
 4. 该命令内部运行外部 recorder、规范化 source、初始化并静态验证；Agent 不得再手工调用 Python、重命名或搬运录制产物。
-5. 只有 user task 的 `source/showui-trace.json` 和 `source/processed-log-sc.json` 已经标准化时，才运行 `node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，再运行 `task validate`。
+5. 只有 user task 的 `source/showui-trace.json` 和 `source/processed-log-sc.json` 已经标准化时，才运行 `node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，再运行 `node dist/cli/main.js task validate --scene <scene> --task <task> --json`。
 
-`task create-from-recording` 不复制原始视频和事件日志，不覆盖已有 user/builtin 任务。执行失败时报告原始错误；复制、转换或验证阶段产生的任务半成品会被删除，原录制目录中的生成产物保留用于排查。
-
-转换器不得从 observation、think、action、expectation 或关键词猜测动作；非法 operation 必须直接失败。
-`useReferenceImage: true` 只允许出现在 click/doubleClick。转换器必须使用同一步 processed log 的 `screenshot_reference` 生成 Midscene 原生 `locate.images`；不得猜路径、生成 Base64、改用录制坐标或在证据无效时回退纯文字点击。
+两种创建入口均不得覆盖已有 user 或 builtin 任务；失败时原样报告错误。
 
 ## 校准协议
 
@@ -51,20 +47,18 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 2. 展示 YAML 位置、原值、新值和中文原因。
 3. 确认目标 `origin=user`、`writable=true`；builtin 任务不得修改。
 4. 停止并等待用户明确确认。
-5. 确认后只修改 user task 的 `task.yaml`，再运行 `node dist/cli/main.js task validate ...`。
+5. 确认后只修改 user task 的 `task.yaml`，再运行 `node dist/cli/main.js task validate --scene <scene> --task <task> --json`。
 6. 除非用户同时要求执行，否则校准完成后不得操作电脑。
 
-普通内容校准不得修改 `source/`、`task.json` 或运行报告；不得重编号、打乱 step 或启用 `continueOnError`。参数契约修改是唯一允许单独编辑 `task.json` 的情况。用户通过本地复核页面明确执行插入、删除或移动时，review service 可以事务性重编号步骤并同步输入与证据绑定。
+普通内容校准不得修改 `source/`、`task.json` 或运行报告，也不得启用 `continueOnError`。参数契约修改是唯一允许单独编辑 `task.json` 的情况。步骤插入、删除或移动只能通过复核页面完成；Agent 不得直接重编号 YAML 步骤。
 
 难以用文字区分的图标可以经确认后在对应 `aiTap`/`aiDoubleClick` 中增加或调整 `locate.prompt` 与 `locate.images`，但只能引用任务包内已有的干净 reference patch。图片名必须被 prompt 明确引用；参考图中心表示录制目标外观，不是要求 Midscene 点击固定坐标。
 
 ## 本地复核页面
 
-运行 `node dist/cli/main.js review` 启动仅监听 `127.0.0.1:47831` 的 Vue 复核页面；相同数据目录的已有 review 服务会被复用，不得重复启动新的监听进程。端口被其他程序或不同数据目录占用时应报告冲突，不自动递增端口。GDE Claw 可用 `--no-open` 获取 URL 后调用系统浏览器。“任务复核”会区分展示全局录制图、带点击标记的局部图和 `locate.images` 执行参考图，并在修改点击目标描述时保留图片引用。页面只写入 user catalog，builtin task 与 `source/` 始终只读。
+运行 `node dist/cli/main.js review --no-open --json` 启动仅监听 `127.0.0.1:47831` 的本地复核页面；相同数据目录的已有服务会被复用。端口被其他程序或不同数据目录占用时应原样报告错误，不自动递增端口。
 
-“从录制创建任务”列出 `CUA_RECORDINGS_ROOT` 的一级子目录，仅以占位卡片显示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并允许打开原始目录。用户填写场景、任务和可选目标后，页面复用完整创建流程；不播放媒体、不展开日志、不暴露 trace，也不提供流式日志。生成时只显示不可确定的进行中状态，成功后自动进入新任务复核。
-
-录制根未配置时，页面只提示 `CUA_RECORDINGS_ROOT`、`execution/.env.local` 配置位置和路径示例，不直接修改本机环境，也不得通过后台服务进程唤起可能失焦或阻塞的桌面目录选择框。配置后需要重启 review 服务。录制根未配置或单个目录不满足文件约束时不得阻止页面启动。Agent 不需要通过 review CLI 编辑任务，仍按本 Skill 的确认协议直接修改 canonical 资产并运行 `task validate`。
+任务创建成功后，或用户进入可视化校准时，运行上述命令，读取返回的 `url` 并在回复中提供给用户。
 
 ## 调用与执行
 
