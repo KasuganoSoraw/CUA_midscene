@@ -2,6 +2,8 @@
 
 该目录是供 GDE Claw 等外部 Agent 或 Agent Host 集成的可独立发布 `cua-midscene` Skill。TypeScript 核心负责调用外部 record 处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use。它不安装为本机 Codex Skill，也不包含 Codex 专用的 `agents/openai.yaml`。
 
+除完整 Skill 外，本目录还能生成首期 `cua-agent-runtime` 精简包。精简包只发布无录制自然语言 Computer Use 和无剪贴板键盘输入，适合在尚未确定 GDE Claw 最终工具注册接口时通过 CLI 或窄 Node API 集成。两种发布物共享执行代码，精简包不通过删除源码维护。
+
 ## 模块职责
 
 ```text
@@ -10,6 +12,7 @@ record trace
   -> cua/conversion：caption.operation -> task.yaml + task.json
   -> cua/task：数据根、catalog、YAML、输入、aiAct 投影与执行编排
   -> cua/act：无录制自然语言原生 aiAct 公开 API
+  -> agent-runtime：首期精简包专用 CLI、API 导出和 Skill 文档
   -> cli：开发命令和安装后 bin 的统一入口
   -> cua/index.ts：GDE Claw 等上层工具直接导入的 API
   -> review：Vue 本地复核应用、localhost 服务与复核专属 service
@@ -27,6 +30,7 @@ record trace
 - `projects/`：随 Skill 发布的只读内置任务。
 - `schemas/`：CUA 自有持久化 JSON 契约；不复制 Midscene action 类型系统。
 - `tests/`：契约、转换、任务、CLI 和执行器测试。
+- `scripts/package-agent-runtime.mjs`：按唯一白名单生成 Agent Runtime 暂存目录和 tgz。
 
 TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv 只校验从磁盘进入系统的 scene、task、trace 和执行结果；resolved YAML 最终交给 Midscene parser。
 
@@ -85,6 +89,43 @@ node dist/cli/main.js review --no-open
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。inspect 与 run 使用同一个 resolver，不调用模型、不回写任务。`--dry-run` 只构建并解析 YAML，不操作电脑，也不是模拟执行。
 
+## Agent Runtime 精简发布
+
+生成首期 Agent 包：
+
+```powershell
+npm run package:agent
+```
+
+输出位于被 Git 忽略的 `release/`：
+
+```text
+release/agent-runtime/                 # 发布内容暂存目录
+release/cua-agent-runtime-<version>.tgz # npm 安装包
+```
+
+精简包只包含：
+
+- `agent-runtime` 专用 CLI 和窄 API 导出。
+- `cua/act` 自然语言执行编排与外部运行目录。
+- `executors` 中原生 aiAct、Computer Agent、环境读取和 `KeyboardTypeText`。
+- `@midscene/computer`、`@midscene/core`、`dotenv` 三项生产依赖。
+- 专用中文 `SKILL.md`、README 和 `.env.example`。
+
+精简包不包含 task、recording、conversion、projects、Review、测试或真实环境文件。安装后使用：
+
+```powershell
+cua act run --prompt "打开 Chrome 并搜索 GUI agent" --data-root "C:\cua-data"
+```
+
+未安装全局 bin 时使用：
+
+```powershell
+node dist/agent-runtime/cli.js act run --prompt "打开 Chrome 并搜索 GUI agent" --data-root "C:\cua-data"
+```
+
+工具宿主可以从 `cua-agent-runtime` 直接导入 `runNaturalLanguageAiAct()`。未来加入录制任务和任务创建时，扩展同一包的命令域、公开 API、白名单和 Skill，不另建不兼容命令体系。
+
 参考图步骤使用 Midscene 原生图片 prompt：canonical `task.yaml` 的 `images[].url` 保存相对任务根目录的路径（通常位于 `source/screenshots/`），resolver 验证文件和目录边界后在 resolved YAML 中改为绝对路径。HTTP(S) 与 data URL 保持不变。图片只用于语义定位，Midscene 仍结合文字 prompt、参考图和当前屏幕寻找目标，并点击定位结果；系统不执行像素模板匹配或录制坐标回放。
 
 ## 执行语义
@@ -118,4 +159,5 @@ const run = await runNaturalLanguageAiAct({
 ```powershell
 npm test
 npm run build
+npm run package:agent
 ```

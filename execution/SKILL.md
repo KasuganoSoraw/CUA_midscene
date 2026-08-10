@@ -7,6 +7,8 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 本目录是供 GDE Claw 等外部 Agent 或 Agent Host 集成的完整 TypeScript Skill 交付单元，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
 
+本文件描述完整 `cua-midscene` Skill。首期只需要无录制自然语言 Computer Use 时，使用 `npm run package:agent` 生成 `cua-agent-runtime` 精简包，并由其独立 `SKILL.md` 指导 Agent。精简包不提供本文件中的 task、recording 或 review 命令，不得混用两种发布物的能力范围。
+
 ## 核心事实
 
 - `task.yaml` 是唯一长期执行流程，由人、Agent、前端和 Midscene 共同消费。

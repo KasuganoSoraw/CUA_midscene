@@ -10,8 +10,10 @@
 CUA/
 ├── record/                 # 教学录制处理：视频、日志、截图 -> trace
 ├── execution/              # 可独立发布的 TypeScript CUA Midscene Skill
+│   ├── agent-runtime/      # 首期 Agent 精简包的专用 CLI、API 和 Skill 文档
 │   ├── cua/                # 转换、任务解析、CLI 和公开工具 API
 │   ├── executors/          # Midscene 适配与 KeyboardTypeText
+│   ├── scripts/            # 可重复的发布物生成脚本
 │   ├── projects/           # 随 Skill 发布的只读内置任务
 │   ├── schemas/            # Ajv 在文件边界使用的 JSON Schema
 │   ├── SKILL.md            # 执行器 Skill 入口
@@ -20,6 +22,8 @@ CUA/
 ```
 
 `record` 基于 ShowUI-Aloha Learn，只保留录制处理，不包含 Act、Actor、Executor 或回放能力。`execution` 全面使用 TypeScript：同一核心同时服务 CLI、GDE Claw 等外部 Agent 的工具 API，并在进程内直接调用 Midscene。`execution` 是供其他 Agent 集成和发布的 Skill 工程，不安装为本机 Codex Skill。
+
+`execution` 提供两种发布形态：完整 `cua-midscene` Skill 保留录制任务、任务执行和复核能力；首期 `cua-agent-runtime` 精简包只发布自然语言 Computer Use、`KeyboardTypeText`、专用 CLI/API 和必要文档。精简由发布白名单完成，不删除完整源码。
 
 ## 数据流
 
@@ -78,6 +82,31 @@ const run = await runNaturalLanguageAiAct({
 ```
 
 该 API 保存 `ai-act-prompt.txt` 和 `ai-act-result.json`，随后由 `executors/midscene-ai-act.ts` 直接调用一次 `agent.aiAct()`。现有三个 CLI 执行模式和任务资产格式均未改变。
+
+## Agent Runtime 精简包
+
+从 `execution` 生成首期 Agent 集成包：
+
+```powershell
+cd execution
+npm run package:agent
+```
+
+命令先编译 Node 运行时，再生成：
+
+```text
+execution/release/
+├── agent-runtime/                  # 可直接检查的暂存目录
+└── cua-agent-runtime-<version>.tgz # 可安装 npm 包
+```
+
+`release/` 是可重复生成的本地产物，不提交 Git。精简包安装后使用：
+
+```powershell
+cua act run --prompt "打开 Chrome 并搜索 GUI agent" --data-root "C:\cua-data"
+```
+
+也可以从 `cua-agent-runtime` 导入 `runNaturalLanguageAiAct()`，供未来 GDE Claw 原生工具注册层直接调用。首期包不提供 `task`、`recording` 或 `review` 命令；后续能力通过扩大同一发布白名单、增加命令域和更新精简 Skill 加入，不改变现有 `act run --prompt` 契约。
 
 `task create-from-recording` 是从原始录制创建任务的默认入口。`--goal` 仅作为创建后任务的描述信息，不会进入 trace 生成 prompt；可以省略，省略时任务 goal/description 与 YAML groupDescription 保存空字符串。命令会自动运行原有 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
 

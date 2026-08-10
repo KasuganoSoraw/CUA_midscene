@@ -14,9 +14,9 @@
 
 - [x] 3.1 增加 Agent Runtime CLI 参数、dry-run、数据根和错误测试
 - [x] 3.2 增加发布清单、窄 API 依赖边界和 tgz 安装后 smoke test
-- [ ] 3.3 运行 TypeScript 类型检查、完整测试、完整构建和 Agent Runtime 打包验证
+- [x] 3.3 运行 TypeScript 类型检查、完整测试、完整构建和 Agent Runtime 打包验证
 
 ## 4. 文档与交付
 
-- [ ] 4.1 更新根 README、execution README 和完整 Skill，说明完整包与精简包差异及未来扩展方式
-- [ ] 4.2 严格验证 OpenSpec，并按入口、打包、测试文档拆分中文小步提交
+- [x] 4.1 更新根 README、execution README 和完整 Skill，说明完整包与精简包差异及未来扩展方式
+- [x] 4.2 严格验证 OpenSpec，并按入口、打包、测试文档拆分中文小步提交
