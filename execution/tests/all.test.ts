@@ -7,6 +7,7 @@ import './task/data-paths.test.js';
 import './task/task-core.test.js';
 import './task/execution.test.js';
 import './act/execution.test.js';
+import './agent-runtime/cli.test.js';
 import './executors/keyboard-type-action.test.js';
 import './executors/ai-act-runner.test.js';
 import './executors/yaml-runner.test.js';

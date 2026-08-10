@@ -1,8 +1,8 @@
 ## 1. Agent Runtime 入口
 
-- [ ] 1.1 提取可复用的数据根解析，使完整 CLI 与精简 CLI 共享外部运行目录规则
-- [ ] 1.2 新增仅支持 `act run --prompt` 的 Agent Runtime CLI，并保持 stdout JSON 与原始错误契约
-- [ ] 1.3 新增窄包根 API 导出，确认导入链不包含任务、录制、转换或 Review 模块
+- [x] 1.1 提取可复用的数据根解析，使完整 CLI 与精简 CLI 共享外部运行目录规则
+- [x] 1.2 新增仅支持 `act run --prompt` 的 Agent Runtime CLI，并保持 stdout JSON 与原始错误契约
+- [x] 1.3 新增窄包根 API 导出，确认导入链不包含任务、录制、转换或 Review 模块
 
 ## 2. 精简发布物
 
