@@ -6,14 +6,14 @@
 
 ## 2. 精简发布物
 
-- [ ] 2.1 新增 Agent Runtime 中文 `SKILL.md`、README 和无敏感信息环境示例
-- [ ] 2.2 实现唯一 `package:agent` 命令，按白名单生成暂存目录和 npm tgz
-- [ ] 2.3 确保精简包只声明 Midscene、dotenv 等必要生产依赖，并排除本地配置、用户数据和完整工程资产
+- [x] 2.1 新增 Agent Runtime 中文 `SKILL.md`、README 和无敏感信息环境示例
+- [x] 2.2 实现唯一 `package:agent` 命令，按白名单生成暂存目录和 npm tgz
+- [x] 2.3 确保精简包只声明 Midscene、dotenv 等必要生产依赖，并排除本地配置、用户数据和完整工程资产
 
 ## 3. 验证
 
-- [ ] 3.1 增加 Agent Runtime CLI 参数、dry-run、数据根和错误测试
-- [ ] 3.2 增加发布清单、窄 API 依赖边界和 tgz 安装后 smoke test
+- [x] 3.1 增加 Agent Runtime CLI 参数、dry-run、数据根和错误测试
+- [x] 3.2 增加发布清单、窄 API 依赖边界和 tgz 安装后 smoke test
 - [ ] 3.3 运行 TypeScript 类型检查、完整测试、完整构建和 Agent Runtime 打包验证
 
 ## 4. 文档与交付
