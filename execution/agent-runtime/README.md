@@ -37,6 +37,7 @@ API 和 CLI 都直接调用原生 `agent.aiAct()`，不会生成任务 YAML。�
 ## 能力边界
 
 - 支持自然语言电脑操作、视觉定位和普通鼠标键盘动作。
-- ASCII 输入使用 `KeyboardTypeText` 逐键输入，不依赖剪贴板。
+- 纯 ASCII 输入使用 `KeyboardTypeText` 逐键输入，不依赖剪贴板。
+- 输入包含中文等 `KeyboardTypeText` 不支持的字符时，aiAct 允许选择 Midscene 默认 `Input`；该动作依赖剪贴板，在剪贴板隔离环境中可能失败。
 - 不包含 `task`、`recording`、`review` 命令。
 - 不使用 browser-use、Playwright、Puppeteer 或 CDP。

@@ -56,7 +56,11 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
       agentFactory: async (options) => {
         assert.equal(options.displayId, '1');
         assert.equal(options.generateReport, true);
-        assert.match(String(options.aiActContext), /KeyboardTypeText/);
+        const context = String(options.aiActContext);
+        assert.match(context, /ASCII.*必须使用 KeyboardTypeText/);
+        assert.match(context, /包含中文.*使用默认 Input/);
+        assert.match(context, /默认 Input 仅用于待输入字符本身不受 KeyboardTypeText 支持/);
+        assert.match(context, /不得因为定位失败、输入失败或一般执行失败.*切换为默认 Input/);
         assert.equal(process.env.MIDSCENE_RUN_DIR, path.join(fixture.runDirectory, 'midscene'));
         return {
           aiAct: async (prompt) => {
