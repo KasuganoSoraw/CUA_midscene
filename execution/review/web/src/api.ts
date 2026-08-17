@@ -1,11 +1,13 @@
 import type {
   CreateRecordingTaskRequest,
   CreateRecordingTaskResult,
+  ReviewCatalogResponse,
   ReviewMutation,
   ReviewMutationResult,
   ReviewRecording,
   ReviewRecordingCatalog,
   ReviewTaskDraft,
+  ReviewTaskListResponse,
   ReviewTaskView,
   SaveReviewTaskResult,
 } from '../../shared/types.js';
@@ -31,7 +33,7 @@ async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> 
 }
 
 export const api = {
-  scenes: () => request<{ scenes: Array<Record<string, unknown>> }>('/api/scenes'),
+  scenes: () => request<ReviewCatalogResponse>('/api/scenes'),
   recordings: () => request<ReviewRecordingCatalog>('/api/recordings'),
   recording: (recording: string) =>
     request<ReviewRecording>(`/api/recordings/${encodeURIComponent(recording)}`),
@@ -45,7 +47,7 @@ export const api = {
       `/api/recordings/${encodeURIComponent(recording)}/tasks`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  tasks: (scene: string) => request<{ tasks: Array<Record<string, unknown>> }>(`/api/scenes/${encodeURIComponent(scene)}/tasks`),
+  tasks: (scene: string) => request<ReviewTaskListResponse>(`/api/scenes/${encodeURIComponent(scene)}/tasks`),
   task: (scene: string, task: string) => request<ReviewTaskView>(`/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}`),
   mutate: (scene: string, task: string, draft: ReviewTaskDraft, mutation: ReviewMutation) =>
     request<ReviewMutationResult>(`/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}/mutate`, {

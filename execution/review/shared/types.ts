@@ -1,4 +1,10 @@
-import type { JsonObject, TaskInputDefinition, TaskManifest } from '../../cua/contracts/types.js';
+import type {
+  JsonObject,
+  SceneCatalogItem,
+  TaskCatalogItem,
+  TaskInputDefinition,
+  TaskManifest,
+} from '../../cua/contracts/types.js';
 
 export type ReviewOrigin = 'builtin' | 'user';
 export type ReviewOperation = 'click' | 'doubleClick' | 'input' | 'keyboard' | 'wait';
@@ -77,12 +83,12 @@ export interface SaveReviewTaskResult {
 }
 
 export interface ReviewCatalogResponse {
-  scenes: JsonObject[];
+  scenes: SceneCatalogItem[];
 }
 
 export interface ReviewTaskListResponse {
   scene: string;
-  tasks: JsonObject[];
+  tasks: TaskCatalogItem[];
 }
 
 export interface ReviewRecordingFile {

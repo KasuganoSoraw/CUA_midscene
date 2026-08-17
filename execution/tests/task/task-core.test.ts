@@ -141,7 +141,7 @@ test('稳定步骤身份和 continueOnError 被严格检查', async () => {
   await assert.rejects(resolveTask({ scene: 'browser-demo', task: 'search-demo', catalog }), /不允许启用 continueOnError/);
 });
 
-test('catalog 合并场景并拒绝重复任务标识', async () => {
+test('catalog 合并场景并将重复任务标记为错误', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-catalog-'));
   const builtin = path.join(root, 'builtin');
   const user = path.join(root, 'user');
@@ -150,11 +150,60 @@ test('catalog 合并场景并拒绝重复任务标识', async () => {
   assert.deepEqual((await listScenes(catalog))[0].origins, ['builtin']);
   const tasks = await listTasks('browser-demo', catalog);
   assert.equal(tasks[0].task, 'search-demo');
-  assert.equal(tasks[0].taskCount, 2);
+  assert.equal(tasks[0].status, 'ready');
+  assert.equal(tasks[0].status === 'ready' ? tasks[0].taskCount : 0, 2);
   assert.equal((await describeTask('browser-demo', 'search-demo', catalog)).writable, false);
   await createTaskFixture(user);
   assert.deepEqual((await listScenes(catalog))[0].origins, ['builtin', 'user']);
-  await assert.rejects(listTasks('browser-demo', catalog), /同时存在于内置与用户 catalog/);
+  const duplicate = (await listTasks('browser-demo', catalog))[0];
+  assert.equal(duplicate.status, 'error');
+  assert.match(duplicate.status === 'error' ? duplicate.error : '', /同时存在于内置与用户 catalog/);
+});
+
+test('catalog 跳过非场景目录并隔离损坏的场景清单', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-scene-isolation-'));
+  const builtin = path.join(root, 'builtin');
+  const user = path.join(root, 'user');
+  await Promise.all([mkdir(builtin, { recursive: true }), createTaskFixture(user)]);
+  await Promise.all([
+    mkdir(path.join(user, 'cache'), { recursive: true }),
+    mkdir(path.join(user, 'damaged-scene'), { recursive: true }),
+  ]);
+  await writeFile(path.join(user, 'damaged-scene', 'scene.json'), '{bad json', 'utf8');
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...values) => warnings.push(values.join(' '));
+  try {
+    const scenes = await listScenes({ builtinProjectsRoot: builtin, userProjectsRoot: user });
+    assert.deepEqual(scenes.map((item) => [item.scene, item.status]), [
+      ['browser-demo', 'ready'],
+      ['damaged-scene', 'error'],
+    ]);
+    assert.match(scenes[1].status === 'error' ? scenes[1].error : '', /读取并解析场景清单失败/);
+    assert.match(warnings[0], /跳过非场景目录.*cache/);
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test('catalog 将损坏任务标记为错误并继续枚举健康任务', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-task-isolation-'));
+  const builtin = path.join(root, 'builtin');
+  const user = path.join(root, 'user');
+  await mkdir(builtin, { recursive: true });
+  await createTaskFixture(user, { task: 'task-a' });
+  const damaged = await createTaskFixture(user, { task: 'task-b' });
+  await createTaskFixture(user, { task: 'task-c' });
+  await writeFile(path.join(damaged, 'task.yaml'), 'tasks: [', 'utf8');
+
+  const tasks = await listTasks('browser-demo', { builtinProjectsRoot: builtin, userProjectsRoot: user });
+  assert.deepEqual(tasks.map((item) => [item.task, item.status]), [
+    ['task-a', 'ready'],
+    ['task-b', 'error'],
+    ['task-c', 'ready'],
+  ]);
+  const error = tasks[1];
+  assert.match(error.status === 'error' ? error.error : '', /YAML/);
 });
 
 test('本次输入拒绝重复值和非字符串', async () => {

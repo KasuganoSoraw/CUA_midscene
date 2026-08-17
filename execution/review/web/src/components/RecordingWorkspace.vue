@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import type { SceneCatalogItem } from '../../../../cua/contracts/types';
 import type {
   CreateRecordingTaskResult,
   ReviewRecording,
@@ -8,7 +9,7 @@ import type {
 import { api } from '../api';
 
 const props = defineProps<{
-  scenes: Array<Record<string, unknown>>;
+  scenes: SceneCatalogItem[];
 }>();
 
 const emit = defineEmits<{
@@ -39,9 +40,10 @@ const canCreate = computed(() =>
 const sceneOptions = computed(() => {
   const query = sceneId.value.trim().toLocaleLowerCase();
   return props.scenes
+    .filter((item) => item.status === 'ready')
     .map((item) => ({
-      id: String(item.scene ?? ''),
-      title: String(item.title ?? ''),
+      id: item.scene,
+      title: item.title,
     }))
     .filter((item) => item.id && (
       !query

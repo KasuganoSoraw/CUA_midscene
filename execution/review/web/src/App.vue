@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import type { JsonObject } from '../../../cua/contracts/types';
+import type { JsonObject, SceneCatalogItem, TaskCatalogItem } from '../../../cua/contracts/types';
 import type {
   ReviewChange,
   ReviewEvidence,
@@ -25,14 +25,16 @@ import RecordingWorkspace from './components/RecordingWorkspace.vue';
 import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect.vue';
 
 const mode = ref<'review' | 'recordings'>('review');
-const scenes = ref<Array<Record<string, unknown>>>([]);
-const tasks = ref<Array<Record<string, unknown>>>([]);
+const scenes = ref<SceneCatalogItem[]>([]);
+const tasks = ref<TaskCatalogItem[]>([]);
 const scene = ref('');
 const task = ref('');
 const sceneSelectOptions = computed<ReviewSelectOption[]>(() =>
   scenes.value.map((item) => ({
-    value: String(item.scene),
-    label: String(item.title),
+    value: item.scene,
+    label: item.status === 'error' ? `${item.title}（不可用）` : item.title,
+    description: item.status === 'error' ? item.error : item.description,
+    disabled: item.status === 'error',
   })),
 );
 const operationOptions: ReviewSelectOption[] = [
@@ -149,6 +151,15 @@ function populateEditor(): void {
   hydratingEditor = false;
 }
 
+function clearTaskView(): void {
+  view.value = undefined;
+  draft.value = undefined;
+  steps.value = [];
+  changes.value = [];
+  selected.value = 0;
+  evidenceBySource.clear();
+}
+
 watch(selected, populateEditor);
 watch(editor, () => {
   if (!hydratingEditor && !advancedEditing.value) syncSemanticDraft();
@@ -158,9 +169,22 @@ async function loadScenes(): Promise<void> {
   busy.value = true;
   try {
     scenes.value = (await api.scenes()).scenes;
-    if (!scene.value && scenes.value.length) scene.value = String(scenes.value[0].scene);
-    await loadTasks();
+    const currentReady = scenes.value.some((item) => item.scene === scene.value && item.status === 'ready');
+    if (!currentReady) scene.value = scenes.value.find((item) => item.status === 'ready')?.scene ?? '';
+    if (scene.value) {
+      await loadTasks();
+    } else {
+      tasks.value = [];
+      task.value = '';
+      clearTaskView();
+      status.value = scenes.value.length ? '当前没有可复核的健康场景' : '当前没有场景';
+    }
   } catch (error) {
+    scenes.value = [];
+    tasks.value = [];
+    scene.value = '';
+    task.value = '';
+    clearTaskView();
     status.value = error instanceof Error ? error.message : String(error);
   } finally { busy.value = false; }
 }
@@ -173,10 +197,36 @@ async function openCreatedTask(result: { scene: string; task: string }): Promise
 }
 
 async function loadTasks(): Promise<void> {
-  if (!scene.value) return;
-  tasks.value = (await api.tasks(scene.value)).tasks;
-  task.value = tasks.value.some((item) => item.task === task.value) ? task.value : String(tasks.value[0]?.task ?? '');
-  if (task.value) await loadTask();
+  if (!scene.value) {
+    tasks.value = [];
+    task.value = '';
+    clearTaskView();
+    return;
+  }
+  busy.value = true;
+  conflict.value = false;
+  try {
+    tasks.value = (await api.tasks(scene.value)).tasks;
+    const currentReady = tasks.value.some((item) => item.task === task.value && item.status === 'ready');
+    if (!currentReady) task.value = tasks.value.find((item) => item.status === 'ready')?.task ?? '';
+    if (task.value) {
+      await loadTask();
+    } else {
+      clearTaskView();
+      status.value = tasks.value.length ? '当前场景没有可复核的健康任务' : '当前场景没有任务';
+    }
+  } catch (error) {
+    tasks.value = [];
+    task.value = '';
+    clearTaskView();
+    status.value = error instanceof Error ? error.message : String(error);
+  } finally { busy.value = false; }
+}
+
+async function openTask(item: TaskCatalogItem): Promise<void> {
+  if (item.status !== 'ready') return;
+  task.value = item.task;
+  await loadTask();
 }
 
 async function loadTask(): Promise<void> {
@@ -195,6 +245,7 @@ async function loadTask(): Promise<void> {
     populateEditor();
     status.value = loaded.writable ? '任务已同步，可开始复核' : '内置任务为只读模式';
   } catch (error) {
+    clearTaskView();
     status.value = error instanceof Error ? error.message : String(error);
   } finally { busy.value = false; }
 }
@@ -404,11 +455,14 @@ onMounted(loadScenes);
         <label>任务</label>
         <button
           v-for="item in tasks" :key="String(item.task)"
-          class="task-row" :class="{ active: task === item.task }"
-          @click="task = String(item.task); loadTask()"
+          class="task-row"
+          :class="{ active: task === item.task, error: item.status === 'error' }"
+          :disabled="item.status === 'error'"
+          @click="openTask(item)"
         >
           <strong>{{ item.title }}</strong>
           <small>{{ item.task }}</small>
+          <span v-if="item.status === 'error'" class="task-error">{{ item.error }}</span>
         </button>
       </aside>
 

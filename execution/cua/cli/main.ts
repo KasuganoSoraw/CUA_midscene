@@ -170,13 +170,17 @@ export async function runCliCommand(
   if (domain === 'scene') {
     const scenes = await listScenes(layout.catalog);
     if (options.json) return json({ scenes });
-    return scenes.map((scene) => `${scene.scene}\t${scene.title}\t${scene.description}`).join('\n') + '\n';
+    return scenes.map((scene) => (
+      `${scene.scene}\t${scene.title}\t${scene.status === 'error' ? `错误：${scene.error}` : scene.description}`
+    )).join('\n') + '\n';
   }
   if (domain === 'task' && command === 'list') {
     const scene = value(options, 'scene')!;
     const tasks = await listTasks(scene, layout.catalog);
     if (options.json) return json({ scene, tasks });
-    return tasks.map((task) => `${task.task}\t${task.title}\t${task.description}`).join('\n') + '\n';
+    return tasks.map((task) => (
+      `${task.task}\t${task.title}\t${task.status === 'error' ? `错误：${task.error}` : task.description}`
+    )).join('\n') + '\n';
   }
   if (domain === 'task' && command === 'describe') {
     return json(await describeTask(value(options, 'scene')!, value(options, 'task')!, layout.catalog));

@@ -7,6 +7,28 @@ export interface SceneManifest {
   description: string;
 }
 
+export type CatalogOrigin = 'builtin' | 'user';
+
+export interface SceneCatalogReadyItem extends SceneManifest {
+  status: 'ready';
+  origins: CatalogOrigin[];
+  writable: boolean;
+  sceneRoots: string[];
+}
+
+export interface SceneCatalogErrorItem {
+  status: 'error';
+  scene: string;
+  title: string;
+  description: string;
+  origins: CatalogOrigin[];
+  writable: false;
+  sceneRoots: string[];
+  error: string;
+}
+
+export type SceneCatalogItem = SceneCatalogReadyItem | SceneCatalogErrorItem;
+
 export interface TaskInputDefinition {
   type: 'string';
   label: string;
@@ -33,6 +55,31 @@ export interface TaskManifest {
   source: TaskSource;
   inputs: Record<string, TaskInputDefinition>;
 }
+
+export interface TaskDescription extends TaskManifest {
+  origin: CatalogOrigin;
+  writable: boolean;
+  taskRoot: string;
+  taskYamlPath: string;
+  taskCount: number;
+  actionCount: number;
+}
+
+export interface TaskCatalogReadyItem extends TaskDescription {
+  status: 'ready';
+}
+
+export interface TaskCatalogErrorItem {
+  status: 'error';
+  scene: string;
+  task: string;
+  title: string;
+  error: string;
+  origins: CatalogOrigin[];
+  taskRoots: string[];
+}
+
+export type TaskCatalogItem = TaskCatalogReadyItem | TaskCatalogErrorItem;
 
 export interface ExecutorResult {
   schemaVersion: '0.2';

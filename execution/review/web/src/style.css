@@ -68,9 +68,11 @@ h2 { font-size: 18px; }
 }
 .review-select-arrow.open { transform: rotate(180deg); }
 .catalog-select { margin-bottom: 19px; }
-.task-row { display: flex; width: 100%; flex-direction: column; gap: 4px; margin-bottom: 6px; padding: 10px; text-align: left; border: 1px solid transparent; border-radius: 10px; background: transparent; }
+.task-row { display: flex; width: 100%; flex-direction: column; gap: 4px; margin-bottom: 6px; padding: 10px; text-align: left; border: 1px solid transparent; border-radius: 8px; background: transparent; }
 .task-row small, .step-row small { color: #849089; }
 .task-row.active { border-color: #a7c7b1; background: #e9f3ec; }
+.task-row.error { border-color: #e1b5b5; background: #fff3f2; color: #8c2f2a; cursor: not-allowed; opacity: 1; }
+.task-error { display: -webkit-box; overflow: hidden; color: #a33b35; font-size: 11px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .steps { display: flex; flex-direction: column; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid #e4e9e5; }
 .panel-heading > span { color: #718078; font-size: 12px; }

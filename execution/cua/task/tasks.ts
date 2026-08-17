@@ -3,8 +3,12 @@ import path from 'node:path';
 import type {
   JsonObject,
   ResolvedTaskResult,
+  SceneCatalogItem,
+  SceneCatalogReadyItem,
   SceneManifest,
   TaskCatalogRoots,
+  TaskCatalogItem,
+  TaskDescription,
   TaskManifest,
   TaskPaths,
 } from '../contracts/types.js';
@@ -187,8 +191,8 @@ function catalogEntries(catalog: TaskCatalogRoots): Array<['builtin' | 'user', b
   return entries;
 }
 
-export async function listScenes(catalog: TaskCatalogRoots): Promise<JsonObject[]> {
-  const scenes = new Map<string, JsonObject>();
+export async function listScenes(catalog: TaskCatalogRoots): Promise<SceneCatalogItem[]> {
+  const scenes = new Map<string, SceneCatalogItem>();
   for (const [origin, writable, root] of catalogEntries(catalog)) {
     if (!(await isDirectory(root))) {
       if (origin === 'user') continue;
@@ -197,19 +201,58 @@ export async function listScenes(catalog: TaskCatalogRoots): Promise<JsonObject[
     const entries = (await readdir(root, { withFileTypes: true })).filter((item) => item.isDirectory()).sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
       const sceneRoot = path.join(root, entry.name);
-      const manifest = await readSceneManifest(path.join(sceneRoot, 'scene.json'));
-      if (manifest.scene !== entry.name) throw new Error(`场景目录 ${entry.name} 与 scene.json 标识 ${manifest.scene} 不一致`);
-      const current = scenes.get(manifest.scene) ?? { ...manifest, origins: [], writable: false, sceneRoots: [] };
-      (current.origins as string[]).push(origin);
-      current.writable = Boolean(current.writable) || writable;
-      (current.sceneRoots as string[]).push(sceneRoot);
-      scenes.set(manifest.scene, current);
+      const manifestPath = path.join(sceneRoot, 'scene.json');
+      if (!(await isFile(manifestPath))) {
+        console.warn(`[catalog] 跳过非场景目录：${sceneRoot}，缺少 scene.json`);
+        continue;
+      }
+
+      try {
+        const manifest = await readSceneManifest(manifestPath);
+        if (manifest.scene !== entry.name) {
+          throw new Error(`场景目录 ${entry.name} 与 scene.json 标识 ${manifest.scene} 不一致`);
+        }
+        const current = scenes.get(manifest.scene);
+        if (current?.status === 'error') {
+          if (!current.origins.includes(origin)) current.origins.push(origin);
+          if (!current.sceneRoots.includes(sceneRoot)) current.sceneRoots.push(sceneRoot);
+          continue;
+        }
+        const ready: SceneCatalogReadyItem = current ?? {
+          ...manifest,
+          status: 'ready',
+          origins: [],
+          writable: false,
+          sceneRoots: [],
+        };
+        if (!ready.origins.includes(origin)) ready.origins.push(origin);
+        ready.writable ||= writable;
+        if (!ready.sceneRoots.includes(sceneRoot)) ready.sceneRoots.push(sceneRoot);
+        scenes.set(manifest.scene, ready);
+      } catch (error) {
+        const current = scenes.get(entry.name);
+        const message = error instanceof Error ? error.message : String(error);
+        const origins = current ? [...current.origins] : [];
+        const sceneRoots = current ? [...current.sceneRoots] : [];
+        if (!origins.includes(origin)) origins.push(origin);
+        if (!sceneRoots.includes(sceneRoot)) sceneRoots.push(sceneRoot);
+        scenes.set(entry.name, {
+          status: 'error',
+          scene: entry.name,
+          title: current?.title ?? entry.name,
+          description: current?.description ?? '',
+          origins,
+          writable: false,
+          sceneRoots,
+          error: current?.status === 'error' ? `${current.error}\n${message}` : message,
+        });
+      }
     }
   }
   return [...scenes.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, value]) => value);
 }
 
-export async function describeTask(scene: string, task: string, catalog: TaskCatalogRoots): Promise<JsonObject> {
+export async function describeTask(scene: string, task: string, catalog: TaskCatalogRoots): Promise<TaskDescription> {
   const paths = await taskPaths(scene, task, catalog);
   const [manifest, document] = await Promise.all([
     readTaskManifest(paths.taskManifestPath),
@@ -228,7 +271,7 @@ export async function describeTask(scene: string, task: string, catalog: TaskCat
   };
 }
 
-export async function listTasks(scene: string, catalog: TaskCatalogRoots): Promise<JsonObject[]> {
+export async function listTasks(scene: string, catalog: TaskCatalogRoots): Promise<TaskCatalogItem[]> {
   const discovered = new Map<string, TaskPaths[]>();
   for (const [origin, writable, root] of catalogEntries(catalog)) {
     const sceneRoot = path.join(root, scene);
@@ -242,13 +285,34 @@ export async function listTasks(scene: string, catalog: TaskCatalogRoots): Promi
       discovered.set(entry.name, [...(discovered.get(entry.name) ?? []), candidate]);
     }
   }
-  const result: JsonObject[] = [];
+  const result: TaskCatalogItem[] = [];
   for (const task of [...discovered.keys()].sort()) {
     const locations = discovered.get(task)!;
     if (locations.length > 1) {
-      throw new Error(`任务 ${scene}/${task} 同时存在于内置与用户 catalog：${locations.map((item) => item.taskRoot).join(', ')}`);
+      result.push({
+        status: 'error',
+        scene,
+        task,
+        title: task,
+        error: `任务 ${scene}/${task} 同时存在于内置与用户 catalog：${locations.map((item) => item.taskRoot).join(', ')}`,
+        origins: locations.map((item) => item.origin),
+        taskRoots: locations.map((item) => item.taskRoot),
+      });
+      continue;
     }
-    result.push(await describeTask(scene, task, catalog));
+    try {
+      result.push({ status: 'ready', ...await describeTask(scene, task, catalog) });
+    } catch (error) {
+      result.push({
+        status: 'error',
+        scene,
+        task,
+        title: task,
+        error: error instanceof Error ? error.message : String(error),
+        origins: [locations[0].origin],
+        taskRoots: [locations[0].taskRoot],
+      });
+    }
   }
   return result;
 }
