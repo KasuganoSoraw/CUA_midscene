@@ -377,6 +377,7 @@ class LogProcessor:
                         if coords_close(click_coords, rel_coords, 5):
                             merged_actions.append({
                                 "timestamp": next_action["timestamp"],
+                                "evidence_timestamp": current_action["timestamp"],
                                 "action": message,  # e.g., "LClick at"
                                 "coords": current_action["coords"],  # keep the click coords
                                 "current_software": current_action.get("current_software")
@@ -395,6 +396,7 @@ class LogProcessor:
                         if coords_close(click_coords, rel_coords, 5):
                             merged_actions.append({
                                 "timestamp": rel_action["timestamp"],
+                                "evidence_timestamp": current_action["timestamp"],
                                 "action": message,
                                 "coords": current_action["coords"],
                                 "current_software": current_action.get("current_software")
@@ -635,7 +637,12 @@ class LogProcessor:
             if is_dblclick(act) and out:
                 prev = out[-1]
                 if is_click(prev) and close(get_xy(prev), get_xy(act), tol):
-                    # Drop the preceding single click; keep the double click
+                    # Drop the preceding single click, but keep its first mouse-down
+                    # as the evidence anchor for the complete double-click gesture.
+                    first_press = prev.get("evidence_timestamp", prev.get("timestamp"))
+                    if first_press is not None:
+                        act = act.copy()
+                        act["evidence_timestamp"] = first_press
                     out.pop()
                     out.append(act)
                     continue

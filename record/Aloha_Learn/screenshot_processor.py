@@ -143,7 +143,8 @@ class VideoScreenshotExtractor:
                 ua["path"] = self.scale_path(a["path"], scale_x, scale_y) if need_scaling else a["path"]
             else:
                 ua["path"] = None
-            timestamp = abs(a['timestamp']-0.1)
+            evidence_timestamp = a.get('evidence_timestamp', a['timestamp'])
+            timestamp = max(0.0, evidence_timestamp - 0.1)
             base = f"{timestamp:.3f}s"
             full_fn = f"{base}.jpg"
             crop_fn = f"{base}.crop.jpg"

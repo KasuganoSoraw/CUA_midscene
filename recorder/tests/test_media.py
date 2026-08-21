@@ -13,6 +13,7 @@ from cua_recorder.media import (
     desktop_encoder_options,
     prepare_video_frame,
     require_recording_capabilities,
+    video_slot_at,
 )
 from cua_recorder.protocol import RecorderError
 
@@ -41,6 +42,22 @@ class MediaCapabilitiesTest(unittest.TestCase):
         self.assertEqual(PictureType.NONE, prepared.pict_type)
         self.assertEqual(7, prepared.pts)
         self.assertEqual(Fraction(1, 30), prepared.time_base)
+
+    def test_wall_clock_slots_preserve_duration_when_capture_is_slower_than_target(self) -> None:
+        captured_slots = [
+            video_slot_at(round(index / 28.5 * 1_000_000_000), 30, round_up=True)
+            for index in range(586)
+        ]
+        stop_slot = video_slot_at(20_556_000_000, 30, round_up=False)
+
+        self.assertEqual(0, captured_slots[0])
+        self.assertEqual(616, stop_slot)
+        self.assertEqual(617, stop_slot + 1)
+        self.assertGreater(len(set(range(stop_slot + 1))) - len(set(captured_slots)), 0)
+
+    def test_capture_frames_round_up_but_stop_duration_rounds_down(self) -> None:
+        self.assertEqual(166, video_slot_at(5_510_000_000, 30, round_up=True))
+        self.assertEqual(165, video_slot_at(5_510_000_000, 30, round_up=False))
 
     def test_ready_requires_capture_encoder_and_muxer(self) -> None:
         capabilities = MediaCapabilities(

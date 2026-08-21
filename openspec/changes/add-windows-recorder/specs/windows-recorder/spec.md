@@ -70,11 +70,19 @@ Worker SHALL 仅使用 Python 标准库和 Windows API 安装低级键盘与鼠�
 - **THEN** Worker SHALL 在内部事件中保留该标记，并 SHALL 按明确配置决定记录或过滤，不得把其误认为无法识别的 Hook 失败
 
 ### Requirement: 视频与输入共享单调时间轴
-Worker SHALL 在视频录制就绪后建立单一单调起点，并 SHALL 将输入事件格式化为相对该起点的毫秒时间戳；停止时 SHALL 先停止输入、排空日志，再正常完成视频。
+Worker SHALL 以第一张桌面帧的 `perf_counter_ns()` 建立视频与输入共享的单调起点，并 SHALL 将输入事件格式化为相对该起点的毫秒时间戳。视频 SHALL 按真实单调经过时间映射到 CFR 帧槽，采集帧不足时 SHALL 复制上一张已知帧补齐时间，而不得使用采集帧计数压缩视频时长；停止时 SHALL 先停止输入、排空日志，再补齐视频到停止时刻并正常完成视频。
 
 #### Scenario: 编码器启动存在延迟
 - **WHEN** PyAV 打开捕获设备后经过一段时间才产生首帧
 - **THEN** Worker SHALL 在首帧就绪前保持 `starting` 且不得把用户输入标记为视频时间零之后的有效录制事件
+
+#### Scenario: 实际采集速率低于目标帧率
+- **WHEN** 目标为 30fps 但桌面实际只能产生较低或不均匀的采集帧率
+- **THEN** MP4 SHALL 通过复制上一张已知帧保持与单调录制时长一致，视频与输入停止时间的误差 SHALL 不超过两个目标帧周期
+
+#### Scenario: 点击动作生成证据截图
+- **WHEN** 单击或双击动作由 mouse-down 与 mouse-up 合并并进入截图处理
+- **THEN** 动作顺序时间 SHALL 可保留 mouse-up，而证据时间 SHALL 使用该手势第一次 mouse-down 前 0.1 秒并在零处截断
 
 ### Requirement: 输出资产兼容现有录制处理链
 每次成功录制 SHALL 在调用方从 `CUA_RECORDINGS_ROOT` 解析并传入的根下创建一个一级 recording 目录，并在 `inputs/` 中生成一个 H.264 MP4 和一个同 basename 的 TXT；TXT SHALL 使用 JSON-per-line 的 `timestamp`、`message`、`window` 字段及现有配置头，不要求额外索引或 metadata 文件。

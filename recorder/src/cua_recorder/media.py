@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import time
 import threading
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import av
 from av.video.frame import PictureType
@@ -16,6 +17,7 @@ from .protocol import RecorderError
 H264_MF_BIT_RATE = 5_000_000
 H264_MF_QUALITY = 80
 H264_MF_GOP_SECONDS = 6
+NANOSECONDS_PER_SECOND = 1_000_000_000
 
 
 def desktop_encoder_options() -> dict[str, str]:
@@ -41,6 +43,14 @@ def prepare_video_frame(
     encoded.pts = frame_index
     encoded.time_base = time_base
     return encoded
+
+
+def video_slot_at(elapsed_ns: int, framerate: int, *, round_up: bool) -> int:
+    """把统一单调时钟映射到 CFR 帧槽；向上取整可避免未来画面提前出现。"""
+    numerator = max(0, elapsed_ns) * framerate
+    if round_up:
+        return (numerator + NANOSECONDS_PER_SECOND - 1) // NANOSECONDS_PER_SECOND
+    return numerator // NANOSECONDS_PER_SECOND
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,18 +151,22 @@ class PyAVVideoRecorder:
         output_path: Path,
         *,
         framerate: int = 30,
+        clock_ns: Callable[[], int] = time.perf_counter_ns,
     ) -> None:
         require_recording_capabilities(capabilities)
         self._display = display
         self._output_path = output_path
         self._framerate = framerate
+        self._clock_ns = clock_ns
         self._stop_requested = threading.Event()
         self._ready = threading.Event()
         self._finished = threading.Event()
         self._thread: threading.Thread | None = None
         self._error: BaseException | None = None
+        self._origin_ns: int | None = None
+        self._stop_ns: int | None = None
 
-    def start(self, timeout: float = 20.0) -> None:
+    def start(self, timeout: float = 20.0) -> int:
         if self._thread is not None:
             raise RecorderError("PyAV 视频录制器已启动")
         self._thread = threading.Thread(target=self._run, name="cua-pyav-video", daemon=True)
@@ -164,10 +178,15 @@ class PyAVVideoRecorder:
             raise RecorderError(f"等待 PyAV 首帧超时（{timeout:g} 秒）")
         if self._error is not None:
             raise RecorderError(f"PyAV 在首帧前失败：{self._error}") from self._error
+        if self._origin_ns is None:
+            raise RecorderError("PyAV 首帧就绪但未建立视频时钟原点")
+        return self._origin_ns
 
     def stop(self, timeout: float = 15.0) -> None:
         if self._thread is None:
             return
+        if self._stop_ns is None:
+            self._stop_ns = self._clock_ns()
         self._stop_requested.set()
         if not self._finished.wait(timeout):
             raise RecorderError(f"等待 PyAV 正常停止超时（{timeout:g} 秒）")
@@ -196,24 +215,53 @@ class PyAVVideoRecorder:
             stream.bit_rate = H264_MF_BIT_RATE
             stream.gop_size = self._framerate * H264_MF_GOP_SECONDS
             time_base = Fraction(1, self._framerate)
-            frame_index = 0
-            for frame in source.decode(video=0):
-                if self._stop_requested.is_set():
-                    break
+            last_slot = -1
+            last_frame: av.VideoFrame | None = None
+
+            def encode_at(frame: av.VideoFrame, slot: int) -> None:
                 encoded = prepare_video_frame(
                     frame,
                     width=self._display.width,
                     height=self._display.height,
-                    frame_index=frame_index,
+                    frame_index=slot,
                     time_base=time_base,
                 )
                 for packet in stream.encode(encoded):
                     output.mux(packet)
-                frame_index += 1
-                if frame_index == 1:
+
+            for frame in source.decode(video=0):
+                if self._stop_requested.is_set():
+                    break
+                captured_ns = self._clock_ns()
+                if self._origin_ns is None:
+                    self._origin_ns = captured_ns
+                    target_slot = 0
+                else:
+                    target_slot = video_slot_at(
+                        captured_ns - self._origin_ns,
+                        self._framerate,
+                        round_up=True,
+                    )
+                if target_slot <= last_slot:
+                    continue
+                if last_frame is not None:
+                    for slot in range(last_slot + 1, target_slot):
+                        encode_at(last_frame, slot)
+                encode_at(frame, target_slot)
+                last_frame = frame
+                last_slot = target_slot
+                if last_slot == 0:
                     self._ready.set()
-            if frame_index == 0:
+            if last_frame is None or self._origin_ns is None:
                 raise RecorderError("gdigrab 在结束前未产生视频帧")
+            if self._stop_ns is not None:
+                stop_slot = video_slot_at(
+                    self._stop_ns - self._origin_ns,
+                    self._framerate,
+                    round_up=False,
+                )
+                for slot in range(last_slot + 1, stop_slot + 1):
+                    encode_at(last_frame, slot)
             for packet in stream.encode(None):
                 output.mux(packet)
         except BaseException as error:

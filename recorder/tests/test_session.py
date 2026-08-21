@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -15,16 +16,17 @@ class SuccessfulVideo:
     def __init__(self, _capabilities: object, _display: object, output_path: Path, **_options: object) -> None:
         self.output_path = output_path
 
-    def start(self, timeout: float = 20.0) -> None:
+    def start(self, timeout: float = 20.0) -> int:
         del timeout
         self.output_path.write_bytes(b"fake-mp4")
+        return time.perf_counter_ns()
 
     def stop(self, timeout: float = 15.0) -> None:
         del timeout
 
 
 class FailedVideo(SuccessfulVideo):
-    def start(self, timeout: float = 20.0) -> None:
+    def start(self, timeout: float = 20.0) -> int:
         del timeout
         raise RecorderError("PyAV 在首帧前失败：encoder failed")
 

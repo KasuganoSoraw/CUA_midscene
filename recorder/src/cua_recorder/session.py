@@ -4,7 +4,7 @@ import os
 import queue
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, TextIO
 
@@ -98,13 +98,14 @@ class RecordingSession:
             framerate=self._framerate,
         )
         try:
-            self._video.start()
+            started_ns = self._video.start()
         except BaseException:
             self._stop_video_after_failure()
             raise
 
-        started_ns = time.perf_counter_ns()
-        started_at = datetime.now()
+        started_at = datetime.now() - timedelta(
+            seconds=max(0, time.perf_counter_ns() - started_ns) / 1_000_000_000,
+        )
         try:
             with temporary_log.open("w", encoding="utf-8", newline="\n") as log_stream:
                 write_log_header(log_stream, started_at=started_at, display=self._display)
