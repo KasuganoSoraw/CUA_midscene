@@ -18,7 +18,7 @@
 
 - 暂停/恢复、音频、摄像头、跨平台、录制回放或输入注入。
 - 捕获安全桌面、UAC、锁屏、`Ctrl+Alt+Delete` 或保证游戏 Raw Input 完整性。
-- 解析中文输入法最终提交文本；首版记录与现有 Aloha 日志一致的物理按键 press/release。
+- 解析中文输入法最终提交文本；首版仍记录物理按键 press/release，但字母按键在录制时结合 Shift 与 CapsLock 状态写入真实大小写。
 - 新增独立桌面 GUI、录制数据库、索引文件或会话令牌。
 
 ## Decisions
@@ -42,6 +42,8 @@ Worker 导入固定且可验证的 PyAV wheel，通过 `libavdevice` 的 `gdigra
 通过 `ctypes` 安装 `WH_KEYBOARD_LL` 与 `WH_MOUSE_LL`。Hook 运行在专用消息循环线程，回调只复制结构体、读取单调时间并写入有界内存队列，然后立即调用 `CallNextHookEx`。写盘、活动窗口查询、键名格式化和双击/拖拽派生在消费线程完成。
 
 事件日志继续输出 `timestamp`、`message`、`window` 三字段，并兼容当前 `Key Press/Release`、`LClick/LRelease/LDoubleClick`、`DragStart/DragMove/DragEnd` 与 `ScrollUp/ScrollDown` 文本。双击和拖拽阈值读取 Windows 系统设置；原始 down/up 状态始终保留在派生规则内部。
+
+字母按键的大小写在录制阶段确定：录制启动时读取 CapsLock 切换状态，之后按非重复 CapsLock keydown 更新状态，并分别跟踪左右 Shift。普通字母按 `Shift XOR CapsLock` 输出真实字符；Ctrl、Alt 或 Win 组合键继续使用大写物理键名，保持快捷键语义稳定。
 
 ### 单一时钟和启动握手
 

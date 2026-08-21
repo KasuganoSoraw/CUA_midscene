@@ -14,7 +14,7 @@ from .hotkey import HOTKEY_LABEL, GlobalHotkeyToggle, HotkeyInputFilter
 from .media import MediaCapabilities, PyAVVideoRecorder
 from .models import DisplayInfo
 from .protocol import RecorderError
-from .windows import foreground_window_label, input_thresholds, require_output_root
+from .windows import caps_lock_enabled, foreground_window_label, input_thresholds, require_output_root
 
 
 StatusSink = Callable[[str, object], None]
@@ -116,6 +116,7 @@ class RecordingSession:
                     include_injected=self._include_injected,
                     coordinate_origin=(self._display.left, self._display.top),
                     coordinate_size=(self._display.width, self._display.height),
+                    caps_lock_on=caps_lock_enabled(),
                     **thresholds,
                 )
                 hotkey_filter = HotkeyInputFilter(formatter.handle)

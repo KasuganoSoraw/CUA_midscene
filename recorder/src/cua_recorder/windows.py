@@ -14,6 +14,7 @@ MONITORINFOF_PRIMARY = 1
 MDT_EFFECTIVE_DPI = 0
 PROCESS_PER_MONITOR_DPI_AWARE = 2
 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = ctypes.c_void_p(-4)
+VK_CAPITAL = 0x14
 
 
 class RECT(ctypes.Structure):
@@ -57,6 +58,15 @@ def enable_per_monitor_dpi_awareness() -> None:
             user32.SetProcessDPIAware()
         except (AttributeError, OSError):
             return
+
+
+def caps_lock_enabled() -> bool:
+    """读取录制启动时的 CapsLock 切换状态。"""
+    require_windows()
+    user32 = ctypes.windll.user32
+    user32.GetKeyState.argtypes = [ctypes.c_int]
+    user32.GetKeyState.restype = ctypes.c_short
+    return bool(int(user32.GetKeyState(VK_CAPITAL)) & 1)
 
 
 def _monitor_scale(handle: int) -> float:

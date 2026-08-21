@@ -13,7 +13,7 @@ def messages(stream: io.StringIO) -> list[str]:
 
 
 class EventFormattingTest(unittest.TestCase):
-    def create_formatter(self, stream: io.StringIO) -> AlohaEventFormatter:
+    def create_formatter(self, stream: io.StringIO, *, caps_lock_on: bool = False) -> AlohaEventFormatter:
         return AlohaEventFormatter(
             stream,
             started_ns=1_000_000_000,
@@ -21,6 +21,7 @@ class EventFormattingTest(unittest.TestCase):
             double_click_ms=500,
             double_click_distance=4,
             drag_distance=4,
+            caps_lock_on=caps_lock_on,
         )
 
     def test_timestamp_uses_milliseconds(self) -> None:
@@ -35,7 +36,57 @@ class EventFormattingTest(unittest.TestCase):
         formatter.handle(RawInputEvent("key_down", 1_040_000_000, vk_code=0x53))
 
         self.assertEqual(
-            ["Key Press: A", "Key Release: A", "Key Press: CTRL", "Hotkey: CTRL+S"],
+            ["Key Press: a", "Key Release: a", "Key Press: CTRL", "Hotkey: CTRL+S"],
+            messages(stream),
+        )
+
+    def test_letter_case_uses_shift_xor_caps_lock(self) -> None:
+        stream = io.StringIO()
+        formatter = self.create_formatter(stream)
+        formatter.handle(RawInputEvent("key_down", 1_010_000_000, vk_code=0x41))
+        formatter.handle(RawInputEvent("key_up", 1_020_000_000, vk_code=0x41))
+        formatter.handle(RawInputEvent("key_down", 1_030_000_000, vk_code=0x10))
+        formatter.handle(RawInputEvent("key_down", 1_040_000_000, vk_code=0x42))
+        formatter.handle(RawInputEvent("key_up", 1_050_000_000, vk_code=0x42))
+        formatter.handle(RawInputEvent("key_up", 1_060_000_000, vk_code=0x10))
+
+        self.assertEqual(
+            [
+                "Key Press: a", "Key Release: a",
+                "Key Press: SHIFT", "Hotkey: SHIFT+B", "Key Release: B", "Key Release: SHIFT",
+            ],
+            messages(stream),
+        )
+
+    def test_caps_lock_toggle_ignores_repeat_and_combines_with_shift(self) -> None:
+        stream = io.StringIO()
+        formatter = self.create_formatter(stream)
+        formatter.handle(RawInputEvent("key_down", 1_010_000_000, vk_code=0x14))
+        formatter.handle(RawInputEvent("key_down", 1_011_000_000, vk_code=0x14))
+        formatter.handle(RawInputEvent("key_up", 1_020_000_000, vk_code=0x14))
+        formatter.handle(RawInputEvent("key_down", 1_030_000_000, vk_code=0x43))
+        formatter.handle(RawInputEvent("key_up", 1_040_000_000, vk_code=0x43))
+        formatter.handle(RawInputEvent("key_down", 1_050_000_000, vk_code=0x10))
+        formatter.handle(RawInputEvent("key_down", 1_060_000_000, vk_code=0x44))
+
+        self.assertEqual(
+            [
+                "Key Press: CAPSLOCK", "Key Press: CAPSLOCK", "Key Release: CAPSLOCK",
+                "Key Press: C", "Key Release: C", "Key Press: SHIFT", "Hotkey: SHIFT+d",
+            ],
+            messages(stream),
+        )
+
+    def test_initial_caps_lock_state_and_dual_shift_release(self) -> None:
+        stream = io.StringIO()
+        formatter = self.create_formatter(stream, caps_lock_on=True)
+        formatter.handle(RawInputEvent("key_down", 1_010_000_000, vk_code=0xA0))
+        formatter.handle(RawInputEvent("key_down", 1_020_000_000, vk_code=0xA1))
+        formatter.handle(RawInputEvent("key_up", 1_030_000_000, vk_code=0xA0))
+        formatter.handle(RawInputEvent("key_down", 1_040_000_000, vk_code=0x45))
+
+        self.assertEqual(
+            ["Key Press: SHIFT", "Key Press: SHIFT", "Key Release: SHIFT", "Hotkey: SHIFT+e"],
             messages(stream),
         )
 
@@ -86,7 +137,7 @@ class EventFormattingTest(unittest.TestCase):
         formatter = self.create_formatter(stream)
         formatter.handle(RawInputEvent("key_down", 1_010_000_000, vk_code=0x41))
         formatter.finish(1_020_000_000)
-        self.assertEqual(["Key Press: A", "Recording Stopped"], messages(stream))
+        self.assertEqual(["Key Press: a", "Recording Stopped"], messages(stream))
 
 
 if __name__ == "__main__":

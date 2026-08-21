@@ -52,3 +52,8 @@
 
 - [x] 9.1 清除 `gdigrab` 捕获帧继承的强制 I-frame 类型，配置目标 5 Mbps VBR 和 6 秒 GOP，并增加帧类型回归测试
 - [x] 9.2 对比真实录制的关键帧数量、平均码率、文件体积和解码帧清晰度，确认接近 Aloha 样本
+
+## 10. 保留字母输入真实大小写
+
+- [x] 10.1 在录制阶段读取并维护 CapsLock、左右 Shift 状态，按 `Shift XOR CapsLock` 输出真实字母大小写
+- [x] 10.2 保持 Ctrl/Alt/Win 快捷键使用稳定的大写物理键名，并补充普通、Shift、CapsLock、Shift+CapsLock 与双 Shift 回归测试

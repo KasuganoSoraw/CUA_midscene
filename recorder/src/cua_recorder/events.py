@@ -12,6 +12,7 @@ from .models import DisplayInfo
 
 
 SPECIAL_KEYS = {
+    0x14: "CAPSLOCK",
     0x08: "BACKSPACE",
     0x09: "TAB",
     0x0D: "ENTER",
@@ -97,6 +98,7 @@ class AlohaEventFormatter:
         include_injected: bool = True,
         coordinate_origin: tuple[int, int] = (0, 0),
         coordinate_size: tuple[int, int] | None = None,
+        caps_lock_on: bool = False,
     ) -> None:
         self._stream = stream
         self._started_ns = started_ns
@@ -107,7 +109,10 @@ class AlohaEventFormatter:
         self._include_injected = include_injected
         self._coordinate_origin = coordinate_origin
         self._coordinate_size = coordinate_size
-        self._pressed_modifiers: set[str] = set()
+        self._caps_lock_on = caps_lock_on
+        self._pressed_keys: set[int] = set()
+        self._pressed_modifier_keys: set[int] = set()
+        self._pressed_key_names: dict[int, str] = {}
         self._buttons: dict[str, MouseButtonState] = {}
         self._last_click: dict[str, tuple[int, int, int]] = {}
         self._lock = threading.Lock()
@@ -127,17 +132,34 @@ class AlohaEventFormatter:
 
     def _format_message(self, event: RawInputEvent) -> str | None:
         if event.kind in ("key_down", "key_up"):
-            name = key_name(event.vk_code)
-            modifier = MODIFIERS.get(event.vk_code or -1)
+            vk_code = event.vk_code
+            physical_name = key_name(vk_code)
+            modifier = MODIFIERS.get(vk_code or -1)
             if event.kind == "key_down":
+                repeated = vk_code is not None and vk_code in self._pressed_keys
+                if vk_code is not None:
+                    self._pressed_keys.add(vk_code)
+                if vk_code == 0x14 and not repeated:
+                    self._caps_lock_on = not self._caps_lock_on
                 if modifier:
-                    self._pressed_modifiers.add(modifier)
-                elif self._pressed_modifiers:
-                    order = [item for item in ("CTRL", "ALT", "SHIFT", "WIN") if item in self._pressed_modifiers]
+                    if vk_code is not None:
+                        self._pressed_modifier_keys.add(vk_code)
+                    name = physical_name
+                else:
+                    name = self._key_name_for_current_state(vk_code, physical_name)
+                    if vk_code is not None:
+                        self._pressed_key_names[vk_code] = name
+                modifiers = self._pressed_modifier_names()
+                if not modifier and modifiers:
+                    order = [item for item in ("CTRL", "ALT", "SHIFT", "WIN") if item in modifiers]
                     return f"Hotkey: {'+'.join([*order, name])}"
                 return f"Key Press: {name}"
+            name = self._pressed_key_names.pop(vk_code, physical_name) if vk_code is not None else physical_name
             if modifier:
-                self._pressed_modifiers.discard(modifier)
+                if vk_code is not None:
+                    self._pressed_modifier_keys.discard(vk_code)
+            if vk_code is not None:
+                self._pressed_keys.discard(vk_code)
             return f"Key Release: {name}"
 
         if event.x is None or event.y is None:
@@ -188,6 +210,18 @@ class AlohaEventFormatter:
                 return f"LDragEnd at {coordinate}"
             return f"{prefix}Release at {coordinate}"
         return None
+
+    def _pressed_modifier_names(self) -> set[str]:
+        return {MODIFIERS[vk_code] for vk_code in self._pressed_modifier_keys}
+
+    def _key_name_for_current_state(self, vk_code: int | None, physical_name: str) -> str:
+        if vk_code is None or not 0x41 <= vk_code <= 0x5A:
+            return physical_name
+        modifiers = self._pressed_modifier_names()
+        if modifiers.intersection({"CTRL", "ALT", "WIN"}):
+            return physical_name
+        uppercase = ("SHIFT" in modifiers) ^ self._caps_lock_on
+        return physical_name if uppercase else physical_name.lower()
 
     def _write(self, time_ns: int, message: str) -> None:
         document = {

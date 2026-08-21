@@ -61,6 +61,10 @@ Worker SHALL 仅使用 Python 标准库和 Windows API 安装低级键盘与鼠�
 - **WHEN** 录制期间用户按下并释放按键，点击、双击、拖拽或滚动鼠标
 - **THEN** TXT SHALL 按时间顺序包含当前处理器兼容的 `Key Press/Release`、点击/释放、双击、拖拽或滚轮消息及物理坐标
 
+#### Scenario: 用户输入大小写字母
+- **WHEN** 用户通过 Shift、CapsLock 或二者组合输入英文字母
+- **THEN** TXT SHALL 在录制时按 `Shift XOR CapsLock` 写入真实字母大小写，并 SHALL 分别跟踪左右 Shift，后处理器不得再从大写虚拟键码猜测文本大小写
+
 #### Scenario: 录制器收到注入输入
 - **WHEN** Hook 结构标记事件为 injected
 - **THEN** Worker SHALL 在内部事件中保留该标记，并 SHALL 按明确配置决定记录或过滤，不得把其误认为无法识别的 Hook 失败

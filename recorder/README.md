@@ -32,7 +32,7 @@ uv run cua-recorder record --display-id display-0 --output-root C:\recordings
 `<output-root>/Recording_YYYYMMDD_HHMMSS/inputs/<same-name>.mp4` 和同 basename 的 `.txt`。
 写入期间只存在 `.partial` 文件，失败产物不会被现有 catalog 识别为可处理录制。
 
-输入日志保留 Aloha 的物理按键 press/release、鼠标按下/释放、双击、滚轮与拖拽消息格式。
+输入日志保留 Aloha 的物理按键 press/release、鼠标按下/释放、双击、滚轮与拖拽消息格式。英文字母会在录制时结合 Shift 与 CapsLock 状态写入真实大小写；中文输入法最终提交文本仍不在首版范围内。
 鼠标坐标会换算为所选显示器视频的局部坐标；所选屏幕之外的新鼠标动作不会写入日志。
 
 ## 首版边界与排障
