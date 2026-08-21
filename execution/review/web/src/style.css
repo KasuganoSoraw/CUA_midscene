@@ -27,7 +27,7 @@ h2 { font-size: 18px; }
 .conflict { margin-bottom: 12px; padding: 12px 15px; border: 1px solid #e8a179; border-radius: 12px; background: #fff3e9; color: #843b18; }
 .conflict button { float: right; background: #843b18; color: white; padding: 5px 10px; }
 .workspace { display: grid; grid-template-columns: 220px 300px minmax(560px, 1fr); gap: 13px; height: calc(100vh - 188px); }
-.workspace.recording-layout { grid-template-columns: 300px minmax(680px, 1fr); }
+.workspace.recording-layout { grid-template-columns: 300px minmax(680px, 1fr); grid-template-rows: auto minmax(0, 1fr); }
 .panel { min-height: 0; overflow: hidden; border: 1px solid #d8dfda; border-radius: 15px; background: #fbfcfa; box-shadow: 0 10px 28px #4d5f5410; }
 .catalog { padding: 16px; overflow-y: auto; }
 .catalog > label { display: block; margin: 0 0 7px; color: #748078; font-size: 11px; font-weight: 800; text-transform: uppercase; }
@@ -144,6 +144,29 @@ h2 { font-size: 18px; }
 footer { display: flex; justify-content: space-between; padding: 11px 4px 0; color: #59675f; font-size: 12px; }
 footer code { color: #8a958f; }
 .error { color: #a33d31; }
+.recorder-control { grid-column: 1 / -1; padding: 16px; }
+.recorder-control.collapsed { display: flex; min-height: 68px; align-items: center; gap: 12px; padding: 12px 16px; border-color: #c9d9cf; background: #f6faf7; }
+.recorder-heading { display: flex; align-items: start; justify-content: space-between; gap: 24px; }
+.recorder-heading > div > p:last-child { margin-top: 5px; color: #718078; font-size: 12px; }
+.recorder-displays { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 14px; }
+.recorder-display { overflow: hidden; padding: 0; border: 2px solid transparent; border-radius: 12px; text-align: left; color: #33443a; background: #eef2ef; }
+.recorder-display.selected { border-color: #38805a; box-shadow: 0 0 0 3px #cce3d3; }
+.recorder-display img { display: block; width: 100%; height: 140px; object-fit: contain; background: #202622; }
+.recorder-display > span { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; }
+.recorder-display strong { display: flex; align-items: center; gap: 8px; }
+.recorder-display em { border-radius: 999px; padding: 3px 6px; color: #27663e; background: #dcefe2; font-size: 9px; font-style: normal; }
+.recorder-display small, .recorder-output-row small { color: #7a8780; }
+.recorder-preview-empty { display: grid; min-height: 92px; margin-top: 14px; place-items: center; border: 1px dashed #cbd5ce; border-radius: 12px; color: #78847d; background: #f4f7f4; font-size: 12px; }
+.recorder-output-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; margin-top: 14px; }
+.recorder-output-row > div { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.recorder-output-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recorder-inline-error { margin-top: 12px; }
+.recorder-live-dot { width: 12px; height: 12px; flex: 0 0 12px; border-radius: 50%; background: #d8483e; box-shadow: 0 0 0 5px #f6d9d6; animation: recorder-live 1.3s ease-in-out infinite; }
+.recorder-live-dot.armed { background: #c88a24; box-shadow: 0 0 0 5px #f4e7cc; animation: none; }
+.recorder-live-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.recorder-live-copy small { overflow: hidden; color: #718078; text-overflow: ellipsis; white-space: nowrap; }
+.recorder-stop { border: 0; border-radius: 9px; padding: 9px 13px; color: white; background: #aa3f35; font-weight: 800; }
+@keyframes recorder-live { 50% { opacity: .55; transform: scale(.85); } }
 .recording-catalog { display: flex; flex-direction: column; }
 .recording-catalog-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .icon-button { width: 32px; height: 32px; border: 0; border-radius: 9px; color: #41604e; background: #e7eee9; font-size: 18px; }

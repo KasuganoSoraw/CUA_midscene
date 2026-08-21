@@ -1,6 +1,8 @@
 import type {
   CreateRecordingTaskRequest,
   CreateRecordingTaskResult,
+  RecorderDisplaysResult,
+  RecorderStatus,
   ReviewCatalogResponse,
   ReviewMutation,
   ReviewMutationResult,
@@ -10,6 +12,7 @@ import type {
   ReviewTaskListResponse,
   ReviewTaskView,
   SaveReviewTaskResult,
+  StartRecorderRequest,
 } from '../../shared/types.js';
 
 export class ApiError extends Error {
@@ -35,6 +38,14 @@ async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> 
 export const api = {
   scenes: () => request<ReviewCatalogResponse>('/api/scenes'),
   recordings: () => request<ReviewRecordingCatalog>('/api/recordings'),
+  recorderStatus: () => request<RecorderStatus>('/api/recorder/status'),
+  refreshRecorderDisplays: () => request<RecorderDisplaysResult>(
+    '/api/recorder/displays/refresh', { method: 'POST' },
+  ),
+  startRecorder: (body: StartRecorderRequest) => request<RecorderStatus>(
+    '/api/recorder/start', { method: 'POST', body: JSON.stringify(body) },
+  ),
+  stopRecorder: () => request<RecorderStatus>('/api/recorder/stop', { method: 'POST' }),
   recording: (recording: string) =>
     request<ReviewRecording>(`/api/recordings/${encodeURIComponent(recording)}`),
   openRecordingFolder: (recording: string) =>

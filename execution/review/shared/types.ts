@@ -129,3 +129,36 @@ export interface CreateRecordingTaskResult {
   task: string;
   goal: string;
 }
+
+export type RecorderPhase = 'idle' | 'arming' | 'armed' | 'starting' | 'recording' | 'stopping' | 'failed';
+
+export interface RecorderStatus {
+  phase: RecorderPhase;
+  outputRoot?: string;
+  recordingId?: string;
+  startedAt?: string;
+  hotkey?: string;
+  error?: string;
+}
+
+export interface RecorderDisplay {
+  id: string;
+  deviceName: string;
+  index: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  scaleFactor: number;
+  primary: boolean;
+  previewUrl: string;
+}
+
+export interface RecorderDisplaysResult {
+  displays: RecorderDisplay[];
+  revision: string;
+}
+
+export interface StartRecorderRequest {
+  displayId: string;
+}

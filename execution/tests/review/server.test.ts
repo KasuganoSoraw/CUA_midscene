@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { runCliCommand } from '../../cli/main.js';
 import { reviewBodyLimit } from '../../review/server/app.js';
+import type { RecorderControl, RecorderStatus } from '../../review/service/windows-recorder.js';
 import {
   defaultReviewPort,
   reviewDataRootKey,
@@ -29,6 +30,39 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
   await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>review</title>', 'utf8');
   let openedPath = '';
   let createRequest: Record<string, unknown> | undefined;
+  const recorderPreview = path.join(root, 'recorder-preview.png');
+  await writeFile(recorderPreview, 'preview', 'utf8');
+  let recorderStatus: RecorderStatus = { phase: 'idle', outputRoot: recordingsRoot };
+  let recorderClosed = false;
+  const recorder: RecorderControl = {
+    status: () => ({ ...recorderStatus }),
+    refreshDisplays: async () => ({
+      revision: '1',
+      displays: [{
+        id: 'display-0', deviceName: 'DISPLAY0', index: 0,
+        left: 0, top: 0, width: 1920, height: 1080,
+        scaleFactor: 1, primary: true,
+        previewUrl: '/api/recorder/displays/0/preview?revision=1',
+      }],
+    }),
+    preview: async (index) => {
+      if (index !== 0) throw Object.assign(new Error('显示器预览不存在'), { statusCode: 404 });
+      return recorderPreview;
+    },
+    start: async (displayId) => {
+      assert.equal(displayId, 'display-0');
+      recorderStatus = {
+        phase: 'recording', outputRoot: recordingsRoot,
+        recordingId: 'Recording_live', startedAt: '2026-08-19T10:00:00.000',
+      };
+      return { ...recorderStatus };
+    },
+    stop: async () => {
+      recorderStatus = { phase: 'idle', outputRoot: recorderStatus.outputRoot };
+      return { ...recorderStatus };
+    },
+    close: async () => { recorderClosed = true; },
+  };
   const started = await startReviewServer({
     dataRoot: root,
     port: 0,
@@ -36,6 +70,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     staticRoot,
     dependencies: {
       openDirectory: async (recordingPath) => { openedPath = recordingPath; },
+      recorder,
       createFromRecording: async (options) => {
         createRequest = options as unknown as Record<string, unknown>;
         return {
@@ -62,6 +97,20 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
       protocolVersion: reviewProtocolVersion,
       dataRootKey: reviewDataRootKey(root),
     });
+
+    assert.equal((await (await fetch(new URL('/api/recorder/status', base))).json() as any).phase, 'idle');
+    const displays = await (await fetch(new URL('/api/recorder/displays/refresh', base), { method: 'POST' })).json() as any;
+    assert.equal(displays.displays[0].id, 'display-0');
+    const preview = await fetch(new URL(displays.displays[0].previewUrl, base));
+    assert.equal(preview.headers.get('content-type'), 'image/png');
+    assert.equal(await preview.text(), 'preview');
+    const recordingStarted = await fetch(new URL('/api/recorder/start', base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ displayId: 'display-0' }),
+    });
+    assert.equal((await recordingStarted.json() as any).phase, 'recording');
+    assert.equal((await (await fetch(new URL('/api/recorder/stop', base), { method: 'POST' })).json() as any).phase, 'idle');
 
     const recordings = await fetch(new URL('/api/recordings', base));
     assert.equal(recordings.status, 200);
@@ -142,6 +191,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     assert.equal(typeof (await tooLarge.json() as { error: string }).error, 'string');
   } finally {
     await started.close();
+    assert.equal(recorderClosed, true);
   }
 });
 
@@ -171,9 +221,35 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
         envName: 'CUA_RECORDINGS_ROOT',
         recordings: [],
       });
+      assert.deepEqual(await (await fetch(new URL('/api/recorder/status', started.url))).json(), {
+        phase: 'idle',
+      });
       assert.equal((await fetch(new URL('/api/scenes', started.url))).status, 200);
     } finally {
       await started.close();
+    }
+
+    const configuredRoot = path.join(root, 'recordings-from-env');
+    await mkdir(configuredRoot);
+    await writeFile(
+      path.join(executionRoot, '.env.local'),
+      `CUA_RECORDINGS_ROOT=${configuredRoot}\n`,
+      'utf8',
+    );
+    const configured = await startReviewServer({
+      dataRoot: root,
+      port: 0,
+      staticRoot,
+      executionRoot,
+    });
+    try {
+      assert.deepEqual(await (await fetch(new URL('/api/recorder/status', configured.url))).json(), {
+        phase: 'idle',
+        outputRoot: configuredRoot,
+      });
+      assert.equal((await (await fetch(new URL('/api/recordings', configured.url))).json() as any).configured, true);
+    } finally {
+      await configured.close();
     }
   } finally {
     if (previous === undefined) delete process.env.CUA_RECORDINGS_ROOT;

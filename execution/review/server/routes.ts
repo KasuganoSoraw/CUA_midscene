@@ -7,6 +7,7 @@ import {
   describeRecording,
   listRecordings,
   openRecordingDirectory,
+  resolveRecordingsRoot,
   resolveRecordingDirectory,
 } from '../../cua/recording/recording-catalog.js';
 import { listScenes, listTasks, requireIdentifier } from '../../cua/task/tasks.js';
@@ -14,6 +15,10 @@ import type { ReviewMutation, ReviewTaskDraft, SaveReviewTaskRequest } from '../
 import { applyReviewMutation } from '../service/task-mutations.js';
 import { loadReviewTask, resolveReviewTaskRoot } from '../service/review-task.js';
 import { saveReviewTask, validateReviewDraft } from '../service/task-save.js';
+import {
+  WindowsRecorderManager,
+  type RecorderControl,
+} from '../service/windows-recorder.js';
 
 interface ReviewRouteOptions {
   layout: RuntimeLayout;
@@ -25,6 +30,7 @@ interface ReviewRouteOptions {
 export interface ReviewRouteDependencies {
   createFromRecording?: typeof createTaskFromRecording;
   openDirectory?: typeof openRecordingDirectory;
+  recorder?: RecorderControl;
 }
 
 interface SceneParams {
@@ -47,6 +53,14 @@ interface CreateRecordingTaskBody {
 
 interface EvidenceQuery {
   path?: string;
+}
+
+interface RecorderPreviewParams {
+  index: string;
+}
+
+interface StartRecorderBody {
+  displayId: string;
 }
 
 interface MutationBody {
@@ -135,11 +149,53 @@ async function evidenceFile(
 }
 
 export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = async (app, options) => {
-  let activeRecordingsRoot = options.recordingsRoot;
+  const activeRecordingsRoot = await resolveRecordingsRoot(options.recordingsRoot, {
+    executionRoot: options.executionRoot,
+  });
   const recordingOptions = () => ({
     recordingsRoot: activeRecordingsRoot,
     executionRoot: options.executionRoot,
   });
+  const recorder = options.dependencies?.recorder ?? new WindowsRecorderManager({
+    executionRoot: path.resolve(options.executionRoot ?? process.cwd()),
+    recordingsRoot: activeRecordingsRoot,
+  });
+  app.addHook('onClose', async () => recorder.close());
+
+  app.get('/api/recorder/status', async () => recorder.status());
+
+  app.post('/api/recorder/displays/refresh', async () => recorder.refreshDisplays());
+
+  app.get<{ Params: RecorderPreviewParams }>('/api/recorder/displays/:index/preview', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['index'],
+        properties: { index: { type: 'string', pattern: '^\\d+$' } },
+      },
+    },
+  }, async (request, reply) => {
+    const previewPath = await recorder.preview(Number(request.params.index));
+    return reply.type('image/png').send(await readFile(previewPath));
+  });
+
+  app.post<{ Body: JsonObject }>('/api/recorder/start', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['displayId'],
+        properties: {
+          displayId: { type: 'string', minLength: 1 },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request) => {
+    const body = requireObjectBody<StartRecorderBody>(request.body);
+    return recorder.start(body.displayId);
+  });
+
+  app.post('/api/recorder/stop', async () => recorder.stop());
 
   app.get('/api/scenes', async () => ({
     scenes: await listScenes(options.layout.catalog),

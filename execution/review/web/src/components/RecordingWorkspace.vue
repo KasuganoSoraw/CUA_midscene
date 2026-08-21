@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { SceneCatalogItem } from '../../../../cua/contracts/types';
 import type {
   CreateRecordingTaskResult,
+  RecorderDisplay,
+  RecorderStatus,
   ReviewRecording,
   ReviewRecordingCatalog,
 } from '../../../shared/types';
@@ -30,6 +32,13 @@ const opening = ref(false);
 const sceneMenuOpen = ref(false);
 const error = ref('');
 const message = ref('正在读取录制目录…');
+const recorderStatus = ref<RecorderStatus>({ phase: 'idle' });
+const recorderDisplays = ref<RecorderDisplay[]>([]);
+const selectedDisplayId = ref('');
+const recorderBusy = ref(false);
+const recorderError = ref('');
+const clock = ref(Date.now());
+let recorderPoll: ReturnType<typeof setInterval> | undefined;
 
 const selected = computed<ReviewRecording | undefined>(() =>
   catalog.value.recordings.find((item) => item.id === selectedId.value),
@@ -50,6 +59,21 @@ const sceneOptions = computed(() => {
       || item.id.toLocaleLowerCase().includes(query)
       || item.title.toLocaleLowerCase().includes(query)
     ));
+});
+const recorderCollapsed = computed(() =>
+  ['arming', 'armed', 'starting', 'recording', 'stopping'].includes(recorderStatus.value.phase),
+);
+const canStartRecorder = computed(() => Boolean(
+  selectedDisplayId.value
+  && recorderStatus.value.outputRoot
+  && ['idle', 'failed'].includes(recorderStatus.value.phase)
+  && !recorderBusy.value,
+));
+const elapsedRecording = computed(() => {
+  if (!recorderStatus.value.startedAt) return '00:00';
+  const seconds = Math.max(0, Math.floor((clock.value - new Date(recorderStatus.value.startedAt).getTime()) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 });
 
 function formatSize(size: number | undefined): string {
@@ -100,6 +124,70 @@ async function loadRecordings(): Promise<void> {
   }
 }
 
+async function loadRecorderStatus(): Promise<void> {
+  try {
+    const wasActive = recorderCollapsed.value;
+    const next = await api.recorderStatus();
+    recorderStatus.value = next;
+    if (wasActive && next.phase === 'idle') await loadRecordings();
+  } catch (caught) {
+    recorderError.value = caught instanceof Error ? caught.message : String(caught);
+  }
+}
+
+async function refreshRecorderDisplays(): Promise<void> {
+  if (recorderBusy.value || recorderCollapsed.value) return;
+  recorderBusy.value = true;
+  recorderError.value = '';
+  try {
+    const result = await api.refreshRecorderDisplays();
+    recorderDisplays.value = result.displays;
+    selectedDisplayId.value = result.displays.some((item) => item.id === selectedDisplayId.value)
+      ? selectedDisplayId.value
+      : result.displays.find((item) => item.primary)?.id ?? result.displays[0]?.id ?? '';
+  } catch (caught) {
+    recorderError.value = caught instanceof Error ? caught.message : String(caught);
+  } finally {
+    recorderBusy.value = false;
+  }
+}
+
+async function startRecorder(): Promise<void> {
+  if (!canStartRecorder.value) return;
+  recorderBusy.value = true;
+  recorderError.value = '';
+  recorderStatus.value = {
+    phase: 'arming',
+    outputRoot: recorderStatus.value.outputRoot,
+  };
+  try {
+    recorderStatus.value = await api.startRecorder({
+      displayId: selectedDisplayId.value,
+    });
+    clock.value = Date.now();
+  } catch (caught) {
+    recorderError.value = caught instanceof Error ? caught.message : String(caught);
+    await loadRecorderStatus();
+  } finally {
+    recorderBusy.value = false;
+  }
+}
+
+async function stopRecorder(): Promise<void> {
+  if (recorderBusy.value || !recorderCollapsed.value) return;
+  recorderBusy.value = true;
+  recorderError.value = '';
+  try {
+    recorderStatus.value = await api.stopRecorder();
+    await loadRecordings();
+  } catch (caught) {
+    recorderError.value = caught instanceof Error ? caught.message : String(caught);
+    await loadRecorderStatus();
+  } finally {
+    recorderBusy.value = false;
+  }
+}
+
 async function openFolder(): Promise<void> {
   if (!selected.value || opening.value || busy.value) return;
   opening.value = true;
@@ -135,10 +223,87 @@ async function createTask(): Promise<void> {
   }
 }
 
-onMounted(loadRecordings);
+onMounted(async () => {
+  await Promise.all([loadRecordings(), loadRecorderStatus()]);
+  recorderPoll = setInterval(() => {
+    clock.value = Date.now();
+    if (recorderCollapsed.value && !recorderBusy.value) void loadRecorderStatus();
+  }, 1000);
+});
+onUnmounted(() => {
+  if (recorderPoll) clearInterval(recorderPoll);
+});
 </script>
 
 <template>
+  <section class="panel recorder-control" :class="{ collapsed: recorderCollapsed }">
+    <template v-if="recorderCollapsed">
+      <span class="recorder-live-dot" :class="{ armed: recorderStatus.phase === 'armed' || recorderStatus.phase === 'arming' }"></span>
+      <div class="recorder-live-copy">
+        <strong>{{
+          recorderStatus.phase === 'arming' ? '正在准备录制'
+            : recorderStatus.phase === 'armed' ? '录制已准备'
+              : recorderStatus.phase === 'starting' ? '正在启动录制'
+                : recorderStatus.phase === 'stopping' ? '正在保存录制'
+                  : '正在录制'
+        }}</strong>
+        <small v-if="recorderStatus.phase === 'armed'">切换到目标应用，按 {{ recorderStatus.hotkey || 'Ctrl+Shift+F9' }} 开始</small>
+        <small v-else-if="recorderStatus.phase === 'recording'">{{ recorderStatus.recordingId }} · {{ elapsedRecording }} · 再按 {{ recorderStatus.hotkey || 'Ctrl+Shift+F9' }} 停止</small>
+        <small v-else>{{ recorderStatus.recordingId || '正在注册全局快捷键' }}</small>
+      </div>
+      <button
+        class="danger recorder-stop"
+        type="button"
+        :disabled="recorderBusy || recorderStatus.phase === 'arming' || recorderStatus.phase === 'stopping'"
+        @click="stopRecorder"
+      >{{ recorderStatus.phase === 'stopping' ? '正在停止…' : recorderStatus.phase === 'armed' ? '取消准备' : '紧急停止' }}</button>
+    </template>
+
+    <template v-else>
+      <div class="recorder-heading">
+        <div>
+          <p class="eyebrow">WINDOWS RECORDER</p>
+          <h2>开始一次新录制</h2>
+          <p>选择要录制的屏幕；保存位置由 CUA_RECORDINGS_ROOT 统一配置。</p>
+        </div>
+        <button class="secondary" type="button" :disabled="recorderBusy" @click="refreshRecorderDisplays">
+          {{ recorderBusy ? '正在处理…' : recorderDisplays.length ? '刷新屏幕截图' : '获取屏幕截图' }}
+        </button>
+      </div>
+
+      <div v-if="recorderDisplays.length" class="recorder-displays">
+        <button
+          v-for="display in recorderDisplays"
+          :key="display.id"
+          type="button"
+          class="recorder-display"
+          :class="{ selected: selectedDisplayId === display.id }"
+          :disabled="recorderBusy"
+          @click="selectedDisplayId = display.id"
+        >
+          <img :src="display.previewUrl" :alt="`显示器 ${display.index + 1} 截图`" />
+          <span>
+            <strong>显示器 {{ display.index + 1 }}<em v-if="display.primary">主屏幕</em></strong>
+            <small>{{ display.width }} × {{ display.height }} · {{ display.deviceName }}</small>
+          </span>
+        </button>
+      </div>
+      <div v-else class="recorder-preview-empty">点击“获取屏幕截图”查看并选择目标显示器。</div>
+
+      <div class="recorder-output-row">
+        <div>
+          <small>保存位置（CUA_RECORDINGS_ROOT）</small>
+          <strong :title="recorderStatus.outputRoot">{{ recorderStatus.outputRoot || '尚未配置' }}</strong>
+          <small v-if="!recorderStatus.outputRoot">请在 execution/.env.local 中配置绝对路径并重启服务</small>
+        </div>
+        <button class="primary" type="button" :disabled="!canStartRecorder" @click="startRecorder">准备录制</button>
+      </div>
+      <div v-if="recorderStatus.phase === 'failed' || recorderError" class="inline-error recorder-inline-error">
+        {{ recorderError || recorderStatus.error }}
+      </div>
+    </template>
+  </section>
+
   <aside class="catalog panel recording-catalog">
     <div class="recording-catalog-heading">
       <div>
