@@ -23,6 +23,12 @@ test('review web 只在存在 JSON 请求体时设置 content-type', async () =>
     await api.refreshRecorderDisplays();
     await api.startRecorder({ displayId: 'display-0' });
     await api.stopRecorder();
+    await api.executionStatus();
+    await api.startExecution({
+      scene: 'browser-demo', task: 'search-demo', mode: 'task',
+      inputs: { query: 'hello=world' },
+    });
+    await api.stopExecution();
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -37,4 +43,11 @@ test('review web 只在存在 JSON 请求体时设置 content-type', async () =>
   assert.equal(new Headers(requests[2]?.headers).has('content-type'), false);
   assert.equal(requests[3]?.body, JSON.stringify({ displayId: 'display-0' }));
   assert.equal(new Headers(requests[4]?.headers).has('content-type'), false);
+  assert.equal(new Headers(requests[5]?.headers).has('content-type'), false);
+  assert.equal(new Headers(requests[6]?.headers).get('content-type'), 'application/json');
+  assert.equal(requests[6]?.body, JSON.stringify({
+    scene: 'browser-demo', task: 'search-demo', mode: 'task',
+    inputs: { query: 'hello=world' },
+  }));
+  assert.equal(new Headers(requests[7]?.headers).has('content-type'), false);
 });

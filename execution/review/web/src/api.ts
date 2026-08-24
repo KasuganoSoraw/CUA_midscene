@@ -13,6 +13,8 @@ import type {
   ReviewTaskView,
   SaveReviewTaskResult,
   StartRecorderRequest,
+  StartTaskExecutionRequest,
+  TaskExecutionStatus,
 } from '../../shared/types.js';
 
 export class ApiError extends Error {
@@ -46,6 +48,11 @@ export const api = {
     '/api/recorder/start', { method: 'POST', body: JSON.stringify(body) },
   ),
   stopRecorder: () => request<RecorderStatus>('/api/recorder/stop', { method: 'POST' }),
+  executionStatus: () => request<TaskExecutionStatus>('/api/execution/status'),
+  startExecution: (body: StartTaskExecutionRequest) => request<TaskExecutionStatus>(
+    '/api/execution/start', { method: 'POST', body: JSON.stringify(body) },
+  ),
+  stopExecution: () => request<TaskExecutionStatus>('/api/execution/stop', { method: 'POST' }),
   recording: (recording: string) =>
     request<ReviewRecording>(`/api/recordings/${encodeURIComponent(recording)}`),
   openRecordingFolder: (recording: string) =>

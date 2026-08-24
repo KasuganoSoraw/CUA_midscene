@@ -21,14 +21,18 @@ import {
 } from '../../shared/step-editor';
 import { ApiError, api } from './api';
 import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
+import ExecutionWorkspace from './components/ExecutionWorkspace.vue';
 import RecordingWorkspace from './components/RecordingWorkspace.vue';
 import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect.vue';
 
-const mode = ref<'review' | 'recordings'>('review');
+const mode = ref<'review' | 'recordings' | 'execution'>('review');
 const scenes = ref<SceneCatalogItem[]>([]);
 const tasks = ref<TaskCatalogItem[]>([]);
 const scene = ref('');
 const task = ref('');
+const executionScene = ref('');
+const executionTask = ref('');
+const executionTargetVersion = ref(0);
 const sceneSelectOptions = computed<ReviewSelectOption[]>(() =>
   scenes.value.map((item) => ({
     value: item.scene,
@@ -372,17 +376,29 @@ async function validate(): Promise<void> {
   } catch (error) { status.value = error instanceof Error ? error.message : String(error); }
 }
 
-async function save(): Promise<void> {
-  if (!draft.value || !view.value || !dirty.value) return;
+async function save(): Promise<boolean> {
+  if (!draft.value || !view.value) return false;
+  if (!dirty.value) return true;
   busy.value = true;
   try {
     const result = await api.save(scene.value, task.value, view.value.revision, draft.value);
     status.value = `已写入 ${result.changed.join('、') || '无变更'}`;
     await loadTask();
+    return true;
   } catch (error) {
     conflict.value = error instanceof ApiError && error.status === 409;
     status.value = error instanceof Error ? error.message : String(error);
+    return false;
   } finally { busy.value = false; }
+}
+
+async function runCurrentTask(): Promise<void> {
+  if (!view.value || busy.value) return;
+  if (dirty.value && !(await save())) return;
+  executionScene.value = scene.value;
+  executionTask.value = task.value;
+  executionTargetVersion.value += 1;
+  mode.value = 'execution';
 }
 
 function evidencePath(step: ReviewStep | undefined): string | undefined {
@@ -420,21 +436,24 @@ onMounted(loadScenes);
     <header class="topbar">
       <div>
         <p class="eyebrow">GDE CLAW · LOCAL REVIEW</p>
-        <h1>Midscene 任务复核</h1>
+        <h1>CUA 本地任务工作台</h1>
       </div>
       <div v-if="mode === 'review'" class="top-actions">
         <span class="status-chip" :class="{ readonly: !writable }">{{ writable ? '用户任务 · 可写' : '内置任务 · 只读' }}</span>
+        <button class="secondary" :disabled="busy || !view" @click="runCurrentTask">{{ dirty && writable ? '保存并运行' : '运行此任务' }}</button>
         <button class="secondary" :disabled="busy || !draft" @click="validate">校验草稿</button>
         <button class="primary" :disabled="busy || !dirty || !writable" @click="save">确认并写入</button>
       </div>
-      <div v-else class="top-actions">
+      <div v-else-if="mode === 'recordings'" class="top-actions">
         <span class="status-chip">本地录制 · 创建任务</span>
       </div>
+      <div v-else class="top-actions"><span class="status-chip">本地执行 · 操作桌面</span></div>
     </header>
 
     <nav class="mode-tabs" aria-label="复核控制台功能">
       <button :class="{ active: mode === 'review' }" @click="mode = 'review'">任务复核</button>
       <button :class="{ active: mode === 'recordings' }" @click="mode = 'recordings'">从录制创建任务</button>
+      <button :class="{ active: mode === 'execution' }" @click="mode = 'execution'">任务运行</button>
     </nav>
 
     <div v-if="mode === 'review' && conflict" class="conflict">
@@ -697,8 +716,17 @@ onMounted(loadScenes);
       </section>
     </main>
 
-    <main v-else class="workspace recording-layout">
+    <main v-else-if="mode === 'recordings'" class="workspace recording-layout">
       <RecordingWorkspace :scenes="scenes" @created="openCreatedTask" />
+    </main>
+
+    <main v-else class="workspace execution-layout">
+      <ExecutionWorkspace
+        :scenes="scenes"
+        :initial-scene="executionScene || scene"
+        :initial-task="executionTask || task"
+        :target-version="executionTargetVersion"
+      />
     </main>
 
     <footer v-if="mode === 'review'"><span :class="{ error: conflict }">{{ status }}</span><code>{{ view?.revision }}</code></footer>

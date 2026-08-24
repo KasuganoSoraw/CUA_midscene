@@ -6,6 +6,8 @@ import test from 'node:test';
 import { runCliCommand } from '../../cli/main.js';
 import { reviewBodyLimit } from '../../review/server/app.js';
 import type { RecorderControl, RecorderStatus } from '../../review/service/windows-recorder.js';
+import type { TaskExecutionControl } from '../../review/service/task-execution.js';
+import type { TaskExecutionStatus } from '../../review/shared/types.js';
 import {
   defaultReviewPort,
   reviewDataRootKey,
@@ -34,6 +36,8 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
   await writeFile(recorderPreview, 'preview', 'utf8');
   let recorderStatus: RecorderStatus = { phase: 'idle', outputRoot: recordingsRoot };
   let recorderClosed = false;
+  let executionClosed = false;
+  let executionStatus: TaskExecutionStatus = { phase: 'idle' };
   const recorder: RecorderControl = {
     status: () => ({ ...recorderStatus }),
     refreshDisplays: async () => ({
@@ -63,6 +67,21 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     },
     close: async () => { recorderClosed = true; },
   };
+  const execution: TaskExecutionControl = {
+    status: () => ({ ...executionStatus }),
+    start: async (request) => {
+      executionStatus = {
+        phase: 'preparing', scene: request.scene, task: request.task, mode: request.mode,
+        preparedAt: '2026-08-24T10:00:00.000Z', startsAt: '2026-08-24T10:00:05.000Z',
+      };
+      return { ...executionStatus };
+    },
+    stop: async () => {
+      executionStatus = { phase: 'idle' };
+      return { ...executionStatus };
+    },
+    close: async () => { executionClosed = true; },
+  };
   const started = await startReviewServer({
     dataRoot: root,
     port: 0,
@@ -71,6 +90,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     dependencies: {
       openDirectory: async (recordingPath) => { openedPath = recordingPath; },
       recorder,
+      execution,
       createFromRecording: async (options) => {
         createRequest = options as unknown as Record<string, unknown>;
         return {
@@ -111,6 +131,19 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     });
     assert.equal((await recordingStarted.json() as any).phase, 'recording');
     assert.equal((await (await fetch(new URL('/api/recorder/stop', base), { method: 'POST' })).json() as any).phase, 'idle');
+
+    assert.equal((await (await fetch(new URL('/api/execution/status', base))).json() as any).phase, 'idle');
+    const executionStarted = await fetch(new URL('/api/execution/start', base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scene: 'browser-demo', task: 'search-demo', mode: 'task',
+        inputs: { 'step-001-input': 'Google Search' },
+      }),
+    });
+    assert.equal(executionStarted.status, 200);
+    assert.equal((await executionStarted.json() as any).phase, 'preparing');
+    assert.equal((await (await fetch(new URL('/api/execution/stop', base), { method: 'POST' })).json() as any).phase, 'idle');
 
     const recordings = await fetch(new URL('/api/recordings', base));
     assert.equal(recordings.status, 200);
@@ -192,6 +225,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
   } finally {
     await started.close();
     assert.equal(recorderClosed, true);
+    assert.equal(executionClosed, true);
   }
 });
 

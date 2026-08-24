@@ -11,10 +11,19 @@ import {
   resolveRecordingDirectory,
 } from '../../cua/recording/recording-catalog.js';
 import { listScenes, listTasks, requireIdentifier } from '../../cua/task/tasks.js';
-import type { ReviewMutation, ReviewTaskDraft, SaveReviewTaskRequest } from '../shared/types.js';
+import type {
+  ReviewMutation,
+  ReviewTaskDraft,
+  SaveReviewTaskRequest,
+  StartTaskExecutionRequest,
+} from '../shared/types.js';
 import { applyReviewMutation } from '../service/task-mutations.js';
 import { loadReviewTask, resolveReviewTaskRoot } from '../service/review-task.js';
 import { saveReviewTask, validateReviewDraft } from '../service/task-save.js';
+import {
+  TaskExecutionManager,
+  type TaskExecutionControl,
+} from '../service/task-execution.js';
 import {
   WindowsRecorderManager,
   type RecorderControl,
@@ -31,6 +40,7 @@ export interface ReviewRouteDependencies {
   createFromRecording?: typeof createTaskFromRecording;
   openDirectory?: typeof openRecordingDirectory;
   recorder?: RecorderControl;
+  execution?: TaskExecutionControl;
 }
 
 interface SceneParams {
@@ -62,6 +72,21 @@ interface RecorderPreviewParams {
 interface StartRecorderBody {
   displayId: string;
 }
+
+const startTaskExecutionBodySchema = {
+  type: 'object',
+  required: ['scene', 'task', 'mode', 'inputs'],
+  properties: {
+    scene: { type: 'string', minLength: 1 },
+    task: { type: 'string', minLength: 1 },
+    mode: { type: 'string', enum: ['task', 'act'] },
+    inputs: {
+      type: 'object',
+      additionalProperties: { type: 'string' },
+    },
+  },
+  additionalProperties: false,
+} as const;
 
 interface MutationBody {
   draft: ReviewTaskDraft;
@@ -161,6 +186,30 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     recordingsRoot: activeRecordingsRoot,
   });
   app.addHook('onClose', async () => recorder.close());
+
+  if (!options.layout.data) throw new Error('任务运行页面需要配置 CUA_DATA_ROOT');
+  const execution = options.dependencies?.execution ?? new TaskExecutionManager({
+    catalog: options.layout.catalog,
+    dataRoot: options.layout.data.root,
+    executionRoot: path.resolve(options.executionRoot ?? process.cwd()),
+  });
+  app.addHook('onClose', async () => execution.close());
+
+  app.get('/api/execution/status', async () => execution.status());
+
+  app.post<{ Body: JsonObject }>('/api/execution/start', {
+    schema: { body: startTaskExecutionBodySchema },
+  }, async (request) => {
+    const body = requireObjectBody<StartTaskExecutionRequest>(request.body);
+    return execution.start({
+      scene: requireIdentifier(body.scene, 'scene'),
+      task: requireIdentifier(body.task, 'task'),
+      mode: body.mode,
+      inputs: body.inputs,
+    });
+  });
+
+  app.post('/api/execution/stop', async () => execution.stop());
 
   app.get('/api/recorder/status', async () => recorder.status());
 

@@ -162,3 +162,38 @@ export interface RecorderDisplaysResult {
 export interface StartRecorderRequest {
   displayId: string;
 }
+
+export type TaskExecutionMode = 'task' | 'act';
+export type TaskExecutionPhase =
+  | 'idle'
+  | 'preparing'
+  | 'running'
+  | 'stopping'
+  | 'succeeded'
+  | 'failed';
+
+export interface StartTaskExecutionRequest {
+  scene: string;
+  task: string;
+  mode: TaskExecutionMode;
+  inputs: Record<string, string>;
+}
+
+export interface TaskExecutionResultSummary {
+  runDir?: string;
+  resolvedTaskPath?: string;
+  executor?: JsonObject;
+}
+
+export interface TaskExecutionStatus {
+  phase: TaskExecutionPhase;
+  scene?: string;
+  task?: string;
+  mode?: TaskExecutionMode;
+  preparedAt?: string;
+  startsAt?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  result?: TaskExecutionResultSummary;
+  error?: string;
+}
