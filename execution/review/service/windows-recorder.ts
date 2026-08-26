@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { access, mkdtemp, rm, stat } from 'node:fs/promises';
+import { access, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { constants as fsConstants } from 'node:fs';
@@ -123,6 +123,7 @@ export class WindowsRecorderManager implements RecorderControl {
     executionRoot: string;
     recordingsRoot?: string;
     recorderRoot?: string;
+    previewRoot?: string;
     spawnProcess?: SpawnProcess;
     stopTimeoutMs?: number;
   }) {
@@ -137,21 +138,22 @@ export class WindowsRecorderManager implements RecorderControl {
   }
 
   async refreshDisplays(): Promise<{ displays: RecorderDisplay[]; revision: string }> {
-    const previewDirectory = await mkdtemp(path.join(os.tmpdir(), 'cua-recorder-previews-'));
+    const previewDirectory = await mkdtemp(path.join(this.options.previewRoot ?? os.tmpdir(), 'cua-recorder-previews-'));
     this.previewDirectories.add(previewDirectory);
     const event = await this.runOnce(['displays', '--preview-dir', previewDirectory]);
     if (event.event !== 'displays' || !Array.isArray(event.displays)) {
       throw new Error(`录制 Worker 未返回 displays：${event.event}`);
     }
     const revision = `${Date.now()}`;
+    const resolvedPreviewDirectory = await realpath(previewDirectory);
     this.previewPaths.clear();
-    const displays = event.displays.map((item) => {
+    const displays = await Promise.all(event.displays.map(async (item) => {
       if (!Number.isInteger(item.index) || !item.preview_path) {
         throw new Error('录制 Worker 返回了无效显示器预览');
       }
-      const previewPath = path.resolve(item.preview_path);
-      const relative = path.relative(previewDirectory, previewPath);
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      const previewPath = await realpath(path.resolve(item.preview_path));
+      const relative = path.relative(resolvedPreviewDirectory, previewPath);
+      if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
         throw new Error('录制 Worker 预览路径越出临时目录');
       }
       this.previewPaths.set(item.index, previewPath);
@@ -167,7 +169,7 @@ export class WindowsRecorderManager implements RecorderControl {
         primary: item.primary,
         previewUrl: `/api/recorder/displays/${item.index}/preview?revision=${revision}`,
       };
-    });
+    }));
     return { displays, revision };
   }
 
@@ -325,7 +327,7 @@ export class WindowsRecorderManager implements RecorderControl {
       await this.stop().catch(() => this.child?.kill());
     }
     this.child?.kill();
-    const tempRoot = path.resolve(os.tmpdir());
+    const tempRoot = path.resolve(this.options.previewRoot ?? os.tmpdir());
     for (const directory of this.previewDirectories) {
       const resolved = path.resolve(directory);
       const relative = path.relative(tempRoot, resolved);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -138,6 +138,44 @@ test('WindowsRecorderManager 要求环境配置录制根并支持显示器预览
   assert.equal(result.displays[0]?.previewUrl.startsWith('/api/recorder/displays/0/preview'), true);
   assert.equal(path.basename(await manager.preview(0)), 'display-0.png');
   await assert.rejects(manager.preview(1), /不存在/);
+  await manager.close();
+});
+
+test('WindowsRecorderManager 使用真实路径校验重定向临时目录中的预览', async () => {
+  const fixture = await recorderFixture();
+  const previewTarget = path.join(fixture.root, 'preview-target');
+  const previewAlias = path.join(fixture.root, 'preview-alias');
+  await mkdir(previewTarget);
+  await symlink(previewTarget, previewAlias, process.platform === 'win32' ? 'junction' : 'dir');
+  const child = childProcess();
+  let workerPreviewPath = '';
+  const manager = new WindowsRecorderManager({
+    executionRoot: fixture.executionRoot,
+    recorderRoot: fixture.recorderRoot,
+    previewRoot: previewAlias,
+    spawnProcess: ((_command: string, args: readonly string[]) => {
+      const previewIndex = args.indexOf('--preview-dir');
+      const previewDir = String(args[previewIndex + 1]);
+      const previewPath = path.join(previewDir, 'display-0.png');
+      void writeFile(previewPath, 'png').then(async () => {
+        workerPreviewPath = await realpath(previewPath);
+        child.stdout.write(JSON.stringify({
+          event: 'displays',
+          displays: [{
+            id: 'display-0', device_name: 'DISPLAY0', index: 0,
+            left: 0, top: 0, width: 1920, height: 1080,
+            scale_factor: 1, primary: true, preview_path: workerPreviewPath,
+          }],
+        }) + '\n');
+        child.emit('close', 0, null);
+      });
+      return child;
+    }) as any,
+  });
+
+  const result = await manager.refreshDisplays();
+  assert.equal(result.displays.length, 1);
+  assert.equal(await manager.preview(0), workerPreviewPath);
   await manager.close();
 });
 
