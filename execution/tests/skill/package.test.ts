@@ -44,6 +44,7 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
     new Set(packageJson.files),
     new Set([
       '.env.example',
+      'agent',
       'cli',
       'cua',
       'dist',

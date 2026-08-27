@@ -2,6 +2,7 @@ import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import type { RuntimeLayout } from '../../cua/contracts/types.js';
 import { ReviewConflictError, ReviewReadonlyError } from '../service/task-save.js';
+import type { ReviewServerIdentity } from '../shared/types.js';
 import { registerReviewRoutes, type ReviewRouteDependencies } from './routes.js';
 
 export const reviewBodyLimit = 2 * 1024 * 1024;
@@ -16,11 +17,7 @@ function errorStatus(error: unknown): number {
 export async function createReviewApp(options: {
   layout: RuntimeLayout;
   staticRoot: string;
-  identity: {
-    service: string;
-    protocolVersion: number;
-    dataRootKey: string;
-  };
+  identity: ReviewServerIdentity;
   recordingsRoot?: string;
   executionRoot?: string;
   dependencies?: ReviewRouteDependencies;
@@ -42,6 +39,7 @@ export async function createReviewApp(options: {
     layout: options.layout,
     recordingsRoot: options.recordingsRoot,
     executionRoot: options.executionRoot,
+    devMode: options.identity.devMode,
     dependencies: options.dependencies,
   });
   await app.register(fastifyStatic, {

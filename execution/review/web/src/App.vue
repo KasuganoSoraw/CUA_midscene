@@ -20,18 +20,29 @@ import {
   referenceImagesFromFlow,
 } from '../../shared/step-editor';
 import { ApiError, api } from './api';
+import AgentWorkspace from './components/AgentWorkspace.vue';
 import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
 import ExecutionWorkspace from './components/ExecutionWorkspace.vue';
 import RecordingWorkspace from './components/RecordingWorkspace.vue';
 import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect.vue';
 
-const mode = ref<'review' | 'recordings' | 'execution'>('review');
+const initialParams = new URLSearchParams(window.location.search);
+const requestedMode = initialParams.get('mode');
+const requestedDevMode = initialParams.get('dev') === '1';
+const initialMode = requestedMode === 'recording'
+  ? 'recordings'
+  : requestedMode === 'execution' ? 'execution' : 'review';
+const initialScene = initialParams.get('scene')?.trim() ?? '';
+const initialTask = initialParams.get('task')?.trim() ?? '';
+
+const mode = ref<'review' | 'recordings' | 'execution' | 'agent'>(initialMode);
+const devMode = ref(false);
 const scenes = ref<SceneCatalogItem[]>([]);
 const tasks = ref<TaskCatalogItem[]>([]);
-const scene = ref('');
-const task = ref('');
-const executionScene = ref('');
-const executionTask = ref('');
+const scene = ref(initialScene);
+const task = ref(initialTask);
+const executionScene = ref(initialMode === 'execution' ? initialScene : '');
+const executionTask = ref(initialMode === 'execution' ? initialTask : '');
 const executionTargetVersion = ref(0);
 const sceneSelectOptions = computed<ReviewSelectOption[]>(() =>
   scenes.value.map((item) => ({
@@ -428,7 +439,11 @@ function unbindReferenceImage(): void {
   editor.convertHttpImage2Base64 = false;
 }
 
-onMounted(loadScenes);
+onMounted(async () => {
+  const [, identity] = await Promise.all([loadScenes(), api.reviewIdentity()]);
+  devMode.value = requestedDevMode && identity.devMode;
+  if (devMode.value && requestedMode === 'agent') mode.value = 'agent';
+});
 </script>
 
 <template>
@@ -447,13 +462,15 @@ onMounted(loadScenes);
       <div v-else-if="mode === 'recordings'" class="top-actions">
         <span class="status-chip">本地录制 · 创建任务</span>
       </div>
-      <div v-else class="top-actions"><span class="status-chip">本地执行 · 操作桌面</span></div>
+      <div v-else-if="mode === 'execution'" class="top-actions"><span class="status-chip">本地执行 · 操作桌面</span></div>
+      <div v-else class="top-actions"><span class="status-chip">统一调用 · 人工 / GDEClaw 对等</span></div>
     </header>
 
     <nav class="mode-tabs" aria-label="复核控制台功能">
       <button :class="{ active: mode === 'review' }" @click="mode = 'review'">任务复核</button>
       <button :class="{ active: mode === 'recordings' }" @click="mode = 'recordings'">从录制创建任务</button>
       <button :class="{ active: mode === 'execution' }" @click="mode = 'execution'">任务运行</button>
+      <button v-if="devMode" :class="{ active: mode === 'agent' }" @click="mode = 'agent'">Agent 调试</button>
     </nav>
 
     <div v-if="mode === 'review' && conflict" class="conflict">
@@ -720,13 +737,17 @@ onMounted(loadScenes);
       <RecordingWorkspace :scenes="scenes" @created="openCreatedTask" />
     </main>
 
-    <main v-else class="workspace execution-layout">
+    <main v-else-if="mode === 'execution'" class="workspace execution-layout">
       <ExecutionWorkspace
         :scenes="scenes"
         :initial-scene="executionScene || scene"
         :initial-task="executionTask || task"
         :target-version="executionTargetVersion"
       />
+    </main>
+
+    <main v-else-if="mode === 'agent' && devMode" class="workspace agent-layout">
+      <AgentWorkspace />
     </main>
 
     <footer v-if="mode === 'review'"><span :class="{ error: conflict }">{{ status }}</span><code>{{ view?.revision }}</code></footer>

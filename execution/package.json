@@ -7,10 +7,12 @@
     "cua": "./dist/cli/main.js"
   },
   "exports": {
-    ".": "./dist/cua/index.js"
+    ".": "./dist/cua/index.js",
+    "./agent": "./dist/agent/index.js"
   },
   "files": [
     ".env.example",
+    "agent",
     "cli",
     "cua",
     "dist",
@@ -32,13 +34,11 @@
     "build:node": "tsc -p tsconfig.build.json",
     "build:web": "vite build --config review/web/vite.config.ts",
     "build": "npm run clean && npm run build:node && npm run build:web",
-    "package:agent": "npm run build:node && node scripts/package-agent-runtime.mjs",
     "prepack": "npm run build",
     "cua": "tsx cli/main.ts",
     "check": "tsx executors/check-env.ts",
     "typecheck": "tsc --noEmit && vue-tsc --noEmit -p review/web/tsconfig.json",
-    "test:agent-package": "npm run package:agent && tsx --test tests/agent-runtime/package.test.ts",
-    "test": "npm run typecheck && tsx --test tests/all.test.ts && npm run test:agent-package"
+    "test": "npm run typecheck && tsx --test tests/all.test.ts"
   },
   "keywords": [],
   "author": "",

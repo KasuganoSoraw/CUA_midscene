@@ -11,15 +11,19 @@ import { openSystemBrowser, startReviewServer, type StartedReviewServer } from '
 export const helpText = `${cuaHelpText.trimEnd()}
 
 本地复核：
-  review [--data-root <path>] [--no-open] [--json]
+  review [--data-root <path>] [--dev] [--no-open] [--json]
     默认使用 127.0.0.1:47831；相同数据目录的现有服务将被复用
+    --dev 启用仅供开发者验证 Subagent invocation 的 Agent 调试页签
 `;
 
-function reviewOptions(argv: string[]): { dataRoot?: string; noOpen: boolean; json: boolean } {
-  const result: { dataRoot?: string; noOpen: boolean; json: boolean } = { noOpen: false, json: false };
+function reviewOptions(argv: string[]): { dataRoot?: string; dev: boolean; noOpen: boolean; json: boolean } {
+  const result: { dataRoot?: string; dev: boolean; noOpen: boolean; json: boolean } = {
+    dev: false, noOpen: false, json: false,
+  };
   for (let index = 1; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === '--no-open') result.noOpen = true;
+    if (token === '--dev') result.dev = true;
+    else if (token === '--no-open') result.noOpen = true;
     else if (token === '--json') result.json = true;
     else if (token === '--data-root') {
       const value = argv[index + 1];
@@ -42,10 +46,11 @@ export async function runCliCommand(
   const options = reviewOptions(argv);
   const started: StartedReviewServer = await (dependencies.startReview ?? startReviewServer)({
     ...(options.dataRoot ? { dataRoot: options.dataRoot } : {}),
+    dev: options.dev,
   });
   if (!options.noOpen) (dependencies.openBrowser ?? openSystemBrowser)(started.url);
   return options.json
-    ? `${JSON.stringify({ url: started.url, host: '127.0.0.1', reused: started.reused }, null, 2)}\n`
+    ? `${JSON.stringify({ url: started.url, host: '127.0.0.1', reused: started.reused, dev: options.dev }, null, 2)}\n`
     : `${started.reused ? '复核页面已复用' : '复核页面已启动'}：${started.url}\n`;
 }
 

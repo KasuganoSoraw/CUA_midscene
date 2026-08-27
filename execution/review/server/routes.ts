@@ -1,6 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyPluginAsync } from 'fastify';
+import {
+  cuaAgentDefinition,
+  invokeCuaSubagent,
+  type CuaSubagentHost,
+  type CuaSubagentInvocationRequest,
+} from '../../agent/index.js';
 import type { JsonObject, RuntimeLayout } from '../../cua/contracts/types.js';
 import { createTaskFromRecording } from '../../cua/recording/create-task.js';
 import {
@@ -33,6 +39,7 @@ interface ReviewRouteOptions {
   layout: RuntimeLayout;
   recordingsRoot?: string;
   executionRoot?: string;
+  devMode: boolean;
   dependencies?: ReviewRouteDependencies;
 }
 
@@ -41,6 +48,7 @@ export interface ReviewRouteDependencies {
   openDirectory?: typeof openRecordingDirectory;
   recorder?: RecorderControl;
   execution?: TaskExecutionControl;
+  agentHost?: CuaSubagentHost;
 }
 
 interface SceneParams {
@@ -84,6 +92,15 @@ const startTaskExecutionBodySchema = {
       type: 'object',
       additionalProperties: { type: 'string' },
     },
+  },
+  additionalProperties: false,
+} as const;
+
+const subagentInvocationBodySchema = {
+  type: 'object',
+  required: ['task'],
+  properties: {
+    task: { type: 'string', minLength: 1 },
   },
   additionalProperties: false,
 } as const;
@@ -210,6 +227,29 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   });
 
   app.post('/api/execution/stop', async () => execution.stop());
+
+  if (options.devMode) {
+    app.get('/api/agent/status', async () => ({
+      available: options.dependencies?.agentHost !== undefined,
+      name: cuaAgentDefinition.name,
+      invocationMode: cuaAgentDefinition.invocationMode,
+      tools: cuaAgentDefinition.tools,
+      ...(options.dependencies?.agentHost === undefined
+        ? { reason: '当前 Review Server 未连接 Agent Host' }
+        : {}),
+    }));
+
+    app.post<{ Body: JsonObject }>('/api/agent/invocations', {
+      schema: { body: subagentInvocationBodySchema },
+    }, async (request) => {
+      const host = options.dependencies?.agentHost;
+      if (!host) {
+        throw Object.assign(new Error('当前 Review Server 未连接 Agent Host'), { statusCode: 503 });
+      }
+      const body = requireObjectBody<CuaSubagentInvocationRequest>(request.body);
+      return invokeCuaSubagent(body, host, { dataRoot: options.layout.data?.root });
+    });
+  }
 
   app.get('/api/recorder/status', async () => recorder.status());
 

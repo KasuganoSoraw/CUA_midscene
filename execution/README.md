@@ -2,17 +2,15 @@
 
 该目录是供 GDE Claw 等外部 Agent 或 Agent Host 集成的可独立发布 `cua-midscene` Skill。TypeScript 核心负责调用外部 record 处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use。它不安装为本机 Codex Skill，也不包含 Codex 专用的 `agents/openai.yaml`。
 
-除完整 Skill 外，本目录还能生成首期 `cua-agent-runtime` 精简包。精简包只发布无录制自然语言 Computer Use 和无剪贴板键盘输入，适合在尚未确定 GDE Claw 最终工具注册接口时通过 CLI 或窄 Node API 集成。两种发布物共享执行代码，精简包不通过删除源码维护。
-
 ## 模块职责
 
 ```text
 record trace
+  -> agent：canonical Computer-Use definition、Tool contracts 与任务级策略适配
   -> cua/recording：调用外部 Python recorder、规范化 source、初始化并验证任务
   -> cua/conversion：caption.operation -> task.yaml + task.json
   -> cua/task：数据根、catalog、YAML、输入、aiAct 投影与执行编排
   -> cua/act：无录制自然语言原生 aiAct 公开 API
-  -> agent-runtime：首期精简包专用 CLI、API 导出和 Skill 文档
   -> cli：开发命令和安装后 bin 的统一入口
   -> cua/index.ts：GDE Claw 等上层工具直接导入的 API
   -> review：Vue 本地复核应用、localhost 服务与复核专属 service
@@ -20,6 +18,7 @@ record trace
 ```
 
 - `cua/contracts/`：普通 TypeScript 类型和 Ajv 文件边界校验。
+- `agent/`：宿主无关的 Agent-facing 智能入口；只负责 catalog、显式执行策略和 Workbench 唤起，不实现 LLM loop、session、memory 或 GDEClaw 注册。
 - `cua/recording/`：定位外部 record 环境、运行 parser、复制标准化生成资产并编排任务创建。
 - `cua/conversion/`：只根据结构化 trace operation 初始化任务；被标记的 click/doubleClick 会绑定 processed log 中的 reference patch。
 - `cua/task/`：双 catalog、YAML、输入、运行快照和执行编排。
@@ -30,9 +29,28 @@ record trace
 - `projects/`：随 Skill 发布的只读内置任务。
 - `schemas/`：CUA 自有持久化 JSON 契约；不复制 Midscene action 类型系统。
 - `tests/`：契约、转换、任务、CLI 和执行器测试。
-- `scripts/package-agent-runtime.mjs`：按唯一白名单生成 Agent Runtime 暂存目录和 tgz。
-
 TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv 只校验从磁盘进入系统的 scene、task、trace 和执行结果；resolved YAML 最终交给 Midscene parser。
+
+## CUA Agent Capability
+
+完整 `cua-midscene` 包通过 `cua-midscene/agent` 导出 canonical Agent definition 和三个 Tool：
+
+```ts
+import {
+  cuaAgentDefinition,
+  cuaCatalog,
+  cuaExecute,
+  cuaWorkbench,
+} from 'cua-midscene/agent';
+```
+
+- `cuaCatalog()` 列出或描述 Recorded Skill，并保留 catalog 的 `ready | error` 诊断。
+- `cuaExecute()` 要求显式选择 `replay | guided | freeform`，分别复用 `runTask()`、`runRecordedTaskAiAct()` 和 `runNaturalLanguageAiAct()`；失败后不自动切换或重试。
+- `cuaWorkbench()` 启动或复用现有本地 Workbench，返回带 `mode/scene/task` 的深链接，由 Host 决定是否在独立浏览器或内嵌浏览器显示。
+
+`invokeCuaSubagent()` 是人工调试和未来 GDEClaw Adapter 共用的无状态单任务调用边界。Main Agent 每次提交一个完整 `{ task }`；CUA 不读取或恢复此前调用，Host 只在本次调用内运行 Tool loop。普通 `review` 不展示或注册 Agent 调试入口，开发者使用 `review --dev` 才会看到“Agent 调试”页签。该页展示最终回复与 Tool 轨迹，不保存跨调用上下文。GUI 执行期间的截图、页面状态和动作上下文由 Midscene 管理。未注入 Host 时页面明确显示不可用，不会绕过 Agent 自动降级为 Freeform。
+
+该目录定义的是 **Agent Capability**。开发阶段继续使用当前 npm/uv 环境；CUA 维护 `package-lock.json` 和 `uv.lock`，未来由 GDEClaw 在安装或构建阶段 provision 独立运行环境。任一 Agent Tool 在调用期间都不会安装或更新依赖。
 
 ## 环境
 
@@ -89,43 +107,6 @@ node dist/cli/main.js review --no-open
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。inspect 与 run 使用同一个 resolver，不调用模型、不回写任务。`--dry-run` 只构建并解析 YAML，不操作电脑，也不是模拟执行。
 
-## Agent Runtime 精简发布
-
-生成首期 Agent 包：
-
-```powershell
-npm run package:agent
-```
-
-输出位于被 Git 忽略的 `release/`：
-
-```text
-release/agent-runtime/                 # 发布内容暂存目录
-release/cua-agent-runtime-<version>.tgz # npm 安装包
-```
-
-精简包只包含：
-
-- `agent-runtime` 专用 CLI 和窄 API 导出。
-- `cua/act` 自然语言执行编排与外部运行目录。
-- `executors` 中原生 aiAct、Computer Agent、环境读取和 `KeyboardTypeText`。
-- `@midscene/computer`、`@midscene/core`、`dotenv` 三项生产依赖。
-- 专用中文 `SKILL.md`、README 和 `.env.example`。
-
-精简包不包含 task、recording、conversion、projects、Review、测试或真实环境文件。安装后使用：
-
-```powershell
-cua act run --prompt "打开 Chrome 并搜索 GUI agent" --data-root "C:\cua-data"
-```
-
-未安装全局 bin 时使用：
-
-```powershell
-node dist/agent-runtime/cli.js act run --prompt "打开 Chrome 并搜索 GUI agent" --data-root "C:\cua-data"
-```
-
-工具宿主可以从 `cua-agent-runtime` 直接导入 `runNaturalLanguageAiAct()`。未来加入录制任务和任务创建时，扩展同一包的命令域、公开 API、白名单和 Skill，不另建不兼容命令体系。
-
 参考图步骤使用 Midscene 原生图片 prompt：canonical `task.yaml` 的 `images[].url` 保存相对任务根目录的路径（通常位于 `source/screenshots/`），resolver 验证文件和目录边界后在 resolved YAML 中改为绝对路径。HTTP(S) 与 data URL 保持不变。图片只用于语义定位，Midscene 仍结合文字 prompt、参考图和当前屏幕寻找目标，并点击定位结果；系统不执行像素模板匹配或录制坐标回放。
 
 ## 执行语义
@@ -159,5 +140,4 @@ const run = await runNaturalLanguageAiAct({
 ```powershell
 npm test
 npm run build
-npm run package:agent
 ```

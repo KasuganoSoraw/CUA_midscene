@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { packageRoot } from '../../cua/package-root.js';
 import { requireDataPaths, resolveRuntimeLayout } from '../../cua/task/data-paths.js';
+import type { ReviewServerIdentity } from '../shared/types.js';
 import { createReviewApp } from './app.js';
 import type { ReviewRouteDependencies } from './routes.js';
 
@@ -18,23 +19,18 @@ export const defaultReviewPort = 47831;
 export const reviewServiceName = 'cua-midscene-review';
 export const reviewProtocolVersion = 1;
 
-interface ReviewServerIdentity {
-  service: string;
-  protocolVersion: number;
-  dataRootKey: string;
-}
-
 export function reviewDataRootKey(root: string): string {
   const normalized = path.normalize(path.resolve(root));
   const stable = process.platform === 'win32' ? normalized.toLowerCase() : normalized;
   return createHash('sha256').update(stable).digest('hex');
 }
 
-function identityFor(dataRoot: string): ReviewServerIdentity {
+function identityFor(dataRoot: string, devMode: boolean): ReviewServerIdentity {
   return {
     service: reviewServiceName,
     protocolVersion: reviewProtocolVersion,
     dataRootKey: reviewDataRootKey(dataRoot),
+    devMode,
   };
 }
 
@@ -43,7 +39,8 @@ function identityMatches(actual: unknown, expected: ReviewServerIdentity): boole
   const identity = actual as Partial<ReviewServerIdentity>;
   return identity.service === expected.service
     && identity.protocolVersion === expected.protocolVersion
-    && identity.dataRootKey === expected.dataRootKey;
+    && identity.dataRootKey === expected.dataRootKey
+    && (!expected.devMode || identity.devMode === true);
 }
 
 async function probeReviewServer(url: string, expected: ReviewServerIdentity): Promise<boolean> {
@@ -57,9 +54,15 @@ async function probeReviewServer(url: string, expected: ReviewServerIdentity): P
   }
 }
 
-function reusedServer(url: string): StartedReviewServer {
+function publicUrl(baseUrl: string, devMode: boolean): string {
+  const url = new URL(baseUrl);
+  if (devMode) url.searchParams.set('dev', '1');
+  return url.toString();
+}
+
+function reusedServer(url: string, devMode: boolean): StartedReviewServer {
   return {
-    url,
+    url: publicUrl(url, devMode),
     reused: true,
     close: async () => undefined,
   };
@@ -75,17 +78,18 @@ export async function startReviewServer(options: {
   executionRoot?: string;
   port?: number;
   staticRoot?: string;
+  dev?: boolean;
   dependencies?: ReviewRouteDependencies;
 } = {}): Promise<StartedReviewServer> {
   const layout = await resolveRuntimeLayout(options.dataRoot);
   const data = await requireDataPaths(layout);
   const staticRoot = path.resolve(options.staticRoot ?? path.join(packageRoot, 'dist', 'review', 'web'));
-  const identity = identityFor(data.root);
-  const defaultPort = options.port === undefined;
+  const devMode = options.dev === true;
+  const identity = identityFor(data.root, devMode);
   const port = options.port ?? defaultReviewPort;
   const expectedUrl = `http://127.0.0.1:${port}/`;
-  if (defaultPort && await probeReviewServer(expectedUrl, identity)) {
-    return reusedServer(expectedUrl);
+  if (await probeReviewServer(expectedUrl, identity)) {
+    return reusedServer(expectedUrl, devMode);
   }
   const server = await createReviewApp({
     layout,
@@ -100,15 +104,15 @@ export async function startReviewServer(options: {
     address = await server.listen({ host: '127.0.0.1', port });
   } catch (error) {
     await server.close().catch(() => undefined);
-    if (defaultPort && isAddressInUse(error)) {
-      if (await probeReviewServer(expectedUrl, identity)) return reusedServer(expectedUrl);
+    if (isAddressInUse(error)) {
+      if (await probeReviewServer(expectedUrl, identity)) return reusedServer(expectedUrl, devMode);
       throw new Error(
-        `复核服务端口 ${defaultReviewPort} 已被其他程序或不同数据目录的 review 服务占用`,
+        `复核服务端口 ${port} 已被其他程序或不同数据目录/开发模式的 review 服务占用`,
       );
     }
     throw error;
   }
-  const url = `${address.replace(/\/$/, '')}/`;
+  const url = publicUrl(`${address.replace(/\/$/, '')}/`, devMode);
   return {
     server,
     url,

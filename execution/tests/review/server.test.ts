@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -16,6 +17,19 @@ import {
   startReviewServer,
 } from '../../review/server/main.js';
 import { createTaskFixture } from '../helpers/task-fixture.js';
+
+async function unusedLoopbackPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  if (!port) throw new Error('无法分配测试端口');
+  return port;
+}
 
 test('review server 在 loopback 随机端口暴露 catalog，并安全提供静态资源与证据', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-server-'));
@@ -37,6 +51,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
   let recorderStatus: RecorderStatus = { phase: 'idle', outputRoot: recordingsRoot };
   let recorderClosed = false;
   let executionClosed = false;
+  let agentTask = '';
   let executionStatus: TaskExecutionStatus = { phase: 'idle' };
   const recorder: RecorderControl = {
     status: () => ({ ...recorderStatus }),
@@ -85,12 +100,26 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
   const started = await startReviewServer({
     dataRoot: root,
     port: 0,
+    dev: true,
     recordingsRoot,
     staticRoot,
     dependencies: {
       openDirectory: async (recordingPath) => { openedPath = recordingPath; },
       recorder,
       execution,
+      agentHost: {
+        invoke: async (invocation) => {
+          agentTask = invocation.task;
+          assert.equal(invocation.definition.name, 'Computer-Use');
+          assert.equal(invocation.definition.invocationMode, 'stateless-task');
+          assert.deepEqual(Object.keys(invocation.tools), ['cua_catalog', 'cua_execute', 'cua_workbench']);
+          return {
+            status: 'completed',
+            reply: 'Agent 已完成查询。',
+            toolCalls: [],
+          };
+        },
+      },
       createFromRecording: async (options) => {
         createRequest = options as unknown as Record<string, unknown>;
         return {
@@ -107,7 +136,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     const base = new URL(started.url);
     assert.equal(base.hostname, '127.0.0.1');
     assert.notEqual(base.port, '');
-    assert.equal(base.search, '');
+    assert.equal(base.search, '?dev=1');
     assert.equal((await fetch(base)).status, 200);
     const scenes = await fetch(new URL('/api/scenes', base));
     assert.equal(scenes.status, 200);
@@ -116,7 +145,24 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
       service: reviewServiceName,
       protocolVersion: reviewProtocolVersion,
       dataRootKey: reviewDataRootKey(root),
+      devMode: true,
     });
+    assert.deepEqual(await (await fetch(new URL('/api/agent/status', base))).json(), {
+      available: true,
+      name: 'Computer-Use',
+      invocationMode: 'stateless-task',
+      tools: ['cua_catalog', 'cua_execute', 'cua_workbench'],
+    });
+    const invocation = await fetch(new URL('/api/agent/invocations', base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task: '查询 NE001 当前告警' }),
+    });
+    assert.equal(invocation.status, 200);
+    const invocationResult = await invocation.json() as any;
+    assert.equal(invocationResult.schemaVersion, '0.1');
+    assert.equal(invocationResult.reply, 'Agent 已完成查询。');
+    assert.equal(agentTask, '查询 NE001 当前告警');
 
     assert.equal((await (await fetch(new URL('/api/recorder/status', base))).json() as any).phase, 'idle');
     const displays = await (await fetch(new URL('/api/recorder/displays/refresh', base), { method: 'POST' })).json() as any;
@@ -245,6 +291,7 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
     const started = await startReviewServer({
       dataRoot: root,
       port: 0,
+      dev: true,
       staticRoot,
       executionRoot,
     });
@@ -259,6 +306,20 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
         phase: 'idle',
       });
       assert.equal((await fetch(new URL('/api/scenes', started.url))).status, 200);
+      assert.deepEqual(await (await fetch(new URL('/api/agent/status', started.url))).json(), {
+        available: false,
+        name: 'Computer-Use',
+        invocationMode: 'stateless-task',
+        tools: ['cua_catalog', 'cua_execute', 'cua_workbench'],
+        reason: '当前 Review Server 未连接 Agent Host',
+      });
+      const unavailable = await fetch(new URL('/api/agent/invocations', started.url), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ task: '测试任务' }),
+      });
+      assert.equal(unavailable.status, 503);
+      assert.match((await unavailable.json() as { error: string }).error, /未连接 Agent Host/);
     } finally {
       await started.close();
     }
@@ -277,6 +338,12 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
       executionRoot,
     });
     try {
+      assert.equal((await fetch(new URL('/api/agent/status', configured.url))).status, 404);
+      assert.equal((await fetch(new URL('/api/agent/invocations', configured.url), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ task: '默认模式不开放' }),
+      })).status, 404);
       assert.deepEqual(await (await fetch(new URL('/api/recorder/status', configured.url))).json(), {
         phase: 'idle',
         outputRoot: configuredRoot,
@@ -300,13 +367,14 @@ test('review server 在固定端口复用相同数据根并拒绝不同数据根
     mkdir(staticRoot, { recursive: true }),
   ]);
   await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>review</title>', 'utf8');
+  const port = await unusedLoopbackPort();
 
-  const first = await startReviewServer({ dataRoot: root, staticRoot });
+  const first = await startReviewServer({ dataRoot: root, staticRoot, port });
   try {
     assert.equal(first.reused, false);
-    assert.equal(first.url, `http://127.0.0.1:${defaultReviewPort}/`);
+    assert.equal(first.url, `http://127.0.0.1:${port}/`);
 
-    const second = await startReviewServer({ dataRoot: root, staticRoot });
+    const second = await startReviewServer({ dataRoot: root, staticRoot, port });
     assert.equal(second.reused, true);
     assert.equal(second.url, first.url);
     assert.equal(second.server, undefined);
@@ -314,8 +382,12 @@ test('review server 在固定端口复用相同数据根并拒绝不同数据根
     assert.equal((await fetch(first.url)).status, 200);
 
     await assert.rejects(
-      startReviewServer({ dataRoot: otherRoot, staticRoot }),
-      new RegExp(`${defaultReviewPort}.*占用`),
+      startReviewServer({ dataRoot: otherRoot, staticRoot, port }),
+      new RegExp(`${port}.*占用`),
+    );
+    await assert.rejects(
+      startReviewServer({ dataRoot: root, staticRoot, port, dev: true }),
+      new RegExp(`${port}.*占用`),
     );
   } finally {
     await first.close();
@@ -326,16 +398,22 @@ test('顶层 CLI 保持旧命令并只增加 review 启动分发', async () => {
   const scenes = JSON.parse(await runCliCommand(['scene', 'list', '--json']));
   assert.equal(scenes.scenes[0].scene, 'browser-demo');
   let opened = '';
-  const output = JSON.parse(await runCliCommand(['review', '--no-open', '--json'], {
-    startReview: async () => ({
+  let devOption: boolean | undefined;
+  const output = JSON.parse(await runCliCommand(['review', '--dev', '--no-open', '--json'], {
+    startReview: async (options) => {
+      devOption = options?.dev;
+      return ({
       server: {} as any,
-      url: 'http://127.0.0.1:43127/',
+      url: 'http://127.0.0.1:43127/?dev=1',
       reused: false,
       close: async () => undefined,
-    }),
+      });
+    },
     openBrowser: (url) => { opened = url; },
   }));
   assert.equal(output.host, '127.0.0.1');
   assert.equal(output.reused, false);
+  assert.equal(output.dev, true);
+  assert.equal(devOption, true);
   assert.equal(opened, '');
 });

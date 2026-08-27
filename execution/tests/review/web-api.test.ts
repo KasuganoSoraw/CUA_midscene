@@ -29,6 +29,8 @@ test('review web 只在存在 JSON 请求体时设置 content-type', async () =>
       inputs: { query: 'hello=world' },
     });
     await api.stopExecution();
+    await api.agentStatus();
+    await api.invokeAgent({ task: '查询 NE001 当前告警' });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -50,4 +52,7 @@ test('review web 只在存在 JSON 请求体时设置 content-type', async () =>
     inputs: { query: 'hello=world' },
   }));
   assert.equal(new Headers(requests[7]?.headers).has('content-type'), false);
+  assert.equal(new Headers(requests[8]?.headers).has('content-type'), false);
+  assert.equal(new Headers(requests[9]?.headers).get('content-type'), 'application/json');
+  assert.equal(requests[9]?.body, JSON.stringify({ task: '查询 NE001 当前告警' }));
 });

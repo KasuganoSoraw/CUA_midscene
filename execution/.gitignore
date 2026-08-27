@@ -4,5 +4,4 @@ node_modules/
 !.env.example
 midscene_run/
 reports/
-release/
 *.log

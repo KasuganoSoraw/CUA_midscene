@@ -9,6 +9,13 @@ import type {
 export type ReviewOrigin = 'builtin' | 'user';
 export type ReviewOperation = 'click' | 'doubleClick' | 'input' | 'keyboard' | 'wait';
 
+export interface ReviewServerIdentity {
+  service: string;
+  protocolVersion: number;
+  dataRootKey: string;
+  devMode: boolean;
+}
+
 export interface ReviewEvidence {
   sourceStep: number;
   timestamp: number;
