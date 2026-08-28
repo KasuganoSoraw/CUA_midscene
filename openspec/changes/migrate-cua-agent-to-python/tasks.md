@@ -37,6 +37,6 @@
 
 ## 7. 完整验证
 
-- [ ] 7.1 运行 Python 格式/类型/测试与 lock 一致性检查
-- [ ] 7.2 运行 TypeScript 类型检查、完整测试、构建和 package surface 检查
-- [ ] 7.3 运行 Review 普通/开发模式复核及 OpenSpec 严格验证
+- [x] 7.1 运行 Python 格式/类型/测试与 lock 一致性检查
+- [x] 7.2 运行 TypeScript 类型检查、完整测试、构建和 package surface 检查
+- [x] 7.3 运行 Review 普通/开发模式复核及 OpenSpec 严格验证
