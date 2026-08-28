@@ -1,31 +1,31 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import type {
-  CuaSubagentInvocationResult,
-  CuaSubagentStatus,
-  CuaSubagentToolTrace,
-} from '../../../../agent/contracts';
+  AgentInvocationResult,
+  AgentStatus,
+  AgentToolTrace,
+} from '../../../shared/agent';
 import { api } from '../api';
 
 interface InvocationRecord {
   task: string;
   submittedAt: string;
-  result?: CuaSubagentInvocationResult;
+  result?: AgentInvocationResult;
   error?: string;
 }
 
-const agentStatus = ref<CuaSubagentStatus>();
+const agentStatus = ref<AgentStatus>();
 const statusError = ref('');
 const message = ref('');
 const busy = ref(false);
 const records = ref<InvocationRecord[]>([]);
 const canSubmit = computed(() => Boolean(agentStatus.value?.available && message.value.trim() && !busy.value));
 
-function statusLabel(status: CuaSubagentInvocationResult['status']): string {
-  return ({ completed: '已完成', 'needs-input': '等待补充', failed: '未完成' })[status];
+function statusLabel(status: AgentInvocationResult['status']): string {
+  return ({ completed: '已完成', 'needs-input': '等待补充', failed: '未完成', cancelled: '已取消' })[status];
 }
 
-function toolStatusLabel(status: CuaSubagentToolTrace['status']): string {
+function toolStatusLabel(status: AgentToolTrace['status']): string {
   return status === 'succeeded' ? '成功' : '失败';
 }
 
@@ -33,7 +33,7 @@ function json(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-function workbenchUrl(trace: CuaSubagentToolTrace): string | undefined {
+function workbenchUrl(trace: AgentToolTrace): string | undefined {
   const value = trace.output?.url;
   return typeof value === 'string' && /^https?:\/\//i.test(value) ? value : undefined;
 }
@@ -85,7 +85,7 @@ onMounted(refreshStatus);
         <div class="agent-availability" :class="{ available: agentStatus?.available }">
           <span></span>
           <div>
-            <strong>{{ agentStatus?.available ? 'Agent Host 已连接' : 'Agent Host 未连接' }}</strong>
+            <strong>{{ agentStatus?.available ? 'Python Agent 可用' : 'Python Agent 不可用' }}</strong>
             <small>{{ agentStatus?.reason ?? (statusError || '可以提交 Computer-Use 任务') }}</small>
           </div>
         </div>
@@ -93,14 +93,13 @@ onMounted(refreshStatus);
         <div class="agent-definition-card">
           <small>CANONICAL AGENT</small>
           <strong>{{ agentStatus?.name ?? 'Computer-Use' }}</strong>
-          <p>人工调试与未来 GDEClaw 使用同一份 definition、Tool 和 invocation contract。</p>
+          <p>人工调试与未来 GDEClaw 使用同一个 Python invocation；内部 Tool 与策略不对 Host 暴露。</p>
         </div>
 
         <div class="agent-tools">
-          <small>AVAILABLE TOOLS</small>
-          <code v-for="tool in agentStatus?.tools ?? ['cua_catalog', 'cua_execute', 'cua_workbench']" :key="tool">
-            {{ tool }}
-          </code>
+          <small>RUNTIME BOUNDARY</small>
+          <code>{{ agentStatus?.runtime ?? 'python' }}</code>
+          <code>{{ agentStatus?.modelConfigured ? 'model configured' : 'model missing' }}</code>
         </div>
 
         <button class="secondary" :disabled="busy" @click="refreshStatus">刷新连接状态</button>
@@ -135,6 +134,13 @@ onMounted(refreshStatus);
             </div>
             <p class="agent-reply">{{ record.result.reply }}</p>
 
+            <details v-if="record.result.events.length" class="agent-event-log">
+              <summary>调用事件 · {{ record.result.events.length }}</summary>
+              <div class="agent-trace-grid">
+                <pre>{{ json(record.result.events) }}</pre>
+              </div>
+            </details>
+
             <div v-if="record.result.toolCalls.length" class="agent-traces">
               <details v-for="trace in record.result.toolCalls" :key="trace.callId">
                 <summary>
@@ -168,7 +174,7 @@ onMounted(refreshStatus);
           @keydown="handleComposerKeydown"
         ></textarea>
         <div>
-          <span>{{ agentStatus?.available ? 'Ctrl + Enter 提交 · 每次调用相互独立' : '连接 Agent Host 后才可提交' }}</span>
+          <span>{{ agentStatus?.available ? 'Ctrl + Enter 提交 · 每次调用相互独立' : '准备 Python Agent、模型和 Runtime 后才可提交' }}</span>
           <button class="primary" :disabled="!canSubmit" @click="submit">{{ busy ? '正在调用…' : '提交任务' }}</button>
         </div>
       </div>

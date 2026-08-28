@@ -51,6 +51,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
   let recorderStatus: RecorderStatus = { phase: 'idle', outputRoot: recordingsRoot };
   let recorderClosed = false;
   let executionClosed = false;
+  let agentClosed = false;
   let agentTask = '';
   let executionStatus: TaskExecutionStatus = { phase: 'idle' };
   const recorder: RecorderControl = {
@@ -107,18 +108,32 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
       openDirectory: async (recordingPath) => { openedPath = recordingPath; },
       recorder,
       execution,
-      agentHost: {
-        invoke: async (invocation) => {
-          agentTask = invocation.task;
-          assert.equal(invocation.definition.name, 'Computer-Use');
-          assert.equal(invocation.definition.invocationMode, 'stateless-task');
-          assert.deepEqual(Object.keys(invocation.tools), ['cua_catalog', 'cua_execute', 'cua_workbench']);
+      agent: {
+        status: async () => ({
+          available: true,
+          name: 'Computer-Use',
+          invocationMode: 'stateless-task',
+          runtime: 'python',
+          modelConfigured: true,
+        }),
+        invoke: async (request) => {
+          agentTask = request.task;
           return {
+            schemaVersion: '1.0',
+            invocationId: 'inv-review',
             status: 'completed',
             reply: 'Agent 已完成查询。',
             toolCalls: [],
+            events: [{
+              schemaVersion: '1.0',
+              invocationId: 'inv-review',
+              type: 'agent.completed',
+              timestamp: '2026-08-28T00:00:00.000Z',
+              message: 'Agent 已完成查询。',
+            }],
           };
         },
+        close: async () => { agentClosed = true; },
       },
       createFromRecording: async (options) => {
         createRequest = options as unknown as Record<string, unknown>;
@@ -151,7 +166,8 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
       available: true,
       name: 'Computer-Use',
       invocationMode: 'stateless-task',
-      tools: ['cua_catalog', 'cua_execute', 'cua_workbench'],
+      runtime: 'python',
+      modelConfigured: true,
     });
     const invocation = await fetch(new URL('/api/agent/invocations', base), {
       method: 'POST',
@@ -160,8 +176,9 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     });
     assert.equal(invocation.status, 200);
     const invocationResult = await invocation.json() as any;
-    assert.equal(invocationResult.schemaVersion, '0.1');
+    assert.equal(invocationResult.schemaVersion, '1.0');
     assert.equal(invocationResult.reply, 'Agent 已完成查询。');
+    assert.equal(invocationResult.events[0].type, 'agent.completed');
     assert.equal(agentTask, '查询 NE001 当前告警');
 
     assert.equal((await (await fetch(new URL('/api/recorder/status', base))).json() as any).phase, 'idle');
@@ -272,6 +289,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     await started.close();
     assert.equal(recorderClosed, true);
     assert.equal(executionClosed, true);
+    assert.equal(agentClosed, true);
   }
 });
 
@@ -306,20 +324,20 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
         phase: 'idle',
       });
       assert.equal((await fetch(new URL('/api/scenes', started.url))).status, 200);
-      assert.deepEqual(await (await fetch(new URL('/api/agent/status', started.url))).json(), {
-        available: false,
-        name: 'Computer-Use',
-        invocationMode: 'stateless-task',
-        tools: ['cua_catalog', 'cua_execute', 'cua_workbench'],
-        reason: '当前 Review Server 未连接 Agent Host',
-      });
+      const agentStatus = await (await fetch(new URL('/api/agent/status', started.url))).json() as any;
+      assert.equal(agentStatus.available, false);
+      assert.equal(agentStatus.name, 'Computer-Use');
+      assert.equal(agentStatus.invocationMode, 'stateless-task');
+      assert.equal(agentStatus.runtime, 'python');
+      assert.equal(typeof agentStatus.modelConfigured, 'boolean');
+      assert.match(agentStatus.reason, /找不到 Python Agent/);
       const unavailable = await fetch(new URL('/api/agent/invocations', started.url), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ task: '测试任务' }),
       });
       assert.equal(unavailable.status, 503);
-      assert.match((await unavailable.json() as { error: string }).error, /未连接 Agent Host/);
+      assert.match((await unavailable.json() as { error: string }).error, /找不到 Python Agent/);
     } finally {
       await started.close();
     }

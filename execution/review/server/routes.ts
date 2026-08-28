@@ -1,12 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyPluginAsync } from 'fastify';
-import {
-  cuaAgentDefinition,
-  invokeCuaSubagent,
-  type CuaSubagentHost,
-  type CuaSubagentInvocationRequest,
-} from '../../agent/index.js';
 import type { JsonObject, RuntimeLayout } from '../../cua/contracts/types.js';
 import { createTaskFromRecording } from '../../cua/recording/create-task.js';
 import {
@@ -24,6 +18,10 @@ import type {
   StartTaskExecutionRequest,
 } from '../shared/types.js';
 import { applyReviewMutation } from '../service/task-mutations.js';
+import {
+  PythonAgentInvoker,
+  type PythonAgentControl,
+} from '../service/python-agent.js';
 import { loadReviewTask, resolveReviewTaskRoot } from '../service/review-task.js';
 import { saveReviewTask, validateReviewDraft } from '../service/task-save.js';
 import {
@@ -34,6 +32,7 @@ import {
   WindowsRecorderManager,
   type RecorderControl,
 } from '../service/windows-recorder.js';
+import type { AgentInvocationRequest } from '../shared/agent.js';
 
 interface ReviewRouteOptions {
   layout: RuntimeLayout;
@@ -48,7 +47,7 @@ export interface ReviewRouteDependencies {
   openDirectory?: typeof openRecordingDirectory;
   recorder?: RecorderControl;
   execution?: TaskExecutionControl;
-  agentHost?: CuaSubagentHost;
+  agent?: PythonAgentControl;
 }
 
 interface SceneParams {
@@ -212,6 +211,14 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   });
   app.addHook('onClose', async () => execution.close());
 
+  const agent = options.devMode
+    ? options.dependencies?.agent ?? new PythonAgentInvoker({
+      executionRoot: path.resolve(options.executionRoot ?? process.cwd()),
+      dataRoot: options.layout.data.root,
+    })
+    : undefined;
+  if (agent) app.addHook('onClose', async () => agent.close());
+
   app.get('/api/execution/status', async () => execution.status());
 
   app.post<{ Body: JsonObject }>('/api/execution/start', {
@@ -229,25 +236,13 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   app.post('/api/execution/stop', async () => execution.stop());
 
   if (options.devMode) {
-    app.get('/api/agent/status', async () => ({
-      available: options.dependencies?.agentHost !== undefined,
-      name: cuaAgentDefinition.name,
-      invocationMode: cuaAgentDefinition.invocationMode,
-      tools: cuaAgentDefinition.tools,
-      ...(options.dependencies?.agentHost === undefined
-        ? { reason: '当前 Review Server 未连接 Agent Host' }
-        : {}),
-    }));
+    app.get('/api/agent/status', async () => agent!.status());
 
     app.post<{ Body: JsonObject }>('/api/agent/invocations', {
       schema: { body: subagentInvocationBodySchema },
     }, async (request) => {
-      const host = options.dependencies?.agentHost;
-      if (!host) {
-        throw Object.assign(new Error('当前 Review Server 未连接 Agent Host'), { statusCode: 503 });
-      }
-      const body = requireObjectBody<CuaSubagentInvocationRequest>(request.body);
-      return invokeCuaSubagent(body, host, { dataRoot: options.layout.data?.root });
+      const body = requireObjectBody<AgentInvocationRequest>(request.body);
+      return agent!.invoke(body);
     });
   }
 

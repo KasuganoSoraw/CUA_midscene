@@ -18,10 +18,10 @@ import type {
   TaskExecutionStatus,
 } from '../../shared/types.js';
 import type {
-  CuaSubagentInvocationRequest,
-  CuaSubagentInvocationResult,
-  CuaSubagentStatus,
-} from '../../../agent/contracts.js';
+  AgentInvocationRequest,
+  AgentInvocationResult,
+  AgentStatus,
+} from '../../shared/agent.js';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -45,8 +45,8 @@ async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> 
 
 export const api = {
   reviewIdentity: () => request<ReviewServerIdentity>('/api/review/identity'),
-  agentStatus: () => request<CuaSubagentStatus>('/api/agent/status'),
-  invokeAgent: (body: CuaSubagentInvocationRequest) => request<CuaSubagentInvocationResult>(
+  agentStatus: () => request<AgentStatus>('/api/agent/status'),
+  invokeAgent: (body: AgentInvocationRequest) => request<AgentInvocationResult>(
     '/api/agent/invocations', { method: 'POST', body: JSON.stringify(body) },
   ),
   scenes: () => request<ReviewCatalogResponse>('/api/scenes'),
