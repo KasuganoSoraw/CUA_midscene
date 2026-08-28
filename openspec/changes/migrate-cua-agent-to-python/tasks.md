@@ -18,10 +18,10 @@
 
 ## 4. 无状态模型 Tool Calling Loop
 
-- [ ] 4.1 定义 provider-neutral model client protocol 与模型 message/tool-call 数据结构
-- [ ] 4.2 实现单次 invocation runner、Tool loop、最大轮次、最终结果和失败语义
-- [ ] 4.3 实现取消检查与 `agent.started`、progress、Tool、completed/failed/needs-input 事件
-- [ ] 4.4 使用 fake model/runtime 验证策略调用、多 Tool round、无跨调用上下文和事件顺序
+- [x] 4.1 定义 provider-neutral model client protocol 与模型 message/tool-call 数据结构
+- [x] 4.2 实现单次 invocation runner、Tool loop、最大轮次、最终结果和失败语义
+- [x] 4.3 实现取消检查与 `agent.started`、progress、Tool、completed/failed/needs-input 事件
+- [x] 4.4 使用 fake model/runtime 验证策略调用、多 Tool round、无跨调用上下文和事件顺序
 
 ## 5. Review 开发入口
 

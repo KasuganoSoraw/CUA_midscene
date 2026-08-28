@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from ..contracts import JsonValue
-from ..runtime_client import CancellationCheck, JsonlRuntimeClient, RuntimeMethod
+from ..runtime_client import CancellationCheck, RuntimeClientProtocol, RuntimeMethod
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,7 +118,7 @@ class CuaToolRegistry:
 
     def __init__(
         self,
-        client: JsonlRuntimeClient,
+        client: RuntimeClientProtocol,
         *,
         data_root: str | None = None,
     ) -> None:
@@ -152,7 +152,7 @@ class CuaToolRegistry:
 
 
 def create_cua_tool_registry(
-    client: JsonlRuntimeClient,
+    client: RuntimeClientProtocol,
     *,
     data_root: str | None = None,
 ) -> CuaToolRegistry:

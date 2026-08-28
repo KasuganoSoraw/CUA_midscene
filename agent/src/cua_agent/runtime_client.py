@@ -9,13 +9,34 @@ from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypeAlias
+from typing import Literal, Protocol, TypeAlias
 from uuid import uuid4
 
 from .contracts import JsonValue
 
 RuntimeMethod: TypeAlias = Literal["catalog", "execute", "workbench"]
 CancellationCheck: TypeAlias = Callable[[], bool]
+
+
+class RuntimeClientProtocol(Protocol):
+    async def request(
+        self,
+        method: RuntimeMethod,
+        payload: Mapping[str, JsonValue],
+        *,
+        cancelled: CancellationCheck | None = None,
+    ) -> dict[str, JsonValue]: ...
+
+
+class ManagedRuntimeClientProtocol(RuntimeClientProtocol, Protocol):
+    async def __aenter__(self) -> RuntimeClientProtocol: ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: object | None,
+    ) -> None: ...
 
 
 class RuntimeClientError(RuntimeError):

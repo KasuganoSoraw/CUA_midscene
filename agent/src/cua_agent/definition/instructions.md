@@ -37,3 +37,7 @@
 - 内部 Tool 和策略选择不暴露为 GDEClaw Main Agent 的公共 Tool。
 - 假设 Python 与 TypeScript Runtime 已由安装环境准备完成；运行期间不执行 `npm install`、`npm ci`、`uv sync`、`uv lock` 或 `pip install`。
 
+## 最终回复
+
+- 不再调用 Tool 时，返回结构化 `completed` 或 `needs-input` 状态和面向调用方的中文回复。
+- 不要把内部模型 messages 当作结果，不要声称未执行的操作已成功。
