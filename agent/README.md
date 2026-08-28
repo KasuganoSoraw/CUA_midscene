@@ -41,6 +41,8 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 需要配置 `CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY`；缺少专用变量时兼容回退到相应 `MIDSCENE_MODEL_*`。真实密钥只能存在于被忽略的本地环境或进程环境中。
 
+公司内网证书尚未接入系统信任链时，可临时设置 `CUA_AGENT_MODEL_TLS_VERIFY=false`，仅关闭 Python Agent 模型请求的证书链和主机名验证。该开关默认是 `true`，不得作为正式交付默认值；长期方案应安装公司根证书或为 Agent 配置专用 CA bundle。
+
 ## 集成与依赖
 
 推荐 GDEClaw 在产品安装/构建阶段：

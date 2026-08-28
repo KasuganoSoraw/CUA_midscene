@@ -67,6 +67,7 @@ MIDSCENE_MODEL_NAME=minimax-m3
 MIDSCENE_MODEL_FAMILY=doubao-vision
 CUA_AGENT_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
 CUA_AGENT_MODEL_NAME=minimax-m3
+CUA_AGENT_MODEL_TLS_VERIFY=true
 CUA_DATA_ROOT=C:\path\to\cua-data
 CUA_RECORD_ROOT=C:\path\to\CUA\record
 CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
@@ -74,7 +75,7 @@ CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
 
 `CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 指向包含 `pyproject.toml` 和 `Aloha_Learn/parser.py` 的 Python 处理器目录；`CUA_RECORDINGS_ROOT` 指向录制器生成的一级目录集合。安装后的 execution Skill 不包含 Python；一键创建命令会在 `CUA_RECORD_ROOT` 运行 uv，并由 Python 自行读取 `record/.env`。
 
-`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 自身的任务级推理模型；未设置时兼容回退到对应 `MIDSCENE_MODEL_*`。`review --dev` 在源码环境默认使用顶层 `agent/.venv`、当前 Node executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_NODE_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径必须由安装阶段准备。
+`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 自身的任务级推理模型；未设置时兼容回退到对应 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_TLS_VERIFY=false` 可在受控公司内网临时关闭 Python Agent 模型请求的证书链与主机名验证，默认值为 `true`，正式环境应改用受信任的公司 CA。`review --dev` 在源码环境默认使用顶层 `agent/.venv`、当前 Node executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_NODE_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径必须由安装阶段准备。
 
 ## CLI
 

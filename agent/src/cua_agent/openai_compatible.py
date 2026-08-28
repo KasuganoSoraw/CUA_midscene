@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import ssl
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ class OpenAICompatibleConfig:
     model: str
     api_key: str = field(repr=False)
     timeout_seconds: float = 120.0
+    verify_tls: bool = True
 
     def __post_init__(self) -> None:
         if not self.base_url.strip():
@@ -60,6 +62,7 @@ class OpenAICompatibleConfig:
             model=required("CUA_AGENT_MODEL_NAME", "MIDSCENE_MODEL_NAME"),
             api_key=required("CUA_AGENT_MODEL_API_KEY", "MIDSCENE_MODEL_API_KEY"),
             timeout_seconds=timeout,
+            verify_tls=_boolean_env("CUA_AGENT_MODEL_TLS_VERIFY", default=True),
         )
 
     @property
@@ -103,7 +106,11 @@ class OpenAICompatibleModelClient(ModelClient):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self._config.timeout_seconds) as response:
+            with urllib.request.urlopen(
+                request,
+                timeout=self._config.timeout_seconds,
+                context=_tls_context(self._config.verify_tls),
+            ) as response:
                 raw_response = response.read().decode("utf-8")
         except urllib.error.HTTPError as error:
             response_body = error.read().decode("utf-8", errors="replace")
@@ -119,6 +126,27 @@ class OpenAICompatibleModelClient(ModelClient):
             return _model_response_from(message)
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
             raise ModelRequestError(f"Agent model 返回了无效响应：{error}") from error
+
+
+def _boolean_env(name: str, *, default: bool) -> bool:
+    raw_value = os.environ.get(name)
+    if raw_value is None or not raw_value.strip():
+        return default
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ModelConfigurationError(f"{name} 必须是 true 或 false：{raw_value}")
+
+
+def _tls_context(verify_tls: bool) -> ssl.SSLContext | None:
+    if verify_tls:
+        return None
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
 
 
 def _message_payload(message: ModelMessage) -> dict[str, JsonValue]:
