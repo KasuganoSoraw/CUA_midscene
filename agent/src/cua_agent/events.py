@@ -52,4 +52,3 @@ class AgentEvent:
         if self.data is not None:
             value["data"] = _copy_json_object(self.data)
         return value
-

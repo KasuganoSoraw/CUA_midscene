@@ -17,4 +17,3 @@ def test_loading_definition_does_not_share_mutable_invocation_state() -> None:
     assert first is not second
     assert not hasattr(first, "messages")
     assert not hasattr(first, "session")
-

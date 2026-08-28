@@ -53,4 +53,3 @@ def test_invocation_result_serializes_to_host_contract() -> None:
             }
         ],
     }
-

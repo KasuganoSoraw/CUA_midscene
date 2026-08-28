@@ -12,9 +12,9 @@
 
 ## 3. Python Runtime Client 与私有 Tools
 
-- [ ] 3.1 实现 Node worker 生命周期、request id、超时、取消和异常退出处理
-- [ ] 3.2 实现 Python 私有 `cua_catalog`、`cua_execute`、`cua_workbench` Tool schema 与 registry
-- [ ] 3.3 使用 fake worker 覆盖连续请求、结果映射、底层失败和清理行为
+- [x] 3.1 实现 Node worker 生命周期、request id、超时、取消和异常退出处理
+- [x] 3.2 实现 Python 私有 `cua_catalog`、`cua_execute`、`cua_workbench` Tool schema 与 registry
+- [x] 3.3 使用 fake worker 覆盖连续请求、结果映射、底层失败和清理行为
 
 ## 4. 无状态模型 Tool Calling Loop
 

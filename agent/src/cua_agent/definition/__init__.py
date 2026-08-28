@@ -23,4 +23,3 @@ def load_agent_definition() -> AgentDefinition:
 CUA_AGENT_DEFINITION = load_agent_definition()
 
 __all__ = ["CUA_AGENT_DEFINITION", "load_agent_definition"]
-
