@@ -12,5 +12,5 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["agent/**/*.ts", "cli/**/*.ts", "cua/**/*.ts", "executors/**/*.ts", "review/shared/**/*.ts", "review/service/**/*.ts", "review/server/**/*.ts", "tests/**/*.ts"]
+  "include": ["agent/**/*.ts", "cli/**/*.ts", "cua/**/*.ts", "executors/**/*.ts", "review/shared/**/*.ts", "review/service/**/*.ts", "review/server/**/*.ts", "runtime-bridge/**/*.ts", "tests/**/*.ts"]
 }

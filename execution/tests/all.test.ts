@@ -8,6 +8,7 @@ import './task/task-core.test.js';
 import './task/execution.test.js';
 import './act/execution.test.js';
 import './agent/capability.test.js';
+import './runtime-bridge/bridge.test.js';
 import './executors/keyboard-type-action.test.js';
 import './executors/ai-act-runner.test.js';
 import './executors/yaml-runner.test.js';

@@ -4,6 +4,6 @@
     "declaration": true,
     "sourceMap": true
   },
-  "include": ["agent/**/*.ts", "cli/**/*.ts", "cua/**/*.ts", "executors/**/*.ts", "review/shared/**/*.ts", "review/service/**/*.ts", "review/server/**/*.ts"],
+  "include": ["agent/**/*.ts", "cli/**/*.ts", "cua/**/*.ts", "executors/**/*.ts", "review/shared/**/*.ts", "review/service/**/*.ts", "review/server/**/*.ts", "runtime-bridge/**/*.ts"],
   "exclude": ["tests"]
 }

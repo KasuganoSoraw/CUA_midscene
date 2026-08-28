@@ -52,6 +52,7 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
       'projects',
       'references',
       'review',
+      'runtime-bridge',
       'schemas',
       'README.md',
       'SKILL.md',

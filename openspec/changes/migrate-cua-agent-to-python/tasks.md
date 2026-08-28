@@ -6,9 +6,9 @@
 
 ## 2. TypeScript Runtime Bridge
 
-- [ ] 2.1 定义版本化 JSON request/response/error/frame 契约与 method dispatch
-- [ ] 2.2 实现复用现有 catalog、execute、workbench adapter 的 JSONL worker/CLI 入口
-- [ ] 2.3 增加多请求、stdout 隔离、错误保真、构建和 package surface 测试
+- [x] 2.1 定义版本化 JSON request/response/error/frame 契约与 method dispatch
+- [x] 2.2 实现复用现有 catalog、execute、workbench adapter 的 JSONL worker/CLI 入口
+- [x] 2.3 增加多请求、stdout 隔离、错误保真、构建和 package surface 测试
 
 ## 3. Python Runtime Client 与私有 Tools
 

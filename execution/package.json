@@ -8,7 +8,8 @@
   },
   "exports": {
     ".": "./dist/cua/index.js",
-    "./agent": "./dist/agent/index.js"
+    "./agent": "./dist/agent/index.js",
+    "./runtime-bridge": "./dist/runtime-bridge/index.js"
   },
   "files": [
     ".env.example",
@@ -20,6 +21,7 @@
     "projects",
     "references",
     "review",
+    "runtime-bridge",
     "schemas",
     "README.md",
     "SKILL.md",
@@ -36,6 +38,7 @@
     "build": "npm run clean && npm run build:node && npm run build:web",
     "prepack": "npm run build",
     "cua": "tsx cli/main.ts",
+    "runtime-bridge": "tsx runtime-bridge/worker.ts",
     "check": "tsx executors/check-env.ts",
     "typecheck": "tsc --noEmit && vue-tsc --noEmit -p review/web/tsconfig.json",
     "test": "npm run typecheck && tsx --test tests/all.test.ts"

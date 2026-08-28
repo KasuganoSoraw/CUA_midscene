@@ -1,72 +1,17 @@
-import type {
-  ExecutorResult,
-  JsonObject,
-  NativeAiActExecutorResult,
-  SceneCatalogItem,
-  TaskCatalogItem,
-  TaskDescription,
-} from '../cua/contracts/types.js';
+import type { JsonObject } from '../cua/contracts/types.js';
+import type { CuaRuntimeToolName } from '../runtime-bridge/contracts.js';
 
-export const cuaAgentToolNames = ['cua_catalog', 'cua_execute', 'cua_workbench'] as const;
-export type CuaAgentToolName = typeof cuaAgentToolNames[number];
-
-interface CuaToolRequestBase {
-  dataRoot?: string;
-}
-
-export type CuaCatalogRequest =
-  | (CuaToolRequestBase & { action: 'list-scenes' })
-  | (CuaToolRequestBase & { action: 'list-tasks'; scene: string })
-  | (CuaToolRequestBase & { action: 'describe-task'; scene: string; task: string });
-
-export type CuaCatalogResult =
-  | { action: 'list-scenes'; scenes: SceneCatalogItem[] }
-  | { action: 'list-tasks'; scene: string; tasks: TaskCatalogItem[] }
-  | { action: 'describe-task'; scene: string; task: string; description: TaskDescription };
-
-interface CuaRecordedExecutionRequest extends CuaToolRequestBase {
-  scene: string;
-  task: string;
-  inputs?: Record<string, string>;
-  dryRun?: boolean;
-}
-
-export type CuaExecuteRequest =
-  | (CuaRecordedExecutionRequest & { strategy: 'replay' })
-  | (CuaRecordedExecutionRequest & { strategy: 'guided' })
-  | (CuaToolRequestBase & {
-      strategy: 'freeform';
-      goal: string;
-      displayId?: string;
-      dryRun?: boolean;
-    });
-
-export interface CuaExecuteResult {
-  strategy: CuaExecuteRequest['strategy'];
-  status: 'succeeded' | 'failed';
-  runDir: string;
-  resolvedTaskPath?: string;
-  promptPath?: string;
-  resultPath?: string;
-  executor: ExecutorResult | NativeAiActExecutorResult;
-}
-
-export type CuaWorkbenchMode = 'recording' | 'review' | 'execution';
-
-export type CuaWorkbenchRequest =
-  | (CuaToolRequestBase & { mode: 'recording' })
-  | (CuaToolRequestBase & {
-      mode: 'review' | 'execution';
-      scene?: string;
-      task?: string;
-    });
-
-export interface CuaWorkbenchResult {
-  mode: CuaWorkbenchMode;
-  baseUrl: string;
-  url: string;
-  reused: boolean;
-}
+export { cuaRuntimeToolNames as cuaAgentToolNames } from '../runtime-bridge/contracts.js';
+export type {
+  CuaCatalogRequest,
+  CuaCatalogResult,
+  CuaExecuteRequest,
+  CuaExecuteResult,
+  CuaWorkbenchMode,
+  CuaWorkbenchRequest,
+  CuaWorkbenchResult,
+} from '../runtime-bridge/contracts.js';
+export type CuaAgentToolName = CuaRuntimeToolName;
 
 export interface CuaAgentDefinition {
   name: 'Computer-Use';
