@@ -44,7 +44,6 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
     new Set(packageJson.files),
     new Set([
       '.env.example',
-      'agent',
       'cli',
       'cua',
       'dist',
@@ -76,7 +75,7 @@ test('Skill 文档面向外部 Agent 并使用编译后的 Node CLI', async () =
   const envExample = await readFile(path.join(executionRoot, '.env.example'), 'utf8');
 
   assert.match(skill, /node dist\/cli\/main\.js/);
-  assert.match(skill, /外部 Agent|Agent Host/);
+  assert.match(skill, /Python CUA Agent|外部调用方/);
   assert.match(skill, /Node\.js `>=22\.18\.0`/);
   assert.match(skill, /设置较长的任务超时/);
   assert.match(skill, /持续较长时间没有新增输出/);

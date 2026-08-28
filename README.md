@@ -1,6 +1,6 @@
 # CUA
 
-本项目探索面向真实桌面环境的 Computer Use Agent（CUA）：`record` 将教学录制处理为结构化日志与 trace，`execution` 将 trace 初始化为 Midscene YAML 任务，并通过 Midscene computer use 操作 Chrome、堡垒机、远程桌面或企业内网页系统。
+本项目探索面向真实桌面环境的 Computer Use Agent（CUA）：顶层 Python `agent` 接收 Main Agent 委派的完整任务并完成任务级 Tool Calling；`record` 将教学录制处理为结构化日志与 trace；TypeScript `execution` 通过 Midscene computer use 操作 Chrome、堡垒机、远程桌面或企业内网页系统。
 
 项目不使用 browser-use、Playwright、Puppeteer 或 CDP 作为执行底座。企业内网中“先经过堡垒机，再操作目标网页”的链路必须基于真实屏幕与键盘鼠标事件。
 
@@ -8,11 +8,12 @@
 
 ```text
 CUA/
+├── agent/                  # Python CUA Subagent：definition、模型 loop、私有 Tool 与事件
 ├── record/                 # 教学录制处理：视频、日志、截图 -> trace
-├── execution/              # 可独立发布的 TypeScript CUA Midscene Skill
-│   ├── agent/              # 宿主无关的 CUA Agent definition、Tool contracts 与适配器
+├── execution/              # TypeScript Computer-Use Runtime
 │   ├── cua/                # 转换、任务解析、CLI 和公开工具 API
 │   ├── executors/          # Midscene 适配与 KeyboardTypeText
+│   ├── runtime-bridge/     # Python Agent 使用的版本化 JSONL Runtime 边界
 │   ├── projects/           # 随 Skill 发布的只读内置任务
 │   ├── schemas/            # Ajv 在文件边界使用的 JSON Schema
 │   ├── SKILL.md            # 执行器 Skill 入口
@@ -20,11 +21,11 @@ CUA/
 └── openspec/               # 规格与变更记录
 ```
 
-`record` 基于 ShowUI-Aloha Learn，只保留录制处理，不包含 Act、Actor、Executor 或回放能力。`execution` 全面使用 TypeScript：同一核心同时服务 CLI、GDE Claw 等外部 Agent 的工具 API，并在进程内直接调用 Midscene。`execution` 是供其他 Agent 集成和发布的 Skill 工程，不安装为本机 Codex Skill。
+`record` 基于 ShowUI-Aloha Learn，只保留录制处理，不包含 Act、Actor、Executor 或回放能力。`execution` 全面使用 TypeScript，在进程内直接调用 Midscene，并通过 JSONL Runtime bridge 服务 Python Agent。`execution` 仍可作为底层 Skill/CLI 独立发布，不安装为本机 Codex Skill。
 
-`execution/agent` 是新的可移植 CUA Agent Capability，而不是另一套 Agent Runtime。它提供 canonical `Computer-Use` definition，以及 `cua_catalog`、`cua_execute`、`cua_workbench` 三个宿主无关 Tool；Standalone Host 或未来 GDEClaw Host 负责单次调用内的 Tool loop 和运行状态。CUA Subagent 不保存跨调用上下文或 Memory，Main Agent 每次委派完整任务；Midscene 负责本次 GUI 执行的截图、页面状态和动作上下文，Workbench 继续作为录制、复核和诊断的 Human Surface。
+顶层 `agent/` 是唯一 canonical CUA Subagent。它提供 Python `cua-agent` 包、自身定位与 instructions、一次 invocation 内的模型 Tool Calling，以及私有 `cua_catalog`、`cua_execute`、`cua_workbench`。GDEClaw 只提交完整任务并接收事件与最终结果，不注册内部 Tool，也不承担第二层 Computer-Use 推理。CUA Subagent 不保存跨调用上下文或 Memory；Midscene 管理更下层的截图、页面状态和动作上下文。
 
-Workbench 的“Agent 调试”页签是统一 Subagent invocation 的薄人工客户端，只在使用 `review --dev` 启动时出现，不承载聊天产品、跨调用上下文或 Agent 决策逻辑；未来 GDEClaw 使用同一请求/回复契约。
+Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现，直接调用同一个 Python Agent invocation。它是薄的开发调试入口，不承载聊天产品、跨调用上下文或 Agent 决策逻辑；未来 GDEClaw 使用同一高层请求、事件与结果语义。
 
 ## 数据流
 
@@ -39,7 +40,9 @@ Workbench 的“Agent 调试”页签是统一 Subagent invocation 的薄人工�
   -> act run --scene/--task：投影为完整步骤 prompt，再执行单个 ai action
 
 无录制自然语言要求
-  -> CLI act run --prompt：保留现有临时单 action YAML 路径
+  -> GDEClaw Main Agent：委派完整任务
+  -> Python CUA Agent：选择私有 Tool 与 freeform 策略
+  -> JSONL Runtime bridge：调用 TypeScript execution
   -> TypeScript runNaturalLanguageAiAct()：直接调用原生 agent.aiAct()
 ```
 
@@ -65,7 +68,20 @@ npm run cua -- task run --scene browser-demo --task air-tickets-demo --dry-run
 npm run cua -- act run --scene browser-demo --task air-tickets-demo --dry-run
 npm run cua -- act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 npm run cua -- review --no-open
+npm run cua -- review --dev --no-open
 ```
+
+开发 Python Agent：
+
+```powershell
+cd agent
+uv sync --locked
+uv run --locked pytest
+uv run --locked ruff check .
+uv run --locked mypy
+```
+
+上述依赖准备属于开发/安装阶段。GDEClaw 集成时应安装 `cua-agent` wheel、准备隔离的 Node Runtime 并配置可执行路径；每次 invocation 只执行，不运行 `uv sync`、`uv lock`、`pip install`、`npm install` 或 `npm ci`。
 
 执行器要求 Node.js `>=22.18.0`。
 
@@ -122,7 +138,7 @@ trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 o
 
 ## 验证与打包
 
-真实密钥只放在 `record/.env` 和 `execution/.env.local`，不得提交。
+真实密钥只放在被忽略的本地环境文件或进程环境中，不得提交。开发 Review 默认从 `execution/.env.local` 继承模型配置；`CUA_AGENT_MODEL_*` 未设置时兼容回退到相应的 `MIDSCENE_MODEL_*`。
 
 ```powershell
 cd execution

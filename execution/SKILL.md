@@ -5,9 +5,9 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 # CUA Midscene
 
-本目录是供 GDE Claw 等外部 Agent 或 Agent Host 集成的完整 TypeScript Skill 交付单元，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
+本目录是完整 TypeScript Computer-Use Runtime 与底层 Skill 交付单元，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
 
-本文件描述完整 `cua-midscene` Skill。Agent Host 应通过 `cua-midscene/agent` 加载 canonical Computer-Use definition 和 Tool；本 Skill 继续提供完整 CLI 与底层 CUA 能力。
+唯一 canonical Subagent 位于仓库顶层 Python `agent/`。GDEClaw Main Agent 只向它委派完整任务；Python Agent 通过本包的 `runtime-bridge` 私下调用 catalog、execute 和 workbench。本 Skill 继续描述完整 CLI 与底层 CUA 能力，不向 GDEClaw 注册内部 Tool。
 
 ## 核心事实
 
@@ -18,7 +18,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 - Skill 内 `projects/` 是只读 builtin catalog；用户任务只写入 `<CUA_DATA_ROOT>/projects/`。
 - 运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`。
 - computer use 必须由上层串行调用。
-- Agent Host 调用本 Skill 命令时必须设置较长的任务超时。录制处理、模型规划和真实 computer use 可能长时间运行，不得因控制台短暂无输出而提前终止；只有控制台持续较长时间没有新增输出且任务明显无进展时，才尝试终止并原样报告。
+- Python CUA Agent 或其他外部调用方使用本 Skill 时必须设置较长的任务超时。录制处理、模型规划和真实 computer use 可能长时间运行，不得因控制台短暂无输出而提前终止；只有控制台持续较长时间没有新增输出且任务明显无进展时，才尝试终止并原样报告。
 
 `CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 定位外部录制处理器；`CUA_RECORDINGS_ROOT` 定位原始录制集合。命令行参数优先于环境配置，完整优先级见 `references/task-contract.md`。
 

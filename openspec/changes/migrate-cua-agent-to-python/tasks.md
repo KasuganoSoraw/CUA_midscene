@@ -31,9 +31,9 @@
 
 ## 6. 旧 TypeScript Agent 清理与集成说明
 
-- [ ] 6.1 删除 `execution/agent` definition、Host invocation seam、TS Agent tests 和 `cua-midscene/agent` export
-- [ ] 6.2 更新 TypeScript/Python 构建发布面、README 与 GDEClaw 安装态/运行态集成说明
-- [ ] 6.3 确认仓库只保留一个 canonical Agent，而 `execution` 仅公开 Runtime bridge
+- [x] 6.1 删除 `execution/agent` definition、Host invocation seam、TS Agent tests 和 `cua-midscene/agent` export
+- [x] 6.2 更新 TypeScript/Python 构建发布面、README 与 GDEClaw 安装态/运行态集成说明
+- [x] 6.3 确认仓库只保留一个 canonical Agent，而 `execution` 仅公开 Runtime bridge
 
 ## 7. 完整验证
 

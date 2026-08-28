@@ -8,12 +8,10 @@
   },
   "exports": {
     ".": "./dist/cua/index.js",
-    "./agent": "./dist/agent/index.js",
     "./runtime-bridge": "./dist/runtime-bridge/index.js"
   },
   "files": [
     ".env.example",
-    "agent",
     "cli",
     "cua",
     "dist",

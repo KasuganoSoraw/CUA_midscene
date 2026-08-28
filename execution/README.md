@@ -1,12 +1,11 @@
 # Execution
 
-该目录是供 GDE Claw 等外部 Agent 或 Agent Host 集成的可独立发布 `cua-midscene` Skill。TypeScript 核心负责调用外部 record 处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use。它不安装为本机 Codex Skill，也不包含 Codex 专用的 `agents/openai.yaml`。
+该目录是可独立构建的 TypeScript Computer-Use Runtime 与 `cua-midscene` 底层 Skill。TypeScript 核心负责调用外部 record 处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use。面向 GDEClaw 的 canonical Subagent 位于仓库顶层 Python `agent/`；本目录不再发布第二套 Agent definition 或模型 loop。
 
 ## 模块职责
 
 ```text
 record trace
-  -> agent：canonical Computer-Use definition、Tool contracts 与任务级策略适配
   -> cua/recording：调用外部 Python recorder、规范化 source、初始化并验证任务
   -> cua/conversion：caption.operation -> task.yaml + task.json
   -> cua/task：数据根、catalog、YAML、输入、aiAct 投影与执行编排
@@ -14,11 +13,12 @@ record trace
   -> cli：开发命令和安装后 bin 的统一入口
   -> cua/index.ts：GDE Claw 等上层工具直接导入的 API
   -> review：Vue 本地复核应用、localhost 服务与复核专属 service
+  -> runtime-bridge：Python Agent 调用 catalog、execute、workbench 的版本化 JSONL 边界
   -> executors：ComputerAgent、KeyboardTypeText、agent.runYaml()、agent.aiAct()
 ```
 
 - `cua/contracts/`：普通 TypeScript 类型和 Ajv 文件边界校验。
-- `agent/`：宿主无关的 Agent-facing 智能入口；只负责 catalog、显式执行策略和 Workbench 唤起，不实现 LLM loop、session、memory 或 GDEClaw 注册。
+- `runtime-bridge/`：向顶层 Python Agent 提供 JSON/JSONL catalog、execute、workbench 契约；不包含模型、prompt、Session 或 GDEClaw 逻辑。
 - `cua/recording/`：定位外部 record 环境、运行 parser、复制标准化生成资产并编排任务创建。
 - `cua/conversion/`：只根据结构化 trace operation 初始化任务；被标记的 click/doubleClick 会绑定 processed log 中的 reference patch。
 - `cua/task/`：双 catalog、YAML、输入、运行快照和执行编排。
@@ -31,26 +31,24 @@ record trace
 - `tests/`：契约、转换、任务、CLI 和执行器测试。
 TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv 只校验从磁盘进入系统的 scene、task、trace 和执行结果；resolved YAML 最终交给 Midscene parser。
 
-## CUA Agent Capability
+## Python Agent 与 Runtime Bridge
 
-完整 `cua-midscene` 包通过 `cua-midscene/agent` 导出 canonical Agent definition 和三个 Tool：
+唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 只调用其高层 `{ task }` invocation；Python Agent 自己运行模型 Tool Calling、判断 Recorded Skill、选择 replay/guided/freeform，并把 GUI 微观规划交给 Midscene。`cua_catalog`、`cua_execute`、`cua_workbench` 是 Python Agent 私有 Tool，不是 GDEClaw 的公共 Tool。
 
-```ts
-import {
-  cuaAgentDefinition,
-  cuaCatalog,
-  cuaExecute,
-  cuaWorkbench,
-} from 'cua-midscene/agent';
+本包只通过 `cua-midscene/runtime-bridge` 和构建后的 `dist/runtime-bridge/worker.js` 提供版本化 JSONL Runtime：
+
+```text
+GDEClaw Main Agent
+  -> Python cua-agent（definition、模型 loop、私有 Tool、事件）
+  -> TypeScript Runtime bridge（catalog、execute、workbench）
+  -> Midscene computer use
 ```
 
-- `cuaCatalog()` 列出或描述 Recorded Skill，并保留 catalog 的 `ready | error` 诊断。
-- `cuaExecute()` 要求显式选择 `replay | guided | freeform`，分别复用 `runTask()`、`runRecordedTaskAiAct()` 和 `runNaturalLanguageAiAct()`；失败后不自动切换或重试。
-- `cuaWorkbench()` 启动或复用现有本地 Workbench，返回带 `mode/scene/task` 的深链接，由 Host 决定是否在独立浏览器或内嵌浏览器显示。
+JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；response 使用相同 request id，并明确区分 result 与结构化 error。worker stdout 只输出协议 frame，诊断写 stderr。一次 Python invocation 可复用一个 Node worker，invocation 结束即释放；不同 invocation 不共享模型 messages 或 Runtime 状态。
 
-`invokeCuaSubagent()` 是人工调试和未来 GDEClaw Adapter 共用的无状态单任务调用边界。Main Agent 每次提交一个完整 `{ task }`；CUA 不读取或恢复此前调用，Host 只在本次调用内运行 Tool loop。普通 `review` 不展示或注册 Agent 调试入口，开发者使用 `review --dev` 才会看到“Agent 调试”页签。该页展示最终回复与 Tool 轨迹，不保存跨调用上下文。GUI 执行期间的截图、页面状态和动作上下文由 Midscene 管理。未注入 Host 时页面明确显示不可用，不会绕过 Agent 自动降级为 Freeform。
+普通 `review` 不展示或注册 Agent API；开发者使用 `review --dev` 才能看到“Agent 调试”页签。Review Server 直接启动 Python Agent invocation，检查 Python executable、模型配置和构建后的 Runtime bridge，不再等待外部 AgentHost。页面是薄调试入口，不保存聊天或跨调用 Session。
 
-该目录定义的是 **Agent Capability**。开发阶段继续使用当前 npm/uv 环境；CUA 维护 `package-lock.json` 和 `uv.lock`，未来由 GDEClaw 在安装或构建阶段 provision 独立运行环境。任一 Agent Tool 在调用期间都不会安装或更新依赖。
+开发阶段可分别运行 npm 与 uv 环境；产品安装阶段由 GDEClaw 安装 `cua-agent` wheel、准备隔离的 Node Runtime 并提供 executable 路径。运行 invocation 时不得执行 `npm install`、`npm ci`、`uv sync`、`uv lock` 或 `pip install`。
 
 ## 环境
 
@@ -67,12 +65,16 @@ npm run check
 MIDSCENE_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
 MIDSCENE_MODEL_NAME=minimax-m3
 MIDSCENE_MODEL_FAMILY=doubao-vision
+CUA_AGENT_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
+CUA_AGENT_MODEL_NAME=minimax-m3
 CUA_DATA_ROOT=C:\path\to\cua-data
 CUA_RECORD_ROOT=C:\path\to\CUA\record
 CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
 ```
 
 `CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 指向包含 `pyproject.toml` 和 `Aloha_Learn/parser.py` 的 Python 处理器目录；`CUA_RECORDINGS_ROOT` 指向录制器生成的一级目录集合。安装后的 execution Skill 不包含 Python；一键创建命令会在 `CUA_RECORD_ROOT` 运行 uv，并由 Python 自行读取 `record/.env`。
+
+`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 自身的任务级推理模型；未设置时兼容回退到对应 `MIDSCENE_MODEL_*`。`review --dev` 在源码环境默认使用顶层 `agent/.venv`、当前 Node executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_NODE_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径必须由安装阶段准备。
 
 ## CLI
 
@@ -90,6 +92,7 @@ npm run cua -- task run --scene browser-demo --task air-tickets-demo --dry-run
 npm run cua -- act run --scene browser-demo --task air-tickets-demo --dry-run
 npm run cua -- act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
 npm run cua -- review --no-open
+npm run cua -- review --dev --no-open
 ```
 
 安装后的 Skill 使用编译入口：
@@ -101,7 +104,7 @@ node dist/cli/main.js review --no-open
 
 `task create-from-recording` 是原始录制的默认创建入口，会按 record 原有无 goal 方式生成 trace、规范化 `source/`、初始化任务并完成静态验证。可选的 `--goal` 只写入任务 goal/description 和 YAML groupDescription，不进入 trace prompt；省略时这些字段保存空字符串。Python 进度写入 stderr，最终 stdout 保持为单个 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
-`review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT` 调用时会识别并复用已有服务，不创建新的 Node 监听进程。若该端口由其他程序或不同数据目录的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。“任务复核”读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。“从录制创建任务”读取 `CUA_RECORDINGS_ROOT` 的一级子目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，可打开系统目录，并复用 `createTaskFromRecording()` 创建完整用户任务。页面不播放视频、不展示完整日志，也不流式转发 Python 日志；创建期间只显示不可确定的“正在生成”状态，成功后自动进入新任务复核。同一录制可以用于创建不同任务，每次都会重新处理。
+`review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT` 与兼容开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。若该端口由其他程序或不同数据目录/开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。`--dev` 额外启用 Python Agent 调试入口；默认模式完全隐藏它。“任务复核”读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。“从录制创建任务”读取 `CUA_RECORDINGS_ROOT` 的一级子目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，可打开系统目录，并复用 `createTaskFromRecording()` 创建完整用户任务。页面不播放视频、不展示完整日志，也不流式转发 Python 录制处理日志；创建期间只显示不可确定的“正在生成”状态，成功后自动进入新任务复核。同一录制可以用于创建不同任务，每次都会重新处理。
 
 未配置 `CUA_RECORDINGS_ROOT` 不会阻止 review 服务和任务复核启动。录制页只提示需要配置的环境变量、`execution/.env.local` 配置位置和路径示例，不直接修改环境文件，也不从后台服务进程唤起可能失焦或阻塞的桌面目录选择框。配置后重启 review 服务即可生效。存在零个或多个视频/事件文件的录制目录仍会显示，但不能生成任务。
 

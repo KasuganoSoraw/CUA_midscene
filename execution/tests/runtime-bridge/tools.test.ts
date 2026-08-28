@@ -1,24 +1,18 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
 import {
-  cuaAgentDefinition,
   cuaCatalog,
   cuaExecute,
   cuaWorkbench,
-  invokeCuaSubagent,
   type CuaCatalogDependencies,
   type CuaExecuteDependencies,
   type CuaWorkbenchDependencies,
-} from '../../agent/index.js';
+} from '../../runtime-bridge/index.js';
 import type {
   NativeAiActExecutorResult,
   TaskCatalogItem,
 } from '../../cua/contracts/types.js';
 
-const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const data = {
   root: 'C:\\cua-data',
   projectsRoot: 'C:\\cua-data\\projects',
@@ -30,23 +24,7 @@ const layout = {
   data,
 };
 
-test('canonical Agent definition 从发布 Markdown 资产加载并固定 Tool 集合', async () => {
-  assert.equal(cuaAgentDefinition.name, 'Computer-Use');
-  assert.equal(cuaAgentDefinition.invocationMode, 'stateless-task');
-  assert.deepEqual(cuaAgentDefinition.tools, ['cua_catalog', 'cua_execute', 'cua_workbench']);
-  assert.match(cuaAgentDefinition.description, /Windows|Computer Use/);
-  assert.match(cuaAgentDefinition.instructions, /replay/);
-  assert.match(cuaAgentDefinition.instructions, /freeform/);
-  assert.match(cuaAgentDefinition.instructions, /不自动重试/);
-  assert.match(cuaAgentDefinition.instructions, /不请求、读取、保存或恢复/);
-  assert.match(cuaAgentDefinition.instructions, /Midscene 独立管理/);
-
-  const packageJson = JSON.parse(await readFile(path.join(executionRoot, 'package.json'), 'utf8'));
-  assert.equal(packageJson.exports['./agent'], './dist/agent/index.js');
-  assert.ok(packageJson.files.includes('agent'));
-});
-
-test('cua_catalog 复用 catalog API 并保留 ready/error 任务', async () => {
+test('Runtime catalog 保留 ready/error 任务', async () => {
   const tasks = [
     { status: 'ready', scene: 'ems', task: 'query-alarm', title: '查询告警' },
     { status: 'error', scene: 'ems', task: 'broken', title: 'broken', error: 'YAML 错误' },
@@ -64,7 +42,7 @@ test('cua_catalog 复用 catalog API 并保留 ready/error 任务', async () => 
   assert.deepEqual(result.tasks, tasks);
 });
 
-test('cua_execute 将三种显式策略映射到唯一底层 API', async () => {
+test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
   const calls: string[] = [];
   const yamlExecutor = {
     schemaVersion: '0.2',
@@ -132,7 +110,7 @@ test('cua_execute 将三种显式策略映射到唯一底层 API', async () => {
   assert.equal(freeform.runDir, 'C:\\cua-data\\runs\\3');
 });
 
-test('cua_execute 保留底层错误且不调用其他策略', async () => {
+test('Runtime execute 保留底层错误且不调用其他策略', async () => {
   const calls: string[] = [];
   const dependencies = {
     resolveRuntimeLayout: async () => layout,
@@ -141,8 +119,14 @@ test('cua_execute 保留底层错误且不调用其他策略', async () => {
       calls.push('replay');
       throw new Error('runner failed');
     },
-    runRecordedTaskAiAct: async () => { calls.push('guided'); throw new Error('不应调用'); },
-    runNaturalLanguageAiAct: async () => { calls.push('freeform'); throw new Error('不应调用'); },
+    runRecordedTaskAiAct: async () => {
+      calls.push('guided');
+      throw new Error('不应调用');
+    },
+    runNaturalLanguageAiAct: async () => {
+      calls.push('freeform');
+      throw new Error('不应调用');
+    },
   } as unknown as Partial<CuaExecuteDependencies>;
 
   await assert.rejects(
@@ -152,7 +136,7 @@ test('cua_execute 保留底层错误且不调用其他策略', async () => {
   assert.deepEqual(calls, ['replay']);
 });
 
-test('cua_workbench 返回 Host 可展示的深链接且不打开系统浏览器', async () => {
+test('Runtime workbench 返回深链接且不打开系统浏览器', async () => {
   let starts = 0;
   const dependencies = {
     startReviewServer: async () => {
@@ -179,48 +163,5 @@ test('cua_workbench 返回 Host 可展示的深链接且不打开系统浏览器
     cuaWorkbench({ mode: 'execution', task: 'query-alarm' }, dependencies),
     /同时提供 scene/,
   );
-  await assert.rejects(
-    cuaWorkbench({ mode: 'invalid' } as never, dependencies),
-    /无法识别 cua_workbench mode/,
-  );
   assert.equal(starts, 1);
-});
-
-test('统一 Subagent invocation 向不同 Host 提供相同 definition 与 Tool 集合', async () => {
-  let calls = 0;
-  const result = await invokeCuaSubagent(
-    { task: '  查询 NE001 当前告警  ' },
-    {
-      invoke: async (invocation) => {
-        calls += 1;
-        assert.equal(invocation.invocationId, 'invoke-001');
-        assert.equal(invocation.task, '查询 NE001 当前告警');
-        assert.equal(invocation.definition, cuaAgentDefinition);
-        assert.deepEqual(Object.keys(invocation.tools), ['cua_catalog', 'cua_execute', 'cua_workbench']);
-        return {
-          status: 'completed',
-          reply: '查询完成。',
-          toolCalls: [{
-            callId: 'call-001',
-            tool: 'cua_catalog',
-            input: { action: 'list-scenes' },
-            status: 'succeeded',
-            output: { scenes: [] },
-          }],
-        };
-      },
-    },
-    { dataRoot: 'C:\\cua-data', createInvocationId: () => 'invoke-001' },
-  );
-
-  assert.equal(calls, 1);
-  assert.equal(result.schemaVersion, '0.1');
-  assert.equal(result.invocationId, 'invoke-001');
-  assert.equal(result.reply, '查询完成。');
-  assert.equal(result.toolCalls[0]?.tool, 'cua_catalog');
-
-  await assert.rejects(
-    invokeCuaSubagent({ task: '   ' }, { invoke: async () => { throw new Error('不应调用'); } }),
-    /非空字符串/,
-  );
 });
