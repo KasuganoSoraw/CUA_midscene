@@ -1,8 +1,8 @@
 ## 1. Python Agent 包与静态契约
 
-- [ ] 1.1 建立顶层 `agent/` Python package、`pyproject.toml`、lock、src/test 布局和导入入口
-- [ ] 1.2 迁移 canonical description/instructions、无状态 invocation contracts 与事件类型
-- [ ] 1.3 增加 definition、contracts、事件序列化和跨 invocation 隔离的确定性测试
+- [x] 1.1 建立顶层 `agent/` Python package、`pyproject.toml`、lock、src/test 布局和导入入口
+- [x] 1.2 迁移 canonical description/instructions、无状态 invocation contracts 与事件类型
+- [x] 1.3 增加 definition、contracts、事件序列化和跨 invocation 隔离的确定性测试
 
 ## 2. TypeScript Runtime Bridge
 
