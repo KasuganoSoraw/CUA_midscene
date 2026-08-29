@@ -1,7 +1,7 @@
 # typescript-task-core Specification
 
 ## Purpose
-TBD - created by archiving change migrate-execution-core-to-typescript. Update Purpose after archive.
+定义 TypeScript 执行核心对任务发现、转换、解析、运行资产和 Midscene 执行的统一职责。
 ## Requirements
 ### Requirement: TypeScript 核心统一承载任务业务逻辑
 TypeScript 核心 SHALL 承载双 catalog 任务发现、trace 转换、输入解析、resolved task YAML 生成、外部 run directory 创建、aiAct prompt 投影和执行编排。

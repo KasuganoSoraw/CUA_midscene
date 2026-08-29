@@ -1,7 +1,7 @@
 # ai-act-execution Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-act-execution-mode. Update Purpose after archive.
+定义自然语言任务与录制任务通过 Midscene `aiAct` 执行时的统一输入、运行产物和失败语义。
 ## Requirements
 ### Requirement: aiAct 支持互斥的自然语言与录制任务来源
 TypeScript 核心 SHALL 通过统一 Midscene YAML 执行 API 接受自然语言 prompt 或参数已解析的录制任务 YAML 其中一种来源，并调用一次整体 aiAct。

@@ -1,7 +1,7 @@
 # local-task-skills Specification
 
 ## Purpose
-TBD - created by archiving change simplify-local-task-skills. Update Purpose after archive.
+定义本地 CUA 任务包的资产组成、只读与可写 catalog 边界，以及维护型 CLI 的使用约束。
 ## Requirements
 ### Requirement: 任务目录使用精简 YAML 资产
 每个任务 SHALL 包含 `task.yaml`、`task.json`、任务指令文件和可选 `source/`；任务目录不得保存运行报告。Skill 内置任务 SHALL 位于只读 builtin catalog，用户任务 SHALL 位于数据根的 user catalog。执行器 Skill SHALL 将单一 `task create-from-recording` 命令作为从原始录制创建任务的默认入口，并仅在 source 已标准化时使用 `task init-from-trace`。
@@ -35,12 +35,12 @@ TBD - created by archiving change simplify-local-task-skills. Update Purpose aft
 - **WHEN** 调用者未覆盖某项输入
 - **THEN** resolver SHALL 使用 `task.json` 中的录制默认值
 
-### Requirement: execution 发布单元只包含当前实现
-execution Skill 安装包 SHALL 包含 TypeScript 核心、Midscene YAML runner、只读内置项目任务、引用文档、编译运行入口和必要契约，不得包含 Python 环境、用户任务、运行时可变数据或已删除架构的代码与说明。
+### Requirement: execution 发布单元只包含运行所需资产
+execution Skill 安装包 SHALL 包含 TypeScript 核心、Midscene YAML runner、只读内置项目任务、引用文档、编译运行入口和必要契约，不得包含 Python 环境、用户任务、运行时可变数据或包职责之外的代码与说明。
 
 #### Scenario: 安装 Skill
 - **WHEN** 执行可重复安装或 staging 命令
-- **THEN** 本机 Skill 副本 SHALL 与明确的当前发布文件集合一致
+- **THEN** 本机 Skill 副本 SHALL 与声明的发布文件集合一致
 - **AND** 安装包 SHALL NOT 包含 Python 源码与锁文件、node_modules、用户 data root、reports、midscene_run、缓存、真实环境文件、测试或旧 flow 文件
 
 ### Requirement: Agent 显式选择电脑操作执行模式

@@ -1,10 +1,10 @@
 # midscene-yaml-tasks Specification
 
 ## Purpose
-TBD - created by archiving change replace-flow-dsl-with-midscene-yaml. Update Purpose after archive.
+定义以 Midscene YAML 作为任务长期执行事实源时的资产结构、稳定步骤身份、参数解析、图片定位、执行失败与静态验证要求。
 ## Requirements
 ### Requirement: Midscene YAML 是唯一长期执行事实源
-每个录制任务 SHALL 使用任务根目录的 `task.yaml` 表达完整执行流程，人、Agent、未来前端和 Midscene SHALL 共同消费该文件。
+每个录制任务 SHALL 使用任务根目录的 `task.yaml` 表达完整执行流程，维护者、Agent、Review 和 Midscene SHALL 共同消费该文件。
 
 #### Scenario: 修改任务动作
 - **WHEN** 用户确认需要长期修改某个任务动作

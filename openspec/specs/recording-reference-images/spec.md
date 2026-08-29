@@ -1,7 +1,7 @@
 # recording-reference-images Specification
 
 ## Purpose
-TBD - created by archiving change add-reference-image-locating. Update Purpose after archive.
+定义从点击录制生成干净参考图、规范化图片资产路径，并将参考图安全绑定到 Midscene 图片定位提示和 Review 表单的要求。
 ## Requirements
 ### Requirement: 点击录制同时生成标注 crop 与干净参考图
 录制截图处理 SHALL 为具有坐标的 click 和 doubleClick 动作保留现有带红叉 crop，并额外生成以录制点击点为中心、无任何标注的 PNG 参考图；两类图片不得互相覆盖。

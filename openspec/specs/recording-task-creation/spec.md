@@ -1,21 +1,21 @@
 # recording-task-creation Specification
 
 ## Purpose
-TBD - created by archiving change add-task-create-from-recording. Update Purpose after archive.
+定义从原始录制运行 record parser、规范化 trace 与截图资产、创建 canonical CUA 任务并执行静态验证的一体化流程。
 ## Requirements
 ### Requirement: 单一命令从原始录制创建任务
 执行器 SHALL 提供 `task create-from-recording`，在一次调用中生成 trace、规范化任务 source、初始化 canonical 任务并执行与 `task validate` 相同的静态验证。
 
 #### Scenario: 创建带目标的任务
 - **WHEN** 调用者提供不存在的 scene/task、有效录制目录和非空 goal
-- **THEN** 系统 SHALL 使用不含 goal 的原有 parser 调用生成 trace
+- **THEN** 系统 SHALL 使用不含 goal 的 record parser 调用生成 trace
 - **AND** 系统 SHALL 将 goal 写入创建后的任务描述
 - **AND** 系统 SHALL 创建通过静态验证的用户任务
 - **AND** 最终 stdout SHALL 返回机器可读的创建与验证结果
 
-#### Scenario: 保留已有标准 source 入口
+#### Scenario: 使用标准 source 入口
 - **WHEN** 调用者已经准备好标准化 task source
-- **THEN** 原有 `task init-from-trace` SHALL 继续可用且行为不变
+- **THEN** `task init-from-trace` SHALL 可用于初始化任务
 
 ### Requirement: goal 为可选任务描述
 创建命令 SHALL 接受可选 goal，不得将其传给 trace 生成模型，也不得在 goal 缺失或仅含空白时推测业务目标。
@@ -32,7 +32,7 @@ TBD - created by archiving change add-task-create-from-recording. Update Purpose
 - **AND** task title 与 YAML agent.groupName SHALL 继续使用 task 标识
 
 ### Requirement: 独立解析录制器环境
-执行器 SHALL 从显式参数、进程环境、execution 环境文件或源码相邻目录解析外部录制器根，并在该目录的 uv 环境中运行 Python；Python SHALL 继续从 `record/.env` 读取 trace 模型配置。
+执行器 SHALL 从显式参数、进程环境、execution 环境文件或源码相邻目录解析外部录制器根，并在该目录的 uv 环境中运行 Python；Python SHALL 从 `record/.env` 读取 trace 模型配置。
 
 #### Scenario: 使用安装后的 Skill
 - **WHEN** execution 安装目录旁不存在 record 且 `CUA_RECORD_ROOT` 指向有效录制器
