@@ -93,7 +93,7 @@ onMounted(refreshStatus);
         <div class="agent-definition-card">
           <small>CANONICAL AGENT</small>
           <strong>{{ agentStatus?.name ?? 'Computer-Use' }}</strong>
-          <p>人工调试与未来 GDEClaw 使用同一个 Python invocation；内部 Tool 与策略不对 Host 暴露。</p>
+          <p>这里直接调用 canonical Python invocation；内部 Tool 不注册为 Host 公共 Tool，页面仅展示受控诊断摘要。</p>
         </div>
 
         <div class="agent-tools">
@@ -116,7 +116,7 @@ onMounted(refreshStatus);
         <div v-if="!records.length" class="agent-empty">
           <span>◎</span>
           <strong>提交一个完整的 Computer-Use 任务</strong>
-          <p>每次提交都是不继承上下文的独立任务。页面不选择执行策略，也不会绕过 Subagent 直接操作桌面。</p>
+          <p>每次提交都是不继承上下文的独立任务。当前 HTTP 调用在完成后一次性返回累计事件；页面不选择执行策略，也不会绕过 Subagent 直接操作桌面。</p>
         </div>
 
         <article v-for="record in records" :key="record.submittedAt" class="agent-record">

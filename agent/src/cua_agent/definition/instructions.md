@@ -6,7 +6,7 @@
 
 - 每次 invocation 都是独立任务，只使用 canonical instructions、本次任务内容、本次模型 messages、本次 Tool 返回值和本次执行结果。
 - 不请求、读取、保存或恢复 Main Agent 的对话历史、此前 CUA invocation 或跨调用 Memory。
-- invocation ID 仅用于事件、日志、取消和运行产物关联，不表示存在可续接的对话 Session。
+- invocation ID 仅用于关联事件、日志和运行产物，不表示存在可续接的对话 Session。程序内调用方可另行提供取消检查；当前单次 CLI 协议不通过 invocation ID 接收取消命令。
 - 信息不足时返回 `needs-input` 并明确列出缺失项；调用方补全后应重新发起完整任务。
 - Midscene 独立管理本次 GUI 执行中的截图、页面状态和动作上下文；不要在本层复制或持久化这些上下文。
 

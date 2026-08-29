@@ -5,20 +5,20 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 # CUA Midscene
 
-本目录是完整 TypeScript Computer-Use Runtime 与底层 Skill 交付单元，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
+本目录是完整 TypeScript Computer-Use Runtime 与底层 CLI 操作/维护 Skill，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
 
-唯一 canonical Subagent 位于仓库顶层 Python `agent/`。GDEClaw Main Agent 只向它委派完整任务；Python Agent 通过本包的 `runtime-bridge` 私下调用 catalog、execute 和 workbench。本 Skill 继续描述完整 CLI 与底层 CUA 能力，不向 GDEClaw 注册内部 Tool。
+唯一 canonical Subagent 位于仓库顶层 Python `agent/`。GDEClaw Main Agent 只向它委派完整任务；Python Agent 通过本包的 `runtime-bridge` 私下调用 catalog、execute 和 workbench。本 Skill 描述开发者、Codex 等维护型调用方如何使用完整 CLI，不是 Python Agent 的运行时 prompt，也不向 GDEClaw 注册内部 Tool。当前 Python `cua_catalog` 不读取本文件或任务目录中的 `SKILL.md`。
 
 ## 核心事实
 
-- `task.yaml` 是唯一长期执行流程，由人、Agent、前端和 Midscene 共同消费。
+- `task.yaml` 是唯一长期执行流程，由维护型调用方、Review、TypeScript Runtime 和 Midscene 共同消费；当前 Python Agent 只通过结构化 Tool 间接使用它。
 - `task.json` 保存任务元数据、输入 ID 和录制默认值，不保存执行步骤。
 - `source/` 是校准时的只读录制证据。
 - `source/screenshots/*.reference.png` 是可选的干净定位参考；带红叉 crop 只用于理解录制点击点，不能作为 Midscene reference patch。
 - Skill 内 `projects/` 是只读 builtin catalog；用户任务只写入 `<CUA_DATA_ROOT>/projects/`。
 - 运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`。
 - computer use 必须由上层串行调用。
-- Python CUA Agent 或其他外部调用方使用本 Skill 时必须设置较长的任务超时。录制处理、模型规划和真实 computer use 可能长时间运行，不得因控制台短暂无输出而提前终止；只有控制台持续较长时间没有新增输出且任务明显无进展时，才尝试终止并原样报告。
+- 维护型外部调用方运行本 CLI 时必须为外围命令设置足够长的超时。当前 Python Agent 的模型请求默认 120 秒、Runtime 单请求默认 300 秒，Review 外层 invocation 默认 30 分钟；这些限制是分层生效的，不得把外围超时误写成可覆盖内部固定超时。
 
 `CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 定位外部录制处理器；`CUA_RECORDINGS_ROOT` 定位原始录制集合。命令行参数优先于环境配置，完整优先级见 `references/task-contract.md`。
 
@@ -37,9 +37,9 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 ## 发现与创建
 
 1. 运行 `node dist/cli/main.js scene list --json`，再运行 `node dist/cli/main.js task list --scene <scene> --json`。
-2. 只读取目标场景和任务的 `SKILL.md`、`task.json`；检查动作时再读取 `task.yaml` 和必要 source。
+2. 维护型调用方只读取目标场景和任务的 `SKILL.md`、`task.json`；检查动作时再读取 `task.yaml` 和必要 source。Python CUA Agent 则通过私有 catalog Tool 获取结构化描述，不直接读取这些文件。
 3. 用户提供原始录制目录时，运行 `node dist/cli/main.js task create-from-recording --scene <scene> --task <task> --recording "<录制目录>" [--goal "<任务描述>"]`。`--goal` 只保存为创建后的任务描述，不参与 trace 生成；用户未说明时可以省略且不得推测。
-4. 该命令内部运行外部 recorder、规范化 source、初始化并静态验证；Agent 不得再手工调用 Python、重命名或搬运录制产物。
+4. 该命令内部运行外部 `record/` 后处理器、规范化 source、初始化并静态验证；调用方不得再手工调用 Python、重命名或搬运录制产物。Windows `recorder/` 是采集 Worker，与 `record/` 后处理器不是同一组件。
 5. 只有 user task 的 `source/showui-trace.json` 和 `source/processed-log-sc.json` 已经标准化时，才运行 `node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，再运行 `node dist/cli/main.js task validate --scene <scene> --task <task> --json`。
 
 两种创建入口均不得覆盖已有 user 或 builtin 任务；失败时原样报告错误。
@@ -61,7 +61,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 运行 `node dist/cli/main.js review --no-open --json` 启动仅监听 `127.0.0.1:47831` 的本地复核页面；相同数据目录的已有服务会被复用。端口被其他程序或不同数据目录占用时应原样报告错误，不自动递增端口。
 
-任务创建成功后，或用户进入可视化校准时，运行上述命令，读取返回的 `url` 并在回复中提供给用户。
+任务创建成功后，或用户进入可视化校准时，运行上述命令，读取返回的 `url` 并在回复中提供给用户。开发 Python Agent 调试时改用 `node dist/cli/main.js review --dev --no-open --json`；普通模式不会注册 Agent API，同一端口上运行的普通/开发模式不能互相复用。
 
 ## 调用与执行
 

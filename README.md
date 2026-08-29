@@ -9,9 +9,11 @@
 ```text
 CUA/
 ├── agent/                  # Python CUA Subagent：definition、模型 loop、私有 Tool 与事件
+├── recorder/               # Windows 录制 Worker：PyAV 视频、Win32 键鼠与全局快捷键
 ├── record/                 # 教学录制处理：视频、日志、截图 -> trace
 ├── execution/              # TypeScript Computer-Use Runtime
-│   ├── cua/                # 转换、任务解析、CLI 和公开工具 API
+│   ├── cua/                # 转换、任务解析、执行编排和底层公开 API
+│   ├── cli/                # 开发与安装后的命令入口
 │   ├── executors/          # Midscene 适配与 KeyboardTypeText
 │   ├── runtime-bridge/     # Python Agent 使用的版本化 JSONL Runtime 边界
 │   ├── projects/           # 随 Skill 发布的只读内置任务
@@ -21,20 +23,28 @@ CUA/
 └── openspec/               # 规格与变更记录
 ```
 
-`record` 基于 ShowUI-Aloha Learn，只保留录制处理，不包含 Act、Actor、Executor 或回放能力。`execution` 全面使用 TypeScript，在进程内直接调用 Midscene，并通过 JSONL Runtime bridge 服务 Python Agent。`execution` 仍可作为底层 Skill/CLI 独立发布，不安装为本机 Codex Skill。
+`recorder` 是 Windows-only 采集进程，生成 MP4 与键鼠 TXT；`record` 基于 ShowUI-Aloha Learn，只保留录制后处理，不包含 Act、Actor、Executor 或回放能力。`execution` 全面使用 TypeScript，在 Runtime worker 自身进程内直接调用 Midscene，并通过 JSONL Runtime bridge 服务 Python Agent。`execution` 仍可作为底层 Skill/CLI 独立发布，不安装为本机 Codex Skill。
 
 顶层 `agent/` 是唯一 canonical CUA Subagent。它提供 Python `cua-agent` 包、自身定位与 instructions、一次 invocation 内的模型 Tool Calling，以及私有 `cua_catalog`、`cua_execute`、`cua_workbench`。GDEClaw 只提交完整任务并接收事件与最终结果，不注册内部 Tool，也不承担第二层 Computer-Use 推理。CUA Subagent 不保存跨调用上下文或 Memory；Midscene 管理更下层的截图、页面状态和动作上下文。
 
 Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现，直接调用同一个 Python Agent invocation。它是薄的开发调试入口，不承载聊天产品、跨调用上下文或 Agent 决策逻辑；未来 GDEClaw 使用同一高层请求、事件与结果语义。
 
+## 当前集成状态与术语
+
+- 已实现：Python `CuaAgent`、单次 `cua-agent invoke` 进程协议、私有 Tool loop、TypeScript Runtime bridge，以及 `review --dev` 调试入口。
+- 尚未实现：GDEClaw 专用注册/生命周期 Adapter、常驻 Agent 服务、跨调用 Session、网络 API 和实时 SSE。文档中的 GDEClaw 表示目标集成边界。
+- `execution/SKILL.md` 是底层 CLI 的操作与维护说明；场景/任务目录中的 `SKILL.md` 是随任务包交付的维护说明。当前 Python Agent 不读取这些 Markdown，而是通过 `cua_catalog` 获取结构化 scene/task 数据。
+- Python Agent 的私有 Tool 可以把受控调用摘要作为诊断结果返回，但 GDEClaw 不注册、选择或直接调用这些 Tool。
+
 ## 数据流
 
 ```text
 教学录制
+  -> recorder：采集 MP4 + 键鼠 TXT（也可使用兼容的既有录制）
   -> record：日志、全屏截图、带红叉 trace crop、干净 reference patch、trace
   -> task create-from-recording：自动规范化 source、初始化并静态验证任务
   -> TypeScript converter：task.yaml + task.json
-  -> 人、Agent 或未来前端确认后直接维护 task.yaml
+  -> 开发者、Review 或维护型 Agent 确认后直接维护 task.yaml
   -> TypeScript resolver：<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml
   -> task run：按多个 Midscene task 顺序执行
   -> act run --scene/--task：投影为完整步骤 prompt，再执行单个 ai action
@@ -52,11 +62,10 @@ Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现
 
 ```powershell
 cd execution
-npm install
+npm ci
+Copy-Item .env.example .env.local
+# 编辑 .env.local，填写模型配置和四个 CUA_*_ROOT 绝对路径
 npm run check
-$env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
-$env:CUA_RECORD_ROOT = 'E:\HW\CUA\record'
-$env:CUA_RECORDINGS_ROOT = 'C:\path\to\recorder-output'
 
 npm run cua -- scene list --json
 npm run cua -- task list --scene browser-demo --json
@@ -87,7 +96,7 @@ uv run --locked mypy
 
 实际操作电脑时去掉 `--dry-run`。第一版不实现并发锁，上层调用方必须串行发起真实 computer use；查询、转换、inspect 和 dry-run 不操作电脑。
 
-GDE Claw 等进程内集成方可以从 execution 包根入口导入独立 API，不需要生成 YAML，也不需要启动子进程：
+底层 TypeScript Runtime 的嵌入方可以从 execution 包根入口导入独立 API，不需要生成 YAML，也不需要启动额外任务 runner。它不是 GDEClaw Main Agent 的 canonical 集成入口；GDEClaw 应调用顶层 Python Subagent：
 
 ```ts
 import { runNaturalLanguageAiAct } from 'cua-midscene';
@@ -132,17 +141,27 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
     └── midscene/                    # Midscene 报告、截图等产物
 ```
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。处理器根优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、execution 环境文件、源码仓相邻 `record/`。`CUA_RECORDINGS_ROOT` 是 review 页面读取的原始录制集合，和 Python 处理器根不是同一目录；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。安装后的 execution Skill 不包含 Python，需要用 `CUA_RECORD_ROOT` 指向独立 record 目录。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。后处理器根优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、execution 环境文件、源码仓相邻 `record/`；Windows 采集 Worker 使用独立的 `CUA_RECORDER_ROOT`，源码仓默认相邻 `recorder/`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合，和前两者都不是同一目录；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。安装后的 execution Skill 不包含这两个 Python 工程，需要由安装环境提供路径。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
 
 trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 
 ## 验证与打包
 
-真实密钥只放在被忽略的本地环境文件或进程环境中，不得提交。开发 Review 默认从 `execution/.env.local` 继承模型配置；`CUA_AGENT_MODEL_*` 未设置时兼容回退到相应的 `MIDSCENE_MODEL_*`。
+真实密钥只放在被忽略的本地环境文件或进程环境中，不得提交。开发 Review 默认从 `execution/.env.local` 继承模型配置；`CUA_AGENT_MODEL_*` 未设置时兼容回退到相应的 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_TLS_VERIFY` 默认 `true`；本地设为 `false` 只影响 Python Agent 模型请求，不影响 Midscene 或 record。Agent 的 `.env.example` 不会被 Python CLI 自动加载。
 
 ```powershell
 cd execution
 npm test
 npm run build
 npm pack --dry-run
+
+cd ..\agent
+uv lock --check
+uv run --locked pytest
+uv run --locked ruff check .
+uv run --locked mypy
+
+cd ..\recorder
+uv lock --check
+uv run --locked python -m unittest discover -s tests -v
 ```

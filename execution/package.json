@@ -17,6 +17,8 @@
     "dist",
     "executors",
     "projects",
+    "!projects/**/reports/**",
+    "!projects/**/midscene_run/**",
     "references",
     "review",
     "runtime-bridge",

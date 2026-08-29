@@ -21,10 +21,15 @@
 └── runs/<run-id>/
     ├── resolved-task.yaml
     ├── execution-result.json
+    ├── ai-act-prompt.txt            # guided/freeform 时存在
+    ├── ai-act-task.yaml             # guided 时存在
+    ├── ai-act-result.json           # freeform 时存在
     └── midscene/
 ```
 
 `task.yaml` 是唯一长期可执行流程，直接遵循 Midscene YAML。`task.json` 保存元数据、trace 来源、输入 ID、中文说明和录制默认值。`source/` 是只读证据。`resolved-task.yaml` 是本次输入解析后的运行快照，不是另一份长期流程。
+
+本契约与各级 `SKILL.md` 面向 CLI 使用者和任务维护者。当前 Python CUA Agent 不直接读取这些 Markdown 或任务文件，而是通过私有 `cua_catalog` 获取结构化 scene/task 描述，再通过 `cua_execute` 选择 replay、guided 或 freeform。
 
 ## 命令
 
@@ -43,11 +48,12 @@ node dist/cli/main.js task run --scene <scene> --task <task> [--input "<input-id
 node dist/cli/main.js act run --scene <scene> --task <task> [--input "<input-id>=<value>"] [--inputs <json-file>]
 node dist/cli/main.js act run --prompt "打开 Chrome 并搜索 GUI agent"
 node dist/cli/main.js review --no-open
+node dist/cli/main.js review --dev --no-open
 ```
 
-`review` 默认使用 `127.0.0.1:47831`。相同数据目录的服务已运行时返回并复用同一 URL；端口被其他程序或不同数据目录占用时直接失败，不扫描后续端口。
+`review` 默认使用 `127.0.0.1:47831`。相同数据目录且相同普通/开发模式的服务已运行时返回并复用同一 URL；端口被其他程序、不同数据目录或不同模式占用时直接失败，不扫描后续端口。`--dev` 只用于 Python Agent 调试，普通模式不暴露 Agent UI/API。
 
-`task create-from-recording` 是原始录制的默认入口。它从 `--record-root`、`CUA_RECORD_ROOT`、execution 环境文件或源码相邻目录定位独立 record 环境，在其中按原有无 goal 方式运行 uv/Python，再将生成资产规范化到 user task `source/` 并完成初始化与静态验证。可选 `--goal` 只写入 task goal/description 与 YAML groupDescription，不进入 trace prompt；省略时这些字段均为空字符串。
+`task create-from-recording` 是原始录制的默认后处理入口。它从 `--record-root`、`CUA_RECORD_ROOT`、execution 环境文件或源码相邻目录定位独立 `record/` 环境，在其中按原有无 goal 方式运行 uv/Python，再将生成资产规范化到 user task `source/` 并完成初始化与静态验证。Windows `recorder/` 只负责采集 MP4/TXT，使用独立 `CUA_RECORDER_ROOT`。可选 `--goal` 只写入 task goal/description 与 YAML groupDescription，不进入 trace prompt；省略时这些字段均为空字符串。
 
 `task init-from-trace` 保留给 source 已经标准化的高级场景。两种创建方式都拒绝覆盖 user/builtin 任务。
 
@@ -120,7 +126,7 @@ click/doubleClick 的 `operation.useReferenceImage: true` 表示该步骤需要�
 
 ## 校准与重建
 
-Agent 校准时必须展示 YAML 位置、原值、新值和原因，等待用户确认后只修改 user catalog 的 `task.yaml` 并运行 `task validate`。builtin 任务、`source/` 和运行产物只读。
+维护型调用方校准时必须展示 YAML 位置、原值、新值和原因，等待用户确认后只修改 user catalog 的 `task.yaml` 并运行 `task validate`。当前 Python CUA Agent 没有任务编辑 Tool。builtin 任务、`source/` 和运行产物只读。
 
 长期改变输入默认值、标签或说明属于参数契约修改，必须单独展示 `task.json` 差异并确认。重新生成 trace 属于重建，不是校准；已有任务资产不得自动删除或覆盖。
 

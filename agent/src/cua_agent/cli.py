@@ -1,4 +1,4 @@
-"""供 GDEClaw Adapter 与 Review 开发入口调用的 JSONL 进程入口。"""
+"""供未来 GDEClaw Adapter 与 Review 开发入口调用的单次 JSON/JSONL 进程入口。"""
 
 from __future__ import annotations
 

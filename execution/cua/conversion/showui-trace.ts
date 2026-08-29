@@ -64,6 +64,8 @@ description: 发现和调用 ${scene} 场景中的本地 CUA 任务。
 
 # ${scene} 场景
 
+本文件供 CLI 使用者和任务维护者阅读；当前 Python CUA Agent 通过私有 catalog Tool 获取结构化描述，不直接加载该 Markdown。
+
 运行 \`npm run cua -- task list --scene ${scene} --json\` 发现任务，再按需读取目标任务的 \`SKILL.md\`、\`task.json\` 和 \`task.yaml\`。
 `;
 }
@@ -76,7 +78,7 @@ description: 调用和维护 ${scene}/${task} 本地 CUA 任务。
 
 # ${task} 任务
 
-本文件属于 Executor 管理的用户任务数据包，不作为独立 GDE Claw Skill 注册。使用 \`npm run cua -- task describe --scene ${scene} --task ${task} --json\` 读取输入定义和 \`origin\`、\`writable\`。
+本文件属于 Executor 管理的用户任务数据包，不作为独立 GDEClaw Skill 注册，也不由当前 Python CUA Agent 加入模型上下文。使用 \`npm run cua -- task describe --scene ${scene} --task ${task} --json\` 读取输入定义和 \`origin\`、\`writable\`。
 
 本任务的执行流程是 \`task.yaml\`，输入契约是 \`task.json\`，\`source/\` 是只读录制证据。调用、校准和执行模式遵循执行器根 \`SKILL.md\`；本文件只提供任务特有信息，不覆盖根 Skill 的确认与只读规则。
 `;

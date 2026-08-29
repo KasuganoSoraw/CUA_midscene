@@ -1,4 +1,4 @@
-"""GDEClaw、Review 调试入口与 CUA Agent 之间的稳定调用契约。"""
+"""未来 GDEClaw Adapter、Review 调试入口与 CUA Agent 之间的稳定调用契约。"""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class InvocationStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class AgentDefinition:
-    """Host 用于路由任务的 canonical CUA Agent 定义。"""
+    """供调用方路由任务、未来由 Host Adapter 注册的 canonical Agent 定义。"""
 
     name: str
     invocation_mode: str
@@ -51,7 +51,7 @@ class InvocationRequest:
 
 @dataclass(frozen=True, slots=True)
 class ToolTrace:
-    """允许 Host 或开发调试界面观察的 Tool 调用摘要。"""
+    """允许调用方观察的诊断摘要；不表示 Host 可以注册或直接调用该 Tool。"""
 
     call_id: str
     tool: str

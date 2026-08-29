@@ -1,4 +1,4 @@
-"""CUA Agent 对 Host 暴露的调用级事件。"""
+"""CUA Agent 产生的调用级事件；具体 Adapter 决定批量返回或流式转发。"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def utc_now_iso() -> str:
 
 @dataclass(frozen=True, slots=True)
 class AgentEvent:
-    """可被 GDEClaw、SSE Adapter 或 Review 开发页消费的事件帧。"""
+    """可被未来 GDEClaw Adapter 或 Review 开发页消费的事件帧。"""
 
     invocation_id: str
     type: AgentEventType

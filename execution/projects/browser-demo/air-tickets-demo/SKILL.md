@@ -7,6 +7,8 @@ description: 使用 Midscene YAML 在 Qatar Airways 页面设置出发地、目�
 
 本任务的长期执行流程是同目录下的 `task.yaml`，输入 ID 和录制默认值以 `task.json` 为准，`source/` 只作为录制证据读取。调用、校准和执行模式遵循执行器根 `SKILL.md`。
 
+本文件供 CLI 使用者和任务维护者阅读；当前 Python CUA Agent 不把它加入模型上下文，而是通过 `cua_catalog` 的 `describe-task` 获取 `task.json` 元数据、origin、writable、步骤数与动作数。
+
 这是随 Skill 发布的只读 builtin 示例，CLI 将返回 `origin=builtin`、`writable=false`。需要长期修改时，应在外部 user catalog 中创建不同 task 标识的数据包，不得编辑本目录。
 
 ## 调用

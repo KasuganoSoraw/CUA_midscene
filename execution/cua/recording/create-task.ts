@@ -107,7 +107,7 @@ async function validateRecordRoot(root: string, source: string): Promise<string>
   for (const relative of ['pyproject.toml', path.join('Aloha_Learn', 'parser.py')]) {
     if ((await pathKind(path.join(resolved, relative))) !== 'file') missing.push(relative);
   }
-  if (missing.length) throw new Error(`录制器根目录无效：${resolved}\n缺少：${missing.join(', ')}`);
+  if (missing.length) throw new Error(`录制后处理器根目录无效：${resolved}\n缺少：${missing.join(', ')}`);
   return resolved;
 }
 
@@ -125,7 +125,7 @@ export async function resolveRecordRoot(
     return await validateRecordRoot(sibling, '源码仓相邻 record 目录');
   } catch {
     throw new Error(
-      `无法定位录制器根目录；请提供 --record-root 或在 execution/.env.local 配置 ${recordRootEnv}\n已检查：${sibling}`,
+      `无法定位录制后处理器根目录；请提供 --record-root 或在 execution/.env.local 配置 ${recordRootEnv}\n已检查：${sibling}`,
     );
   }
 }
@@ -160,7 +160,7 @@ export async function runRecordingParser(
     child.stdout.on('data', forward);
     child.stderr.on('data', forward);
     child.once('error', (error) => {
-      reject(new Error(`无法启动录制器 uv 进程：${error.message}`));
+      reject(new Error(`无法启动录制后处理器 uv 进程：${error.message}`));
     });
     child.once('close', (code, signal) => {
       if (code === 0) {
@@ -168,7 +168,7 @@ export async function runRecordingParser(
         return;
       }
       const detail = output.trim() ? `\n${output.trim()}` : '';
-      reject(new Error(`录制器执行失败：exit=${String(code)} signal=${signal ?? '-'}${detail}`));
+      reject(new Error(`录制后处理器执行失败：exit=${String(code)} signal=${signal ?? '-'}${detail}`));
     });
   });
 }

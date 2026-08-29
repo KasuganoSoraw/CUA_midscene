@@ -463,7 +463,7 @@ onMounted(async () => {
         <span class="status-chip">本地录制 · 创建任务</span>
       </div>
       <div v-else-if="mode === 'execution'" class="top-actions"><span class="status-chip">本地执行 · 操作桌面</span></div>
-      <div v-else class="top-actions"><span class="status-chip">统一调用 · 人工 / GDEClaw 对等</span></div>
+      <div v-else class="top-actions"><span class="status-chip">Canonical invocation · 开发调试</span></div>
     </header>
 
     <nav class="mode-tabs" aria-label="复核控制台功能">
