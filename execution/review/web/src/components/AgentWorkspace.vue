@@ -116,7 +116,7 @@ onMounted(refreshStatus);
         <div v-if="!records.length" class="agent-empty">
           <span>◎</span>
           <strong>提交一个完整的 Computer-Use 任务</strong>
-          <p>每次提交都是不继承上下文的独立任务。当前 HTTP 调用在完成后一次性返回累计事件；页面不选择执行策略，也不会绕过 Subagent 直接操作桌面。</p>
+          <p>每次提交都是不继承上下文的独立任务。HTTP 调用在完成后一次性返回累计事件；页面不选择执行策略，也不会绕过 Subagent 直接操作桌面。</p>
         </div>
 
         <article v-for="record in records" :key="record.submittedAt" class="agent-record">

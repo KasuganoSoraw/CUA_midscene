@@ -1,4 +1,4 @@
-"""未来 GDEClaw Adapter、Review 调试入口与 CUA Agent 之间的稳定调用契约。"""
+"""Review、Host Adapter 与 CUA Agent 之间的稳定调用契约。"""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class InvocationStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class AgentDefinition:
-    """供调用方路由任务、未来由 Host Adapter 注册的 canonical Agent 定义。"""
+    """供调用方路由任务和 Host Adapter 注册的 canonical Agent 定义。"""
 
     name: str
     invocation_mode: str

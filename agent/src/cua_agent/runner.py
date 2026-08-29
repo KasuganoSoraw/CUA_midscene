@@ -39,7 +39,7 @@ FINAL_RESPONSE_PROTOCOL = """
 
 
 class CuaAgent:
-    """可被未来 GDEClaw Adapter 或 Review 调试入口调用的高层无状态 Agent。"""
+    """供 Host Adapter 或 Review 调试入口调用的高层无状态 Agent。"""
 
     def __init__(
         self,

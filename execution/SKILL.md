@@ -7,18 +7,18 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 本目录是完整 TypeScript Computer-Use Runtime 与底层 CLI 操作/维护 Skill，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
 
-唯一 canonical Subagent 位于仓库顶层 Python `agent/`。GDEClaw Main Agent 只向它委派完整任务；Python Agent 通过本包的 `runtime-bridge` 私下调用 catalog、execute 和 workbench。本 Skill 描述开发者、Codex 等维护型调用方如何使用完整 CLI，不是 Python Agent 的运行时 prompt，也不向 GDEClaw 注册内部 Tool。当前 Python `cua_catalog` 不读取本文件或任务目录中的 `SKILL.md`。
+唯一 canonical Subagent 位于仓库顶层 Python `agent/`。GDEClaw Main Agent 只向它委派完整任务；Python Agent 通过本包的 `runtime-bridge` 私下调用 catalog、execute 和 workbench。本 Skill 描述开发者、Codex 等维护型调用方如何使用完整 CLI，不是 Python Agent 的运行时 prompt，也不向 GDEClaw 注册内部 Tool。Python `cua_catalog` 不读取本文件或任务目录中的 `SKILL.md`。
 
 ## 核心事实
 
-- `task.yaml` 是唯一长期执行流程，由维护型调用方、Review、TypeScript Runtime 和 Midscene 共同消费；当前 Python Agent 只通过结构化 Tool 间接使用它。
+- `task.yaml` 是唯一长期执行流程，由维护型调用方、Review、TypeScript Runtime 和 Midscene 共同消费；Python Agent 只通过结构化 Tool 间接使用它。
 - `task.json` 保存任务元数据、输入 ID 和录制默认值，不保存执行步骤。
 - `source/` 是校准时的只读录制证据。
 - `source/screenshots/*.reference.png` 是可选的干净定位参考；带红叉 crop 只用于理解录制点击点，不能作为 Midscene reference patch。
 - Skill 内 `projects/` 是只读 builtin catalog；用户任务只写入 `<CUA_DATA_ROOT>/projects/`。
 - 运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`。
 - computer use 必须由上层串行调用。
-- 维护型外部调用方运行本 CLI 时必须为外围命令设置足够长的超时。当前 Python Agent 的模型请求默认 120 秒、Runtime 单请求默认 300 秒，Review 外层 invocation 默认 30 分钟；这些限制是分层生效的，不得把外围超时误写成可覆盖内部固定超时。
+- 维护型外部调用方运行本 CLI 时必须为外围命令设置足够长的超时。Python Agent 的模型请求默认 120 秒、Runtime 单请求默认 300 秒，Review 外层 invocation 默认 30 分钟；这些限制分层生效，外围超时不能覆盖内部固定超时。
 
 `CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 定位外部录制处理器；`CUA_RECORDINGS_ROOT` 定位原始录制集合。命令行参数优先于环境配置，完整优先级见 `references/task-contract.md`。
 

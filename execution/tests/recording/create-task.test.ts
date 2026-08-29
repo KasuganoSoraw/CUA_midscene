@@ -145,7 +145,7 @@ test('录制后处理器根必须是包含 uv 项目标记与 parser 的绝对�
   await assert.rejects(resolveRecordRoot(root), /录制后处理器根目录无效/);
 });
 
-test('录制后处理器子进程不使用 shell，按原有无 goal 方式运行并转发进度', async () => {
+test('录制后处理器子进程不使用 shell，不传 goal 并转发进度', async () => {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   const child = new EventEmitter() as EventEmitter & {

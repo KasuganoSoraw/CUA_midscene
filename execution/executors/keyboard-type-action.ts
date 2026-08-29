@@ -95,7 +95,7 @@ export function textToKeyboardSequence(value: string): string[] {
       continue;
     }
 
-    throw new Error(`KeyboardTypeText 不支持字符 "${char}" (${charCodePoint(char)})，当前仅支持 ASCII 键盘输入`);
+    throw new Error(`KeyboardTypeText 不支持字符 "${char}" (${charCodePoint(char)})，仅支持 ASCII 键盘输入`);
   }
 
   return keys;

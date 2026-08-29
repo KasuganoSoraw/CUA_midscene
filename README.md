@@ -23,17 +23,17 @@ CUA/
 └── openspec/               # 规格与变更记录
 ```
 
-`recorder` 是 Windows-only 采集进程，生成 MP4 与键鼠 TXT；`record` 基于 ShowUI-Aloha Learn，只保留录制后处理，不包含 Act、Actor、Executor 或回放能力。`execution` 全面使用 TypeScript，在 Runtime worker 自身进程内直接调用 Midscene，并通过 JSONL Runtime bridge 服务 Python Agent。`execution` 仍可作为底层 Skill/CLI 独立发布，不安装为本机 Codex Skill。
+`recorder` 是 Windows-only 采集进程，生成 MP4 与键鼠 TXT；`record` 基于 ShowUI-Aloha Learn，负责录制后处理，不包含 Act、Actor、Executor 或回放能力。`execution` 使用 TypeScript，在 Runtime worker 自身进程内直接调用 Midscene，并通过 JSONL Runtime bridge 服务 Python Agent。`execution` 可作为底层 Skill/CLI 独立发布，不安装为本机 Codex Skill。
 
 顶层 `agent/` 是唯一 canonical CUA Subagent。它提供 Python `cua-agent` 包、自身定位与 instructions、一次 invocation 内的模型 Tool Calling，以及私有 `cua_catalog`、`cua_execute`、`cua_workbench`。GDEClaw 只提交完整任务并接收事件与最终结果，不注册内部 Tool，也不承担第二层 Computer-Use 推理。CUA Subagent 不保存跨调用上下文或 Memory；Midscene 管理更下层的截图、页面状态和动作上下文。
 
-Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现，直接调用同一个 Python Agent invocation。它是薄的开发调试入口，不承载聊天产品、跨调用上下文或 Agent 决策逻辑；未来 GDEClaw 使用同一高层请求、事件与结果语义。
+Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现，直接调用 Python Agent invocation。它是薄的开发调试入口，不承载聊天产品、跨调用上下文或 Agent 决策逻辑。Host Adapter 使用相同的高层请求、事件与结果语义。
 
-## 当前集成状态与术语
+## 集成边界与术语
 
-- 已实现：Python `CuaAgent`、单次 `cua-agent invoke` 进程协议、私有 Tool loop、TypeScript Runtime bridge，以及 `review --dev` 调试入口。
-- 尚未实现：GDEClaw 专用注册/生命周期 Adapter、常驻 Agent 服务、跨调用 Session、网络 API 和实时 SSE。文档中的 GDEClaw 表示目标集成边界。
-- `execution/SKILL.md` 是底层 CLI 的操作与维护说明；场景/任务目录中的 `SKILL.md` 是随任务包交付的维护说明。当前 Python Agent 不读取这些 Markdown，而是通过 `cua_catalog` 获取结构化 scene/task 数据。
+- 仓库发布 Python `CuaAgent`、单次 `cua-agent invoke` 进程协议、私有 Tool loop、TypeScript Runtime bridge 和 `review --dev` 调试入口。
+- GDEClaw 注册与生命周期 Adapter、常驻 Agent 服务、跨调用 Session、网络 API 和实时事件传输属于 Host 产品边界，不由本仓库提供。
+- `execution/SKILL.md` 是底层 CLI 的操作与维护说明；场景/任务目录中的 `SKILL.md` 是随任务包交付的维护说明。Python Agent 不读取这些 Markdown，而是通过 `cua_catalog` 获取结构化 scene/task 数据。
 - Python Agent 的私有 Tool 可以把受控调用摘要作为诊断结果返回，但 GDEClaw 不注册、选择或直接调用这些 Tool。
 
 ## 数据流
@@ -94,7 +94,7 @@ uv run --locked mypy
 
 执行器要求 Node.js `>=22.18.0`。
 
-实际操作电脑时去掉 `--dry-run`。第一版不实现并发锁，上层调用方必须串行发起真实 computer use；查询、转换、inspect 和 dry-run 不操作电脑。
+实际操作电脑时去掉 `--dry-run`。Runtime 不提供跨进程并发锁，上层调用方必须串行发起真实 computer use；查询、转换、inspect 和 dry-run 不操作电脑。
 
 底层 TypeScript Runtime 的嵌入方可以从 execution 包根入口导入独立 API，不需要生成 YAML，也不需要启动额外任务 runner。它不是 GDEClaw Main Agent 的 canonical 集成入口；GDEClaw 应调用顶层 Python Subagent：
 
@@ -109,7 +109,7 @@ const run = await runNaturalLanguageAiAct({
 
 该 API 保存 `ai-act-prompt.txt` 和 `ai-act-result.json`，随后由 `executors/midscene-ai-act.ts` 直接调用一次 `agent.aiAct()`。现有三个 CLI 执行模式和任务资产格式均未改变。
 
-`task create-from-recording` 是从原始录制创建任务的默认入口。`--goal` 仅作为创建后任务的描述信息，不会进入 trace 生成 prompt；可以省略，省略时任务 goal/description 与 YAML groupDescription 保存空字符串。命令会自动运行原有 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
+`task create-from-recording` 是从原始录制创建任务的默认入口。`--goal` 仅作为创建后任务的描述信息，不会进入 trace 生成 prompt；可以省略，省略时任务 goal/description 与 YAML groupDescription 保存空字符串。命令会运行 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
 
 仅当 trace 与 processed log 已经放入 user task `source/` 时，使用高级初始化入口：
 
@@ -147,7 +147,7 @@ trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 o
 
 ## 验证与打包
 
-真实密钥只放在被忽略的本地环境文件或进程环境中，不得提交。开发 Review 默认从 `execution/.env.local` 继承模型配置；`CUA_AGENT_MODEL_*` 未设置时兼容回退到相应的 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_TLS_VERIFY` 默认 `true`；本地设为 `false` 只影响 Python Agent 模型请求，不影响 Midscene 或 record。Agent 的 `.env.example` 不会被 Python CLI 自动加载。
+真实密钥只放在被忽略的本地环境文件或进程环境中，不得提交。开发 Review 默认从 `execution/.env.local` 继承模型配置；`CUA_AGENT_MODEL_*` 未设置时读取相应的 `MIDSCENE_MODEL_*`。Agent 的 `.env.example` 不会被 Python CLI 自动加载。
 
 ```powershell
 cd execution

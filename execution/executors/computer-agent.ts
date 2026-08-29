@@ -19,7 +19,7 @@ export async function createKeyboardEnabledComputerAgent(
   const keyboard = agent.interface.inputPrimitives?.keyboard;
   if (!keyboard?.keyboardPress) {
     await agent.destroy();
-    throw new Error('当前 Midscene computer interface 不支持底层 keyboardPress 输入');
+    throw new Error('Midscene computer interface 不支持底层 keyboardPress 输入');
   }
   keyboardTypeText.setPressKey(async (keyName, target) => {
     await keyboard.keyboardPress(keyName, { target });

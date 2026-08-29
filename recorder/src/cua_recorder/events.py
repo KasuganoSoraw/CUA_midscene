@@ -126,7 +126,7 @@ class AlohaEventFormatter:
                 self._write(event.time_ns, message)
 
     def finish(self, time_ns: int) -> None:
-        """写入旧处理器预期删除的末尾哨兵，避免其误删最后一个真实动作。"""
+        """写入处理器消费的末尾哨兵，确保最后一个真实动作被保留。"""
         with self._lock:
             self._write(time_ns, "Recording Stopped")
 

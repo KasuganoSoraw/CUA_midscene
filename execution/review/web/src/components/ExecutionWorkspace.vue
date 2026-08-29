@@ -210,7 +210,7 @@ onUnmounted(() => { if (poll) clearInterval(poll); });
 
       <div class="execution-notice">
         <strong>执行会直接操作当前 Windows 桌面</strong>
-        <p>点击准备后有 5 秒切换到目标初始界面。首版不限制录制器同时运行，请不要在任务执行期间启动录制或手动操作鼠标键盘。</p>
+        <p>点击准备后有 5 秒切换到目标初始界面。录制与任务执行之间没有互斥锁，请不要在执行期间启动录制或手动操作鼠标键盘。</p>
       </div>
 
       <div v-if="error" class="execution-error">{{ error }}</div>

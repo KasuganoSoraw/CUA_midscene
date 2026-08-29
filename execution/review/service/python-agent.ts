@@ -57,7 +57,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 function modelConfigured(): boolean {
-  // 这里只做启动前的变量存在性检查；端点、TLS 与响应格式在真实 invocation 中验证。
+  // 状态检查只验证配置是否存在；端点和响应格式由 invocation 验证。
   const configured = (primary: string, fallback: string) =>
     Boolean(process.env[primary]?.trim() || process.env[fallback]?.trim());
   return configured('CUA_AGENT_MODEL_BASE_URL', 'MIDSCENE_MODEL_BASE_URL')

@@ -47,7 +47,7 @@ class OpenAICompatibleConfig:
         def required(primary: str, fallback: str) -> str:
             value = os.environ.get(primary) or os.environ.get(fallback)
             if value is None or not value.strip():
-                raise ModelConfigurationError(f"缺少 {primary}（也未提供兼容回退 {fallback}）")
+                raise ModelConfigurationError(f"缺少 {primary}（备用环境变量 {fallback} 也未设置）")
             return value.strip()
 
         raw_timeout = os.environ.get("CUA_AGENT_MODEL_TIMEOUT_SECONDS", "120")

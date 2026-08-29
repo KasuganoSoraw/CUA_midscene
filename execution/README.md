@@ -1,6 +1,6 @@
 # Execution
 
-该目录是可独立构建的 TypeScript Computer-Use Runtime 与 `cua-midscene` 底层 Skill。TypeScript 核心负责调用外部 record 后处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use；Review 还通过独立 Windows recorder Worker 采集新录制。面向 GDEClaw 的 canonical Subagent 位于仓库顶层 Python `agent/`；本目录不再发布第二套 Agent definition 或模型 loop。
+该目录是可独立构建的 TypeScript Computer-Use Runtime 与 `cua-midscene` 底层 Skill。TypeScript 核心负责调用外部 record 后处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use；Review 通过独立 Windows recorder Worker 采集新录制。面向 GDEClaw 的 canonical Subagent 位于仓库顶层 Python `agent/`；本目录不发布 Agent definition 或模型 loop。
 
 ## 模块职责
 
@@ -35,7 +35,7 @@ TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv �
 
 唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 只调用其高层 `{ task }` invocation；Python Agent 自己运行模型 Tool Calling、判断 Recorded Skill、选择 replay/guided/freeform，并把 GUI 微观规划交给 Midscene。`cua_catalog`、`cua_execute`、`cua_workbench` 是 Python Agent 私有 Tool，不是 GDEClaw 的公共 Tool。
 
-当前仓库尚未包含 GDEClaw 专用 Adapter；已实现的是 Python API、一次一进程的 `cua-agent invoke` 和 Review 开发调用。`execution/SKILL.md` 及场景/任务 `SKILL.md` 面向 CLI 操作、维护和打包，当前 Python Agent 不读取这些 Markdown，`cua_catalog` 只返回结构化 catalog/manifest/YAML 摘要。
+GDEClaw 专用 Adapter 属于 Host 产品边界。本仓库提供 Python API、一次一进程的 `cua-agent invoke` 和 Review 开发调用。`execution/SKILL.md` 及场景/任务 `SKILL.md` 面向 CLI 操作、维护和打包；Python Agent 不读取这些 Markdown，`cua_catalog` 只返回结构化 catalog/manifest/YAML 摘要。
 
 本包只通过 `cua-midscene/runtime-bridge` 和构建后的 `dist/runtime-bridge/worker.js` 提供版本化 JSONL Runtime：
 
@@ -48,9 +48,9 @@ GDEClaw Main Agent
 
 JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；response 使用相同 request id，并明确区分 result 与结构化 error。worker stdout 只输出协议 frame，诊断写 stderr。一次 Python invocation 可复用一个 Node worker，invocation 结束即释放；不同 invocation 不共享模型 messages 或 Runtime 状态。
 
-普通 `review` 不展示或注册 Agent API；开发者使用 `review --dev` 才能看到“Agent 调试”页签。Review Server 直接启动 Python Agent invocation，启动前只检查 Python/Node/bridge 路径和模型变量是否存在；端点、TLS 与模型响应在真实调用时验证。页面是薄调试入口，不保存聊天或跨调用 Session。当前 HTTP 请求会等待 Agent 子进程完成，再一次性返回最终结果与累计事件，不提供实时事件流或页面中途取消。
+普通 `review` 不展示或注册 Agent API；开发者使用 `review --dev` 才能看到“Agent 调试”页签。Review Server 直接启动 Python Agent invocation，启动前检查 Python/Node/bridge 路径和模型变量是否存在；模型端点和响应格式由 invocation 验证。页面是薄调试入口，不保存聊天或跨调用 Session。HTTP 请求等待 Agent 子进程完成，再一次性返回最终结果与累计事件，不提供实时事件传输或页面中途取消。
 
-开发阶段可分别运行 npm 与 uv 环境；产品安装阶段应由 GDEClaw 安装 `cua-agent` wheel、准备隔离的 Node Runtime 并提供 executable 路径。Python Agent invocation 自身不执行 `npm install`、`npm ci`、`uv sync`、`uv lock` 或 `pip install`。当前源码 Review 的录制与任务创建链仍分别使用 `uv run` 启动 `recorder/` 和 `record/`，因此这些开发环境必须提前 `uv sync --locked`；这部分尚未改造成最终 GDEClaw 预置 executable。
+依赖准备属于安装流程：Host 安装 `cua-agent` wheel、准备隔离的 Node Runtime 并提供 executable 路径。Python Agent invocation 不执行 `npm install`、`npm ci`、`uv sync`、`uv lock` 或 `pip install`。源码 Review 分别使用 `uv run` 启动 `recorder/` 和 `record/`，因此两个 Python 环境都必须提前执行 `uv sync --locked`。
 
 ## 环境
 
@@ -72,16 +72,15 @@ CUA_AGENT_MODEL_NAME=minimax-m3
 CUA_AGENT_MODEL_API_KEY=replace-me
 CUA_AGENT_MODEL_TIMEOUT_SECONDS=120
 CUA_AGENT_MAX_TURNS=8
-CUA_AGENT_MODEL_TLS_VERIFY=true
 CUA_DATA_ROOT=C:\path\to\cua-data
 CUA_RECORD_ROOT=C:\path\to\CUA\record
 CUA_RECORDER_ROOT=C:\path\to\CUA\recorder
 CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
 ```
 
-`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 指向包含 `pyproject.toml` 和 `Aloha_Learn/parser.py` 的 Python 后处理器；`CUA_RECORDER_ROOT` 指向包含 `cua_recorder` 的 Windows 采集 Worker；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。安装后的 execution Skill 不包含这两个 Python 工程；当前源码 Review 分别在对应根目录运行 `uv run`，并由 record 自行读取 `record/.env`。
+`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 指向包含 `pyproject.toml` 和 `Aloha_Learn/parser.py` 的 Python 后处理器；`CUA_RECORDER_ROOT` 指向包含 `cua_recorder` 的 Windows 采集 Worker；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。execution Skill 不包含这两个 Python 工程；源码 Review 分别在对应根目录运行 `uv run`，并由 record 自行读取 `record/.env`。
 
-`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 自身的任务级推理模型；未设置时兼容回退到对应 `MIDSCENE_MODEL_*`。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8；Runtime 单请求超时当前固定 300 秒。`CUA_AGENT_MODEL_TLS_VERIFY=false` 可在受控公司内网临时关闭 Python Agent 模型请求的证书链与主机名验证，默认值为 `true`，正式环境应改用受信任的公司 CA。`review --dev` 在源码环境默认使用顶层 `agent/.venv`、当前 Node executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_NODE_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径必须由安装阶段准备。
+`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 的任务级推理模型；未设置时读取对应 `MIDSCENE_MODEL_*`。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8，Runtime 单请求超时为 300 秒。`review --dev` 在源码环境使用顶层 `agent/.venv`、服务进程 Node executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_NODE_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径由安装流程准备。
 
 ## CLI
 
@@ -109,7 +108,7 @@ node dist/cli/main.js scene list --json
 node dist/cli/main.js review --no-open
 ```
 
-`task create-from-recording` 是原始录制的默认创建入口，会按 record 原有无 goal 方式生成 trace、规范化 `source/`、初始化任务并完成静态验证。可选的 `--goal` 只写入任务 goal/description 和 YAML groupDescription，不进入 trace prompt；省略时这些字段保存空字符串。Python 进度写入 stderr，最终 stdout 保持为单个 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
+`task create-from-recording` 是原始录制的默认创建入口。record parser 不接收 goal；命令在 trace 生成后将可选 `--goal` 写入任务 goal/description 和 YAML groupDescription。省略时这些字段保存空字符串。Python 进度写入 stderr，stdout 只输出最终 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
 `review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT` 与相同开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。`--dev` 额外启用 Python Agent 调试入口；默认模式完全隐藏它。“任务复核”读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。“从录制创建任务”既提供 Windows Worker 的显示器预览、`Ctrl+Shift+F9` 准备/开始/停止控制，也读取 `CUA_RECORDINGS_ROOT` 的一级目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并复用 `createTaskFromRecording()` 创建完整用户任务。页面不播放视频、不展示完整日志，也不流式转发 Python 后处理日志；创建期间只显示不可确定的“正在生成”状态，成功后自动进入新任务复核。同一录制可以用于创建不同任务，每次都会重新处理。
 
@@ -127,8 +126,8 @@ node dist/cli/main.js review --no-open
 - 现有三种 CLI 路径复用 `executors/midscene-yaml.ts`，在同一进程内直接调用 Midscene。
 - `runNaturalLanguageAiAct()` 是底层 TypeScript Runtime 嵌入 API，由 `executors/midscene-ai-act.ts` 直接调用一次 `agent.aiAct()`，不生成 YAML；它不是 GDEClaw Main Agent 的 canonical 入口。
 - 每次实际执行设置 `MIDSCENE_RUN_DIR=<run-dir>/midscene`，并在 `finally` 中销毁 Agent、恢复原环境。
-- 第一版不实现并发锁，上层必须串行调用真实 computer use。
-- 不兼容旧 flow，不自动切换模式、修改任务、重试或调用替代输入动作。
+- Runtime 不提供跨进程并发锁，上层必须串行调用真实 computer use。
+- 系统不维护自定义 flow，不自动切换模式、修改任务、重试或调用替代输入动作。
 - 逐步 YAML 和录制任务整体 aiAct 都保留被明确选择的参考图片；图片缺失、路径越界或同名图片指向不同 URL 时启动前失败，不降级为纯文字动作。
 
 原生 aiAct API 从包根入口导入：

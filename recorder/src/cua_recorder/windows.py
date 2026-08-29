@@ -38,7 +38,7 @@ class MONITORINFOEXW(ctypes.Structure):
 
 def require_windows() -> None:
     if sys.platform != "win32":
-        raise RecorderError("CUA 录制器首版只支持 Windows 10/11")
+        raise RecorderError("CUA 录制器只支持 Windows 10/11")
 
 
 def enable_per_monitor_dpi_awareness() -> None:

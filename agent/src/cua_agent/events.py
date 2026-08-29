@@ -27,7 +27,7 @@ def utc_now_iso() -> str:
 
 @dataclass(frozen=True, slots=True)
 class AgentEvent:
-    """可被未来 GDEClaw Adapter 或 Review 开发页消费的事件帧。"""
+    """供 Host Adapter 或 Review 开发页消费的事件帧。"""
 
     invocation_id: str
     type: AgentEventType
