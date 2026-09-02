@@ -11,7 +11,7 @@
 
 ## 3. JavaScript Runtime Injection
 
-- [ ] 3.1 为 Python Runtime client 提供通用 JavaScript Runtime executable 构造入口并保留 cwd/env，通过 Node 与宿主 executable 配置测试
+- [x] 3.1 为 Python Runtime client 提供通用 JavaScript Runtime executable 构造入口并保留 cwd/env，通过 Node 与宿主 executable 配置测试
 
 ## 4. Component Distribution
 

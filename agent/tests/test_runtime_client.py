@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,27 @@ def config(**overrides: object) -> RuntimeProcessConfig:
         **overrides,
     }
     return RuntimeProcessConfig(**values)  # type: ignore[arg-type]
+
+
+def test_runtime_config_accepts_host_javascript_executable_environment_and_cwd() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        runtime = root / "GDEClaw.exe"
+        bridge = root / "computer-use" / "dist" / "runtime-bridge" / "worker.js"
+        bridge.parent.mkdir(parents=True)
+        runtime.write_bytes(b"runtime")
+        bridge.write_text("", encoding="utf-8")
+
+        configured = RuntimeProcessConfig.from_runtime(
+            runtime,
+            bridge,
+            cwd=str(bridge.parents[2]),
+            env={"ELECTRON_RUN_AS_NODE": "1"},
+        )
+
+        assert configured.command == (str(runtime), str(bridge))
+        assert configured.cwd == str(bridge.parents[2])
+        assert configured.env == {"ELECTRON_RUN_AS_NODE": "1"}
 
 
 def test_client_reuses_worker_for_multiple_correlated_requests_and_closes() -> None:

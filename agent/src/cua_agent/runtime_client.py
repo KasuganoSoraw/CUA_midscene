@@ -94,20 +94,32 @@ class RuntimeProcessConfig:
             raise RuntimeConfigurationError("shutdown timeout 必须大于 0")
 
     @classmethod
+    def from_runtime(
+        cls,
+        runtime_executable: str | Path,
+        bridge_script: str | Path,
+        **kwargs: object,
+    ) -> RuntimeProcessConfig:
+        runtime_path = Path(runtime_executable)
+        script_path = Path(bridge_script)
+        for value, name in (
+            (runtime_path, "JavaScript Runtime executable"),
+            (script_path, "Runtime bridge"),
+        ):
+            if not value.is_absolute():
+                raise RuntimeConfigurationError(f"{name} 必须是绝对路径：{value}")
+            if not value.is_file():
+                raise RuntimeConfigurationError(f"{name} 不存在：{value}")
+        return cls(command=(str(runtime_path), str(script_path)), **kwargs)  # type: ignore[arg-type]
+
+    @classmethod
     def from_paths(
         cls,
         node_executable: str | Path,
         bridge_script: str | Path,
         **kwargs: object,
     ) -> RuntimeProcessConfig:
-        node_path = Path(node_executable)
-        script_path = Path(bridge_script)
-        for value, name in ((node_path, "Node executable"), (script_path, "Runtime bridge")):
-            if not value.is_absolute():
-                raise RuntimeConfigurationError(f"{name} 必须是绝对路径：{value}")
-            if not value.is_file():
-                raise RuntimeConfigurationError(f"{name} 不存在：{value}")
-        return cls(command=(str(node_path), str(script_path)), **kwargs)  # type: ignore[arg-type]
+        return cls.from_runtime(node_executable, bridge_script, **kwargs)
 
 
 class JsonlRuntimeClient:
