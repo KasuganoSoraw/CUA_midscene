@@ -26,5 +26,5 @@
 
 ## 6. Validation
 
-- [ ] 6.1 运行 Record、Recorder、Agent 与 execution 测试、类型检查和 lint，修复全部回归
-- [ ] 6.2 运行组件实际构建、clean staging smoke test 和 `openspec validate --all --strict`，确认变更达到可归档状态
+- [x] 6.1 运行 Record、Recorder、Agent 与 execution 测试、类型检查和 lint，修复全部回归
+- [x] 6.2 运行组件实际构建、clean staging smoke test 和 `openspec validate --all --strict`，确认变更达到可归档状态
