@@ -28,19 +28,13 @@ function childProcess(): FakeChild {
   return child;
 }
 
-async function recorderFixture(): Promise<{ root: string; executionRoot: string; recorderRoot: string }> {
+async function recorderFixture(): Promise<{ root: string; executionRoot: string; pythonExecutable: string }> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-recorder-manager-'));
   const executionRoot = path.join(root, 'execution');
-  const recorderRoot = path.join(root, 'recorder');
-  await Promise.all([
-    mkdir(executionRoot, { recursive: true }),
-    mkdir(path.join(recorderRoot, 'src', 'cua_recorder'), { recursive: true }),
-  ]);
-  await Promise.all([
-    writeFile(path.join(recorderRoot, 'pyproject.toml'), '[project]\nname="test"\nversion="0"\n'),
-    writeFile(path.join(recorderRoot, 'src', 'cua_recorder', '__main__.py'), ''),
-  ]);
-  return { root, executionRoot, recorderRoot };
+  const pythonExecutable = path.join(root, 'python.exe');
+  await mkdir(executionRoot, { recursive: true });
+  await writeFile(pythonExecutable, 'python');
+  return { root, executionRoot, pythonExecutable };
 }
 
 test('WindowsRecorderManager 串行启动并通过 stdin 正常停止 Worker', async () => {
@@ -51,7 +45,7 @@ test('WindowsRecorderManager 串行启动并通过 stdin 正常停止 Worker', a
   const spawnCalls: Array<{ command: string; args: readonly string[] }> = [];
   const manager = new WindowsRecorderManager({
     executionRoot: fixture.executionRoot,
-    recorderRoot: fixture.recorderRoot,
+    pythonExecutable: fixture.pythonExecutable,
     recordingsRoot: outputRoot,
     spawnProcess: ((command: string, args: readonly string[]) => {
       spawnCalls.push({ command, args });
@@ -77,8 +71,8 @@ test('WindowsRecorderManager 串行启动并通过 stdin 正常停止 Worker', a
   assert.equal(manager.status().phase, 'recording');
   assert.equal(manager.status().recordingId, 'Recording_test');
   assert.equal((await manager.stop()).phase, 'idle');
-  assert.equal(spawnCalls[0]?.command, 'uv');
-  assert.deepEqual(spawnCalls[0]?.args.slice(0, 5), ['run', 'python', '-m', 'cua_recorder', 'record']);
+  assert.equal(spawnCalls[0]?.command, fixture.pythonExecutable);
+  assert.deepEqual(spawnCalls[0]?.args.slice(0, 3), ['-m', 'cua_recorder', 'record']);
   await manager.close();
 });
 
@@ -89,7 +83,7 @@ test('WindowsRecorderManager 将 Worker 首帧前失败暴露为 failed', async 
   const child = childProcess();
   const manager = new WindowsRecorderManager({
     executionRoot: fixture.executionRoot,
-    recorderRoot: fixture.recorderRoot,
+    pythonExecutable: fixture.pythonExecutable,
     recordingsRoot: outputRoot,
     spawnProcess: (() => {
       queueMicrotask(() => {
@@ -106,14 +100,14 @@ test('WindowsRecorderManager 将 Worker 首帧前失败暴露为 failed', async 
   await manager.close();
 });
 
-test('WindowsRecorderManager 要求环境配置录制根并支持显示器预览边界', async () => {
+test('WindowsRecorderManager 要求录制输出根并支持显示器预览边界', async () => {
   const fixture = await recorderFixture();
   const preview = path.join(fixture.root, 'preview.png');
   await writeFile(preview, 'png');
   const child = childProcess();
   const manager = new WindowsRecorderManager({
     executionRoot: fixture.executionRoot,
-    recorderRoot: fixture.recorderRoot,
+    pythonExecutable: fixture.pythonExecutable,
     spawnProcess: ((_command: string, args: readonly string[]) => {
       const previewIndex = args.indexOf('--preview-dir');
       const previewDir = String(args[previewIndex + 1]);
@@ -151,7 +145,7 @@ test('WindowsRecorderManager 使用真实路径校验重定向临时目录中的
   let workerPreviewPath = '';
   const manager = new WindowsRecorderManager({
     executionRoot: fixture.executionRoot,
-    recorderRoot: fixture.recorderRoot,
+    pythonExecutable: fixture.pythonExecutable,
     previewRoot: previewAlias,
     spawnProcess: ((_command: string, args: readonly string[]) => {
       const previewIndex = args.indexOf('--preview-dir');
@@ -186,7 +180,7 @@ test('WindowsRecorderManager 停止超时后终止 Worker 并进入 failed', asy
   const child = childProcess();
   const manager = new WindowsRecorderManager({
     executionRoot: fixture.executionRoot,
-    recorderRoot: fixture.recorderRoot,
+    pythonExecutable: fixture.pythonExecutable,
     recordingsRoot: outputRoot,
     stopTimeoutMs: 5,
     spawnProcess: (() => {
@@ -208,7 +202,7 @@ test('WindowsRecorderManager 可在 armed 阶段取消且不产生录制', async
   const child = childProcess();
   const manager = new WindowsRecorderManager({
     executionRoot: fixture.executionRoot,
-    recorderRoot: fixture.recorderRoot,
+    pythonExecutable: fixture.pythonExecutable,
     recordingsRoot: outputRoot,
     spawnProcess: (() => {
       queueMicrotask(() => child.stdout.write(JSON.stringify({ event: 'armed', hotkey: 'Ctrl+Shift+F9' }) + '\n'));

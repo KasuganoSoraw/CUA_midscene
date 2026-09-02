@@ -7,11 +7,18 @@ export {
 export { convertTrace, buildTaskAssets, clampRecordedWaitMs } from './conversion/showui-trace.js';
 export {
   createTaskFromRecording,
-  resolveRecordRoot,
   runRecordingParser,
   type CreateTaskFromRecordingOptions,
   type CreateTaskFromRecordingResult,
 } from './recording/create-task.js';
+export {
+  pythonExecutableEnv,
+  resolvePythonExecutable,
+  runPythonWorker,
+  spawnPythonWorker,
+  type PythonWorkerLaunch,
+  type ResolvePythonExecutableOptions,
+} from './python-worker.js';
 export {
   describeRecording,
   listRecordings,

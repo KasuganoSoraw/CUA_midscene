@@ -27,7 +27,7 @@ export const helpText = `CUA 场景、任务与 Midscene YAML 执行工具
 任务：
   task list --scene <scene> [--data-root <path>] [--json]
   task describe --scene <scene> --task <task> [--data-root <path>] [--json]
-  task create-from-recording --scene <scene> --task <task> --recording <目录> [--goal <目标>] [--record-root <path>] [--data-root <path>]
+  task create-from-recording --scene <scene> --task <task> --recording <目录> [--goal <目标>] [--python-executable <path>] [--data-root <path>]
   task init-from-trace --scene <scene> --task <task> --goal <目标> [--data-root <path>]
   task validate --scene <scene> --task <task> [--input key=value] [--inputs <file>] [--data-root <path>] [--json]
   task inspect --scene <scene> --task <task> [--input key=value] [--inputs <file>] [--data-root <path>] [--json]
@@ -43,7 +43,7 @@ const commandOptions: Record<string, { values: string[]; booleans: string[]; rep
   'task list': { values: ['scene', 'data-root'], booleans: ['json'], required: ['scene'] },
   'task describe': { values: ['scene', 'task', 'data-root'], booleans: ['json'], required: ['scene', 'task'] },
   'task create-from-recording': {
-    values: ['scene', 'task', 'recording', 'goal', 'record-root', 'data-root'],
+    values: ['scene', 'task', 'recording', 'goal', 'python-executable', 'data-root'],
     booleans: [],
     required: ['scene', 'task', 'recording'],
   },
@@ -153,7 +153,7 @@ function buildCreationCommand(options: ParsedOptions): string {
     `--task ${value(options, 'task')}`,
     `--recording ${quoteCommandValue(value(options, 'recording')!)}`,
   ];
-  for (const option of ['goal', 'record-root', 'data-root']) {
+  for (const option of ['goal', 'python-executable', 'data-root']) {
     const optionValue = value(options, option);
     if (optionValue !== undefined) parts.push(`--${option} ${quoteCommandValue(optionValue)}`);
   }
@@ -192,7 +192,9 @@ export async function runCliCommand(
       task: value(options, 'task')!,
       recording: value(options, 'recording')!,
       ...(value(options, 'goal') !== undefined ? { goal: value(options, 'goal') } : {}),
-      ...(value(options, 'record-root') !== undefined ? { recordRoot: value(options, 'record-root') } : {}),
+      ...(value(options, 'python-executable') !== undefined
+        ? { pythonExecutable: value(options, 'python-executable') }
+        : {}),
       catalog: layout.catalog,
       runsRoot: data.runsRoot,
       creationCommand: buildCreationCommand(options),

@@ -1,14 +1,11 @@
-import { spawn } from 'node:child_process';
 import {
   copyFile,
   mkdir,
-  readFile,
   rm,
   stat,
 } from 'node:fs/promises';
 import path from 'node:path';
 import type { Writable } from 'node:stream';
-import dotenv from 'dotenv';
 import { convertTrace } from '../conversion/showui-trace.js';
 import type {
   ExecutorResult,
@@ -20,13 +17,12 @@ import {
   readShowuiTrace,
 } from '../contracts/validation.js';
 import { packageRoot } from '../package-root.js';
+import { resolvePythonExecutable, runPythonWorker } from '../python-worker.js';
 import { runTask } from '../task/execution.js';
 import { requireIdentifier } from '../task/tasks.js';
 
-export const recordRootEnv = 'CUA_RECORD_ROOT';
-
-export interface RecorderRunRequest {
-  recordRoot: string;
+export interface RecordProcessorRunRequest {
+  pythonExecutable: string;
   recordingPath: string;
   progress: Writable;
 }
@@ -36,7 +32,7 @@ export interface CreateTaskFromRecordingOptions {
   task: string;
   recording: string;
   goal?: string;
-  recordRoot?: string;
+  pythonExecutable?: string;
   catalog: TaskCatalogRoots;
   runsRoot: string;
   executionRoot?: string;
@@ -50,7 +46,6 @@ export interface CreateTaskFromRecordingResult {
   scene: string;
   task: string;
   goal: string;
-  recordRoot: string;
   recordingPath: string;
   taskRoot: string;
   sourceRoot: string;
@@ -62,7 +57,7 @@ export interface CreateTaskFromRecordingResult {
 }
 
 export interface CreateTaskFromRecordingDependencies {
-  runRecorder?: (request: RecorderRunRequest) => Promise<void>;
+  runRecorder?: (request: RecordProcessorRunRequest) => Promise<void>;
   convert?: typeof convertTrace;
   validate?: typeof runTask;
 }
@@ -79,98 +74,16 @@ async function pathKind(sourcePath: string): Promise<'file' | 'directory' | unde
   }
 }
 
-async function configuredRecordRoot(
-  explicit: string | undefined,
-  executionRoot: string,
-): Promise<{ value?: string; source?: string }> {
-  if (explicit !== undefined) return { value: explicit, source: '--record-root' };
-  const processValue = process.env[recordRootEnv]?.trim();
-  if (processValue) return { value: processValue, source: recordRootEnv };
-
-  for (const filename of ['.env.local', '.env']) {
-    const envPath = path.join(executionRoot, filename);
-    try {
-      const parsed = dotenv.parse(await readFile(envPath));
-      const value = parsed[recordRootEnv]?.trim();
-      if (value) return { value, source: envPath };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
-  return {};
-}
-
-async function validateRecordRoot(root: string, source: string): Promise<string> {
-  if (!path.isAbsolute(root)) throw new Error(`${source} 必须配置绝对路径：${root}`);
-  const resolved = path.resolve(root);
-  const missing: string[] = [];
-  for (const relative of ['pyproject.toml', path.join('Aloha_Learn', 'parser.py')]) {
-    if ((await pathKind(path.join(resolved, relative))) !== 'file') missing.push(relative);
-  }
-  if (missing.length) throw new Error(`录制后处理器根目录无效：${resolved}\n缺少：${missing.join(', ')}`);
-  return resolved;
-}
-
-export async function resolveRecordRoot(
-  explicit?: string,
-  options: { executionRoot?: string } = {},
-): Promise<string> {
-  const executionRoot = path.resolve(options.executionRoot ?? packageRoot);
-  const configured = await configuredRecordRoot(explicit, executionRoot);
-  if (configured.value !== undefined) {
-    return validateRecordRoot(configured.value, configured.source ?? recordRootEnv);
-  }
-  const sibling = path.resolve(executionRoot, '..', 'record');
-  try {
-    return await validateRecordRoot(sibling, '源码仓相邻 record 目录');
-  } catch {
-    throw new Error(
-      `无法定位录制后处理器根目录；请提供 --record-root 或在 execution/.env.local 配置 ${recordRootEnv}\n已检查：${sibling}`,
-    );
-  }
-}
-
 export async function runRecordingParser(
-  request: RecorderRunRequest,
-  spawnProcess: typeof spawn = spawn,
+  request: RecordProcessorRunRequest,
+  spawnProcess?: Parameters<typeof runPythonWorker>[1],
 ): Promise<void> {
-  const args = [
-    'run',
-    'python',
-    path.join('Aloha_Learn', 'parser.py'),
-    request.recordingPath,
-  ];
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawnProcess('uv', args, {
-      cwd: request.recordRoot,
-      env: {
-        ...process.env,
-        PYTHONUTF8: '1',
-        PYTHONIOENCODING: 'utf-8',
-      },
-      shell: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let output = '';
-    const forward = (chunk: Buffer) => {
-      request.progress.write(chunk);
-      output = `${output}${chunk.toString('utf8')}`.slice(-16_384);
-    };
-    child.stdout.on('data', forward);
-    child.stderr.on('data', forward);
-    child.once('error', (error) => {
-      reject(new Error(`无法启动录制后处理器 uv 进程：${error.message}`));
-    });
-    child.once('close', (code, signal) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      const detail = output.trim() ? `\n${output.trim()}` : '';
-      reject(new Error(`录制后处理器执行失败：exit=${String(code)} signal=${signal ?? '-'}${detail}`));
-    });
-  });
+  await runPythonWorker({
+    pythonExecutable: request.pythonExecutable,
+    module: 'cua_record',
+    args: ['process', request.recordingPath],
+    progress: request.progress,
+  }, spawnProcess);
 }
 
 function normalizeScreenshotPath(rawValue: unknown, field: string, index: number): string | undefined {
@@ -250,12 +163,8 @@ function quoteCommandValue(value: string): string {
   return `"${value.replaceAll('"', '\\"')}"`;
 }
 
-function traceGenerationCommand(recordRoot: string, recordingPath: string): string {
-  const parts = [
-    `cd ${quoteCommandValue(recordRoot)}`,
-    `uv run python Aloha_Learn/parser.py ${quoteCommandValue(recordingPath)}`,
-  ];
-  return parts.join('; ');
+function traceGenerationCommand(recordingPath: string): string {
+  return `python -m cua_record process ${quoteCommandValue(recordingPath)}`;
 }
 
 export async function createTaskFromRecording(
@@ -272,8 +181,10 @@ export async function createTaskFromRecording(
     throw new Error(`录制目录缺少 inputs/：${recordingPath}`);
   }
 
-  const recordRoot = await resolveRecordRoot(options.recordRoot, {
-    executionRoot: options.executionRoot,
+  const executionRoot = path.resolve(options.executionRoot ?? packageRoot);
+  const pythonExecutable = await resolvePythonExecutable(options.pythonExecutable, {
+    executionRoot,
+    devProjectRoot: path.resolve(executionRoot, '..', 'record'),
   });
   const userProjectsRoot = path.resolve(options.catalog.userProjectsRoot);
   const taskRoot = path.resolve(userProjectsRoot, scene, task);
@@ -287,7 +198,7 @@ export async function createTaskFromRecording(
 
   const sceneExisted = (await pathKind(sceneRoot)) === 'directory';
   await (dependencies.runRecorder ?? runRecordingParser)({
-    recordRoot,
+    pythonExecutable,
     recordingPath,
     progress: options.progress ?? process.stderr,
   });
@@ -303,7 +214,7 @@ export async function createTaskFromRecording(
       catalog: options.catalog,
       conversionCommand: `npm run cua -- task init-from-trace --scene ${scene} --task ${task}${goal ? ` --goal ${quoteCommandValue(goal)}` : ''}`,
       recordingPreparationCommand: options.creationCommand ?? 'task create-from-recording',
-      traceGenerationCommand: traceGenerationCommand(recordRoot, recordingPath),
+      traceGenerationCommand: traceGenerationCommand(recordingPath),
     });
     const validation = await (dependencies.validate ?? runTask)({
       scene,
@@ -318,7 +229,6 @@ export async function createTaskFromRecording(
       scene,
       task,
       goal,
-      recordRoot,
       recordingPath,
       taskRoot,
       sourceRoot,

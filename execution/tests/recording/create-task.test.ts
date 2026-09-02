@@ -14,9 +14,8 @@ import test from 'node:test';
 import type { spawn } from 'node:child_process';
 import {
   createTaskFromRecording,
-  resolveRecordRoot,
   runRecordingParser,
-  type RecorderRunRequest,
+  type RecordProcessorRunRequest,
 } from '../../cua/recording/create-task.js';
 import { readTaskManifest } from '../../cua/contracts/validation.js';
 import { readYamlDocument } from '../../cua/task/yaml-task.js';
@@ -31,23 +30,16 @@ async function exists(sourcePath: string): Promise<boolean> {
   }
 }
 
-async function validRecordRoot(root: string): Promise<string> {
-  await mkdir(path.join(root, 'Aloha_Learn'), { recursive: true });
-  await writeFile(path.join(root, 'pyproject.toml'), '[project]\nname="test"\nversion="0.0.0"\n', 'utf8');
-  await writeFile(path.join(root, 'Aloha_Learn', 'parser.py'), '# test parser\n', 'utf8');
-  return root;
-}
-
 async function fixture(): Promise<{
   root: string;
-  recordRoot: string;
+  pythonExecutable: string;
   recordingPath: string;
   builtinProjectsRoot: string;
   userProjectsRoot: string;
   runsRoot: string;
 }> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-recording-create-'));
-  const recordRoot = await validRecordRoot(path.join(root, 'record'));
+  const pythonExecutable = path.join(root, 'python.exe');
   const recordingPath = path.join(root, 'recording-demo');
   const builtinProjectsRoot = path.join(root, 'builtin');
   const userProjectsRoot = path.join(root, 'data', 'projects');
@@ -57,13 +49,14 @@ async function fixture(): Promise<{
     mkdir(builtinProjectsRoot, { recursive: true }),
     mkdir(userProjectsRoot, { recursive: true }),
     mkdir(runsRoot, { recursive: true }),
+    writeFile(pythonExecutable, 'python'),
   ]);
   await writeFile(path.join(recordingPath, 'inputs', 'record.txt'), 'CONFIG\n', 'utf8');
-  return { root, recordRoot, recordingPath, builtinProjectsRoot, userProjectsRoot, runsRoot };
+  return { root, pythonExecutable, recordingPath, builtinProjectsRoot, userProjectsRoot, runsRoot };
 }
 
 async function writeGeneratedRecording(
-  request: RecorderRunRequest,
+  request: RecordProcessorRunRequest,
   options: { escapedScreenshot?: boolean } = {},
 ): Promise<void> {
   const name = path.basename(request.recordingPath);
@@ -110,41 +103,6 @@ async function writeGeneratedRecording(
   ]);
 }
 
-test('录制后处理器根遵循显式、进程、env.local、env 和源码相邻目录优先级', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-record-root-'));
-  const executionRoot = path.join(root, 'execution');
-  const explicit = await validRecordRoot(path.join(root, 'explicit'));
-  const processRoot = await validRecordRoot(path.join(root, 'process'));
-  const localRoot = await validRecordRoot(path.join(root, 'local'));
-  const envRoot = await validRecordRoot(path.join(root, 'env'));
-  const siblingRoot = await validRecordRoot(path.join(root, 'record'));
-  await mkdir(executionRoot);
-  await writeFile(path.join(executionRoot, '.env'), `CUA_RECORD_ROOT=${envRoot}\n`, 'utf8');
-  await writeFile(path.join(executionRoot, '.env.local'), `CUA_RECORD_ROOT=${localRoot}\n`, 'utf8');
-
-  const previous = process.env.CUA_RECORD_ROOT;
-  try {
-    process.env.CUA_RECORD_ROOT = processRoot;
-    assert.equal(await resolveRecordRoot(explicit, { executionRoot }), explicit);
-    assert.equal(await resolveRecordRoot(undefined, { executionRoot }), processRoot);
-    delete process.env.CUA_RECORD_ROOT;
-    assert.equal(await resolveRecordRoot(undefined, { executionRoot }), localRoot);
-    await writeFile(path.join(executionRoot, '.env.local'), '', 'utf8');
-    assert.equal(await resolveRecordRoot(undefined, { executionRoot }), envRoot);
-    await writeFile(path.join(executionRoot, '.env'), '', 'utf8');
-    assert.equal(await resolveRecordRoot(undefined, { executionRoot }), siblingRoot);
-  } finally {
-    if (previous === undefined) delete process.env.CUA_RECORD_ROOT;
-    else process.env.CUA_RECORD_ROOT = previous;
-  }
-});
-
-test('录制后处理器根必须是包含 uv 项目标记与 parser 的绝对目录', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-invalid-record-root-'));
-  await assert.rejects(resolveRecordRoot('relative-record'), /必须配置绝对路径/);
-  await assert.rejects(resolveRecordRoot(root), /录制后处理器根目录无效/);
-});
-
 test('录制后处理器子进程不使用 shell，不传 goal 并转发进度', async () => {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -171,15 +129,15 @@ test('录制后处理器子进程不使用 shell，不传 goal 并转发进度',
   });
 
   await runRecordingParser({
-    recordRoot: 'E:\\record',
+    pythonExecutable: 'E:\\runtime\\python.exe',
     recordingPath: 'E:\\recording',
     progress,
   }, fakeSpawn);
 
-  assert.equal(invocation?.command, 'uv');
+  assert.equal(invocation?.command, 'E:\\runtime\\python.exe');
   assert.equal(invocation?.shell, false);
   assert.deepEqual(invocation?.args, [
-    'run', 'python', path.join('Aloha_Learn', 'parser.py'), 'E:\\recording',
+    '-m', 'cua_record', 'process', 'E:\\recording',
   ]);
   assert.match(forwarded, /trace progress/);
   assert.match(forwarded, /trace warning/);
@@ -191,7 +149,7 @@ test('一键创建规范化 source 并允许空 goal 通过 Midscene dry-run 校
     scene: 'network',
     task: 'open-settings',
     recording: setup.recordingPath,
-    recordRoot: setup.recordRoot,
+    pythonExecutable: setup.pythonExecutable,
     catalog: {
       builtinProjectsRoot: setup.builtinProjectsRoot,
       userProjectsRoot: setup.userProjectsRoot,
@@ -223,7 +181,7 @@ test('非空 goal 不传给录制后处理器，只写入任务资产', async ()
     task: 'query-alarm',
     recording: setup.recordingPath,
     goal: '  查询当前网管告警  ',
-    recordRoot: setup.recordRoot,
+    pythonExecutable: setup.pythonExecutable,
     catalog: {
       builtinProjectsRoot: setup.builtinProjectsRoot,
       userProjectsRoot: setup.userProjectsRoot,
@@ -251,7 +209,7 @@ test('已有任务在录制后处理器执行前失败，验证失败则清理�
     scene: 'network',
     task: 'existing',
     recording: existing.recordingPath,
-    recordRoot: existing.recordRoot,
+    pythonExecutable: existing.pythonExecutable,
     catalog: {
       builtinProjectsRoot: existing.builtinProjectsRoot,
       userProjectsRoot: existing.userProjectsRoot,
@@ -273,7 +231,7 @@ test('已有任务在录制后处理器执行前失败，验证失败则清理�
     scene: 'network',
     task: 'builtin-task',
     recording: builtin.recordingPath,
-    recordRoot: builtin.recordRoot,
+    pythonExecutable: builtin.pythonExecutable,
     catalog: {
       builtinProjectsRoot: builtin.builtinProjectsRoot,
       userProjectsRoot: builtin.userProjectsRoot,
@@ -292,7 +250,7 @@ test('已有任务在录制后处理器执行前失败，验证失败则清理�
     scene: 'network',
     task: 'invalid',
     recording: failed.recordingPath,
-    recordRoot: failed.recordRoot,
+    pythonExecutable: failed.pythonExecutable,
     catalog: {
       builtinProjectsRoot: failed.builtinProjectsRoot,
       userProjectsRoot: failed.userProjectsRoot,
@@ -315,7 +273,7 @@ test('截图路径越界时拒绝创建任务', async () => {
     scene: 'network',
     task: 'escaped',
     recording: setup.recordingPath,
-    recordRoot: setup.recordRoot,
+    pythonExecutable: setup.pythonExecutable,
     catalog: {
       builtinProjectsRoot: setup.builtinProjectsRoot,
       userProjectsRoot: setup.userProjectsRoot,

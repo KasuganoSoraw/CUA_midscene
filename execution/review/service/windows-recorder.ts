@@ -3,6 +3,7 @@ import { access, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { constants as fsConstants } from 'node:fs';
+import { resolvePythonExecutable, spawnPythonWorker } from '../../cua/python-worker.js';
 
 export type RecorderPhase = 'idle' | 'arming' | 'armed' | 'starting' | 'recording' | 'stopping' | 'failed';
 
@@ -97,18 +98,6 @@ async function requireWritableDirectory(raw: string): Promise<string> {
   return resolved;
 }
 
-export async function resolveRecorderRoot(executionRoot: string, explicit?: string): Promise<string> {
-  const configured = explicit?.trim() || process.env.CUA_RECORDER_ROOT?.trim();
-  const root = path.resolve(configured || path.join(executionRoot, '..', 'recorder'));
-  const markers = [path.join(root, 'pyproject.toml'), path.join(root, 'src', 'cua_recorder', '__main__.py')];
-  for (const marker of markers) {
-    await access(marker).catch(() => {
-      throw new Error(`Windows 录制器目录无效，缺少 ${marker}；请配置 CUA_RECORDER_ROOT`);
-    });
-  }
-  return root;
-}
-
 export class WindowsRecorderManager implements RecorderControl {
   private readonly previewDirectories = new Set<string>();
   private readonly previewPaths = new Map<number, string>();
@@ -117,12 +106,12 @@ export class WindowsRecorderManager implements RecorderControl {
   private completion?: Promise<void>;
   private resolveCompletion?: () => void;
   private diagnostics: string[] = [];
-  private recorderRoot?: string;
+  private resolvedPythonExecutable?: string;
 
   constructor(private readonly options: {
     executionRoot: string;
     recordingsRoot?: string;
-    recorderRoot?: string;
+    pythonExecutable?: string;
     previewRoot?: string;
     spawnProcess?: SpawnProcess;
     stopTimeoutMs?: number;
@@ -189,17 +178,14 @@ export class WindowsRecorderManager implements RecorderControl {
     const outputRoot = await requireWritableDirectory(this.currentStatus.outputRoot || '');
     this.currentStatus = { phase: 'arming', outputRoot };
     this.diagnostics = [];
-    const root = await this.root();
+    const pythonExecutable = await this.pythonExecutable();
     const spawnProcess = this.options.spawnProcess ?? spawn;
-    const child = spawnProcess('uv', [
-      'run', 'python', '-m', 'cua_recorder', 'record', '--display-id', displayId, '--output-root', outputRoot,
-    ], {
-      cwd: root,
-      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
-      shell: false,
-      windowsHide: true,
+    const child = spawnPythonWorker({
+      pythonExecutable,
+      module: 'cua_recorder',
+      args: ['record', '--display-id', displayId, '--output-root', outputRoot],
       stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    }, spawnProcess) as ChildProcessWithoutNullStreams;
     this.child = child;
     this.completion = new Promise<void>((resolve) => {
       this.resolveCompletion = resolve;
@@ -339,25 +325,30 @@ export class WindowsRecorderManager implements RecorderControl {
     this.previewPaths.clear();
   }
 
-  private async root(): Promise<string> {
-    this.recorderRoot ??= await resolveRecorderRoot(this.options.executionRoot, this.options.recorderRoot);
-    return this.recorderRoot;
+  private async pythonExecutable(): Promise<string> {
+    this.resolvedPythonExecutable ??= await resolvePythonExecutable(
+      this.options.pythonExecutable,
+      {
+        executionRoot: this.options.executionRoot,
+        devProjectRoot: path.resolve(this.options.executionRoot, '..', 'recorder'),
+      },
+    );
+    return this.resolvedPythonExecutable;
   }
 
   private async runOnce(args: string[]): Promise<WorkerEvent> {
-    const root = await this.root();
+    const pythonExecutable = await this.pythonExecutable();
     const spawnProcess = this.options.spawnProcess ?? spawn;
-    const child = spawnProcess('uv', ['run', 'python', '-m', 'cua_recorder', ...args], {
-      cwd: root,
-      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
-      shell: false,
-      windowsHide: true,
+    const child = spawnPythonWorker({
+      pythonExecutable,
+      module: 'cua_recorder',
+      args,
       stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    }, spawnProcess);
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString('utf8'); });
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
+    child.stdout?.on('data', (chunk) => { stdout += chunk.toString('utf8'); });
+    child.stderr?.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
     const code = await new Promise<number>((resolve, reject) => {
       child.once('error', reject);
       child.once('close', (value) => resolve(value ?? 1));

@@ -102,8 +102,8 @@ test('task create-from-recording 接受可选 goal 并保持 stdout JSON 契约'
     'query-alarm',
     '--recording',
     'E:\\recordings\\alarm',
-    '--record-root',
-    'E:\\CUA\\record',
+    '--python-executable',
+    'E:\\GDEClaw\\python.exe',
     '--data-root',
     dataRoot,
   ], {
@@ -115,7 +115,6 @@ test('task create-from-recording 接受可选 goal 并保持 stdout JSON 契约'
         scene: options.scene,
         task: options.task,
         goal: '',
-        recordRoot: options.recordRoot!,
         recordingPath: options.recording,
         taskRoot: path.join(dataRoot, 'projects', options.scene, options.task),
         sourceRoot: path.join(dataRoot, 'projects', options.scene, options.task, 'source'),
@@ -139,6 +138,7 @@ test('task create-from-recording 接受可选 goal 并保持 stdout JSON 契约'
   assert.equal(parsed.created, true);
   assert.equal(parsed.goal, '');
   assert.equal(received?.goal, undefined);
+  assert.equal(received?.pythonExecutable, 'E:\\GDEClaw\\python.exe');
   assert.match(String(received?.creationCommand), /task create-from-recording/);
   assert.doesNotMatch(output, /trace progress/);
 });

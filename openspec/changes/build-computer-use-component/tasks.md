@@ -5,9 +5,9 @@
 
 ## 2. Host Python Worker Contract
 
-- [ ] 2.1 实现无 shell 的宿主 Python Worker 启动配置与进程工具，并通过 executable、module、环境、输出和退出错误单元测试
-- [ ] 2.2 将 `task create-from-recording` 切换为宿主 Python 执行 `cua_record`，删除 record 源码根/`uv` 运行依赖并通过录制任务创建测试
-- [ ] 2.3 将 Windows Recorder 服务切换为宿主 Python 执行 `cua_recorder`，删除 Recorder 源码标记/`uv` 运行依赖并通过服务测试
+- [x] 2.1 实现无 shell 的宿主 Python Worker 启动配置与进程工具，并通过 executable、module、环境、输出和退出错误单元测试
+- [x] 2.2 将 `task create-from-recording` 切换为宿主 Python 执行 `cua_record`，删除 record 源码根/`uv` 运行依赖并通过录制任务创建测试
+- [x] 2.3 将 Windows Recorder 服务切换为宿主 Python 执行 `cua_recorder`，删除 Recorder 源码标记/`uv` 运行依赖并通过服务测试
 
 ## 3. JavaScript Runtime Injection
 
