@@ -53,7 +53,7 @@ node dist/cli/main.js review --dev --no-open
 
 `review` 默认使用 `127.0.0.1:47831`。相同数据目录且相同普通/开发模式的服务已运行时返回并复用同一 URL；端口被其他程序、不同数据目录或不同模式占用时直接失败，不扫描后续端口。`--dev` 只用于 Python Agent 调试，普通模式不暴露 Agent UI/API。
 
-`task create-from-recording` 是原始录制的默认后处理入口。它从 `--record-root`、`CUA_RECORD_ROOT`、execution 环境文件或源码相邻目录定位独立 `record/` 环境，在其中运行不接收 goal 的 parser，再将生成资产规范化到 user task `source/` 并完成初始化与静态验证。Windows `recorder/` 只负责采集 MP4/TXT，使用独立 `CUA_RECORDER_ROOT`。可选 `--goal` 只写入 task goal/description 与 YAML groupDescription，不进入 trace prompt；省略时这些字段均为空字符串。
+`task create-from-recording` 是原始录制的默认后处理入口。它通过 `--python-executable`、`CUA_PYTHON_EXECUTABLE` 或源码开发环境选择 Python，运行 `cua_record` 模块，再将生成资产规范化到 user task `source/` 并完成初始化与静态验证。Windows `cua_recorder` 只负责采集 MP4/TXT，并使用相同的宿主 Python 契约。可选 `--goal` 只写入 task goal/description 与 YAML groupDescription，不进入 trace prompt；省略时这些字段均为空字符串。
 
 `task init-from-trace` 用于 source 已经标准化的高级场景。两种创建方式都拒绝覆盖 user/builtin 任务。
 

@@ -12,7 +12,7 @@ uv run cua-recorder doctor
 uv run cua-recorder displays --preview-dir .local/previews
 ```
 
-`uv sync --locked` 会安装固定版本的 PyAV Windows wheel，用户无需另行安装或配置 `ffmpeg.exe`。Worker 不下载媒体制品。源码 Review 使用 `uv run` 启动 Worker，因此运行前必须完成 locked sync；安装环境可直接调用准备好的 `cua-recorder` executable。
+`uv sync --locked` 会安装固定版本的 PyAV Windows wheel，用户无需另行安装或配置 `ffmpeg.exe`。Worker 不下载媒体制品。组件安装环境把 `cua-recorder` wheel 与其他组件 wheels 安装到统一 Python；源码开发使用本目录已同步的 `.venv`。
 验证版本、Windows wheel 校验值、捆绑库版本与许可证审查边界见
 [`PYAV_ARTIFACT.md`](./PYAV_ARTIFACT.md)。
 
@@ -46,4 +46,4 @@ Worker 启动后先进入 `armed`，不会立即创建录制目录。用户切�
 - 记录的是物理键事件，不尝试还原中文输入法最终提交的文本。
 - 网页刷新屏幕截图失败时，先运行 `doctor`；能力缺失错误会明确列出 `gdigrab`、`h264_mf` 或 MP4 muxer，编码器打开失败会保留 PyAV/FFmpeg 原生错误。
 - 控制进程通过 CLI 与 stdio 启动 Worker，不导入其内部 Hook 模块。
-- Review 默认从 `CUA_RECORDER_ROOT` 或源码相邻 `recorder/` 定位 Worker；录制输出只来自已验证的 `CUA_RECORDINGS_ROOT`，浏览器不能提交任意输出路径。
+- Review 通过 `CUA_PYTHON_EXECUTABLE` 使用已经安装 `cua_recorder` 的宿主 Python；源码开发未设置时使用相邻 `recorder/.venv`。录制输出只来自已验证的 `CUA_RECORDINGS_ROOT`，浏览器不能提交任意输出路径。

@@ -1,6 +1,6 @@
 # Record
 
-本目录是 CUA 的录制后处理域，包含 ShowUI-Aloha Learn 流程，用于把录制资源转换为结构化操作日志和 trace。
+本目录提供 `cua-record` Python 包，用于把录制资源转换为结构化操作日志和 trace。
 
 ShowUI-Aloha 不承担任务执行或回放；Computer-Use Runtime 位于 `../execution`，执行底座是 Midscene computer use。
 
@@ -12,19 +12,21 @@ ShowUI-Aloha 不承担任务执行或回放；Computer-Use Runtime 位于 `../ex
 - 调用 OpenAI 兼容接口生成语义化 trace，并为每一步输出面向 Midscene 的最小 `operation` 动作结构；`LDoubleClick` 录制事件生成 `doubleClick`，input 操作需要同时输出完整动作 `prompt` 和只用于定位输入框的 `locatePrompt`。
 - trace 生成 prompt 会约束 `operation.prompt` 按“目标视觉特征 + 所在区域 + 相对锚点 + 动作意图”组织，以提升弱视觉模型下 Midscene computer use 的定位稳定性。对于红叉下方目标本体是无可见文字标签的紧凑纯图标或符号控件，模型必须额外输出 `useReferenceImage: true`；带文字按钮、链接、列表项及带相邻文字标签的单选框/复选框不自动启用。不得为其他动作设置该字段，也不得让模型生成图片路径。
 
-本目录不包含 `Aloha_Act`、Actor、Executor、回放入口或执行演示视频。
+本目录不包含 Act、Actor、Executor、回放入口或执行演示视频。
 
-从 `execution` 使用 `task create-from-recording` 创建可执行任务。该命令在本目录的 uv 环境中调用 parser，将生成资产规范化到 `<CUA_DATA_ROOT>/projects/<scene>/<task>/source/`，再生成并验证 `task.yaml` 和 `task.json`。Python CUA Subagent 的私有 Tool 不提供任务创建能力；该命令面向开发者、Review 和维护型 CLI 调用方。
+从 `execution` 使用 `task create-from-recording` 创建可执行任务。该命令通过宿主 Python 调用 `cua_record`，将生成资产规范化到 `<CUA_DATA_ROOT>/projects/<scene>/<task>/source/`，再生成并验证 `task.yaml` 和 `task.json`。Python CUA Subagent 的私有 Tool 不提供任务创建能力；该命令面向开发者、Review 和维护型 CLI 调用方。
 
 ## 环境配置
 
-复制环境变量示例：
+模型配置通过进程环境提供。PowerShell 开发会话可以设置对应变量：
 
 ```powershell
-Copy-Item .env.example .env
+$env:OPENAI_BASE_URL = 'https://example.internal/v1'
+$env:OPENAI_MODEL = 'vision-model'
+$env:OPENAI_API_KEY = 'replace-me'
 ```
 
-`.env` 中配置 OpenAI 兼容接口：
+需要提供以下 OpenAI 兼容接口配置：
 
 ```text
 OPENAI_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
@@ -33,7 +35,7 @@ OPENAI_API_KEY=replace-me
 ALOHA_TRACE_TEMPERATURE=0.2
 ```
 
-真实 `.env` 不会提交到 git。
+`cua_record` 不自动加载环境文件。真实密钥只能由 shell、进程管理器或 Host 注入，不能提交到 git。
 
 ## 运行 Learn 流程
 
@@ -46,10 +48,10 @@ uv sync --locked
 基于示例录制生成结构化日志和 trace：
 
 ```powershell
-uv run python Aloha_Learn\parser.py Aloha_Learn\projects\air_tickets
+uv run python -m cua_record process C:\path\to\recording
 ```
 
-parser 接收一个录制目录，生成 trace 时将 Overall Task 固定为空且不接收业务 goal，避免高层目标干扰逐步视觉证据判断。该 Python 命令用于独立调试 record；开发者、Review 和维护型调用方通过 execution 的单一创建命令生成可执行任务。execution 的可选 `--goal` 只在 trace 生成后写入任务描述。
+processor 接收一个录制目录，生成 trace 时不接收业务 goal，避免高层目标干扰逐步视觉证据判断。该 Python 命令用于独立调试 record；开发者、Review 和维护型调用方通过 execution 的单一创建命令生成可执行任务。execution 的可选 `--goal` 只在 trace 生成后写入任务描述。
 
 生成物会落在对应 project 目录下，主要包括：
 
@@ -61,6 +63,6 @@ parser 接收一个录制目录，生成 trace 时将 Overall Task 固定为空�
 
 这些产物用于分析和任务初始化，不作为执行入口。trace 包含面向 Midscene 的最小 `operation` 动作结构，由 `execution` 据此初始化任务根目录的 `task.yaml` 和 `task.json`。对于双击操作，trace 使用 `operation.type=doubleClick`；对于 input 操作，`operation.prompt` 表示完整输入动作，`operation.locatePrompt` 表示目标输入框，两者不能混用。
 
-为了降低弱模型生成短 prompt 或歧义 prompt 的概率，`Aloha_Learn/default_prompt.json` 会要求模型为 Midscene prompt 提供足量定位信息：目标视觉特征、所在区域、相对锚点和动作意图。对于列表项、下拉候选、表格行、多个相似输入框等场景，prompt 应明确可见文本、所在容器和相对位置。
+包内的 `resources/default_prompt.json` 要求模型为 Midscene prompt 提供足量定位信息：目标视觉特征、所在区域、相对锚点和动作意图。对于列表项、下拉候选、表格行、多个相似输入框等场景，prompt 应明确可见文本、所在容器和相对位置。
 
 视觉参考不是默认点击策略。模型只判断是否需要视觉参考，`execution` 转换器再按步骤从 processed log 确定性绑定 reference patch；请求参考图但资产无效时转换失败，不回退为纯文字点击。

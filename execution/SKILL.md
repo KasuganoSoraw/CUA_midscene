@@ -20,7 +20,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 - computer use 必须由上层串行调用。
 - 维护型外部调用方运行本 CLI 时必须为外围命令设置足够长的超时。Python Agent 的模型请求默认 120 秒、Runtime 单请求默认 300 秒，Review 外层 invocation 默认 30 分钟；这些限制分层生效，外围超时不能覆盖内部固定超时。
 
-`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 定位外部录制处理器；`CUA_RECORDINGS_ROOT` 定位原始录制集合。命令行参数优先于环境配置，完整优先级见 `references/task-contract.md`。
+`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_PYTHON_EXECUTABLE` 指向已安装组件 Python 包的宿主解释器；`CUA_RECORDINGS_ROOT` 定位原始录制集合。命令行参数优先于环境配置，完整优先级见 `references/task-contract.md`。
 
 ## 判断意图
 
@@ -39,7 +39,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 1. 运行 `node dist/cli/main.js scene list --json`，再运行 `node dist/cli/main.js task list --scene <scene> --json`。
 2. 维护型调用方只读取目标场景和任务的 `SKILL.md`、`task.json`；检查动作时再读取 `task.yaml` 和必要 source。Python CUA Agent 则通过私有 catalog Tool 获取结构化描述，不直接读取这些文件。
 3. 用户提供原始录制目录时，运行 `node dist/cli/main.js task create-from-recording --scene <scene> --task <task> --recording "<录制目录>" [--goal "<任务描述>"]`。`--goal` 只保存为创建后的任务描述，不参与 trace 生成；用户未说明时可以省略且不得推测。
-4. 该命令内部运行外部 `record/` 后处理器、规范化 source、初始化并静态验证；调用方不得再手工调用 Python、重命名或搬运录制产物。Windows `recorder/` 是采集 Worker，与 `record/` 后处理器不是同一组件。
+4. 该命令使用宿主 Python 的 `cua_record` 模块完成后处理、规范化 source、初始化并静态验证；调用方不得再手工调用 Python、重命名或搬运录制产物。Windows `cua_recorder` 是采集 Worker，与 `cua_record` 后处理器职责独立，但由同一个组件 Python 环境提供。
 5. 只有 user task 的 `source/showui-trace.json` 和 `source/processed-log-sc.json` 已经标准化时，才运行 `node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，再运行 `node dist/cli/main.js task validate --scene <scene> --task <task> --json`。
 
 两种创建入口均不得覆盖已有 user 或 builtin 任务；失败时原样报告错误。

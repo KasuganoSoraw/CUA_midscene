@@ -22,7 +22,7 @@
 ## 5. Clean Staging Verification
 
 - [x] 5.1 实现源码仓外 smoke test，使用外部 Python/Node 验证 wheel imports 与 Runtime bridge `catalog` 协议
-- [ ] 5.2 更新 README、SKILL 与环境示例，只记录组件构建、宿主运行时契约和开发调试入口，并通过文档/发布面测试
+- [x] 5.2 更新 README、SKILL 与环境示例，只记录组件构建、宿主运行时契约和开发调试入口，并通过文档/发布面测试
 
 ## 6. Validation
 

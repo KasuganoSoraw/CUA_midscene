@@ -37,10 +37,7 @@ def _positive_int_env(name: str, default: int) -> int:
 
 def build_agent_from_env() -> CuaAgent:
     runtime_config = RuntimeProcessConfig.from_runtime(
-        Path(
-            os.environ.get("CUA_AGENT_JS_RUNTIME_EXECUTABLE")
-            or _required_env("CUA_AGENT_NODE_EXECUTABLE")
-        ),
+        Path(_required_env("CUA_AGENT_JS_RUNTIME_EXECUTABLE")),
         Path(_required_env("CUA_AGENT_RUNTIME_BRIDGE")),
         cwd=str(Path(_required_env("CUA_AGENT_RUNTIME_BRIDGE")).resolve().parent),
     )

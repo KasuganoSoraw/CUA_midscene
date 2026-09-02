@@ -98,13 +98,14 @@ test('Skill 文档面向维护型调用方并使用编译后的 Node CLI', async
   assert.match(skill, /设置足够长的超时/);
   assert.match(skill, /模型请求默认 120 秒.*Runtime 单请求默认 300 秒.*Review 外层 invocation 默认 30 分钟/);
   assert.match(skill, /task create-from-recording/);
-  assert.match(skill, /CUA_RECORD_ROOT/);
-  assert.match(skill, /Windows `recorder\/` 是采集 Worker.*`record\/` 后处理器/);
+  assert.match(skill, /CUA_PYTHON_EXECUTABLE/);
+  assert.match(skill, /Windows `cua_recorder` 是采集 Worker.*`cua_record` 后处理器/);
   assert.match(skill, /--goal.*不参与 trace 生成/);
   assert.match(skill, /提出 `task\.yaml` 修改建议，展示原值、新值和原因，等待明确确认/);
   assert.match(skill, /停止并等待用户明确确认/);
   assert.doesNotMatch(skill, /uv run cua|python\s+-m/i);
   assert.doesNotMatch(skill, /uv run python|Aloha_Learn[\\/]parser\.py/i);
-  assert.match(envExample, /^CUA_RECORD_ROOT=.+$/m);
+  assert.match(envExample, /^# CUA_PYTHON_EXECUTABLE=.+$/m);
+  assert.doesNotMatch(envExample, /CUA_RECORD_ROOT|CUA_RECORDER_ROOT/);
   await assert.rejects(access(path.join(repositoryRoot, 'scripts/install-cua-midscene-skill.ps1')));
 });

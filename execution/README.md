@@ -48,9 +48,9 @@ GDEClaw Main Agent
 
 JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；response 使用相同 request id，并明确区分 result 与结构化 error。worker stdout 只输出协议 frame，诊断写 stderr。一次 Python invocation 可复用一个 Node worker，invocation 结束即释放；不同 invocation 不共享模型 messages 或 Runtime 状态。
 
-普通 `review` 不展示或注册 Agent API；开发者使用 `review --dev` 才能看到“Agent 调试”页签。Review Server 直接启动 Python Agent invocation，启动前检查 Python/Node/bridge 路径和模型变量是否存在；模型端点和响应格式由 invocation 验证。页面是薄调试入口，不保存聊天或跨调用 Session。HTTP 请求等待 Agent 子进程完成，再一次性返回最终结果与累计事件，不提供实时事件传输或页面中途取消。
+普通 `review` 不展示或注册 Agent API；开发者使用 `review --dev` 才能看到“Agent 调试”页签。Review Server 直接启动 Python Agent invocation，启动前检查 Python、JavaScript Runtime、bridge 路径和模型变量是否存在；模型端点和响应格式由 invocation 验证。页面是薄调试入口，不保存聊天或跨调用 Session。HTTP 请求等待 Agent 子进程完成，再一次性返回最终结果与累计事件，不提供实时事件传输或页面中途取消。
 
-依赖准备属于安装流程：Host 安装 `cua-agent` wheel、准备隔离的 Node Runtime 并提供 executable 路径。Python Agent invocation 不执行 `npm install`、`npm ci`、`uv sync`、`uv lock` 或 `pip install`。源码 Review 分别使用 `uv run` 启动 `recorder/` 和 `record/`，因此两个 Python 环境都必须提前执行 `uv sync --locked`。
+依赖准备属于安装流程：Host 把三个组件 wheels 安装到同一个隔离 Python 环境，准备隔离的 JavaScript Runtime，并提供 executable 与 bridge 路径。Python Agent invocation 和 Worker 调用不执行 `npm install`、`npm ci`、`uv sync`、`uv lock` 或 `pip install`。源码开发未配置统一 Python 时，record 与 recorder 分别使用相邻工程已准备完成的 `.venv`。
 
 ## 环境
 
@@ -61,7 +61,7 @@ npm ci
 npm run check
 ```
 
-从 `.env.example` 创建 `.env.local`，配置模型、Skill 外部的绝对数据根、独立的 record 处理器根目录，以及可选的原始录制集合：
+从 `.env.example` 创建 `.env.local`，配置模型、Skill 外部的绝对数据根，以及可选的原始录制集合：
 
 ```text
 MIDSCENE_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
@@ -73,14 +73,12 @@ CUA_AGENT_MODEL_API_KEY=replace-me
 CUA_AGENT_MODEL_TIMEOUT_SECONDS=120
 CUA_AGENT_MAX_TURNS=8
 CUA_DATA_ROOT=C:\path\to\cua-data
-CUA_RECORD_ROOT=C:\path\to\CUA\record
-CUA_RECORDER_ROOT=C:\path\to\CUA\recorder
 CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
 ```
 
-`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORD_ROOT` 指向包含 `pyproject.toml` 和 `Aloha_Learn/parser.py` 的 Python 后处理器；`CUA_RECORDER_ROOT` 指向包含 `cua_recorder` 的 Windows 采集 Worker；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。execution Skill 不包含这两个 Python 工程；源码 Review 分别在对应根目录运行 `uv run`，并由 record 自行读取 `record/.env`。
+`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。组件宿主通过 `CUA_PYTHON_EXECUTABLE` 提供已经安装 `cua_record` 与 `cua_recorder` 的统一 Python；源码开发不设置该变量时，两个 Worker 分别使用相邻工程的 `.venv`。record 模型配置通过进程环境注入。
 
-`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 的任务级推理模型；未设置时读取对应 `MIDSCENE_MODEL_*`。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8，Runtime 单请求超时为 300 秒。`review --dev` 在源码环境使用顶层 `agent/.venv`、服务进程 Node executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_NODE_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径由安装流程准备。
+`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 的任务级推理模型；未设置时读取对应 `MIDSCENE_MODEL_*`。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8，Runtime 单请求超时为 300 秒。`review --dev` 在源码环境使用顶层 `agent/.venv`、服务进程 JavaScript executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_JS_RUNTIME_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径由安装流程准备。
 
 ## CLI
 
@@ -108,7 +106,7 @@ node dist/cli/main.js scene list --json
 node dist/cli/main.js review --no-open
 ```
 
-`task create-from-recording` 是原始录制的默认创建入口。record parser 不接收 goal；命令在 trace 生成后将可选 `--goal` 写入任务 goal/description 和 YAML groupDescription。省略时这些字段保存空字符串。Python 进度写入 stderr，stdout 只输出最终 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
+`task create-from-recording` 是原始录制的默认创建入口。可用 `--python-executable` 显式选择已经安装 `cua_record` 的 Python，否则按 `CUA_PYTHON_EXECUTABLE` 和源码开发环境解析。record processor 不接收 goal；命令在 trace 生成后将可选 `--goal` 写入任务 goal/description 和 YAML groupDescription。省略时这些字段保存空字符串。Python 进度写入 stderr，stdout 只输出最终 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
 `review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT` 与相同开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。`--dev` 额外启用 Python Agent 调试入口；默认模式完全隐藏它。“任务复核”读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。“从录制创建任务”既提供 Windows Worker 的显示器预览、`Ctrl+Shift+F9` 准备/开始/停止控制，也读取 `CUA_RECORDINGS_ROOT` 的一级目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并复用 `createTaskFromRecording()` 创建完整用户任务。页面不播放视频、不展示完整日志，也不流式转发 Python 后处理日志；创建期间只显示不可确定的“正在生成”状态，成功后自动进入新任务复核。同一录制可以用于创建不同任务，每次都会重新处理。
 

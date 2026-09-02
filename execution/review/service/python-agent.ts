@@ -18,7 +18,7 @@ export interface PythonAgentControl {
 interface PythonAgentLaunch {
   agentRoot: string;
   pythonExecutable: string;
-  nodeExecutable: string;
+  javascriptRuntimeExecutable: string;
   runtimeBridge: string;
 }
 
@@ -27,7 +27,7 @@ interface PythonAgentInvokerOptions {
   dataRoot: string;
   agentRoot?: string;
   pythonExecutable?: string;
-  nodeExecutable?: string;
+  javascriptRuntimeExecutable?: string;
   runtimeBridge?: string;
   timeoutMs?: number;
   spawnProcess?: typeof spawn;
@@ -78,8 +78,10 @@ export function pythonAgentPaths(options: PythonAgentInvokerOptions): PythonAgen
     pythonExecutable: path.resolve(
       options.pythonExecutable ?? process.env.CUA_AGENT_PYTHON_EXECUTABLE ?? defaultPython,
     ),
-    nodeExecutable: path.resolve(
-      options.nodeExecutable ?? process.env.CUA_AGENT_NODE_EXECUTABLE ?? process.execPath,
+    javascriptRuntimeExecutable: path.resolve(
+      options.javascriptRuntimeExecutable
+        ?? process.env.CUA_AGENT_JS_RUNTIME_EXECUTABLE
+        ?? process.execPath,
     ),
     runtimeBridge: path.resolve(
       options.runtimeBridge
@@ -96,17 +98,19 @@ export class PythonAgentInvoker implements PythonAgentControl {
 
   async status(): Promise<AgentStatus> {
     const launch = pythonAgentPaths(this.options);
-    const [agentRootReady, pythonReady, nodeReady, bridgeReady] = await Promise.all([
+    const [agentRootReady, pythonReady, javascriptRuntimeReady, bridgeReady] = await Promise.all([
       fileExists(path.join(launch.agentRoot, 'pyproject.toml')),
       fileExists(launch.pythonExecutable),
-      fileExists(launch.nodeExecutable),
+      fileExists(launch.javascriptRuntimeExecutable),
       fileExists(launch.runtimeBridge),
     ]);
     const hasModel = modelConfigured();
     const reasons = [
       ...(!agentRootReady ? [`找不到 Python Agent：${launch.agentRoot}`] : []),
       ...(!pythonReady ? [`找不到 Agent Python executable：${launch.pythonExecutable}`] : []),
-      ...(!nodeReady ? [`找不到 Node executable：${launch.nodeExecutable}`] : []),
+      ...(!javascriptRuntimeReady
+        ? [`找不到 JavaScript Runtime executable：${launch.javascriptRuntimeExecutable}`]
+        : []),
       ...(!bridgeReady ? [`找不到已构建 Runtime bridge：${launch.runtimeBridge}`] : []),
       ...(!hasModel ? ['未配置 CUA_AGENT_MODEL_* 或兼容的 MIDSCENE_MODEL_*'] : []),
     ];
@@ -150,7 +154,7 @@ export class PythonAgentInvoker implements PythonAgentControl {
           env: {
             ...process.env,
             PYTHONUTF8: '1',
-            CUA_AGENT_NODE_EXECUTABLE: launch.nodeExecutable,
+            CUA_AGENT_JS_RUNTIME_EXECUTABLE: launch.javascriptRuntimeExecutable,
             CUA_AGENT_RUNTIME_BRIDGE: launch.runtimeBridge,
             CUA_DATA_ROOT: this.options.dataRoot,
           },

@@ -28,7 +28,7 @@
       "step-016": 16
     },
     "recordingPreparationCommand": "将 record 生成的 trace、processed log 和截图复制到用户数据根的 browser-demo/air-tickets-demo/source",
-    "traceGenerationCommand": "cd record; uv run python Aloha_Learn\\parser.py Aloha_Learn\\projects\\air_tickets"
+    "traceGenerationCommand": "python -m cua_record process \"air_tickets\""
   },
   "inputs": {
     "step-002-input": {

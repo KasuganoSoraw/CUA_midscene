@@ -22,7 +22,7 @@
 - MP4 muxer 可在停止时 flush 并写入可重新解码的 H.264 MP4；
 - 静态 PNG 预览、CLI 首帧握手、stdin `stop`、原子完成均可用；
 - 现有 recording catalog 将 MP4+TXT 标记为 ready；
-- `record/Aloha_Learn` 使用的 OpenCV 可打开视频并读取帧。
+- `cua_record` 使用的 OpenCV 可打开视频并读取帧。
 
 运行时报告的 FFmpeg 库版本：
 

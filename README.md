@@ -8,6 +8,7 @@
 
 ```text
 CUA/
+├── component.toml          # 可装配组件的版本、运行时与 Python 包声明
 ├── agent/                  # Python CUA Subagent：definition、模型 loop、私有 Tool 与事件
 ├── recorder/               # Windows 录制 Worker：PyAV 视频、Win32 键鼠与全局快捷键
 ├── record/                 # 教学录制处理：视频、日志、截图 -> trace
@@ -20,6 +21,7 @@ CUA/
 │   ├── schemas/            # Ajv 在文件边界使用的 JSON Schema
 │   ├── SKILL.md            # 执行器 Skill 入口
 │   └── references/         # Agent 按需读取的任务契约
+├── scripts/                # 组件构建、结构校验与 clean-room smoke test
 └── openspec/               # 规格与变更记录
 ```
 
@@ -64,7 +66,7 @@ Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现
 cd execution
 npm ci
 Copy-Item .env.example .env.local
-# 编辑 .env.local，填写模型配置和四个 CUA_*_ROOT 绝对路径
+# 编辑 .env.local，填写模型配置、数据根和可选录制输出根
 npm run check
 
 npm run cua -- scene list --json
@@ -141,7 +143,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
     └── midscene/                    # Midscene 报告、截图等产物
 ```
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。后处理器根优先级为 `--record-root`、进程 `CUA_RECORD_ROOT`、execution 环境文件、源码仓相邻 `record/`；Windows 采集 Worker 使用独立的 `CUA_RECORDER_ROOT`，源码仓默认相邻 `recorder/`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合，和前两者都不是同一目录；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。安装后的 execution Skill 不包含这两个 Python 工程，需要由安装环境提供路径。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。`CUA_PYTHON_EXECUTABLE` 是组件宿主提供的统一 Python，必须已经安装 `cua-agent`、`cua-recorder` 与 `cua-record`；源码开发未设置时，record 后处理和 Windows recorder 分别使用相邻工程的 `.venv`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
 
 trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 
@@ -165,3 +167,17 @@ cd ..\recorder
 uv lock --check
 uv run --locked python -m unittest discover -s tests -v
 ```
+
+## 可装配组件
+
+`component.toml` 定义组件版本、兼容运行时和三个 Python wheel。构建命令生成自描述目录，包含 wheels、编译后的 Runtime bridge、schemas、内置 projects 与独立的 production `node_modules`：
+
+```powershell
+py -3.11 scripts\build_component.py --force
+py -3.11 scripts\verify_component.py dist\computer-use-component
+py -3.11 scripts\smoke_component.py dist\computer-use-component `
+  --python C:\path\to\python.exe `
+  --javascript C:\path\to\node.exe
+```
+
+Host 安装阶段读取 `manifest.json`，把三个 wheels 安装到同一个隔离 Python 环境，并为 Agent 配置 `CUA_AGENT_JS_RUNTIME_EXECUTABLE`、`CUA_AGENT_RUNTIME_BRIDGE` 与 `CUA_DATA_ROOT`。运行阶段只启动模块和 Runtime，不执行依赖解析、安装、lock 或构建。JavaScript executable 可以是兼容 Node.js 的独立运行时，也可以是启用 Node 模式的 Electron；具体环境变量由 Host Adapter 注入。

@@ -35,7 +35,7 @@ uv build
 本地进程入口从 stdin 一次性读取一个 JSON request，在 stdout 输出零到多个事件 frame 和一个最终结果 frame 后退出。它不是可复用 daemon，也不在 stdin 上接收第二次调用或中途取消 frame：
 
 ```powershell
-$env:CUA_AGENT_NODE_EXECUTABLE = 'C:\Program Files\nodejs\node.exe'
+$env:CUA_AGENT_JS_RUNTIME_EXECUTABLE = 'C:\Program Files\nodejs\node.exe'
 $env:CUA_AGENT_RUNTIME_BRIDGE = 'E:\HW\CUA\execution\dist\runtime-bridge\worker.js'
 $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 '{"task":"打开 Chrome","invocationId":"dev-1"}' | uv run --locked cua-agent invoke
@@ -57,7 +57,7 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 Host 产品的安装/构建流程应：
 
 1. 安装本目录构建的 `cua-agent` wheel 到隔离 Python 环境。
-2. 安装并构建 `execution`，保留 Node executable 与 `dist/runtime-bridge/worker.js`。
+2. 安装 `execution` Runtime，保留兼容的 JavaScript executable 与 `dist/runtime-bridge/worker.js`。
 3. 向 Agent 进程提供模型配置、`CUA_DATA_ROOT` 和两个 Runtime 路径。
 4. invocation 只启动 `cua-agent invoke`，不调用包管理命令。
 
