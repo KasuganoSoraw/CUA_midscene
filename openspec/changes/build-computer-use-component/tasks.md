@@ -1,7 +1,7 @@
 ## 1. Record Python Package
 
-- [ ] 1.1 将 Aloha 录制处理逻辑迁入 `src/cua_record`、配置 wheel 元数据与包内资源，并通过包导入和资源定位测试
-- [ ] 1.2 提供 `python -m cua_record process <recording>` 稳定入口，迁移现有 Record 测试并验证产物命名和失败行为不变
+- [x] 1.1 将 Aloha 录制处理逻辑迁入 `src/cua_record`、配置 wheel 元数据与包内资源，并通过包导入和资源定位测试
+- [x] 1.2 提供 `python -m cua_record process <recording>` 稳定入口，迁移现有 Record 测试并验证产物命名和失败行为不变
 
 ## 2. Host Python Worker Contract
 

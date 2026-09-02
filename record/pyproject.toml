@@ -1,15 +1,30 @@
 [project]
-name = "showui-aloha-midscene-learn"
+name = "cua-record"
 version = "0.1.0"
+description = "Computer-Use 录制后处理 Worker"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.21.0",
     "opencv-python>=4.8.0",
     "pillow>=10.0.0",
-    "python-dotenv>=1.0.1",
     "requests>=2.25.0",
     "urllib3>=2.0.0",
 ]
 
-[tool.uv]
-package = false
+[project.scripts]
+cua-record = "cua_record.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cua_record = ["resources/*.json"]

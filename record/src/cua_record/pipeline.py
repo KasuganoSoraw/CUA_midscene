@@ -1,12 +1,11 @@
 # parser.py
 import os
-import glob
 from pathlib import Path
-from dotenv import load_dotenv
 
-from log_processor import LogProcessor
-from screenshot_processor import VideoScreenshotExtractor
-from trace_generator import TraceGenerator
+from .log_processor import LogProcessor
+from .resources import default_prompt_path
+from .screenshot_processor import VideoScreenshotExtractor
+from .trace_generator import TraceGenerator
 
 
 def _resolve_project_dir(project_name: str) -> Path:
@@ -48,8 +47,6 @@ def run_pipeline(project_name: str) -> Path:
 
     Only input: project_name (string). Returns final trace path.
     """
-    learn_dir = Path(__file__).resolve().parent
-    load_dotenv(learn_dir.parent / ".env", override=True)
     project_dir = _resolve_project_dir(project_name)
     inputs_dir = project_dir / "inputs"
     if not inputs_dir.exists():
@@ -77,11 +74,10 @@ def run_pipeline(project_name: str) -> Path:
     out_trace = project_dir / f"{project_dir.name}_trace.json"
 
     tg = TraceGenerator(
-        default_prompt_path=str(learn_dir / "default_prompt.json"),
+        default_prompt_path=str(default_prompt_path()),
         api_provider="openai",            # or "claude" — adjust here if needed
         openai_model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
         claude_model="claude-sonnet-4-20250514",
-        api_keys_path=str(learn_dir / "config" / "api_keys.json"),
     )
     tg.generate_trace(
         recording_json_path=str(log_sc),
@@ -97,11 +93,3 @@ def run_pipeline(project_name: str) -> Path:
     print(f"Processed log (+screens): {log_sc.name}")
     print(f"Trace: {out_trace.name}")
     return out_trace
-
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Run full Parser pipeline (1) log → (2) screenshots → (3) trace")
-    parser.add_argument("project_name", help="Either a bare name (e.g., 'Drag_0') or a full path to the project folder.")
-    args = parser.parse_args()
-    run_pipeline(args.project_name)

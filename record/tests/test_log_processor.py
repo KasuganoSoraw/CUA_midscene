@@ -1,9 +1,6 @@
 import unittest
-from pathlib import Path
-import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from log_processor import LogProcessor
+from cua_record.log_processor import LogProcessor
 
 
 def key_press(timestamp, key):

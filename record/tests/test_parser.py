@@ -1,11 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
-import sys
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from parser import run_pipeline
+from cua_record.pipeline import run_pipeline
 
 
 class ParserPipelineTest(unittest.TestCase):
@@ -19,9 +17,9 @@ class ParserPipelineTest(unittest.TestCase):
             screenshots.mkdir()
 
             with (
-                patch("parser.LogProcessor") as log_processor,
-                patch("parser.VideoScreenshotExtractor") as screenshot_extractor,
-                patch("parser.TraceGenerator") as trace_generator,
+                patch("cua_record.pipeline.LogProcessor") as log_processor,
+                patch("cua_record.pipeline.VideoScreenshotExtractor") as screenshot_extractor,
+                patch("cua_record.pipeline.TraceGenerator") as trace_generator,
             ):
                 log_processor.return_value.process_log_file.side_effect = (
                     lambda _source, output, **_kwargs: Path(output).write_text("[]", encoding="utf-8")

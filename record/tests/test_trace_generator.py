@@ -3,11 +3,10 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-import sys
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from trace_generator import TraceGenerator, env_bool
+from cua_record.resources import default_prompt_path
+from cua_record.trace_generator import TraceGenerator, env_bool
 
 
 class StubTraceGenerator(TraceGenerator):
@@ -154,13 +153,12 @@ class TraceGeneratorOperationTest(unittest.TestCase):
             response.json.return_value = {"choices": [{"message": {"content": "{}"}}]}
 
             with (
-                patch("trace_generator.load_dotenv"),
                 patch.dict(
                     os.environ,
                     {"OPENAI_API_KEY": "test-key", "OPENAI_VERIFY_SSL": "false"},
                     clear=False,
                 ),
-                patch("trace_generator.requests.post", return_value=response) as post,
+                patch("cua_record.trace_generator.requests.post", return_value=response) as post,
             ):
                 generator = TraceGenerator(
                     default_prompt_path=str(prompt_path),
@@ -301,7 +299,7 @@ class TraceGeneratorOperationTest(unittest.TestCase):
         previous_key = os.environ.get("OPENAI_API_KEY")
         os.environ["OPENAI_API_KEY"] = "test-key"
         try:
-            prompt_path = Path(__file__).resolve().parents[1] / "default_prompt.json"
+            prompt_path = default_prompt_path()
             generator = StubTraceGenerator(
                 default_prompt_path=str(prompt_path),
                 api_provider="openai",

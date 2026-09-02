@@ -1,14 +1,12 @@
 import tempfile
 import unittest
 from pathlib import Path
-import sys
 from unittest.mock import patch
 
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from screenshot_processor import VideoScreenshotExtractor
+from cua_record.screenshot_processor import VideoScreenshotExtractor
 
 
 class ScreenshotProcessorReferenceImageTest(unittest.TestCase):

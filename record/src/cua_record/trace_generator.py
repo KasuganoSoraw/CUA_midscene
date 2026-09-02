@@ -1,7 +1,8 @@
 import os, json, base64, re, time, requests, urllib3
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from dotenv import load_dotenv
+
+from .resources import default_prompt_path as packaged_default_prompt_path
 
 
 def env_bool(name: str, default: bool) -> bool:
@@ -18,15 +19,14 @@ def env_bool(name: str, default: bool) -> bool:
 class TraceGenerator:
     """Generate step-by-step traces from GUI actions with crop+full screenshots."""
 
-    def __init__(self, default_prompt_path: str = "default_prompt.json",
+    def __init__(self, default_prompt_path: str | None = None,
                  api_provider: str = "openai",
                  openai_model: str = "gpt-4o",
                  claude_model: str = "claude-sonnet-4-20250514",
-                 api_keys_path: str = "config/api_keys.json"):
+                 api_keys_path: str | None = None):
         """Load default prompt and API settings from config file or env vars."""
-        project_env = Path(__file__).resolve().parents[1] / ".env"
-        load_dotenv(project_env, override=True)
-        with open(default_prompt_path, "r", encoding="utf-8") as f:
+        prompt_path = default_prompt_path or str(packaged_default_prompt_path())
+        with open(prompt_path, "r", encoding="utf-8") as f:
             self.default_prompt = json.load(f)
 
         self.api_provider = api_provider.lower()
@@ -49,18 +49,21 @@ class TraceGenerator:
         self.openai_key = ""
         self.claude_key = ""
 
-        try:
-            with open(api_keys_path, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-            self.openai_key = (
-                cfg.get("OPENAI_API_KEY", "")
-                or os.environ.get("OPENAI_API_KEY", "")
-                or os.environ.get("MIDSCENE_MODEL_API_KEY", "")
-            )
-            self.claude_key = cfg.get("CLAUDE_API_KEY", "") or os.environ.get("ANTHROPIC_API_KEY", "")
-        except FileNotFoundError:
-            self.openai_key = os.environ.get("OPENAI_API_KEY", "") or os.environ.get("MIDSCENE_MODEL_API_KEY", "")
-            self.claude_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        cfg: Dict[str, Any] = {}
+        if api_keys_path is not None:
+            try:
+                with open(api_keys_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+            except FileNotFoundError:
+                pass
+        self.openai_key = (
+            cfg.get("OPENAI_API_KEY", "")
+            or os.environ.get("OPENAI_API_KEY", "")
+            or os.environ.get("MIDSCENE_MODEL_API_KEY", "")
+        )
+        self.claude_key = (
+            cfg.get("CLAUDE_API_KEY", "") or os.environ.get("ANTHROPIC_API_KEY", "")
+        )
 
         if not self.openai_key and not self.claude_key:
             raise RuntimeError("No API keys found. Please fill config/api_keys.json or set env vars.")
@@ -474,9 +477,8 @@ if __name__ == "__main__":
     parser.add_argument("--claude_model", default="claude-sonnet-4-20250514")
     args = parser.parse_args()
 
-    tg = TraceGenerator(default_prompt_path="default_prompt.json",
+    tg = TraceGenerator(default_prompt_path=str(packaged_default_prompt_path()),
                         api_provider=args.provider,
                         openai_model=args.openai_model,
-                        claude_model=args.claude_model,
-                        api_keys_path="config/api_keys.json")
+                        claude_model=args.claude_model)
     tg.generate_trace(args.log, args.shots, args.out, overall_task=args.task)
