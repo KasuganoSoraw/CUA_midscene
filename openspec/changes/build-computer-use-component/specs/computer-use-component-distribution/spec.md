@@ -32,7 +32,7 @@
 - **THEN** Runtime bridge SHALL 使用该 executable 和环境启动而无需修改 CUA 业务实现
 
 ### Requirement: 组件能够在脱离源码的环境中验证
-组件构建 SHALL 提供结构校验和 smoke test，并 SHALL 在不访问源码目录、不执行依赖安装或 lock 的验证阶段检查 Python imports、Worker 模块入口、Runtime bridge 协议和组件路径完整性。
+组件构建 SHALL 提供结构校验和 smoke test，并 SHALL 在不访问源码目录、不解析或下载第三方依赖、不执行 lock 的验证阶段检查 Python imports、Worker 模块入口、Runtime bridge 协议和组件路径完整性。验证可以将组件自身 wheels 以禁用依赖解析的方式安装到隔离目录。
 
 #### Scenario: clean staging 验证成功
 - **WHEN** 组件被复制到源码仓外的临时目录并提供已准备好的兼容解释器
@@ -41,4 +41,3 @@
 #### Scenario: 组件泄漏开发路径
 - **WHEN** manifest、启动配置或发行文件依赖构建机绝对路径、源码文件或开发命令
 - **THEN** 组件验证 SHALL 失败并报告对应路径或入口
-

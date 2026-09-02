@@ -15,13 +15,13 @@
 
 ## 4. Component Distribution
 
-- [ ] 4.1 定义并实现版本化 `manifest.json` 生成与解析校验，通过相对路径、兼容版本和必需入口测试
-- [ ] 4.2 实现单一组件构建命令，生成三个 wheels、编译 JavaScript Runtime 和隔离的 production `node_modules`，并验证 staging 内容完整
-- [ ] 4.3 实现组件静态验证器，拒绝绝对路径、缺失文件、源码/开发工具泄漏和未声明入口，并通过正反例测试
+- [x] 4.1 定义并实现版本化 `manifest.json` 生成与解析校验，通过相对路径、兼容版本和必需入口测试
+- [x] 4.2 实现单一组件构建命令，生成三个 wheels、编译 JavaScript Runtime 和隔离的 production `node_modules`，并验证 staging 内容完整
+- [x] 4.3 实现组件静态验证器，拒绝绝对路径、缺失文件、源码/开发工具泄漏和未声明入口，并通过正反例测试
 
 ## 5. Clean Staging Verification
 
-- [ ] 5.1 实现源码仓外 smoke test，使用外部 Python/Node 验证 wheel imports 与 Runtime bridge `catalog` 协议
+- [x] 5.1 实现源码仓外 smoke test，使用外部 Python/Node 验证 wheel imports 与 Runtime bridge `catalog` 协议
 - [ ] 5.2 更新 README、SKILL 与环境示例，只记录组件构建、宿主运行时契约和开发调试入口，并通过文档/发布面测试
 
 ## 6. Validation

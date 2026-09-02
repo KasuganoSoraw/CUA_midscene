@@ -1,0 +1,24 @@
+schema-version = "1.0"
+name = "computer-use"
+version = "0.1.0"
+requires-python = ">=3.11"
+requires-node = ">=22.18.0"
+runtime-bridge-protocol = "1.0"
+
+[[python-packages]]
+distribution = "cua-agent"
+module = "cua_agent"
+project = "agent"
+wheel-prefix = "cua_agent"
+
+[[python-packages]]
+distribution = "cua-windows-recorder"
+module = "cua_recorder"
+project = "recorder"
+wheel-prefix = "cua_windows_recorder"
+
+[[python-packages]]
+distribution = "cua-record"
+module = "cua_record"
+project = "record"
+wheel-prefix = "cua_record"

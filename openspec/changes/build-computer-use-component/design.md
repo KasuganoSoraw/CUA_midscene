@@ -54,7 +54,7 @@ manifest 只声明 schema、组件版本、Python 兼容范围、wheel 相对路
 
 ### 7. 验证分为静态校验与 clean-room smoke test
 
-静态校验检查 manifest schema、相对路径、文件存在性、禁止的源码/开发文件和绝对路径。Smoke test 将组件复制到临时目录，使用外部提供的 Python/Node 验证 wheels 安装、模块导入与 Runtime bridge `catalog` 请求。
+静态校验检查 manifest schema、相对路径、文件存在性、禁止的源码/开发文件和绝对路径。Smoke test 将组件复制到临时目录，安全展开组件 wheels 到隔离导入路径，使用外部提供且依赖已准备完成的 Python/Node 验证模块导入与 Runtime bridge `catalog` 请求。
 
 需要模型、桌面或 Windows Hook 的完整行为不进入基础 smoke test；其模块入口和启动失败边界由单元测试覆盖。
 
