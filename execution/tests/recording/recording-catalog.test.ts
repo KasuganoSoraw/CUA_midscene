@@ -39,8 +39,8 @@ test('录制根遵循显式、进程、env.local、env 和未配置状态', asyn
     mkdir(localRoot),
     mkdir(envRoot),
   ]);
-  await writeFile(path.join(executionRoot, '.env'), `CUA_RECORDINGS_ROOT=${envRoot}\n`, 'utf8');
-  await writeFile(path.join(executionRoot, '.env.local'), `CUA_RECORDINGS_ROOT=${localRoot}\n`, 'utf8');
+  await writeFile(path.join(root, '.env'), `CUA_RECORDINGS_ROOT=${envRoot}\n`, 'utf8');
+  await writeFile(path.join(root, '.env.local'), `CUA_RECORDINGS_ROOT=${localRoot}\n`, 'utf8');
   const previous = process.env.CUA_RECORDINGS_ROOT;
   try {
     process.env.CUA_RECORDINGS_ROOT = processRoot;
@@ -48,9 +48,9 @@ test('录制根遵循显式、进程、env.local、env 和未配置状态', asyn
     assert.equal(await resolveRecordingsRoot(undefined, { executionRoot }), processRoot);
     delete process.env.CUA_RECORDINGS_ROOT;
     assert.equal(await resolveRecordingsRoot(undefined, { executionRoot }), localRoot);
-    await writeFile(path.join(executionRoot, '.env.local'), '', 'utf8');
+    await writeFile(path.join(root, '.env.local'), '', 'utf8');
     assert.equal(await resolveRecordingsRoot(undefined, { executionRoot }), envRoot);
-    await writeFile(path.join(executionRoot, '.env'), '', 'utf8');
+    await writeFile(path.join(root, '.env'), '', 'utf8');
     assert.equal(await resolveRecordingsRoot(undefined, { executionRoot }), undefined);
     assert.deepEqual(await listRecordings({ executionRoot }), {
       configured: false,

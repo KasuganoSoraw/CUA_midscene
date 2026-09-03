@@ -1,8 +1,8 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readFile } from 'node:fs/promises';
+import { access, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import dotenv from 'dotenv';
 import type { DataPaths, RuntimeLayout } from './contracts/types.js';
+import { readEnvironmentValue } from './environment.js';
 import { packageRoot } from './package-root.js';
 
 export const executionRoot = packageRoot;
@@ -22,17 +22,7 @@ async function configuredDataRoot(
   const processValue = process.env[dataRootEnv]?.trim();
   if (processValue) return { value: processValue, source: dataRootEnv };
 
-  for (const filename of ['.env.local', '.env']) {
-    const envPath = path.join(root, filename);
-    try {
-      const parsed = dotenv.parse(await readFile(envPath));
-      const value = parsed[dataRootEnv]?.trim();
-      if (value) return { value, source: envPath };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
-  return {};
+  return readEnvironmentValue(dataRootEnv, root);
 }
 
 export function dataPaths(root: string): DataPaths {

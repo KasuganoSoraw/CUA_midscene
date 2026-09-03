@@ -1,7 +1,7 @@
 ## 1. Shared Environment Configuration
 
-- [ ] 1.1 增加 TypeScript 根环境文件定位与解析模块，并通过根路径、`.env.local` 覆盖和进程环境优先级测试
-- [ ] 1.2 将数据根、录制根、Python Worker 与 Midscene 配置切换到共享模块，并通过对应单元测试
+- [x] 1.1 增加 TypeScript 根环境文件定位与解析模块，并通过根路径、`.env.local` 覆盖和进程环境优先级测试
+- [x] 1.2 将数据根、录制根、Python Worker 与 Midscene 配置切换到共享模块，并通过对应单元测试
 
 ## 2. Configuration Surface
 

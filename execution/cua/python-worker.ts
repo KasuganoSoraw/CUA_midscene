@@ -1,8 +1,8 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { readFile, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { Writable } from 'node:stream';
-import dotenv from 'dotenv';
+import { readEnvironmentValue } from './environment.js';
 
 export const pythonExecutableEnv = 'CUA_PYTHON_EXECUTABLE';
 
@@ -34,17 +34,7 @@ async function configuredPython(
   const processValue = process.env[pythonExecutableEnv]?.trim();
   if (processValue) return { value: processValue, source: pythonExecutableEnv };
 
-  for (const filename of ['.env.local', '.env']) {
-    const envPath = path.join(executionRoot, filename);
-    try {
-      const parsed = dotenv.parse(await readFile(envPath));
-      const value = parsed[pythonExecutableEnv]?.trim();
-      if (value) return { value, source: envPath };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
-  return {};
+  return readEnvironmentValue(pythonExecutableEnv, executionRoot);
 }
 
 export async function resolvePythonExecutable(

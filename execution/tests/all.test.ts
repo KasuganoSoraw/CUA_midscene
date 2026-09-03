@@ -4,6 +4,7 @@ import './conversion/showui-trace.test.js';
 import './recording/create-task.test.js';
 import './recording/recording-catalog.test.js';
 import './python-worker.test.js';
+import './environment.test.js';
 import './task/data-paths.test.js';
 import './task/task-core.test.js';
 import './task/execution.test.js';

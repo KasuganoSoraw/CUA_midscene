@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import type { Dirent } from 'node:fs';
-import { access, open, readFile, readdir, stat } from 'node:fs/promises';
+import { access, open, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import dotenv from 'dotenv';
+import { readEnvironmentValue } from '../environment.js';
 import { packageRoot } from '../package-root.js';
 import { requireIdentifier } from '../task/tasks.js';
 
@@ -44,17 +44,7 @@ async function configuredRecordingsRoot(
   const processValue = process.env[recordingsRootEnv]?.trim();
   if (processValue) return { value: processValue, source: recordingsRootEnv };
 
-  for (const filename of ['.env.local', '.env']) {
-    const envPath = path.join(executionRoot, filename);
-    try {
-      const parsed = dotenv.parse(await readFile(envPath));
-      const value = parsed[recordingsRootEnv]?.trim();
-      if (value) return { value, source: envPath };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
-  return {};
+  return readEnvironmentValue(recordingsRootEnv, executionRoot);
 }
 
 export async function resolveRecordingsRoot(

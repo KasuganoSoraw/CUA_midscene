@@ -345,7 +345,7 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
     const configuredRoot = path.join(root, 'recordings-from-env');
     await mkdir(configuredRoot);
     await writeFile(
-      path.join(executionRoot, '.env.local'),
+      path.join(root, '.env.local'),
       `CUA_RECORDINGS_ROOT=${configuredRoot}\n`,
       'utf8',
     );

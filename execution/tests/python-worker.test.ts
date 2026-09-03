@@ -33,8 +33,8 @@ test('Python executable 遵循显式、进程、env.local、env 和开发环境�
   const processPython = await pythonFile(root, 'process-python');
   const localPython = await pythonFile(root, 'local-python');
   const envPython = await pythonFile(root, 'env-python');
-  await writeFile(path.join(executionRoot, '.env'), `${pythonExecutableEnv}=${envPython}\n`);
-  await writeFile(path.join(executionRoot, '.env.local'), `${pythonExecutableEnv}=${localPython}\n`);
+  await writeFile(path.join(root, '.env'), `${pythonExecutableEnv}=${envPython}\n`);
+  await writeFile(path.join(root, '.env.local'), `${pythonExecutableEnv}=${localPython}\n`);
 
   const previous = process.env[pythonExecutableEnv];
   try {
@@ -43,9 +43,9 @@ test('Python executable 遵循显式、进程、env.local、env 和开发环境�
     assert.equal(await resolvePythonExecutable(undefined, { executionRoot, devProjectRoot: projectRoot }), processPython);
     delete process.env[pythonExecutableEnv];
     assert.equal(await resolvePythonExecutable(undefined, { executionRoot, devProjectRoot: projectRoot }), localPython);
-    await writeFile(path.join(executionRoot, '.env.local'), '');
+    await writeFile(path.join(root, '.env.local'), '');
     assert.equal(await resolvePythonExecutable(undefined, { executionRoot, devProjectRoot: projectRoot }), envPython);
-    await writeFile(path.join(executionRoot, '.env'), '');
+    await writeFile(path.join(root, '.env'), '');
     assert.equal(await resolvePythonExecutable(undefined, { executionRoot, devProjectRoot: projectRoot }), devPython);
   } finally {
     if (previous === undefined) delete process.env[pythonExecutableEnv];

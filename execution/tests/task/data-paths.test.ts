@@ -14,8 +14,8 @@ test('数据根遵循显式、进程、env.local、env 优先级', async () => {
   const fromProcess = path.join(root, 'from-process');
   const explicit = path.join(root, 'explicit');
   await import('node:fs/promises').then(({ mkdir }) => mkdir(builtin, { recursive: true }));
-  await writeFile(path.join(skill, '.env'), `CUA_DATA_ROOT=${fromEnv}\n`, 'utf8');
-  await writeFile(path.join(skill, '.env.local'), `CUA_DATA_ROOT=${fromLocal}\n`, 'utf8');
+  await writeFile(path.join(root, '.env'), `CUA_DATA_ROOT=${fromEnv}\n`, 'utf8');
+  await writeFile(path.join(root, '.env.local'), `CUA_DATA_ROOT=${fromLocal}\n`, 'utf8');
   const previous = process.env.CUA_DATA_ROOT;
   delete process.env.CUA_DATA_ROOT;
   try {
