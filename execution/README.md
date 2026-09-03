@@ -52,6 +52,8 @@ JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；resp
 
 依赖准备属于安装流程：Host 把三个组件 wheels 安装到同一个隔离 Python 环境，准备隔离的 JavaScript Runtime，并提供 executable 与 bridge 路径。Python Agent invocation 和 Worker 调用不执行 `npm install`、`npm ci`、`uv sync`、`uv lock` 或 `pip install`。源码开发未配置统一 Python 时，record 与 recorder 分别使用相邻工程已准备完成的 `.venv`。
 
+组件构建、Host 安装与产品运行命令见 [`../docs/component-distribution.md`](../docs/component-distribution.md)。
+
 ## 环境
 
 要求 Node.js `>=22.18.0`，公司基线版本为 Node.js 22.18.0。

@@ -56,9 +56,11 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 Host 产品的安装/构建流程应：
 
-1. 安装本目录构建的 `cua-agent` wheel 到隔离 Python 环境。
-2. 安装 `execution` Runtime，保留兼容的 JavaScript executable 与 `dist/runtime-bridge/worker.js`。
-3. 向 Agent 进程提供模型配置、`CUA_DATA_ROOT` 和两个 Runtime 路径。
+1. 读取组件 `manifest.json`，将 `cua-agent`、`cua-recorder` 和 `cua-record` wheels 安装到同一个隔离 Python 环境。
+2. 整体复制组件的 JavaScript Runtime，并提供兼容的 JavaScript executable。
+3. 向 Agent 提供模型配置、`CUA_DATA_ROOT`、Runtime executable 和 bridge 绝对路径。
 4. invocation 只启动 `cua-agent invoke`，不调用包管理命令。
 
 `review --dev` 使用完全相同的 Python invocation，只是将事件和结果显示在开发调试页面。普通 `review` 不注册该入口。
+
+组件构建、安装和 GDEClaw/Electron 适配命令见 [`../docs/component-distribution.md`](../docs/component-distribution.md)。

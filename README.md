@@ -9,6 +9,7 @@
 ```text
 CUA/
 ├── component.toml          # 可装配组件的版本、运行时与 Python 包声明
+├── docs/                   # 组件发行与宿主集成说明
 ├── agent/                  # Python CUA Subagent：definition、模型 loop、私有 Tool 与事件
 ├── recorder/               # Windows 录制 Worker：PyAV 视频、Win32 键鼠与全局快捷键
 ├── record/                 # 教学录制处理：视频、日志、截图 -> trace
@@ -62,37 +63,30 @@ Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现
 
 ## 快速开始
 
-```powershell
-cd execution
-npm ci
-Copy-Item .env.example .env.local
-# 编辑 .env.local，填写模型配置、数据根和可选录制输出根
-npm run check
-
-npm run cua -- scene list --json
-npm run cua -- task list --scene browser-demo --json
-npm run cua -- task describe --scene browser-demo --task air-tickets-demo --json
-npm run cua -- task create-from-recording --scene <scene> --task <task> --recording <录制目录> [--goal "<任务描述>"]
-npm run cua -- task validate --scene browser-demo --task air-tickets-demo
-npm run cua -- task inspect --scene browser-demo --task air-tickets-demo --input step-002-input=GOOGLE
-npm run cua -- task run --scene browser-demo --task air-tickets-demo --dry-run
-npm run cua -- act run --scene browser-demo --task air-tickets-demo --dry-run
-npm run cua -- act run --prompt "打开 Chrome 并搜索 GUI agent" --dry-run
-npm run cua -- review --no-open
-npm run cua -- review --dev --no-open
-```
-
-开发 Python Agent：
+完整源码开发需要分别准备三个 Python 工程和 TypeScript Runtime：
 
 ```powershell
 cd agent
 uv sync --locked
-uv run --locked pytest
-uv run --locked ruff check .
-uv run --locked mypy
+
+cd ..\record
+uv sync --locked
+
+cd ..\recorder
+uv sync --locked
+
+cd ..\execution
+npm ci
+Copy-Item .env.example .env.local
+# 编辑 .env.local，填写模型配置、数据根和可选录制输出根
+npm run check
+npm run build
+
+npm run cua -- review --no-open
+npm run cua -- review --dev --no-open
 ```
 
-上述依赖准备属于开发/安装阶段。GDEClaw 集成时应安装 `cua-agent` wheel、准备隔离的 Node Runtime 并配置可执行路径；每次 invocation 只执行，不运行 `uv sync`、`uv lock`、`pip install`、`npm install` 或 `npm ci`。
+普通 `review` 用于任务与录制复核；`review --dev` 额外提供无 Session 的 Agent 自然语言调试入口。完整 CLI 命令见 [`execution/README.md`](./execution/README.md)，Agent 进程调用见 [`agent/README.md`](./agent/README.md)。
 
 执行器要求 Node.js `>=22.18.0`。
 
@@ -166,18 +160,19 @@ uv run --locked mypy
 cd ..\recorder
 uv lock --check
 uv run --locked python -m unittest discover -s tests -v
+
+cd ..\record
+uv lock --check
+uv run --locked python -m unittest discover -s tests -v
 ```
 
 ## 可装配组件
 
-`component.toml` 定义组件版本、兼容运行时和三个 Python wheel。构建命令生成自描述目录，包含 wheels、编译后的 Runtime bridge、schemas、内置 projects 与独立的 production `node_modules`：
+`component.toml` 定义组件版本、兼容运行时和三个 Python wheel。构建产物是供 Host 安装的组件目录，不携带 Python 或 Node/Electron executable：
 
 ```powershell
-py -3.11 scripts\build_component.py --force
-py -3.11 scripts\verify_component.py dist\computer-use-component
-py -3.11 scripts\smoke_component.py dist\computer-use-component `
-  --python C:\path\to\python.exe `
-  --javascript C:\path\to\node.exe
+uv run --project record --locked python scripts\build_component.py --force
+uv run --project record --locked python scripts\verify_component.py dist\computer-use-component
 ```
 
-Host 安装阶段读取 `manifest.json`，把三个 wheels 安装到同一个隔离 Python 环境，并为 Agent 配置 `CUA_AGENT_JS_RUNTIME_EXECUTABLE`、`CUA_AGENT_RUNTIME_BRIDGE` 与 `CUA_DATA_ROOT`。运行阶段只启动模块和 Runtime，不执行依赖解析、安装、lock 或构建。JavaScript executable 可以是兼容 Node.js 的独立运行时，也可以是启用 Node 模式的 Electron；具体环境变量由 Host Adapter 注入。
+组件目录结构、clean-room smoke test、本地 Host 安装、直接运行和 GDEClaw/Electron 适配见 [`docs/component-distribution.md`](./docs/component-distribution.md)。运行阶段只启动已安装模块和 Runtime，不执行依赖解析、安装、lock 或构建。
