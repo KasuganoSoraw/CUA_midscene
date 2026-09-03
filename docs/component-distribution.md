@@ -1,6 +1,6 @@
 # Computer-Use Component
 
-Computer-Use Component 是供 GDEClaw 或其他 Host 安装的组件目录。它包含三个 Python wheel、编译后的 JavaScript Runtime、production `node_modules`、schemas、内置任务和 manifest；不包含 Python、Node/Electron executable、模型配置或数据目录。
+Computer-Use Component 是供 GDEClaw 或其他 Host 安装的组件目录。它包含三个 Python wheel、编译后的 JavaScript Runtime、production `node_modules`、schemas、内置任务和 manifest；不包含 Python、Node/Electron executable、环境文件、模型配置或数据目录。
 
 ## 构建与验证
 
@@ -85,6 +85,8 @@ $env:MIDSCENE_MODEL_FAMILY = 'doubao-vision'
 ```
 
 `CUA_AGENT_MODEL_*` 可为 Subagent 单独配置任务级模型；未设置时读取对应的 `MIDSCENE_MODEL_*`。stdin 只接收一个 invocation，stdout 输出事件与最终结果 JSONL，随后进程退出。
+
+仓库根 `.env.example` 只用于源码开发。组件运行时不查找或复制环境文件，Host 通过进程环境或自身密钥管理注入全部配置。
 
 需要启动打包后的普通 Review 时，额外设置统一 Python 并调用组件 CLI：
 

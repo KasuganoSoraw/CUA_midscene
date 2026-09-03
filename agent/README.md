@@ -38,12 +38,12 @@ uv build
 $env:CUA_AGENT_JS_RUNTIME_EXECUTABLE = 'C:\Program Files\nodejs\node.exe'
 $env:CUA_AGENT_RUNTIME_BRIDGE = 'E:\HW\CUA\execution\dist\runtime-bridge\worker.js'
 $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
-'{"task":"打开 Chrome","invocationId":"dev-1"}' | uv run --locked cua-agent invoke
+'{"task":"打开 Chrome","invocationId":"dev-1"}' | uv run --locked --env-file ..\.env.local cua-agent invoke
 ```
 
 需要配置 `CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY`；未设置专用变量时读取相应 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_TIMEOUT_SECONDS` 默认 120 秒，`CUA_AGENT_MAX_TURNS` 默认 8，Runtime 单请求超时为 300 秒。真实密钥只能存在于被忽略的本地环境或进程环境中。
 
-`agent/.env.example` 只是环境变量契约示例，Python CLI 本身不加载 `.env` 文件。直接调用时由 shell/进程管理器注入环境；`review --dev` 则继承 Review Server 已从 `execution/.env.local`、`execution/.env` 和进程环境加载的变量。
+完整变量契约位于仓库根 `.env.example`。Python CLI 本身不查找环境文件；源码直接调用使用 `uv --env-file` 注入根 `.env.local`，`review --dev` 继承 Review Server 已加载的根环境配置，产品调用由 Host 注入进程环境。
 
 ## 调用结果与取消
 

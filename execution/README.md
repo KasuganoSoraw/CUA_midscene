@@ -63,7 +63,11 @@ npm ci
 npm run check
 ```
 
-从 `.env.example` 创建 `.env.local`，配置模型、Skill 外部的绝对数据根，以及可选的原始录制集合：
+从仓库根 `.env.example` 创建根 `.env.local`，配置模型、Skill 外部的绝对数据根，以及可选的原始录制集合：
+
+```powershell
+Copy-Item ..\.env.example ..\.env.local
+```
 
 ```text
 MIDSCENE_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
@@ -78,7 +82,7 @@ CUA_DATA_ROOT=C:\path\to\cua-data
 CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
 ```
 
-`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。组件宿主通过 `CUA_PYTHON_EXECUTABLE` 提供已经安装 `cua_record` 与 `cua_recorder` 的统一 Python；源码开发不设置该变量时，两个 Worker 分别使用相邻工程的 `.venv`。record 模型配置通过进程环境注入。
+TypeScript Runtime 的配置优先级为进程环境、仓库根 `.env.local`、仓库根 `.env`；子工程目录不保存或读取环境文件。`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。组件宿主通过 `CUA_PYTHON_EXECUTABLE` 提供已经安装 `cua_record` 与 `cua_recorder` 的统一 Python；源码开发不设置该变量时，两个 Worker 分别使用相邻工程的 `.venv`。Python Worker 继承 Runtime 已加载的进程环境。
 
 `CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 的任务级推理模型；未设置时读取对应 `MIDSCENE_MODEL_*`。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8，Runtime 单请求超时为 300 秒。`review --dev` 在源码环境使用顶层 `agent/.venv`、服务进程 JavaScript executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_JS_RUNTIME_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径由安装流程准备。
 
@@ -112,7 +116,7 @@ node dist/cli/main.js review --no-open
 
 `review` 只启动监听 `127.0.0.1` 的本地页面，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT` 与相同开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。`--dev` 额外启用 Python Agent 调试入口；默认模式完全隐藏它。“任务复核”读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML。“从录制创建任务”既提供 Windows Worker 的显示器预览、`Ctrl+Shift+F9` 准备/开始/停止控制，也读取 `CUA_RECORDINGS_ROOT` 的一级目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并复用 `createTaskFromRecording()` 创建完整用户任务。页面不播放视频、不展示完整日志，也不流式转发 Python 后处理日志；创建期间只显示不可确定的“正在生成”状态，成功后自动进入新任务复核。同一录制可以用于创建不同任务，每次都会重新处理。
 
-未配置 `CUA_RECORDINGS_ROOT` 不会阻止 review 服务和任务复核启动。录制页只提示需要配置的环境变量、`execution/.env.local` 配置位置和路径示例，不直接修改环境文件，也不从后台服务进程唤起可能失焦或阻塞的桌面目录选择框。配置后重启 review 服务即可生效。存在零个或多个视频/事件文件的录制目录仍会显示，但不能生成任务。
+未配置 `CUA_RECORDINGS_ROOT` 不会阻止 review 服务和任务复核启动。录制页只提示需要配置的环境变量、仓库根 `.env.local` 配置位置和路径示例，不直接修改环境文件，也不从后台服务进程唤起可能失焦或阻塞的桌面目录选择框。配置后重启 review 服务即可生效。存在零个或多个视频/事件文件的录制目录仍会显示，但不能生成任务。
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。inspect 与 run 使用同一个 resolver，不调用模型、不回写任务。`--dry-run` 只构建并解析 YAML，不操作电脑，也不是模拟执行。
 

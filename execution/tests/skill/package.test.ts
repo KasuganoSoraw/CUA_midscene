@@ -46,7 +46,6 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
   assert.deepEqual(
     new Set(packageJson.files),
     new Set([
-      '.env.example',
       'cli',
       'cua',
       'dist',
@@ -89,7 +88,9 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
 
 test('Skill 文档面向维护型调用方并使用编译后的 Node CLI', async () => {
   const skill = await readFile(path.join(executionRoot, 'SKILL.md'), 'utf8');
-  const envExample = await readFile(path.join(executionRoot, '.env.example'), 'utf8');
+  const envExample = await readFile(path.join(repositoryRoot, '.env.example'), 'utf8');
+  const rootReadme = await readFile(path.join(repositoryRoot, 'README.md'), 'utf8');
+  const executionReadme = await readFile(path.join(executionRoot, 'README.md'), 'utf8');
 
   assert.match(skill, /node dist\/cli\/main\.js/);
   assert.match(skill, /维护型调用方/);
@@ -99,6 +100,7 @@ test('Skill 文档面向维护型调用方并使用编译后的 Node CLI', async
   assert.match(skill, /模型请求默认 120 秒.*Runtime 单请求默认 300 秒.*Review 外层 invocation 默认 30 分钟/);
   assert.match(skill, /task create-from-recording/);
   assert.match(skill, /CUA_PYTHON_EXECUTABLE/);
+  assert.match(skill, /源码仓只在仓库根提供 `.env\.example`/);
   assert.match(skill, /Windows `cua_recorder` 是采集 Worker.*`cua_record` 后处理器/);
   assert.match(skill, /--goal.*不参与 trace 生成/);
   assert.match(skill, /提出 `task\.yaml` 修改建议，展示原值、新值和原因，等待明确确认/);
@@ -106,6 +108,16 @@ test('Skill 文档面向维护型调用方并使用编译后的 Node CLI', async
   assert.doesNotMatch(skill, /uv run cua|python\s+-m/i);
   assert.doesNotMatch(skill, /uv run python|Aloha_Learn[\\/]parser\.py/i);
   assert.match(envExample, /^# CUA_PYTHON_EXECUTABLE=.+$/m);
+  assert.match(envExample, /^CUA_AGENT_MODEL_TLS_VERIFY=true$/m);
+  assert.match(envExample, /^OPENAI_VERIFY_SSL=true$/m);
   assert.doesNotMatch(envExample, /CUA_RECORD_ROOT|CUA_RECORDER_ROOT/);
+  assert.match(rootReadme, /仓库根 `.env\.example` 是源码开发的完整变量契约/);
+  assert.match(executionReadme, /进程环境、仓库根 `.env\.local`、仓库根 `.env`/);
+  assert.doesNotMatch(`${rootReadme}\n${executionReadme}`, /execution[/\\]\.env(?:\.local)?/);
+  await Promise.all([
+    access(path.join(repositoryRoot, 'agent', '.env.example')),
+    access(path.join(repositoryRoot, 'execution', '.env.example')),
+    access(path.join(repositoryRoot, 'record', '.env.example')),
+  ].map(async (accessFile) => assert.rejects(accessFile)));
   await assert.rejects(access(path.join(repositoryRoot, 'scripts/install-cua-midscene-skill.ps1')));
 });

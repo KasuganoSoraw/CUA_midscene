@@ -294,7 +294,7 @@ onUnmounted(() => {
         <div>
           <small>保存位置（CUA_RECORDINGS_ROOT）</small>
           <strong :title="recorderStatus.outputRoot">{{ recorderStatus.outputRoot || '尚未配置' }}</strong>
-          <small v-if="!recorderStatus.outputRoot">请在 execution/.env.local 中配置绝对路径并重启服务</small>
+          <small v-if="!recorderStatus.outputRoot">请在仓库根 .env.local 中配置绝对路径并重启服务</small>
         </div>
         <button class="primary" type="button" :disabled="!canStartRecorder" @click="startRecorder">准备录制</button>
       </div>
@@ -315,7 +315,7 @@ onUnmounted(() => {
 
     <div v-if="!catalog.configured" class="recording-config-empty">
       <strong>未配置录制目录</strong>
-      <p>请在 execution 的环境变量或 <code>.env.local</code> 中配置：</p>
+      <p>请在进程环境或仓库根 <code>.env.local</code> 中配置：</p>
       <code>{{ catalog.envName }}</code>
       <small>示例：</small>
       <code class="recording-config-example" title="CUA_RECORDINGS_ROOT=C:\path\to\recorder-output">

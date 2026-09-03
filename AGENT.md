@@ -23,3 +23,4 @@
 13. 仓库提供 Python 包、单次进程 invocation、Review `--dev` 调试入口和 Runtime bridge。GDEClaw 注册与生命周期 Adapter、网络服务和长期 Agent daemon 位于仓库边界之外。
 14. `execution/SKILL.md` 与任务目录中的 `SKILL.md` 是 CLI 操作、维护和打包说明；Python Agent 不读取这些 Markdown，而是通过 `cua_catalog` 获取结构化 task/scene 数据。不得把这些文件描述为 GDEClaw 需要注册的公共 Tool 或 Python Agent 的运行时 prompt。
 15. 代码、注释、文档、Skill 和 UI 文案只描述稳定设计、能力边界和必要用法。变更历史只在用户明确要求时记录；其他场景不写入对话过程、用户纠正过程、版本演进或前后方案比较，修改时同步清理同类元叙述。
+16. 源码仓的环境变量契约只保存在根 `.env.example`，本地真实值只保存在被忽略的根 `.env.local`。TypeScript Runtime 按“进程环境、根 `.env.local`、根 `.env`”读取；Python 包由调用方注入进程环境。组件和独立 execution 发布包不得携带环境文件。

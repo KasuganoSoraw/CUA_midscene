@@ -66,6 +66,9 @@ Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现
 完整源码开发需要分别准备三个 Python 工程和 TypeScript Runtime：
 
 ```powershell
+Copy-Item .env.example .env.local
+# 编辑仓库根 .env.local，填写模型配置、数据根和可选录制输出根
+
 cd agent
 uv sync --locked
 
@@ -77,8 +80,6 @@ uv sync --locked
 
 cd ..\execution
 npm ci
-Copy-Item .env.example .env.local
-# 编辑 .env.local，填写模型配置、数据根和可选录制输出根
 npm run check
 npm run build
 
@@ -137,13 +138,13 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
     └── midscene/                    # Midscene 报告、截图等产物
 ```
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、`execution/.env.local`、`execution/.env`。`CUA_PYTHON_EXECUTABLE` 是组件宿主提供的统一 Python，必须已经安装 `cua-agent`、`cua-recorder` 与 `cua-record`；源码开发未设置时，record 后处理和 Windows recorder 分别使用相邻工程的 `.venv`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、仓库根 `.env.local`、仓库根 `.env`。`CUA_PYTHON_EXECUTABLE` 是组件宿主提供的统一 Python，必须已经安装 `cua-agent`、`cua-recorder` 与 `cua-record`；源码开发未设置时，record 后处理和 Windows recorder 分别使用相邻工程的 `.venv`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
 
 trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 
 ## 验证与打包
 
-真实密钥只放在被忽略的本地环境文件或进程环境中，不得提交。开发 Review 默认从 `execution/.env.local` 继承模型配置；`CUA_AGENT_MODEL_*` 未设置时读取相应的 `MIDSCENE_MODEL_*`。Agent 的 `.env.example` 不会被 Python CLI 自动加载。
+仓库根 `.env.example` 是源码开发的完整变量契约；真实值只放在被忽略的根 `.env.local` 或进程环境中，不得提交。TypeScript Runtime 自动读取根环境文件，进程环境优先；Python 包由 Review/Runtime 注入环境，独立运行时使用 `uv run --env-file ..\.env.local ...`。`CUA_AGENT_MODEL_*` 未设置时读取相应的 `MIDSCENE_MODEL_*`。组件发布物不携带环境文件，产品态由 Host 注入进程环境。
 
 ```powershell
 cd execution

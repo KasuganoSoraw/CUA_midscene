@@ -18,12 +18,11 @@ ShowUI-Aloha 不承担任务执行或回放；Computer-Use Runtime 位于 `../ex
 
 ## 环境配置
 
-模型配置通过进程环境提供。PowerShell 开发会话可以设置对应变量：
+完整变量契约位于仓库根 `.env.example`。源码开发将其复制为根 `.env.local`，独立运行 record 时通过 `uv --env-file` 注入：
 
 ```powershell
-$env:OPENAI_BASE_URL = 'https://example.internal/v1'
-$env:OPENAI_MODEL = 'vision-model'
-$env:OPENAI_API_KEY = 'replace-me'
+Copy-Item ..\.env.example ..\.env.local
+uv run --locked --env-file ..\.env.local python -m cua_record process C:\path\to\recording
 ```
 
 需要提供以下 OpenAI 兼容接口配置：
@@ -35,7 +34,7 @@ OPENAI_API_KEY=replace-me
 ALOHA_TRACE_TEMPERATURE=0.2
 ```
 
-`cua_record` 不自动加载环境文件。真实密钥只能由 shell、进程管理器或 Host 注入，不能提交到 git。
+`OPENAI_BASE_URL`、`OPENAI_MODEL` 和 `OPENAI_API_KEY` 未设置时回退到对应 `MIDSCENE_MODEL_*`。`cua_record` 本身不查找环境文件；Review/Runtime 和产品 Host 均通过进程环境注入。真实密钥只放在被忽略的根 `.env.local` 或 Host 密钥管理中。
 
 ## 运行 Learn 流程
 
@@ -48,7 +47,7 @@ uv sync --locked
 基于示例录制生成结构化日志和 trace：
 
 ```powershell
-uv run python -m cua_record process C:\path\to\recording
+uv run --locked --env-file ..\.env.local python -m cua_record process C:\path\to\recording
 ```
 
 processor 接收一个录制目录，生成 trace 时不接收业务 goal，避免高层目标干扰逐步视觉证据判断。该 Python 命令用于独立调试 record；开发者、Review 和维护型调用方通过 execution 的单一创建命令生成可执行任务。execution 的可选 `--goal` 只在 trace 生成后写入任务描述。

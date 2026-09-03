@@ -5,8 +5,8 @@
 
 ## 2. Configuration Surface
 
-- [ ] 2.1 在仓库根创建完整 `.env.example`，删除三个子工程 example，并通过发布面测试确认组件与 execution 包不携带环境文件
-- [ ] 2.2 更新 Review 配置提示、README、Agent 与组件发行文档，使源码命令只引用根环境文件并通过文档断言
+- [x] 2.1 在仓库根创建完整 `.env.example`，删除三个子工程 example，并通过发布面测试确认组件与 execution 包不携带环境文件
+- [x] 2.2 更新 Review 配置提示、README、Agent 与组件发行文档，使源码命令只引用根环境文件并通过文档断言
 
 ## 3. Validation
 

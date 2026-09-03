@@ -20,7 +20,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 - computer use 必须由上层串行调用。
 - 维护型外部调用方运行本 CLI 时必须为外围命令设置足够长的超时。Python Agent 的模型请求默认 120 秒、Runtime 单请求默认 300 秒，Review 外层 invocation 默认 30 分钟；这些限制分层生效，外围超时不能覆盖内部固定超时。
 
-`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_PYTHON_EXECUTABLE` 指向已安装组件 Python 包的宿主解释器；`CUA_RECORDINGS_ROOT` 定位原始录制集合。命令行参数优先于环境配置，完整优先级见 `references/task-contract.md`。
+`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_PYTHON_EXECUTABLE` 指向已安装组件 Python 包的宿主解释器；`CUA_RECORDINGS_ROOT` 定位原始录制集合。源码仓只在仓库根提供 `.env.example`，本地真实值放在被忽略的根 `.env.local`；发布包不携带环境文件。命令行参数优先于环境配置，完整优先级见 `references/task-contract.md`。
 
 ## 判断意图
 
