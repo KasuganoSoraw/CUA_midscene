@@ -10,5 +10,5 @@
 
 ## 3. Validation
 
-- [ ] 3.1 运行 execution 全量测试、类型检查和三个 Python 包测试，修复环境加载回归
-- [ ] 3.2 重建并验证组件、运行 clean-room smoke test 与 `openspec validate --all --strict`，确认产品态不依赖环境文件
+- [x] 3.1 运行 execution 全量测试、类型检查和三个 Python 包测试，修复环境加载回归
+- [x] 3.2 重建并验证组件、运行 clean-room smoke test 与 `openspec validate --all --strict`，确认产品态不依赖环境文件
