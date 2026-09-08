@@ -2,9 +2,11 @@
 
 ## Purpose
 定义 Executor Skill 发布资产与用户可写数据之间的稳定边界，规定数据根配置优先级、内置与用户任务目录、统一运行产物目录以及 Midscene 输出位置，确保安装目录在运行期间保持只读且可安全替换升级。
+
 ## Requirements
+
 ### Requirement: 用户数据根具有确定配置优先级
-系统 SHALL 按显式 CLI 参数、进程环境变量 `CUA_DATA_ROOT`、Skill 根目录 `.env.local`、Skill 根目录 `.env` 的顺序解析用户数据根，并将其规范化为绝对路径。
+系统 SHALL 按显式 CLI 参数、进程环境变量 `CUA_DATA_ROOT`、组件或仓库根目录 `.env.local`、同一根目录 `.env` 的顺序解析用户数据根，并将其规范化为绝对路径。
 
 #### Scenario: CLI 覆盖环境配置
 - **WHEN** 调用方同时提供 `--data-root` 和 `CUA_DATA_ROOT`
@@ -12,7 +14,7 @@
 - **AND** 系统 SHALL NOT 修改环境文件
 
 #### Scenario: 使用现场环境配置
-- **WHEN** 调用方未提供 `--data-root` 且进程环境或环境文件包含 `CUA_DATA_ROOT`
+- **WHEN** 调用方未提供 `--data-root` 且进程环境或根环境文件包含 `CUA_DATA_ROOT`
 - **THEN** 系统 SHALL 使用最高优先级的非空值
 - **AND** 相对路径、不可创建路径或不可写路径 SHALL 在写入前失败并给出明确错误
 
@@ -58,4 +60,3 @@ TypeScript 执行编排 SHALL 为每次调用显式提供绝对 run directory，
 - **WHEN** Midscene 实际执行成功、失败或抛出异常
 - **THEN** 执行器 SHALL 销毁本次 Agent
 - **AND** 执行器 SHALL 在 `finally` 中恢复调用前的环境值
-

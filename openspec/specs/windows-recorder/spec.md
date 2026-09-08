@@ -6,7 +6,7 @@
 ## Requirements
 
 ### Requirement: Windows 录制器以独立 Python 进程提供稳定控制协议
-系统 SHALL 提供 Windows-only Python 录制 Worker，并 SHALL 通过无 shell 的 CLI、stdin、stdout、stderr 和退出码完成显示器查询、预览、开始、状态通知与停止，而不要求调用方导入录制内部实现。
+系统 SHALL 提供 Windows-only Python 录制 Worker，并 SHALL 通过宿主提供的 Python executable 以 `-m cua_recorder` 启动独立无 shell 进程；调用方 SHALL 通过 CLI、stdin、stdout、stderr 和退出码完成显示器查询、预览、开始、状态通知与停止，且 SHALL NOT 要求 Recorder 源码根、`pyproject.toml` 或 `uv`。
 
 #### Scenario: 调用方准备并通过全局快捷键完成录制
 - **WHEN** 调用方以合法显示器和输出根启动 Worker，Worker 报告 `armed` 后用户在目标应用中第一次按全局快捷键开始、第二次按快捷键停止
@@ -19,6 +19,10 @@
 #### Scenario: 父进程关闭控制通道
 - **WHEN** Worker 已开始实际录制且其 stdin 到达 EOF
 - **THEN** Worker SHALL 尝试正常停止并完成资产，不得继续成为失去所有者的后台录制进程
+
+#### Scenario: 宿主 Python 未提供 Recorder
+- **WHEN** Python executable 不存在、无法启动或未安装 `cua_recorder`
+- **THEN** 调用方 SHALL 返回可执行诊断且不得创建录制目录
 
 ### Requirement: 全局快捷键定义无浏览器污染的录制边界
 Worker SHALL 仅使用 Python 标准库和 Win32 `RegisterHotKey` 注册带防重复标志的全局切换快捷键，并 SHALL 在 `armed` 前验证注册成功；第一次触发 SHALL 开始实际视频和输入时间轴，第二次触发 SHALL 正常停止，控制快捷键自身 SHALL NOT 写入输入日志。

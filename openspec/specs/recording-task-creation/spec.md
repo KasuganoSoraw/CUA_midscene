@@ -2,7 +2,9 @@
 
 ## Purpose
 定义从原始录制运行 record parser、规范化 trace 与截图资产、创建 canonical CUA 任务并执行静态验证的一体化流程。
+
 ## Requirements
+
 ### Requirement: 单一命令从原始录制创建任务
 执行器 SHALL 提供 `task create-from-recording`，在一次调用中生成 trace、规范化任务 source、初始化 canonical 任务并执行与 `task validate` 相同的静态验证。
 
@@ -32,15 +34,15 @@
 - **AND** task title 与 YAML agent.groupName SHALL 继续使用 task 标识
 
 ### Requirement: 独立解析录制器环境
-执行器 SHALL 从显式参数、进程环境、execution 环境文件或源码相邻目录解析外部录制器根，并在该目录的 uv 环境中运行 Python；Python SHALL 从 `record/.env` 读取 trace 模型配置。
+执行器 SHALL 使用显式提供或由运行环境配置的 Python executable 执行已安装的 `cua_record` 模块；录制目录仅作为处理输入，创建流程 SHALL NOT 要求 record 源码根、`pyproject.toml`、脚本相对路径或 `uv`，Python 模块 SHALL 从进程环境读取 trace 模型配置。
 
 #### Scenario: 使用安装后的 Skill
-- **WHEN** execution 安装目录旁不存在 record 且 `CUA_RECORD_ROOT` 指向有效录制器
-- **THEN** 创建命令 SHALL 使用该目录的 `pyproject.toml` 和 `Aloha_Learn/parser.py`
-- **AND** execution 发布物 SHALL NOT 包含 Python 源码或 uv 环境
+- **WHEN** execution 运行于已安装 `cua_record` 的宿主 Python 环境
+- **THEN** 创建命令 SHALL 使用该 Python 执行 `-m cua_record process <recording>`
+- **AND** execution 与组件发行物 SHALL NOT 包含 Python executable、源码工程或 uv 环境
 
 #### Scenario: 录制器环境无效
-- **WHEN** 解析到的目录缺少录制器标记文件或无法启动 uv
+- **WHEN** Python executable 不存在、无法启动或未安装 `cua_record`
 - **THEN** 系统 SHALL 在创建任务目录前失败并报告原始原因
 
 ### Requirement: 任务 source 只保存规范化生成资产
