@@ -99,14 +99,22 @@ class VideoScreenshotExtractor:
         for a in actions:
             if (a.get("action") or "").startswith("CONFIG"):
                 monitors = a.get("coords", {})
-                primary = monitors.get("0") if isinstance(monitors, dict) else None
-
-                if not primary:
+                if not isinstance(monitors, dict) or not monitors:
                     return None, None
 
-                width = primary.get("width")
-                height = primary.get("height")
-                sf = primary.get("scale_factor", 1.0) or 1.0
+                selected = monitors.get("0")
+                if selected is None and len(monitors) == 1:
+                    selected = next(iter(monitors.values()))
+
+                if not isinstance(selected, dict):
+                    return None, None
+
+                width = selected.get("width")
+                height = selected.get("height")
+                sf = selected.get("scale_factor", 1.0) or 1.0
+
+                if width is None or height is None:
+                    return None, None
 
                 # Use *logical* resolution as base for coords / video
                 logical_w = int(round(width / sf))

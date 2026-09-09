@@ -145,5 +145,26 @@ class ScreenshotProcessorReferenceImageTest(unittest.TestCase):
                     )
 
 
+class ScreenshotProcessorConfigTest(unittest.TestCase):
+    def test_nonzero_selected_display_provides_recording_resolution(self):
+        actions = [
+            {
+                "timestamp": 0.0,
+                "action": "CONFIG",
+                "coords": {
+                    "1": {
+                        "width": 2560,
+                        "height": 1440,
+                        "scale_factor": 1.0,
+                    }
+                },
+            }
+        ]
+
+        extractor = VideoScreenshotExtractor()
+
+        self.assertEqual((2560, 1440), extractor._parse_config_resolution(actions))
+
+
 if __name__ == "__main__":
     unittest.main()
