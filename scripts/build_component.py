@@ -122,6 +122,9 @@ def _build_python_wheels(
     wheels: dict[str, Path] = {}
     for package in metadata["python-packages"]:
         project_root = repository_root / str(package["project"])
+        build_root = project_root / "build"
+        if build_root.exists():
+            shutil.rmtree(build_root)
         _run(
             [uv_executable, "build", "--wheel", "--out-dir", str(output)],
             cwd=project_root,

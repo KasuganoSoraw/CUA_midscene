@@ -4,8 +4,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from scripts.build_component import _sanitized_runtime_package
+from scripts.build_component import _build_python_wheels, _sanitized_runtime_package
 from scripts.component_manifest import (
     ComponentValidationError,
     build_manifest,
@@ -105,6 +106,55 @@ class ComponentManifestTest(unittest.TestCase):
         self.assertNotIn("devDependencies", package)
         self.assertNotIn("scripts", package)
         self.assertEqual({"fastify": "^5.0.0"}, package["dependencies"])
+
+    def test_python_wheel_builds_start_without_setuptools_build_trees(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repository = root / "repository"
+            staging = root / "staging"
+            staging.mkdir()
+            packages = [
+                {
+                    "distribution": "cua-agent",
+                    "module": "cua_agent",
+                    "project": "agent",
+                    "wheel-prefix": "cua_agent",
+                },
+                {
+                    "distribution": "cua-windows-recorder",
+                    "module": "cua_recorder",
+                    "project": "recorder",
+                    "wheel-prefix": "cua_windows_recorder",
+                },
+                {
+                    "distribution": "cua-record",
+                    "module": "cua_record",
+                    "project": "record",
+                    "wheel-prefix": "cua_record",
+                },
+            ]
+            for package in packages:
+                stale = repository / package["project"] / "build" / "lib"
+                stale.mkdir(parents=True)
+                (stale / "stale.py").write_text("stale", encoding="utf-8")
+
+            def build_wheel(command, *, cwd):
+                self.assertFalse((cwd / "build").exists())
+                package = next(item for item in packages if repository / item["project"] == cwd)
+                output = Path(command[command.index("--out-dir") + 1])
+                wheel = output / f"{package['wheel-prefix']}-0.1.0-py3-none-any.whl"
+                wheel.write_bytes(b"wheel")
+
+            with patch("scripts.build_component._run", side_effect=build_wheel) as run:
+                wheels = _build_python_wheels(
+                    repository,
+                    staging,
+                    "uv",
+                    {"python-packages": packages},
+                )
+
+            self.assertEqual(3, run.call_count)
+            self.assertEqual({"cua_agent", "cua_recorder", "cua_record"}, set(wheels))
 
 
 if __name__ == "__main__":
