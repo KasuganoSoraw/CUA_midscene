@@ -132,6 +132,38 @@ class EventFormattingTest(unittest.TestCase):
         self.assertEqual("NUMPAD_7", key_name(0x67))
         self.assertEqual("NUMPAD_DECIMAL", key_name(0x6E))
 
+    def test_standard_keyboard_punctuation_uses_shift_state(self) -> None:
+        stream = io.StringIO()
+        formatter = self.create_formatter(stream)
+        formatter.handle(RawInputEvent("key_down", 1_010_000_000, vk_code=0x10))
+        formatter.handle(RawInputEvent("key_down", 1_020_000_000, vk_code=0xBA))
+        formatter.handle(RawInputEvent("key_up", 1_030_000_000, vk_code=0xBA))
+        formatter.handle(RawInputEvent("key_up", 1_040_000_000, vk_code=0x10))
+        formatter.handle(RawInputEvent("key_down", 1_050_000_000, vk_code=0xDC))
+        formatter.handle(RawInputEvent("key_up", 1_060_000_000, vk_code=0xDC))
+        formatter.handle(RawInputEvent("key_down", 1_070_000_000, vk_code=0x10))
+        formatter.handle(RawInputEvent("key_down", 1_080_000_000, vk_code=0xBD))
+
+        self.assertEqual(
+            [
+                "Key Press: SHIFT", "Hotkey: SHIFT+:", "Key Release: :", "Key Release: SHIFT",
+                "Key Press: \\", "Key Release: \\", "Key Press: SHIFT", "Hotkey: SHIFT+_",
+            ],
+            messages(stream),
+        )
+
+    def test_shifted_number_row_uses_standard_symbols(self) -> None:
+        stream = io.StringIO()
+        formatter = self.create_formatter(stream)
+        formatter.handle(RawInputEvent("key_down", 1_010_000_000, vk_code=0x10))
+        formatter.handle(RawInputEvent("key_down", 1_020_000_000, vk_code=0x31))
+        formatter.handle(RawInputEvent("key_up", 1_030_000_000, vk_code=0x31))
+
+        self.assertEqual(
+            ["Key Press: SHIFT", "Hotkey: SHIFT+!", "Key Release: !"],
+            messages(stream),
+        )
+
     def test_finish_writes_processor_cleanup_sentinel(self) -> None:
         stream = io.StringIO()
         formatter = self.create_formatter(stream)

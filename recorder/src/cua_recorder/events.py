@@ -51,6 +51,30 @@ MODIFIERS = {
     0x5B: "WIN",
     0x5C: "WIN",
 }
+STATIC_KEY_CHARACTERS: dict[int, tuple[str, str]] = {
+    0x30: ("0", ")"),
+    0x31: ("1", "!"),
+    0x32: ("2", "@"),
+    0x33: ("3", "#"),
+    0x34: ("4", "$"),
+    0x35: ("5", "%"),
+    0x36: ("6", "^"),
+    0x37: ("7", "&"),
+    0x38: ("8", "*"),
+    0x39: ("9", "("),
+    0xBA: (";", ":"),
+    0xBB: ("=", "+"),
+    0xBC: (",", "<"),
+    0xBD: ("-", "_"),
+    0xBE: (".", ">"),
+    0xBF: ("/", "?"),
+    0xC0: ("`", "~"),
+    0xDB: ("[", "{"),
+    0xDC: ("\\", "|"),
+    0xDD: ("]", "}"),
+    0xDE: ("'", '"'),
+    0xE2: ("\\", "|"),
+}
 BUTTON_PREFIX = {"left": "L", "right": "R", "middle": "M", "x1": "X1", "x2": "X2", "x": "X"}
 
 
@@ -61,7 +85,9 @@ def key_name(vk_code: int | None) -> str:
         return MODIFIERS[vk_code]
     if vk_code in SPECIAL_KEYS:
         return SPECIAL_KEYS[vk_code]
-    if 0x30 <= vk_code <= 0x39 or 0x41 <= vk_code <= 0x5A:
+    if vk_code in STATIC_KEY_CHARACTERS:
+        return STATIC_KEY_CHARACTERS[vk_code][0]
+    if 0x41 <= vk_code <= 0x5A:
         return chr(vk_code)
     if 0x60 <= vk_code <= 0x69:
         return f"NUMPAD_{vk_code - 0x60}"
@@ -215,13 +241,19 @@ class AlohaEventFormatter:
         return {MODIFIERS[vk_code] for vk_code in self._pressed_modifier_keys}
 
     def _key_name_for_current_state(self, vk_code: int | None, physical_name: str) -> str:
-        if vk_code is None or not 0x41 <= vk_code <= 0x5A:
+        if vk_code is None:
             return physical_name
         modifiers = self._pressed_modifier_names()
         if modifiers.intersection({"CTRL", "ALT", "WIN"}):
             return physical_name
-        uppercase = ("SHIFT" in modifiers) ^ self._caps_lock_on
-        return physical_name if uppercase else physical_name.lower()
+        shifted = "SHIFT" in modifiers
+        if 0x41 <= vk_code <= 0x5A:
+            uppercase = shifted ^ self._caps_lock_on
+            return physical_name if uppercase else physical_name.lower()
+        characters = STATIC_KEY_CHARACTERS.get(vk_code)
+        if characters:
+            return characters[1] if shifted else characters[0]
+        return physical_name
 
     def _write(self, time_ns: int, message: str) -> None:
         document = {

@@ -12,6 +12,15 @@ def key_press(timestamp, key):
     }
 
 
+def hotkey(timestamp, value):
+    return {
+        "timestamp": timestamp,
+        "action": f"Hotkey: {value}",
+        "coords": None,
+        "current_software": "PcAccess.exe",
+    }
+
+
 class LogProcessorKeyboardMergeTest(unittest.TestCase):
     def test_merge_numpad_digits_into_typing_action(self):
         actions = [
@@ -42,6 +51,20 @@ class LogProcessorKeyboardMergeTest(unittest.TestCase):
 
         self.assertEqual(
             [{"timestamp": 1.4, "action": "Type: 47.05", "coords": None, "current_software": "PcAccess.exe"}],
+            merged,
+        )
+
+    def test_merge_static_punctuation_mapping_into_typing_action(self):
+        actions = [
+            hotkey(1.0, "SHIFT+:"),
+            key_press(1.1, "\\"),
+            hotkey(1.2, "SHIFT+_"),
+        ]
+
+        merged = LogProcessor().merge_keyboard_events(actions)
+
+        self.assertEqual(
+            [{"timestamp": 1.2, "action": "Type: :\\_", "coords": None, "current_software": "PcAccess.exe"}],
             merged,
         )
 
