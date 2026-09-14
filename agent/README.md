@@ -41,13 +41,13 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 '{"task":"打开 Chrome","invocationId":"dev-1"}' | uv run --locked --env-file ..\.env.local cua-agent invoke
 ```
 
-需要配置 `CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY`；未设置专用变量时读取相应 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_TIMEOUT_SECONDS` 默认 120 秒，`CUA_AGENT_MAX_TURNS` 默认 8，Runtime 单请求超时为 300 秒。真实密钥只能存在于被忽略的本地环境或进程环境中。
+需要配置 `CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY`；未设置专用变量时读取相应 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_TIMEOUT_SECONDS` 默认 120 秒，`CUA_AGENT_MAX_TURNS` 默认 8，Runtime 单请求超时为 1800 秒。真实密钥只能存在于被忽略的本地环境或进程环境中。
 
 完整变量契约位于仓库根 `.env.example`。Python CLI 本身不查找环境文件；源码直接调用使用 `uv --env-file` 注入根 `.env.local`，`review --dev` 继承 Review Server 已加载的根环境配置，产品调用由 Host 注入进程环境。
 
 ## 调用结果与取消
 
-- `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 在模型与 Tool 执行期间发送调用级事件，并支持调用级取消检查。`cua_execute` 执行期间的 Midscene 动作状态以 `execution.progress` 事件返回，包含调用关联信息和受控的动作摘要；完整 Midscene 报告仍保存在本次 run 的 `midscene/` 目录。
+- `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 在模型与 Tool 执行期间发送调用级事件，并支持调用级取消检查。`cua_execute` 的 `execution.progress` 事件包含调用关联信息、执行 ID、任务 ID、动作名称、可选描述及状态。描述可能包含输入文本；Host 应按事件数据策略管理访问与留存。完整 Midscene 报告保存在本次 run 的 `midscene/` 目录。
 - assistant 事件按轮次发送可见文本增量；Tool 事件关联轮次与调用 ID，并携带完整参数及结果或错误。最终响应协议 JSON 只通过终态回复公开。
 - `cua-agent invoke` 逐帧输出事件 JSONL；stdin 协议只提交一次请求，不提供运行中的 cancel frame。
 - Review `--dev` 使用 NDJSON 流实时展示事件和最终结果；页面不提供 Agent 中途取消按钮。完成后返回 JSON 的调用入口也可使用。

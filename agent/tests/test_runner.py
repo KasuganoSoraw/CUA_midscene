@@ -68,8 +68,11 @@ class FakeRuntimeClient:
         if method == "execute" and self.progress and on_event is not None:
             delivered = on_event(
                 RuntimeProgressEvent(
-                    "Midscene 正在执行 Tap",
-                    {"source": "midscene", "taskIndex": 0, "action": "Tap", "status": "running"},
+                    "Tap - username field",
+                    {
+                        "source": "midscene", "taskIndex": 0, "taskId": "task-1",
+                        "action": "Tap", "description": "username field", "status": "running",
+                    },
                 )
             )
             if inspect.isawaitable(delivered):
@@ -184,7 +187,9 @@ def test_runner_correlates_midscene_progress_before_tool_completion() -> None:
             "turn": 1,
             "source": "midscene",
             "taskIndex": 0,
+            "taskId": "task-1",
             "action": "Tap",
+            "description": "username field",
             "status": "running",
         }
 

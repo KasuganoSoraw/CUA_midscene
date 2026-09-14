@@ -21,5 +21,6 @@ import './review/server.test.js';
 import './review/step-editor.test.js';
 import './review/web-api.test.js';
 import './review/python-agent.test.js';
+import './review/agent-progress.test.js';
 import './review/windows-recorder.test.js';
 import './review/task-execution.test.js';

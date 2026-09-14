@@ -6,7 +6,13 @@ Python Agent SHALL 在私有 `cua_execute` 运行期间消费与当前 Runtime �
 #### Scenario: 执行期间出现 Midscene 进度
 - **WHEN** Runtime 在 `cua_execute` 终态响应前发出过程帧
 - **THEN** Agent SHALL 在 `tool.completed` 前发送关联的 `execution.progress`
+- **AND** 合法的任务 ID、动作描述及状态 SHALL 保留在调用级事件中
 - **AND** 现有 CLI JSONL、Review 开发流及最终 invocation result SHALL 保持可用
+
+#### Scenario: Review 展示执行进度
+- **WHEN** Review 开发页收到同一 invocation、Tool call、执行 ID 与任务 ID 的状态更新
+- **THEN** 页面 SHALL 更新已有进度项，而非重复追加相同动作
+- **AND** 其他调用事件 SHALL 保持原有顺序
 
 #### Scenario: 无效或错配过程帧
 - **WHEN** Runtime 过程帧的版本、请求 ID 或结构与当前请求不符

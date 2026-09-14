@@ -7,11 +7,13 @@ import type {
   AgentToolTrace,
 } from '../../../shared/agent';
 import { api } from '../api';
+import { appendVisibleAgentEvent } from '../agent-progress';
 
 interface InvocationRecord {
   task: string;
   submittedAt: string;
   events: AgentEvent[];
+  visibleEvents: AgentEvent[];
   liveText: string;
   lastVisibleTurn?: number;
   result?: AgentInvocationResult;
@@ -45,6 +47,25 @@ function eventDetail(event: AgentEvent): string {
   return event.message ?? '';
 }
 
+function progressStatus(event: AgentEvent): string {
+  const status = event.data?.status;
+  return typeof status === 'string' ? status : 'running';
+}
+
+function progressSymbol(event: AgentEvent): string {
+  return ({ running: '●', succeeded: '✓', failed: '×', cancelled: '–' })[progressStatus(event)] ?? '●';
+}
+
+function progressAction(event: AgentEvent): string {
+  const action = event.data?.action;
+  return typeof action === 'string' ? action : (event.message ?? 'Action');
+}
+
+function progressDescription(event: AgentEvent): string | undefined {
+  const description = event.data?.description;
+  return typeof description === 'string' ? description : undefined;
+}
+
 function workbenchUrl(trace: AgentToolTrace): string | undefined {
   const value = trace.output?.url;
   return typeof value === 'string' && /^https?:\/\//i.test(value) ? value : undefined;
@@ -67,6 +88,7 @@ async function submit(): Promise<void> {
     task: text,
     submittedAt: new Date().toISOString(),
     events: [],
+    visibleEvents: [],
     liveText: '',
   });
   records.value.unshift(record);
@@ -75,6 +97,7 @@ async function submit(): Promise<void> {
   try {
     record.result = await api.streamAgent({ task: text }, (event) => {
       record.events.push(event);
+      appendVisibleAgentEvent(record.visibleEvents, event);
       if (event.type === 'assistant.delta' && typeof event.data?.text === 'string') {
         const turn = typeof event.data.turn === 'number' ? event.data.turn : undefined;
         if (record.liveText && turn !== record.lastVisibleTurn) record.liveText += '\n\n';
@@ -181,12 +204,21 @@ onMounted(refreshStatus);
             <div class="agent-pending-label"><span></span>Subagent 正在处理这次任务…</div>
             <p v-if="record.liveText" class="agent-reply">{{ record.liveText }}</p>
           </div>
-          <details v-if="record.events.length" class="agent-event-log" open>
-            <summary>实时事件 · {{ record.events.length }}</summary>
+          <details v-if="record.visibleEvents.length" class="agent-event-log" open>
+            <summary>实时事件 · {{ record.visibleEvents.length }}</summary>
             <div class="agent-trace-grid">
-              <div v-for="(event, index) in record.events" :key="index">
-                <code>{{ event.type }}</code>
-                <pre v-if="eventDetail(event)">{{ eventDetail(event) }}</pre>
+              <div v-for="(event, index) in record.visibleEvents" :key="index">
+                <div v-if="event.type === 'execution.progress'" class="agent-progress-row">
+                  <span class="agent-progress-mark" :class="progressStatus(event)">{{ progressSymbol(event) }}</span>
+                  <div class="agent-progress-copy">
+                    <strong>{{ progressAction(event) }}</strong>
+                    <small v-if="progressDescription(event)">{{ progressDescription(event) }}</small>
+                  </div>
+                </div>
+                <template v-else>
+                  <code>{{ event.type }}</code>
+                  <pre v-if="eventDetail(event)">{{ eventDetail(event) }}</pre>
+                </template>
               </div>
             </div>
           </details>

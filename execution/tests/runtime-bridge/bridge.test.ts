@@ -104,7 +104,7 @@ test('Runtime bridge 在 execute 结束前发送关联进度并继续处理下�
     onProgress?.({
       type: 'execution.progress',
       message: 'Midscene 正在执行 Tap',
-      data: { source: 'midscene', taskIndex: 0, action: 'Tap', status: 'running' },
+      data: { source: 'midscene', taskIndex: 0, taskId: 'task-1', action: 'Tap', status: 'running' },
     });
     await gate;
     return { status: 'succeeded' };
@@ -138,7 +138,7 @@ test('Runtime bridge 过程失败后仍返回唯一终态错误', async () => {
   handlers.execute = async (_payload, onProgress) => {
     onProgress?.({
       type: 'execution.progress', message: 'Midscene 执行失败 Tap',
-      data: { source: 'midscene', taskIndex: 0, action: 'Tap', status: 'failed' },
+      data: { source: 'midscene', taskIndex: 0, taskId: 'task-1', action: 'Tap', status: 'failed' },
     });
     throw new Error('定位失败');
   };

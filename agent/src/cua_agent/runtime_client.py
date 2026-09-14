@@ -93,7 +93,7 @@ class RuntimeProcessConfig:
     command: tuple[str, ...]
     cwd: str | None = None
     env: Mapping[str, str] | None = None
-    request_timeout_seconds: float = 300.0
+    request_timeout_seconds: float = 1800.0
     shutdown_timeout_seconds: float = 5.0
 
     def __post_init__(self) -> None:
@@ -360,7 +360,9 @@ class JsonlRuntimeClient:
         if not isinstance(data, dict) or set(data) - {
             "source",
             "taskIndex",
+            "taskId",
             "action",
+            "description",
             "status",
             "executionId",
         }:
@@ -368,12 +370,22 @@ class JsonlRuntimeClient:
         if not isinstance(data, dict) or data.get("source") != "midscene":
             raise RuntimeProtocolError("Runtime event source 无效")
         task_index = data.get("taskIndex")
+        task_id = data.get("taskId")
         action = data.get("action")
+        description = data.get("description")
         status = data.get("status")
         if type(task_index) is not int or task_index < 0:
             raise RuntimeProtocolError("Runtime event taskIndex 无效")
+        if not isinstance(task_id, str) or not task_id.strip() or len(task_id) > 120:
+            raise RuntimeProtocolError("Runtime event taskId 无效")
         if not isinstance(action, str) or not action or len(action) > 80:
             raise RuntimeProtocolError("Runtime event action 无效")
+        if description is not None and (
+            not isinstance(description, str)
+            or not description.strip()
+            or len(description) > 300
+        ):
+            raise RuntimeProtocolError("Runtime event description 无效")
         if status not in ("running", "succeeded", "failed", "cancelled"):
             raise RuntimeProtocolError("Runtime event status 无效")
         execution_id = data.get("executionId")

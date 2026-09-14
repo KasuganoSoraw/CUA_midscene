@@ -50,6 +50,7 @@ def test_runtime_config_accepts_host_javascript_executable_environment_and_cwd()
         assert configured.command == (str(runtime), str(bridge))
         assert configured.cwd == str(bridge.parents[2])
         assert configured.env == {"ELECTRON_RUN_AS_NODE": "1"}
+        assert configured.request_timeout_seconds == 1800.0
 
 
 def test_client_reuses_worker_for_multiple_correlated_requests_and_closes() -> None:
@@ -121,7 +122,9 @@ def test_client_delivers_correlated_progress_before_terminal_response() -> None:
             assert events[0].data == {
                 "source": "midscene",
                 "taskIndex": 0,
+                "taskId": "task-1",
                 "action": "Tap",
+                "description": "username field",
                 "status": "running",
             }
             with pytest.raises(RuntimeMethodError, match="fake runtime failure"):
@@ -146,6 +149,8 @@ def test_client_rejects_mismatched_and_uncontrolled_progress() -> None:
 
     asyncio.run(scenario("progress-invalid"))
     asyncio.run(scenario("progress-leak"))
+    asyncio.run(scenario("progress-bad-task-id"))
+    asyncio.run(scenario("progress-long-description"))
 
 
 def test_client_preserves_total_timeout_and_cancellation_after_progress() -> None:

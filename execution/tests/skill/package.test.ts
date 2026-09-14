@@ -97,7 +97,7 @@ test('Skill 文档面向维护型调用方并使用编译后的 Node CLI', async
   assert.match(skill, /不是 Python Agent 的运行时 prompt/);
   assert.match(skill, /Node\.js `>=22\.18\.0`/);
   assert.match(skill, /设置足够长的超时/);
-  assert.match(skill, /模型请求默认 120 秒.*Runtime 单请求默认 300 秒.*Review 外层 invocation 默认 30 分钟/);
+  assert.match(skill, /模型请求默认 120 秒.*Runtime 单请求默认 1800 秒.*Review 外层 invocation 默认 40 分钟/);
   assert.match(skill, /task create-from-recording/);
   assert.match(skill, /CUA_PYTHON_EXECUTABLE/);
   assert.match(skill, /源码仓只在仓库根提供 `.env\.example`/);

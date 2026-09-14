@@ -46,7 +46,7 @@ GDEClaw Main Agent
   -> Midscene computer use
 ```
 
-JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；`execute` 可以先输出零到多个关联的 `execution.progress` event frame，再输出一个终态 response，明确区分 result 与结构化 error。进度帧只包含去重的 Midscene 动作状态摘要，不传输原始 Dump、截图或模型消息；完整报告保存在本次 run 的 `midscene/` 目录。worker stdout 只输出协议 frame，诊断写 stderr。一次 Python invocation 可复用一个 Node worker，invocation 结束即释放；不同 invocation 不共享模型 messages 或 Runtime 状态。
+JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；`execute` 可以先输出零到多个关联的 `execution.progress` event frame，再输出一个终态 response，明确区分 result 与结构化 error。进度帧包含 Midscene 格式化的动作名称、可选描述、执行与任务身份及状态；同一任务的状态更新使用相同身份，Review 开发页更新已有展示项。描述可能包含输入文本；进度帧不传输原始 Dump、截图或完整模型消息，完整报告保存在本次 run 的 `midscene/` 目录。worker stdout 只输出协议 frame，诊断写 stderr。一次 Python invocation 可复用一个 Node worker，invocation 结束即释放；不同 invocation 不共享模型 messages 或 Runtime 状态。
 
 普通 `review` 不展示或注册 Agent API；开发者使用 `review --dev` 才能看到“Agent 调试”页签。Review Server 直接启动 Python Agent invocation，启动前检查 Python、JavaScript Runtime、bridge 路径和模型变量是否存在；模型端点和响应格式由 invocation 验证。页面是薄调试入口，不保存聊天或跨调用 Session。`POST /api/agent/invocations/stream` 以 NDJSON 实时返回事件和最终结果；`POST /api/agent/invocations` 在调用结束后返回 JSON 结果与累计事件。页面不提供中途取消按钮，关闭流连接会终止对应子进程。
 
@@ -84,7 +84,7 @@ CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
 
 TypeScript Runtime 的配置优先级为进程环境、仓库根 `.env.local`、仓库根 `.env`；子工程目录不保存或读取环境文件。`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。组件宿主通过 `CUA_PYTHON_EXECUTABLE` 提供已经安装 `cua_record` 与 `cua_recorder` 的统一 Python；源码开发不设置该变量时，两个 Worker 分别使用相邻工程的 `.venv`。Python Worker 继承 Runtime 已加载的进程环境。
 
-`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 的任务级推理模型；未设置时读取对应 `MIDSCENE_MODEL_*`。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8，Runtime 单请求超时为 300 秒。`review --dev` 在源码环境使用顶层 `agent/.venv`、服务进程 JavaScript executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_JS_RUNTIME_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径由安装流程准备。
+`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 的任务级推理模型；未设置时读取对应 `MIDSCENE_MODEL_*`。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8，Runtime 单请求超时为 1800 秒。`review --dev` 在源码环境使用顶层 `agent/.venv`、服务进程 JavaScript executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_JS_RUNTIME_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径由安装流程准备。
 
 ## CLI
 

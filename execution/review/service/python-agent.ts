@@ -154,7 +154,7 @@ export class PythonAgentInvoker implements PythonAgentControl {
     if (!task) throw new Error('Subagent task 必须是非空字符串');
     const invocationId = request.invocationId?.trim() || randomUUID();
     const launch = pythonAgentPaths(this.options);
-    const timeoutMs = this.options.timeoutMs ?? 30 * 60 * 1000;
+    const timeoutMs = this.options.timeoutMs ?? 40 * 60 * 1000;
 
     return new Promise<AgentInvocationResult>((resolve, reject) => {
       let pending = '';

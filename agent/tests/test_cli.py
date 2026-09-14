@@ -43,8 +43,11 @@ class FakeRuntimeClient:
         if method == "execute" and on_event is not None:
             delivered = on_event(
                 RuntimeProgressEvent(
-                    "Midscene 正在执行 Tap",
-                    {"source": "midscene", "taskIndex": 0, "action": "Tap", "status": "running"},
+                    "Tap - username field",
+                    {
+                        "source": "midscene", "taskIndex": 0, "taskId": "task-1",
+                        "action": "Tap", "description": "username field", "status": "running",
+                    },
                 )
             )
             if inspect.isawaitable(delivered):

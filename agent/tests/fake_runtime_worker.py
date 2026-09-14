@@ -20,15 +20,21 @@ for raw_line in sys.stdin:
             "type": "event",
             "event": {
                 "type": "execution.progress",
-                "message": "Midscene running Tap",
+                "message": "Tap - username field",
                 "data": {
                     "source": "midscene",
                     "taskIndex": 0,
+                    "taskId": "task-1",
                     "action": "Tap",
+                    "description": "username field",
                     "status": "running",
                 },
             },
         }
+        if action == "progress-bad-task-id":
+            event["event"]["data"]["taskId"] = 1
+        if action == "progress-long-description":
+            event["event"]["data"]["description"] = "x" * 301
         if action == "progress-leak":
             event["event"]["data"]["screenshot"] = "private-image"
         print(json.dumps(event, ensure_ascii=False), flush=True)
