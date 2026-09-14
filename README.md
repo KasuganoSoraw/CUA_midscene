@@ -30,12 +30,12 @@ CUA/
 
 顶层 `agent/` 是唯一 canonical CUA Subagent。它提供 Python `cua-agent` 包、自身定位与 instructions、一次 invocation 内的模型 Tool Calling，以及私有 `cua_catalog`、`cua_execute`、`cua_workbench`。GDEClaw 只提交完整任务并接收事件与最终结果，不注册内部 Tool，也不承担第二层 Computer-Use 推理。CUA Subagent 不保存跨调用上下文或 Memory；Midscene 管理更下层的截图、页面状态和动作上下文。
 
-Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现，直接调用 Python Agent invocation。它是薄的开发调试入口，不承载聊天产品、跨调用上下文或 Agent 决策逻辑。Host Adapter 使用相同的高层请求、事件与结果语义。
+Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现，直接调用 Python Agent invocation 并实时展示通用事件。它是薄的开发调试入口，不承载聊天产品、跨调用上下文或 Agent 决策逻辑。Host Adapter 使用相同的高层请求、事件与结果语义。
 
 ## 集成边界与术语
 
 - 仓库发布 Python `CuaAgent`、单次 `cua-agent invoke` 进程协议、私有 Tool loop、TypeScript Runtime bridge 和 `review --dev` 调试入口。
-- GDEClaw 注册与生命周期 Adapter、常驻 Agent 服务、跨调用 Session、网络 API 和实时事件传输属于 Host 产品边界，不由本仓库提供。
+- GDEClaw 注册与生命周期 Adapter、常驻 Agent 服务、跨调用 Session 和产品消息传输属于 Host 产品边界，不由本仓库提供。
 - `execution/SKILL.md` 是底层 CLI 的操作与维护说明；场景/任务目录中的 `SKILL.md` 是随任务包交付的维护说明。Python Agent 不读取这些 Markdown，而是通过 `cua_catalog` 获取结构化 scene/task 数据。
 - Python Agent 的私有 Tool 可以把受控调用摘要作为诊断结果返回，但 GDEClaw 不注册、选择或直接调用这些 Tool。
 

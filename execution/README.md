@@ -48,7 +48,7 @@ GDEClaw Main Agent
 
 JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；response 使用相同 request id，并明确区分 result 与结构化 error。worker stdout 只输出协议 frame，诊断写 stderr。一次 Python invocation 可复用一个 Node worker，invocation 结束即释放；不同 invocation 不共享模型 messages 或 Runtime 状态。
 
-普通 `review` 不展示或注册 Agent API；开发者使用 `review --dev` 才能看到“Agent 调试”页签。Review Server 直接启动 Python Agent invocation，启动前检查 Python、JavaScript Runtime、bridge 路径和模型变量是否存在；模型端点和响应格式由 invocation 验证。页面是薄调试入口，不保存聊天或跨调用 Session。HTTP 请求等待 Agent 子进程完成，再一次性返回最终结果与累计事件，不提供实时事件传输或页面中途取消。
+普通 `review` 不展示或注册 Agent API；开发者使用 `review --dev` 才能看到“Agent 调试”页签。Review Server 直接启动 Python Agent invocation，启动前检查 Python、JavaScript Runtime、bridge 路径和模型变量是否存在；模型端点和响应格式由 invocation 验证。页面是薄调试入口，不保存聊天或跨调用 Session。`POST /api/agent/invocations/stream` 以 NDJSON 实时返回事件和最终结果；`POST /api/agent/invocations` 在调用结束后返回 JSON 结果与累计事件。页面不提供中途取消按钮，关闭流连接会终止对应子进程。
 
 依赖准备属于安装流程：Host 把三个组件 wheels 安装到同一个隔离 Python 环境，准备隔离的 JavaScript Runtime，并提供 executable 与 bridge 路径。Python Agent invocation 和 Worker 调用不执行 `npm install`、`npm ci`、`uv sync`、`uv lock` 或 `pip install`。源码开发未配置统一 Python 时，record 与 recorder 分别使用相邻工程已准备完成的 `.venv`。
 

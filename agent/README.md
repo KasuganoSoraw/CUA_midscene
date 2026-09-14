@@ -47,9 +47,10 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 ## 调用结果与取消
 
-- `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 支持程序内事件回调和边界式取消检查。
-- `cua-agent invoke` 输出事件 JSONL；stdin 协议只提交一次请求，不提供运行中的 cancel frame。
-- Review 开发 API 等待子进程结束后一次性返回结果和累计事件，不提供实时事件传输或 Agent 中途取消按钮。
+- `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 在模型与 Tool 执行期间发送调用级事件，并支持调用级取消检查。
+- assistant 事件按轮次发送可见文本增量；Tool 事件关联轮次与调用 ID，并携带完整参数及结果或错误。最终响应协议 JSON 只通过终态回复公开。
+- `cua-agent invoke` 逐帧输出事件 JSONL；stdin 协议只提交一次请求，不提供运行中的 cancel frame。
+- Review `--dev` 使用 NDJSON 流实时展示事件和最终结果；页面不提供 Agent 中途取消按钮。完成后返回 JSON 的调用入口也可使用。
 - Review 的“Python Agent 可用 / model configured”只表示路径存在且模型变量齐全；端点连通性、TLS 和模型响应格式在实际 invocation 时验证。
 
 ## 集成与依赖
