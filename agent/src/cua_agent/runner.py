@@ -29,6 +29,8 @@ from .runtime_client import (
     CancellationCheck,
     ManagedRuntimeClientProtocol,
     RuntimeCancelledError,
+    RuntimeEventSink,
+    RuntimeProgressEvent,
 )
 from .tools import CuaToolRegistry, ToolDefinition, create_cua_tool_registry
 
@@ -189,7 +191,16 @@ class CuaAgent:
                         ),
                     )
                 try:
-                    result = await tools.call(call.name, call.arguments, cancelled=cancelled)
+                    result = await tools.call(
+                        call.name,
+                        call.arguments,
+                        cancelled=cancelled,
+                        on_event=(
+                            _runtime_progress_sink(event_sink, invocation_id, turn, call)
+                            if call.name == "cua_execute" and event_sink is not None
+                            else None
+                        ),
+                    )
                 except RuntimeCancelledError:
                     raise
                 except Exception as error:
@@ -290,6 +301,31 @@ async def _emit_tool_started(
             },
         ),
     )
+
+
+def _runtime_progress_sink(
+    event_sink: EventSink | None,
+    invocation_id: str,
+    turn: int,
+    call: ModelToolCall,
+) -> RuntimeEventSink:
+    async def forward(event: RuntimeProgressEvent) -> None:
+        await _emit(
+            event_sink,
+            AgentEvent(
+                invocation_id,
+                "execution.progress",
+                event.message,
+                {
+                    "callId": call.call_id,
+                    "tool": call.name,
+                    "turn": turn,
+                    **event.data,
+                },
+            ),
+        )
+
+    return forward
 
 
 async def _stream_model_turn(

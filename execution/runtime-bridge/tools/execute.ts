@@ -7,6 +7,7 @@ import {
   runTask,
 } from '../../cua/index.js';
 import type { CuaExecuteRequest, CuaExecuteResult } from '../contracts.js';
+import type { ExecutionProgressSink } from '../../executors/midscene-progress.js';
 
 export interface CuaExecuteDependencies {
   resolveRuntimeLayout: typeof resolveRuntimeLayout;
@@ -32,6 +33,7 @@ function requiredString(value: unknown, name: string): string {
 export async function cuaExecute(
   request: CuaExecuteRequest,
   dependencies: Partial<CuaExecuteDependencies> = {},
+  onProgress?: ExecutionProgressSink,
 ): Promise<CuaExecuteResult> {
   if (!['replay', 'guided', 'freeform'].includes(request.strategy)) {
     throw new Error(`无法识别 cua_execute strategy：${String((request as { strategy?: unknown }).strategy)}`);
@@ -46,6 +48,7 @@ export async function cuaExecute(
       runsRoot: data.runsRoot,
       dryRun: request.dryRun,
       ...(request.displayId === undefined ? {} : { displayId: request.displayId }),
+      ...(onProgress === undefined ? {} : { onProgress }),
     });
     return {
       strategy: request.strategy,
@@ -64,6 +67,7 @@ export async function cuaExecute(
     runsRoot: data.runsRoot,
     ...(request.inputs === undefined ? {} : { inputs: request.inputs }),
     dryRun: request.dryRun,
+    ...(onProgress === undefined ? {} : { onProgress }),
   };
   if (request.strategy === 'replay') {
     const run = await api.runTask(options);

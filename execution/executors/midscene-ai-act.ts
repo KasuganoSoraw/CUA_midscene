@@ -6,6 +6,7 @@ import {
   type TUserPrompt,
 } from '@midscene/core';
 import type { NativeAiActExecutorResult } from '../cua/contracts/types.js';
+import { createMidsceneProgressListener, type ExecutionProgressSink } from './midscene-progress.js';
 import {
   createKeyboardEnabledComputerAgent,
   keyboardInputAiActContext,
@@ -15,6 +16,7 @@ import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
 
 interface AgentLike {
   aiAct(prompt: TUserPrompt, options?: AiActOptions): Promise<string | undefined>;
+  addDumpUpdateListener?: (listener: ReturnType<typeof createMidsceneProgressListener>) => () => void;
   destroy(): Promise<void>;
 }
 
@@ -26,6 +28,7 @@ export interface MidsceneAiActExecutionOptions {
   dryRun: boolean;
   displayId?: string;
   abortSignal?: AbortSignal;
+  onProgress?: ExecutionProgressSink;
   agentFactory?: (options: ComputerAgentOptions) => Promise<AgentLike>;
 }
 
@@ -54,6 +57,7 @@ export async function executeMidsceneAiAct(
       checkRequiredModelEnv();
       const previousRunDirectory = process.env.MIDSCENE_RUN_DIR;
       let agent: AgentLike | undefined;
+      let removeProgressListener: (() => void) | undefined;
       try {
         process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(options.runDirectory), 'midscene');
         agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)({
@@ -63,16 +67,26 @@ export async function executeMidsceneAiAct(
           groupDescription: '执行原生 Midscene aiAct 电脑操作',
           aiActContext: keyboardInputAiActContext,
         });
+        if (options.onProgress) {
+          if (!agent.addDumpUpdateListener) throw new Error('Midscene Agent 不支持过程事件');
+          removeProgressListener = agent.addDumpUpdateListener(
+            createMidsceneProgressListener(options.onProgress),
+          );
+        }
         midsceneResult = await agent.aiAct(
           prompt,
           options.abortSignal ? { abortSignal: options.abortSignal } : undefined,
         );
       } finally {
         try {
-          if (agent) await agent.destroy();
+          removeProgressListener?.();
         } finally {
-          if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
-          else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
+          try {
+            if (agent) await agent.destroy();
+          } finally {
+            if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
+            else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
+          }
         }
       }
     }

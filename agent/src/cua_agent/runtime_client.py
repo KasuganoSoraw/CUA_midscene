@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol, TypeAlias
@@ -18,6 +19,15 @@ RuntimeMethod: TypeAlias = Literal["catalog", "execute", "workbench"]
 CancellationCheck: TypeAlias = Callable[[], bool]
 
 
+@dataclass(frozen=True, slots=True)
+class RuntimeProgressEvent:
+    message: str
+    data: dict[str, JsonValue]
+
+
+RuntimeEventSink: TypeAlias = Callable[[RuntimeProgressEvent], Awaitable[None] | None]
+
+
 class RuntimeClientProtocol(Protocol):
     async def request(
         self,
@@ -25,6 +35,7 @@ class RuntimeClientProtocol(Protocol):
         payload: Mapping[str, JsonValue],
         *,
         cancelled: CancellationCheck | None = None,
+        on_event: RuntimeEventSink | None = None,
     ) -> dict[str, JsonValue]: ...
 
 
@@ -216,6 +227,7 @@ class JsonlRuntimeClient:
         payload: Mapping[str, JsonValue],
         *,
         cancelled: CancellationCheck | None = None,
+        on_event: RuntimeEventSink | None = None,
     ) -> dict[str, JsonValue]:
         if cancelled is not None and cancelled():
             raise RuntimeCancelledError("Runtime request 在发送前已取消")
@@ -236,8 +248,24 @@ class JsonlRuntimeClient:
             except (BrokenPipeError, ConnectionResetError) as error:
                 raise RuntimeProcessError(self._process_exit_message()) from error
 
-            raw_line = await self._read_response_line(cancelled)
-            response = self._parse_response(raw_line, request_id)
+            deadline = asyncio.get_running_loop().time() + self._config.request_timeout_seconds
+            try:
+                while True:
+                    raw_line = await self._read_response_line(cancelled, deadline)
+                    response = self._parse_response(raw_line, request_id)
+                    if response.get("type") == "event":
+                        event = self._parse_event(response)
+                        if on_event is not None:
+                            delivered = on_event(event)
+                            if inspect.isawaitable(delivered):
+                                await delivered
+                        continue
+                    if response.get("type") not in (None, "response"):
+                        raise RuntimeProtocolError("Runtime frame type 不受支持")
+                    break
+            except BaseException:
+                await self.close()
+                raise
             if response.get("ok") is not True:
                 runtime_error = response.get("error")
                 if not isinstance(runtime_error, dict):
@@ -262,11 +290,12 @@ class JsonlRuntimeClient:
             raise RuntimeProcessError(self._process_exit_message())
         return self._process
 
-    async def _read_response_line(self, cancelled: CancellationCheck | None) -> bytes:
+    async def _read_response_line(
+        self, cancelled: CancellationCheck | None, deadline: float
+    ) -> bytes:
         process = self._require_process()
         assert process.stdout is not None
         read_task = asyncio.create_task(process.stdout.readline())
-        deadline = asyncio.get_running_loop().time() + self._config.request_timeout_seconds
         try:
             while True:
                 remaining = deadline - asyncio.get_running_loop().time()
@@ -315,6 +344,44 @@ class JsonlRuntimeClient:
                 f"期望 {request_id}，实际 {response.get('requestId')}"
             )
         return response
+
+    def _parse_event(self, frame: dict[str, JsonValue]) -> RuntimeProgressEvent:
+        if set(frame) != {"schemaVersion", "requestId", "type", "event"}:
+            raise RuntimeProtocolError("Runtime event frame 包含无效字段")
+        event = frame.get("event")
+        if not isinstance(event, dict) or set(event) != {"type", "message", "data"}:
+            raise RuntimeProtocolError("Runtime event 缺少受控结构")
+        if event.get("type") != "execution.progress":
+            raise RuntimeProtocolError("Runtime event type 不受支持")
+        message = event.get("message")
+        data = event.get("data")
+        if not isinstance(message, str) or not message.strip() or len(message) > 500:
+            raise RuntimeProtocolError("Runtime event message 无效")
+        if not isinstance(data, dict) or set(data) - {
+            "source",
+            "taskIndex",
+            "action",
+            "status",
+            "executionId",
+        }:
+            raise RuntimeProtocolError("Runtime event data 包含无效字段")
+        if not isinstance(data, dict) or data.get("source") != "midscene":
+            raise RuntimeProtocolError("Runtime event source 无效")
+        task_index = data.get("taskIndex")
+        action = data.get("action")
+        status = data.get("status")
+        if type(task_index) is not int or task_index < 0:
+            raise RuntimeProtocolError("Runtime event taskIndex 无效")
+        if not isinstance(action, str) or not action or len(action) > 80:
+            raise RuntimeProtocolError("Runtime event action 无效")
+        if status not in ("running", "succeeded", "failed", "cancelled"):
+            raise RuntimeProtocolError("Runtime event status 无效")
+        execution_id = data.get("executionId")
+        if execution_id is not None and (
+            not isinstance(execution_id, str) or len(execution_id) > 120
+        ):
+            raise RuntimeProtocolError("Runtime event executionId 无效")
+        return RuntimeProgressEvent(message, dict(data))
 
     async def _drain_stderr(self) -> None:
         process = self._process

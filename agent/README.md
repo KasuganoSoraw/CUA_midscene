@@ -47,7 +47,7 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 ## 调用结果与取消
 
-- `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 在模型与 Tool 执行期间发送调用级事件，并支持调用级取消检查。
+- `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 在模型与 Tool 执行期间发送调用级事件，并支持调用级取消检查。`cua_execute` 执行期间的 Midscene 动作状态以 `execution.progress` 事件返回，包含调用关联信息和受控的动作摘要；完整 Midscene 报告仍保存在本次 run 的 `midscene/` 目录。
 - assistant 事件按轮次发送可见文本增量；Tool 事件关联轮次与调用 ID，并携带完整参数及结果或错误。最终响应协议 JSON 只通过终态回复公开。
 - `cua-agent invoke` 逐帧输出事件 JSONL；stdin 协议只提交一次请求，不提供运行中的 cancel frame。
 - Review `--dev` 使用 NDJSON 流实时展示事件和最终结果；页面不提供 Agent 中途取消按钮。完成后返回 JSON 的调用入口也可使用。

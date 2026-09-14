@@ -3,6 +3,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import type { ExecutionDump } from '@midscene/core';
 import { executeMidsceneAiAct } from '../../executors/midscene-ai-act.js';
 
 async function executionFixture() {
@@ -46,6 +47,8 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
   for (const key of required) process.env[key] = 'test';
   process.env.MIDSCENE_RUN_DIR = 'previous-directory';
   let destroyed = false;
+  let listenerRemoved = false;
+  const progress: string[] = [];
 
   try {
     const result = await executeMidsceneAiAct({
@@ -53,6 +56,7 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
       prompt: '打开 Chrome',
       dryRun: false,
       displayId: '1',
+      onProgress: (event) => { progress.push(event.data.status); },
       agentFactory: async (options) => {
         assert.equal(options.displayId, '1');
         assert.equal(options.generateReport, true);
@@ -62,9 +66,18 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
         assert.match(context, /默认 Input 仅用于待输入字符本身不受 KeyboardTypeText 支持/);
         assert.match(context, /不得因为定位失败、输入失败或一般执行失败.*切换为默认 Input/);
         assert.equal(process.env.MIDSCENE_RUN_DIR, path.join(fixture.runDirectory, 'midscene'));
+        let listener: ((dump: string, executionDump?: ExecutionDump) => void) | undefined;
         return {
+          addDumpUpdateListener: (callback: typeof listener) => {
+            listener = callback;
+            return () => { listenerRemoved = true; };
+          },
           aiAct: async (prompt) => {
             assert.equal(prompt, '打开 Chrome');
+            listener?.('', { id: 'exec', tasks: [{
+              taskId: 'task-1', status: 'running', type: 'Planning', subType: 'Act',
+            }] } as unknown as ExecutionDump);
+            assert.deepEqual(progress, ['running']);
             return '操作完成';
           },
           destroy: async () => {
@@ -77,6 +90,7 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
     assert.equal(result.status, 'succeeded');
     assert.equal(result.midsceneResult, '操作完成');
     assert.equal(destroyed, true);
+    assert.equal(listenerRemoved, true);
     assert.equal(process.env.MIDSCENE_RUN_DIR, 'previous-directory');
   } finally {
     for (const [key, value] of Object.entries(previous)) {

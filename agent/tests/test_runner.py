@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import AsyncIterator, Mapping
 
 from cua_agent import (
@@ -16,7 +17,12 @@ from cua_agent import (
     ModelToolCall,
 )
 from cua_agent.contracts import JsonValue
-from cua_agent.runtime_client import CancellationCheck, RuntimeMethodError
+from cua_agent.runtime_client import (
+    CancellationCheck,
+    RuntimeEventSink,
+    RuntimeMethodError,
+    RuntimeProgressEvent,
+)
 
 
 class FakeModelClient:
@@ -38,8 +44,9 @@ class FakeModelClient:
 
 
 class FakeRuntimeClient:
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(self, *, fail: bool = False, progress: bool = False) -> None:
         self.fail = fail
+        self.progress = progress
         self.calls: list[tuple[str, dict[str, JsonValue]]] = []
         self.closed = False
 
@@ -55,8 +62,18 @@ class FakeRuntimeClient:
         payload: Mapping[str, JsonValue],
         *,
         cancelled: CancellationCheck | None = None,
+        on_event: RuntimeEventSink | None = None,
     ) -> dict[str, JsonValue]:
         self.calls.append((method, dict(payload)))
+        if method == "execute" and self.progress and on_event is not None:
+            delivered = on_event(
+                RuntimeProgressEvent(
+                    "Midscene 正在执行 Tap",
+                    {"source": "midscene", "taskIndex": 0, "action": "Tap", "status": "running"},
+                )
+            )
+            if inspect.isawaitable(delivered):
+                await delivered
         if self.fail:
             raise RuntimeMethodError("RUNTIME_METHOD_FAILED", "desktop unavailable")
         return {"method": method, "ok": True}
@@ -130,6 +147,46 @@ def test_runner_handles_multiple_tool_rounds_and_emits_domain_events() -> None:
         }
         assert model.calls[0][1] == ModelMessage(role="user", content="打开 Chrome")
         assert model.calls[1][-1].role == "tool"
+
+    asyncio.run(scenario())
+
+
+def test_runner_correlates_midscene_progress_before_tool_completion() -> None:
+    async def scenario() -> None:
+        model = FakeModelClient(
+            [
+                ModelResponse(
+                    tool_calls=(
+                        ModelToolCall(
+                            "execute-1",
+                            "cua_execute",
+                            {"strategy": "freeform", "goal": "打开 Chrome"},
+                        ),
+                    )
+                ),
+                ModelResponse(content="完成", final_status="completed"),
+            ]
+        )
+        events: list[AgentEvent] = []
+        agent = CuaAgent(model, lambda: FakeRuntimeClient(progress=True))  # type: ignore[arg-type]
+        result = await agent.invoke(
+            InvocationRequest("打开 Chrome", invocation_id="inv-progress"), event_sink=events.append
+        )
+        kinds = [event.type for event in events]
+        assert result.status is InvocationStatus.COMPLETED
+        assert kinds.index("execution.started") < kinds.index("execution.progress")
+        assert kinds.index("execution.progress") < kinds.index("tool.completed")
+        progress = next(event for event in events if event.type == "execution.progress")
+        assert progress.invocation_id == "inv-progress"
+        assert progress.data == {
+            "callId": "execute-1",
+            "tool": "cua_execute",
+            "turn": 1,
+            "source": "midscene",
+            "taskIndex": 0,
+            "action": "Tap",
+            "status": "running",
+        }
 
     asyncio.run(scenario())
 

@@ -13,7 +13,28 @@ for raw_line in sys.stdin:
         raise SystemExit(7)
     if action == "delay":
         time.sleep(2)
-    if action == "error":
+    if isinstance(action, str) and action.startswith("progress"):
+        event = {
+            "schemaVersion": "1.0",
+            "requestId": "wrong-id" if action == "progress-invalid" else request["requestId"],
+            "type": "event",
+            "event": {
+                "type": "execution.progress",
+                "message": "Midscene running Tap",
+                "data": {
+                    "source": "midscene",
+                    "taskIndex": 0,
+                    "action": "Tap",
+                    "status": "running",
+                },
+            },
+        }
+        if action == "progress-leak":
+            event["event"]["data"]["screenshot"] = "private-image"
+        print(json.dumps(event, ensure_ascii=False), flush=True)
+        if action in ("progress-delay", "progress-cancel"):
+            time.sleep(2)
+    if action in ("error", "progress-error"):
         response = {
             "schemaVersion": "1.0",
             "requestId": request["requestId"],

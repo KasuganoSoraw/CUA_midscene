@@ -3,6 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import type { ExecutionDump } from '@midscene/core';
 import { executeMidsceneYaml } from '../../executors/midscene-yaml.js';
 
 async function yamlFixture(content: string) {
@@ -60,14 +61,28 @@ test('实际执行设置本次报告目录并在成功后销毁 Agent 和恢复�
   for (const key of Object.keys(previousRequired)) process.env[key] = 'test';
   process.env.MIDSCENE_RUN_DIR = 'previous-directory';
   let destroyed = false;
+  let listenerRemoved = false;
+  const progress: string[] = [];
   try {
     const result = await executeMidsceneYaml({
       ...fixture,
       dryRun: false,
+      onProgress: (event) => { progress.push(event.data.status); },
       agentFactory: async () => {
         assert.equal(process.env.MIDSCENE_RUN_DIR, path.join(fixture.runDirectory, 'midscene'));
+        let listener: ((dump: string, executionDump?: ExecutionDump) => void) | undefined;
         return {
-          runYaml: async () => ({ result: { ok: true } }),
+          addDumpUpdateListener: (callback: typeof listener) => {
+            listener = callback;
+            return () => { listenerRemoved = true; };
+          },
+          runYaml: async () => {
+            listener?.('', { id: 'exec', tasks: [{
+              taskId: 'task-1', status: 'running', type: 'Action Space', subType: 'Tap',
+            }] } as unknown as ExecutionDump);
+            assert.deepEqual(progress, ['running']);
+            return { result: { ok: true } };
+          },
           destroy: async () => {
             destroyed = true;
           },
@@ -77,6 +92,7 @@ test('实际执行设置本次报告目录并在成功后销毁 Agent 和恢复�
     assert.equal(result.status, 'succeeded');
     assert.deepEqual(result.midsceneResult, { ok: true });
     assert.equal(destroyed, true);
+    assert.equal(listenerRemoved, true);
     assert.equal(process.env.MIDSCENE_RUN_DIR, 'previous-directory');
   } finally {
     for (const [key, value] of Object.entries(previousRequired)) {

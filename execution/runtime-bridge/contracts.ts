@@ -6,6 +6,7 @@ import type {
   TaskCatalogItem,
   TaskDescription,
 } from '../cua/contracts/types.js';
+import type { ExecutionProgress } from '../executors/midscene-progress.js';
 
 export const runtimeBridgeSchemaVersion = '1.0' as const;
 export const cuaRuntimeToolNames = ['cua_catalog', 'cua_execute', 'cua_workbench'] as const;
@@ -82,6 +83,13 @@ export interface RuntimeBridgeError {
   code: 'INVALID_REQUEST' | 'RUNTIME_METHOD_FAILED';
   message: string;
   details?: JsonObject;
+}
+
+export interface RuntimeBridgeEventFrame {
+  schemaVersion: typeof runtimeBridgeSchemaVersion;
+  requestId: string;
+  type: 'event';
+  event: ExecutionProgress;
 }
 
 export type RuntimeBridgeResponse =

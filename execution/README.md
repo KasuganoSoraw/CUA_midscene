@@ -46,7 +46,7 @@ GDEClaw Main Agent
   -> Midscene computer use
 ```
 
-JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；response 使用相同 request id，并明确区分 result 与结构化 error。worker stdout 只输出协议 frame，诊断写 stderr。一次 Python invocation 可复用一个 Node worker，invocation 结束即释放；不同 invocation 不共享模型 messages 或 Runtime 状态。
+JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；`execute` 可以先输出零到多个关联的 `execution.progress` event frame，再输出一个终态 response，明确区分 result 与结构化 error。进度帧只包含去重的 Midscene 动作状态摘要，不传输原始 Dump、截图或模型消息；完整报告保存在本次 run 的 `midscene/` 目录。worker stdout 只输出协议 frame，诊断写 stderr。一次 Python invocation 可复用一个 Node worker，invocation 结束即释放；不同 invocation 不共享模型 messages 或 Runtime 状态。
 
 普通 `review` 不展示或注册 Agent API；开发者使用 `review --dev` 才能看到“Agent 调试”页签。Review Server 直接启动 Python Agent invocation，启动前检查 Python、JavaScript Runtime、bridge 路径和模型变量是否存在；模型端点和响应格式由 invocation 验证。页面是薄调试入口，不保存聊天或跨调用 Session。`POST /api/agent/invocations/stream` 以 NDJSON 实时返回事件和最终结果；`POST /api/agent/invocations` 在调用结束后返回 JSON 结果与累计事件。页面不提供中途取消按钮，关闭流连接会终止对应子进程。
 

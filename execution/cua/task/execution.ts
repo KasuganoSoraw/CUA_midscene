@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ExecutorResult, JsonObject, ResolvedTaskResult, TaskCatalogRoots } from '../contracts/types.js';
 import { executeMidsceneYaml, type MidsceneYamlExecutionOptions } from '../../executors/midscene-yaml.js';
+import type { ExecutionProgressSink } from '../../executors/midscene-progress.js';
 import { keyboardInputAiActContext } from '../../executors/computer-agent.js';
 import { createRunDirectory } from '../run-directory.js';
 import { resolveTask } from './tasks.js';
@@ -16,6 +17,7 @@ export interface ExecutionOptions {
   runsRoot: string;
   inputs?: Record<string, string>;
   dryRun?: boolean;
+  onProgress?: ExecutionProgressSink;
   executor?: typeof executeMidsceneYaml;
 }
 
@@ -176,12 +178,14 @@ async function execute(
   runDirectory: string,
   dryRun: boolean,
   executor: typeof executeMidsceneYaml,
+  onProgress?: ExecutionProgressSink,
 ): Promise<ExecutorResult> {
   const options: MidsceneYamlExecutionOptions = {
     yamlPath,
     resultPath: path.join(runDirectory, 'execution-result.json'),
     runDirectory,
     dryRun,
+    ...(onProgress === undefined ? {} : { onProgress }),
   };
   return executor(options);
 }
@@ -196,6 +200,7 @@ export async function runTask(options: ExecutionOptions): Promise<TaskRun> {
     runDirectory,
     options.dryRun ?? false,
     options.executor ?? executeMidsceneYaml,
+    options.onProgress,
   );
   return { resolved, resolvedTaskPath, executorResult };
 }
@@ -223,6 +228,7 @@ export async function runRecordedTaskAiAct(options: ExecutionOptions): Promise<R
     runDirectory,
     options.dryRun ?? false,
     options.executor ?? executeMidsceneYaml,
+    options.onProgress,
   );
   return { resolved, resolvedTaskPath, promptPath, aiActYamlPath, executorResult };
 }

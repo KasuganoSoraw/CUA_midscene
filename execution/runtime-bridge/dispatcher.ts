@@ -1,10 +1,12 @@
 import type { JsonObject } from '../cua/contracts/types.js';
+import type { ExecutionProgressSink } from '../executors/midscene-progress.js';
 import {
   runtimeBridgeSchemaVersion,
   type CuaCatalogRequest,
   type CuaExecuteRequest,
   type CuaWorkbenchRequest,
   type RuntimeBridgeMethod,
+  type RuntimeBridgeEventFrame,
   type RuntimeBridgeRequest,
   type RuntimeBridgeResponse,
 } from './contracts.js';
@@ -12,13 +14,13 @@ import { cuaCatalog, cuaExecute, cuaWorkbench } from './tools/index.js';
 
 export interface RuntimeBridgeHandlers {
   catalog(payload: CuaCatalogRequest): Promise<unknown>;
-  execute(payload: CuaExecuteRequest): Promise<unknown>;
+  execute(payload: CuaExecuteRequest, onProgress?: ExecutionProgressSink): Promise<unknown>;
   workbench(payload: CuaWorkbenchRequest): Promise<unknown>;
 }
 
 const defaultHandlers: RuntimeBridgeHandlers = {
   catalog: cuaCatalog,
-  execute: cuaExecute,
+  execute: (payload, onProgress) => cuaExecute(payload, {}, onProgress),
   workbench: cuaWorkbench,
 };
 
@@ -81,6 +83,7 @@ function errorDetails(error: unknown): JsonObject {
 export async function dispatchRuntimeBridgeRequest(
   value: unknown,
   handlers: RuntimeBridgeHandlers = defaultHandlers,
+  onEvent?: (frame: RuntimeBridgeEventFrame) => void,
 ): Promise<RuntimeBridgeResponse> {
   let request: RuntimeBridgeRequest;
   try {
@@ -102,7 +105,15 @@ export async function dispatchRuntimeBridgeRequest(
     const result = request.method === 'catalog'
       ? await handlers.catalog(request.payload as unknown as CuaCatalogRequest)
       : request.method === 'execute'
-        ? await handlers.execute(request.payload as unknown as CuaExecuteRequest)
+        ? await handlers.execute(
+          request.payload as unknown as CuaExecuteRequest,
+          onEvent === undefined ? undefined : (event) => onEvent({
+            schemaVersion: runtimeBridgeSchemaVersion,
+            requestId: request.requestId,
+            type: 'event',
+            event,
+          }),
+        )
         : await handlers.workbench(request.payload as unknown as CuaWorkbenchRequest);
     return {
       schemaVersion: runtimeBridgeSchemaVersion,
@@ -127,6 +138,7 @@ export async function dispatchRuntimeBridgeRequest(
 export async function dispatchRuntimeBridgeLine(
   line: string,
   handlers: RuntimeBridgeHandlers = defaultHandlers,
+  onEvent?: (frame: RuntimeBridgeEventFrame) => void,
 ): Promise<string> {
   let value: unknown;
   try {
@@ -134,5 +146,5 @@ export async function dispatchRuntimeBridgeLine(
   } catch (error) {
     value = { parseError: error instanceof Error ? error.message : String(error) };
   }
-  return JSON.stringify(await dispatchRuntimeBridgeRequest(value, handlers));
+  return JSON.stringify(await dispatchRuntimeBridgeRequest(value, handlers, onEvent));
 }

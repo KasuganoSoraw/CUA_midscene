@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { ExecutionProgressSink } from '../../executors/midscene-progress.js';
 import {
   cuaCatalog,
   cuaExecute,
@@ -58,22 +59,27 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
     dryRun: true,
     finishedAt: '2026-08-27T00:00:00.000Z',
   };
+  const onProgress: ExecutionProgressSink = () => {};
   const dependencies = {
     resolveRuntimeLayout: async () => layout,
     requireDataPaths: async () => data,
-    runTask: async (options: { scene: string; task: string; inputs?: Record<string, string> }) => {
+    runTask: async (options: {
+      scene: string; task: string; inputs?: Record<string, string>; onProgress?: ExecutionProgressSink;
+    }) => {
       calls.push('replay');
       assert.equal(options.scene, 'ems');
       assert.equal(options.task, 'query-alarm');
       assert.deepEqual(options.inputs, { ne: 'NE001' });
+      assert.equal(options.onProgress, onProgress);
       return {
         resolved: {},
         resolvedTaskPath: 'C:\\cua-data\\runs\\1\\resolved-task.yaml',
         executorResult: yamlExecutor,
       };
     },
-    runRecordedTaskAiAct: async () => {
+    runRecordedTaskAiAct: async (options: { onProgress?: ExecutionProgressSink }) => {
       calls.push('guided');
+      assert.equal(options.onProgress, onProgress);
       return {
         resolved: {},
         resolvedTaskPath: 'C:\\cua-data\\runs\\2\\resolved-task.yaml',
@@ -82,9 +88,10 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
         executorResult: yamlExecutor,
       };
     },
-    runNaturalLanguageAiAct: async (options: { prompt: string }) => {
+    runNaturalLanguageAiAct: async (options: { prompt: string; onProgress?: ExecutionProgressSink }) => {
       calls.push('freeform');
       assert.equal(options.prompt, '打开 Chrome');
+      assert.equal(options.onProgress, onProgress);
       return {
         runDirectory: 'C:\\cua-data\\runs\\3',
         promptPath: 'C:\\cua-data\\runs\\3\\ai-act-prompt.txt',
@@ -96,13 +103,13 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
 
   const replay = await cuaExecute({
     strategy: 'replay', scene: 'ems', task: 'query-alarm', inputs: { ne: 'NE001' }, dryRun: true,
-  }, dependencies);
+  }, dependencies, onProgress);
   const guided = await cuaExecute({
     strategy: 'guided', scene: 'ems', task: 'query-alarm', dryRun: true,
-  }, dependencies);
+  }, dependencies, onProgress);
   const freeform = await cuaExecute({
     strategy: 'freeform', goal: '打开 Chrome', dryRun: true,
-  }, dependencies);
+  }, dependencies, onProgress);
 
   assert.deepEqual(calls, ['replay', 'guided', 'freeform']);
   assert.equal(replay.strategy, 'replay');

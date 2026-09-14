@@ -11,8 +11,8 @@ export async function runRuntimeBridgeWorker(
   for await (const line of lines) {
     if (!line.trim()) continue;
     const response = handlers === undefined
-      ? await dispatchRuntimeBridgeLine(line)
-      : await dispatchRuntimeBridgeLine(line, handlers);
+      ? await dispatchRuntimeBridgeLine(line, undefined, (frame) => output.write(`${JSON.stringify(frame)}\n`))
+      : await dispatchRuntimeBridgeLine(line, handlers, (frame) => output.write(`${JSON.stringify(frame)}\n`));
     output.write(`${response}\n`);
   }
 }

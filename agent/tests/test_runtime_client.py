@@ -13,6 +13,8 @@ from cua_agent.runtime_client import (
     RuntimeMethodError,
     RuntimeProcessConfig,
     RuntimeProcessError,
+    RuntimeProgressEvent,
+    RuntimeProtocolError,
     RuntimeTimeoutError,
 )
 
@@ -107,3 +109,87 @@ def test_client_times_out_and_honors_cancellation() -> None:
 
     asyncio.run(timeout_scenario())
     asyncio.run(cancelled_scenario())
+
+
+def test_client_delivers_correlated_progress_before_terminal_response() -> None:
+    async def scenario() -> None:
+        events: list[RuntimeProgressEvent] = []
+        async with JsonlRuntimeClient(config()) as client:
+            result = await client.request("execute", {"action": "progress"}, on_event=events.append)
+            assert result["method"] == "execute"
+            assert len(events) == 1
+            assert events[0].data == {
+                "source": "midscene",
+                "taskIndex": 0,
+                "action": "Tap",
+                "status": "running",
+            }
+            with pytest.raises(RuntimeMethodError, match="fake runtime failure"):
+                await client.request(
+                    "execute", {"action": "progress-error"}, on_event=events.append
+                )
+            assert len(events) == 2
+            later = await client.request("catalog", {"action": "list-scenes"})
+            assert later["method"] == "catalog"
+
+    asyncio.run(scenario())
+
+
+def test_client_rejects_mismatched_and_uncontrolled_progress() -> None:
+    async def scenario(action: str) -> None:
+        events: list[RuntimeProgressEvent] = []
+        async with JsonlRuntimeClient(config()) as client:
+            with pytest.raises(RuntimeProtocolError):
+                await client.request("execute", {"action": action}, on_event=events.append)
+            assert not events
+            assert not client.running
+
+    asyncio.run(scenario("progress-invalid"))
+    asyncio.run(scenario("progress-leak"))
+
+
+def test_client_preserves_total_timeout_and_cancellation_after_progress() -> None:
+    async def timeout_scenario() -> None:
+        events: list[RuntimeProgressEvent] = []
+        async with JsonlRuntimeClient(
+            config(request_timeout_seconds=1.0, shutdown_timeout_seconds=0.05)
+        ) as client:
+            with pytest.raises(RuntimeTimeoutError):
+                await client.request(
+                    "execute", {"action": "progress-delay"}, on_event=events.append
+                )
+            assert len(events) == 1
+            assert not client.running
+
+    async def cancelled_scenario() -> None:
+        cancelled = False
+
+        def on_event(_event: RuntimeProgressEvent) -> None:
+            nonlocal cancelled
+            cancelled = True
+
+        async with JsonlRuntimeClient(config(shutdown_timeout_seconds=0.05)) as client:
+            with pytest.raises(RuntimeCancelledError):
+                await client.request(
+                    "execute",
+                    {"action": "progress-cancel"},
+                    on_event=on_event,
+                    cancelled=lambda: cancelled,
+                )
+            assert not client.running
+
+    asyncio.run(timeout_scenario())
+    asyncio.run(cancelled_scenario())
+
+
+def test_client_closes_worker_when_progress_consumer_fails() -> None:
+    async def scenario() -> None:
+        def on_event(_event: RuntimeProgressEvent) -> None:
+            raise ValueError("event consumer failed")
+
+        async with JsonlRuntimeClient(config()) as client:
+            with pytest.raises(ValueError, match="event consumer failed"):
+                await client.request("execute", {"action": "progress"}, on_event=on_event)
+            assert not client.running
+
+    asyncio.run(scenario())

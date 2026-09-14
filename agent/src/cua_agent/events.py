@@ -17,6 +17,7 @@ AgentEventType: TypeAlias = Literal[
     "tool.started",
     "tool.completed",
     "execution.started",
+    "execution.progress",
     "agent.completed",
     "failed",
     "needs-input",

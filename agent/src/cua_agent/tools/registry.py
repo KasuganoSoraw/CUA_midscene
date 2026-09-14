@@ -6,7 +6,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from ..contracts import JsonValue
-from ..runtime_client import CancellationCheck, RuntimeClientProtocol, RuntimeMethod
+from ..runtime_client import (
+    CancellationCheck,
+    RuntimeClientProtocol,
+    RuntimeEventSink,
+    RuntimeMethod,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +145,7 @@ class CuaToolRegistry:
         arguments: Mapping[str, JsonValue],
         *,
         cancelled: CancellationCheck | None = None,
+        on_event: RuntimeEventSink | None = None,
     ) -> dict[str, JsonValue]:
         entry = self._tools.get(name)
         if entry is None:
@@ -148,6 +154,10 @@ class CuaToolRegistry:
         payload = dict(arguments)
         if self._data_root is not None and "dataRoot" not in payload:
             payload["dataRoot"] = self._data_root
+        if method == "execute" and on_event is not None:
+            return await self._client.request(
+                method, payload, cancelled=cancelled, on_event=on_event
+            )
         return await self._client.request(method, payload, cancelled=cancelled)
 
 
