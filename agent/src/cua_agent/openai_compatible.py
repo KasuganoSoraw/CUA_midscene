@@ -8,11 +8,21 @@ import os
 import ssl
 import urllib.error
 import urllib.request
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import cast
 
 from .contracts import JsonValue
-from .model import FinalStatus, ModelClient, ModelMessage, ModelResponse, ModelToolCall
+from .model import (
+    FinalStatus,
+    ModelClient,
+    ModelContentDelta,
+    ModelMessage,
+    ModelResponse,
+    ModelStreamComplete,
+    ModelStreamItem,
+    ModelToolCall,
+)
 from .tools import ToolDefinition
 
 
@@ -80,19 +90,26 @@ class OpenAICompatibleModelClient(ModelClient):
         messages: tuple[ModelMessage, ...],
         tools: tuple[ToolDefinition, ...],
     ) -> ModelResponse:
-        return await asyncio.to_thread(self._complete_sync, messages, tools)
+        result: ModelResponse | None = None
+        async for item in self.stream(messages, tools):
+            if isinstance(item, ModelStreamComplete):
+                result = item.response
+        if result is None:
+            raise ModelRequestError("Agent model 流缺少完整响应")
+        return result
 
-    def _complete_sync(
+    async def stream(
         self,
         messages: tuple[ModelMessage, ...],
         tools: tuple[ToolDefinition, ...],
-    ) -> ModelResponse:
+    ) -> AsyncIterator[ModelStreamItem]:
         body = json.dumps(
             {
                 "model": self._config.model,
                 "messages": [_message_payload(message) for message in messages],
                 "tools": [_tool_payload(tool) for tool in tools],
                 "tool_choice": "auto",
+                "stream": True,
             },
             ensure_ascii=False,
         ).encode("utf-8")
@@ -102,16 +119,48 @@ class OpenAICompatibleModelClient(ModelClient):
             headers={
                 "Authorization": f"Bearer {self._config.api_key}",
                 "Content-Type": "application/json",
+                "Accept": "text/event-stream",
             },
             method="POST",
         )
+        response: object | None = None
+        assembler = _StreamAssembler()
         try:
-            with urllib.request.urlopen(
-                request,
-                timeout=self._config.timeout_seconds,
-                context=_tls_context(self._config.verify_tls),
-            ) as response:
-                raw_response = response.read().decode("utf-8")
+            async with asyncio.timeout(self._config.timeout_seconds):
+                response = await asyncio.to_thread(
+                    urllib.request.urlopen,
+                    request,
+                    timeout=self._config.timeout_seconds,
+                    context=_tls_context(self._config.verify_tls),
+                )
+                data_lines: list[str] = []
+                while True:
+                    raw_line = await asyncio.to_thread(response.readline)  # type: ignore[attr-defined]
+                    if not raw_line:
+                        break
+                    line = raw_line.decode("utf-8").rstrip("\r\n")
+                    if line.startswith("data:"):
+                        data_lines.append(line[5:].lstrip())
+                        continue
+                    if line:
+                        continue
+                    if not data_lines:
+                        continue
+                    data = "\n".join(data_lines)
+                    data_lines.clear()
+                    if data == "[DONE]":
+                        yield ModelStreamComplete(assembler.complete())
+                        return
+                    for delta in assembler.accept(data):
+                        yield delta
+                if data_lines:
+                    data = "\n".join(data_lines)
+                    if data == "[DONE]":
+                        yield ModelStreamComplete(assembler.complete())
+                        return
+                    for delta in assembler.accept(data):
+                        yield delta
+                raise ValueError("流缺少 [DONE] 终止帧")
         except urllib.error.HTTPError as error:
             response_body = error.read().decode("utf-8", errors="replace")
             raise ModelRequestError(
@@ -119,13 +168,72 @@ class OpenAICompatibleModelClient(ModelClient):
             ) from error
         except (urllib.error.URLError, TimeoutError, OSError) as error:
             raise ModelRequestError(f"Agent model 请求失败：{error}") from error
-
-        try:
-            payload: object = json.loads(raw_response)
-            message = _first_message(payload)
-            return _model_response_from(message)
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
             raise ModelRequestError(f"Agent model 返回了无效响应：{error}") from error
+        finally:
+            if response is not None:
+                response.close()  # type: ignore[attr-defined]
+
+
+class _StreamAssembler:
+    def __init__(self) -> None:
+        self.content: list[str] = []
+        self.calls: dict[int, dict[str, str]] = {}
+
+    def accept(self, data: str) -> list[ModelContentDelta]:
+        payload: object = json.loads(data)
+        if not isinstance(payload, dict):
+            raise ValueError("SSE data 必须是 JSON object")
+        if "error" in payload:
+            error = payload["error"]
+            message = error.get("message") if isinstance(error, dict) else error
+            raise ModelRequestError(f"Agent model 流错误：{str(message)[:500]}")
+        choices = payload.get("choices")
+        if not isinstance(choices, list):
+            raise ValueError("SSE data 缺少 choice")
+        if not choices:
+            return []
+        if not isinstance(choices[0], dict):
+            raise ValueError("SSE choice 必须是 object")
+        delta = choices[0].get("delta")
+        if not isinstance(delta, dict):
+            raise ValueError("SSE choice 缺少 delta")
+        emitted: list[ModelContentDelta] = []
+        content = delta.get("content")
+        if isinstance(content, str) and content:
+            self.content.append(content)
+            emitted.append(ModelContentDelta(content))
+        raw_calls = delta.get("tool_calls")
+        if raw_calls is not None:
+            if not isinstance(raw_calls, list):
+                raise ValueError("SSE tool_calls 必须是数组")
+            for raw_call in raw_calls:
+                if not isinstance(raw_call, dict) or not isinstance(raw_call.get("index"), int):
+                    raise ValueError("SSE tool_call 缺少 index")
+                call = self.calls.setdefault(
+                    raw_call["index"], {"id": "", "name": "", "arguments": ""}
+                )
+                if isinstance(raw_call.get("id"), str):
+                    call["id"] += raw_call["id"]
+                function = raw_call.get("function")
+                if isinstance(function, dict):
+                    for key in ("name", "arguments"):
+                        part = function.get(key)
+                        if isinstance(part, str):
+                            call[key] += part
+        return emitted
+
+    def complete(self) -> ModelResponse:
+        message: dict[str, object] = {"content": "".join(self.content)}
+        if self.calls:
+            message["tool_calls"] = [
+                {
+                    "id": call["id"],
+                    "function": {"name": call["name"], "arguments": call["arguments"] or "{}"},
+                }
+                for _, call in sorted(self.calls.items())
+            ]
+        return _model_response_from(message)
 
 
 def _boolean_env(name: str, *, default: bool) -> bool:
@@ -181,18 +289,6 @@ def _tool_payload(tool: ToolDefinition) -> dict[str, JsonValue]:
     }
 
 
-def _first_message(payload: object) -> dict[str, object]:
-    if not isinstance(payload, dict):
-        raise ValueError("response 必须是 JSON object")
-    choices = payload.get("choices")
-    if not isinstance(choices, list) or not choices:
-        raise ValueError("response 缺少 choices")
-    first = choices[0]
-    if not isinstance(first, dict) or not isinstance(first.get("message"), dict):
-        raise ValueError("response 缺少 choice.message")
-    return cast(dict[str, object], first["message"])
-
-
 def _model_response_from(message: dict[str, object]) -> ModelResponse:
     raw_calls = message.get("tool_calls")
     if isinstance(raw_calls, list) and raw_calls:
@@ -215,7 +311,11 @@ def _model_response_from(message: dict[str, object]) -> ModelResponse:
             )
         if any(not call.call_id or not call.name for call in calls):
             raise ValueError("tool_call id 和 name 不能为空")
-        return ModelResponse(tool_calls=tuple(calls))
+        content = message.get("content")
+        return ModelResponse(
+            content=content if isinstance(content, str) and content.strip() else None,
+            tool_calls=tuple(calls),
+        )
 
     content = message.get("content")
     if not isinstance(content, str) or not content.strip():

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TypeAlias
 from uuid import uuid4
 
@@ -16,13 +17,20 @@ from .contracts import (
 )
 from .definition import CUA_AGENT_DEFINITION
 from .events import AgentEvent, AgentEventType
-from .model import ModelClient, ModelMessage, ModelToolCall
+from .model import (
+    ModelClient,
+    ModelContentDelta,
+    ModelMessage,
+    ModelResponse,
+    ModelStreamComplete,
+    ModelToolCall,
+)
 from .runtime_client import (
     CancellationCheck,
     ManagedRuntimeClientProtocol,
     RuntimeCancelledError,
 )
-from .tools import CuaToolRegistry, create_cua_tool_registry
+from .tools import CuaToolRegistry, ToolDefinition, create_cua_tool_registry
 
 EventSinkResult: TypeAlias = Awaitable[None] | None
 EventSink: TypeAlias = Callable[[AgentEvent], EventSinkResult]
@@ -125,7 +133,15 @@ class CuaAgent:
                     {"turn": turn},
                 ),
             )
-            response = await self._model_client.complete(tuple(messages), tools.definitions)
+            response = await _stream_model_turn(
+                self._model_client,
+                tuple(messages),
+                tools.definitions,
+                invocation_id,
+                turn,
+                event_sink,
+                cancelled,
+            )
             if not response.tool_calls:
                 assert response.content is not None
                 status = (
@@ -136,7 +152,15 @@ class CuaAgent:
                 event_type: AgentEventType = (
                     "needs-input" if status is InvocationStatus.NEEDS_INPUT else "agent.completed"
                 )
-                await _emit(event_sink, AgentEvent(invocation_id, event_type, response.content))
+                await _emit(
+                    event_sink,
+                    AgentEvent(
+                        invocation_id,
+                        event_type,
+                        response.content,
+                        {"turn": turn, "reply": response.content.strip()},
+                    ),
+                )
                 return InvocationResult(
                     invocation_id=invocation_id,
                     status=status,
@@ -153,7 +177,7 @@ class CuaAgent:
             )
             for call in response.tool_calls:
                 _check_cancelled(cancelled)
-                await _emit_tool_started(event_sink, invocation_id, call)
+                await _emit_tool_started(event_sink, invocation_id, turn, call)
                 if call.name == "cua_execute":
                     await _emit(
                         event_sink,
@@ -161,7 +185,7 @@ class CuaAgent:
                             invocation_id,
                             "execution.started",
                             "Computer-Use 执行已开始",
-                            {"callId": call.call_id},
+                            {"callId": call.call_id, "turn": turn},
                         ),
                     )
                 try:
@@ -185,7 +209,13 @@ class CuaAgent:
                             invocation_id,
                             "tool.completed",
                             f"{call.name} 执行失败",
-                            {"callId": call.call_id, "tool": call.name, "status": "failed"},
+                            {
+                                "callId": call.call_id,
+                                "tool": call.name,
+                                "turn": turn,
+                                "status": "failed",
+                                "error": message,
+                            },
                         ),
                     )
                     await _emit(event_sink, AgentEvent(invocation_id, "failed", message))
@@ -212,7 +242,13 @@ class CuaAgent:
                         invocation_id,
                         "tool.completed",
                         f"{call.name} 执行完成",
-                        {"callId": call.call_id, "tool": call.name, "status": "succeeded"},
+                        {
+                            "callId": call.call_id,
+                            "tool": call.name,
+                            "turn": turn,
+                            "status": "succeeded",
+                            "output": result,
+                        },
                     ),
                 )
                 messages.append(
@@ -237,6 +273,7 @@ class CuaAgent:
 async def _emit_tool_started(
     event_sink: EventSink | None,
     invocation_id: str,
+    turn: int,
     call: ModelToolCall,
 ) -> None:
     await _emit(
@@ -245,9 +282,94 @@ async def _emit_tool_started(
             invocation_id,
             "tool.started",
             f"正在调用 {call.name}",
-            {"callId": call.call_id, "tool": call.name},
+            {
+                "callId": call.call_id,
+                "tool": call.name,
+                "turn": turn,
+                "arguments": call.arguments,
+            },
         ),
     )
+
+
+async def _stream_model_turn(
+    model_client: ModelClient,
+    messages: tuple[ModelMessage, ...],
+    definitions: tuple[ToolDefinition, ...],
+    invocation_id: str,
+    turn: int,
+    event_sink: EventSink | None,
+    cancelled: CancellationCheck | None,
+) -> ModelResponse:
+    # 最终协议以 JSON object 开头；其内容只通过终态事件公开。
+    prefix = ""
+    classification: str | None = None
+    visible = False
+    response: ModelResponse | None = None
+    stream = model_client.stream(messages, definitions)
+    while True:
+        try:
+            item = await _next_model_item(stream, cancelled)
+        except StopAsyncIteration:
+            break
+        _check_cancelled(cancelled)
+        if isinstance(item, ModelStreamComplete):
+            response = item.response
+            continue
+        if not isinstance(item, ModelContentDelta) or not item.text:
+            continue
+        if classification is None:
+            prefix += item.text
+            stripped = prefix.lstrip()
+            if not stripped:
+                continue
+            classification = "protocol" if stripped.startswith("{") else "visible"
+            if classification == "protocol":
+                continue
+            delta = prefix
+            prefix = ""
+        elif classification == "protocol":
+            continue
+        else:
+            delta = item.text
+        if not visible:
+            await _emit(
+                event_sink,
+                AgentEvent(invocation_id, "assistant.started", data={"turn": turn}),
+            )
+            visible = True
+        await _emit(
+            event_sink,
+            AgentEvent(invocation_id, "assistant.delta", data={"turn": turn, "text": delta}),
+        )
+    if visible:
+        await _emit(
+            event_sink,
+            AgentEvent(invocation_id, "assistant.completed", data={"turn": turn}),
+        )
+    if response is None:
+        raise ValueError("模型流缺少完整响应")
+    return response
+
+
+async def _next_model_item(
+    stream: AsyncIterator[ModelContentDelta | ModelStreamComplete],
+    cancelled: CancellationCheck | None,
+) -> ModelContentDelta | ModelStreamComplete:
+    async def read_next() -> ModelContentDelta | ModelStreamComplete:
+        return await anext(stream)
+
+    pending = asyncio.create_task(read_next())
+    try:
+        while not pending.done():
+            _check_cancelled(cancelled)
+            await asyncio.wait({pending}, timeout=0.1)
+        _check_cancelled(cancelled)
+        return pending.result()
+    finally:
+        if not pending.done():
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
 
 
 async def _emit(event_sink: EventSink | None, event: AgentEvent) -> None:

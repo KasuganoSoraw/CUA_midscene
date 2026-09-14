@@ -11,6 +11,9 @@ from .contracts import JsonValue, _copy_json_object
 AgentEventType: TypeAlias = Literal[
     "agent.started",
     "progress",
+    "assistant.started",
+    "assistant.delta",
+    "assistant.completed",
     "tool.started",
     "tool.completed",
     "execution.started",

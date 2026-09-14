@@ -3,9 +3,16 @@ from __future__ import annotations
 import asyncio
 import io
 import json
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 
-from cua_agent import CuaAgent, InvocationStatus, ModelResponse
+from cua_agent import (
+    CuaAgent,
+    InvocationStatus,
+    ModelContentDelta,
+    ModelResponse,
+    ModelStreamComplete,
+    ModelStreamItem,
+)
 from cua_agent.cli import invoke_from_stream
 from cua_agent.contracts import JsonValue
 from cua_agent.model import ModelMessage
@@ -32,6 +39,13 @@ class FakeRuntimeClient:
 class FinalModel:
     async def complete(self, messages: tuple[ModelMessage, ...], tools: object) -> ModelResponse:
         return ModelResponse(content="调试调用完成", final_status="completed")
+
+    async def stream(
+        self, messages: tuple[ModelMessage, ...], tools: object
+    ) -> AsyncIterator[ModelStreamItem]:
+        response = await self.complete(messages, tools)
+        yield ModelContentDelta(response.content or "")
+        yield ModelStreamComplete(response)
 
 
 def test_cli_streams_events_before_final_result() -> None:

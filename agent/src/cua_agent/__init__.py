@@ -9,7 +9,15 @@ from .contracts import (
 )
 from .definition import CUA_AGENT_DEFINITION, load_agent_definition
 from .events import AgentEvent, AgentEventType
-from .model import ModelClient, ModelMessage, ModelResponse, ModelToolCall
+from .model import (
+    ModelClient,
+    ModelContentDelta,
+    ModelMessage,
+    ModelResponse,
+    ModelStreamComplete,
+    ModelStreamItem,
+    ModelToolCall,
+)
 from .runner import CuaAgent
 
 __all__ = [
@@ -22,8 +30,11 @@ __all__ = [
     "InvocationResult",
     "InvocationStatus",
     "ModelClient",
+    "ModelContentDelta",
     "ModelMessage",
     "ModelResponse",
+    "ModelStreamComplete",
+    "ModelStreamItem",
     "ModelToolCall",
     "ToolTrace",
     "load_agent_definition",

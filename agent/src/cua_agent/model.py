@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Literal, Protocol, TypeAlias
 
@@ -40,7 +41,26 @@ class ModelResponse:
             raise ValueError("包含 Tool call 的模型响应不能同时声明 final_status")
 
 
+@dataclass(frozen=True, slots=True)
+class ModelContentDelta:
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class ModelStreamComplete:
+    response: ModelResponse
+
+
+ModelStreamItem: TypeAlias = ModelContentDelta | ModelStreamComplete
+
+
 class ModelClient(Protocol):
+    def stream(
+        self,
+        messages: tuple[ModelMessage, ...],
+        tools: tuple[ToolDefinition, ...],
+    ) -> AsyncIterator[ModelStreamItem]: ...
+
     async def complete(
         self,
         messages: tuple[ModelMessage, ...],
