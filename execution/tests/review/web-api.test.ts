@@ -56,3 +56,48 @@ test('review web 只在存在 JSON 请求体时设置 content-type', async () =>
   assert.equal(new Headers(requests[9]?.headers).get('content-type'), 'application/json');
   assert.equal(requests[9]?.body, JSON.stringify({ task: '查询 NE001 当前告警' }));
 });
+
+test('review web 逐帧读取 Agent 事件并等待最终结果', async () => {
+  const originalFetch = globalThis.fetch;
+  const encoder = new TextEncoder();
+  let releaseResult: () => void = () => {};
+  const gate = new Promise<void>((resolve) => { releaseResult = resolve; });
+  globalThis.fetch = async () => new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      const event = JSON.stringify({
+        type: 'event', event: {
+          schemaVersion: '1.0', invocationId: 'inv-1', type: 'assistant.delta',
+          timestamp: '2026-08-28T00:00:00.000Z', data: { turn: 1, text: '查询中' },
+        },
+      });
+      const bytes = encoder.encode(`${event}\n`);
+      controller.enqueue(bytes.slice(0, 5));
+      controller.enqueue(bytes.slice(5));
+      void gate.then(() => {
+        controller.enqueue(encoder.encode(`${JSON.stringify({
+          type: 'result', result: {
+            schemaVersion: '1.0', invocationId: 'inv-1', status: 'completed',
+            reply: '查询完成', toolCalls: [], events: [],
+          },
+        })}\n`));
+        controller.close();
+      });
+    },
+  }), { headers: { 'content-type': 'application/x-ndjson' } });
+  try {
+    const events: string[] = [];
+    let finished = false;
+    const invocation = api.streamAgent({ task: '查询' }, (event) => {
+      events.push(String(event.data?.text));
+    }).then((result) => { finished = true; return result; });
+    for (let attempt = 0; attempt < 100 && !events.length; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    assert.deepEqual(events, ['查询中']);
+    assert.equal(finished, false);
+    releaseResult();
+    assert.equal((await invocation).reply, '查询完成');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

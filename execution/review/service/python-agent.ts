@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import type {
   AgentEvent,
   AgentInvocationRequest,
@@ -12,6 +13,11 @@ import type {
 export interface PythonAgentControl {
   status(): Promise<AgentStatus>;
   invoke(request: AgentInvocationRequest): Promise<AgentInvocationResult>;
+  invokeStreaming(
+    request: AgentInvocationRequest,
+    onEvent: (event: AgentEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<AgentInvocationResult>;
   close(): Promise<void>;
 }
 
@@ -125,6 +131,14 @@ export class PythonAgentInvoker implements PythonAgentControl {
   }
 
   async invoke(request: AgentInvocationRequest): Promise<AgentInvocationResult> {
+    return this.invokeStreaming(request, () => {});
+  }
+
+  async invokeStreaming(
+    request: AgentInvocationRequest,
+    onEvent: (event: AgentEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<AgentInvocationResult> {
     if (this.child) {
       throw Object.assign(new Error('已有 CUA Agent invocation 正在执行，请等待完成'), {
         statusCode: 409,
@@ -143,9 +157,11 @@ export class PythonAgentInvoker implements PythonAgentControl {
     const timeoutMs = this.options.timeoutMs ?? 30 * 60 * 1000;
 
     return new Promise<AgentInvocationResult>((resolve, reject) => {
-      let stdout = '';
+      let pending = '';
       let diagnostics = '';
       let settled = false;
+      const frames: AgentProtocolFrame[] = [];
+      const decoder = new StringDecoder('utf8');
       const child = (this.options.spawnProcess ?? spawn)(
         launch.pythonExecutable,
         ['-m', 'cua_agent', 'invoke'],
@@ -170,29 +186,58 @@ export class PythonAgentInvoker implements PythonAgentControl {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
+        signal?.removeEventListener('abort', abort);
         this.child = undefined;
         if (error) reject(error);
         else if (result) resolve(result);
         else reject(new Error('Python CUA Agent 未返回结果'));
       };
 
+      const abort = () => {
+        child.kill();
+        finish(new Error('Python CUA Agent invocation 已取消'));
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) abort();
+
+      const acceptLine = (line: string) => {
+        if (!line.trim()) return;
+        const frame: unknown = JSON.parse(line);
+        if (!frame || typeof frame !== 'object' || Array.isArray(frame)) {
+          throw new Error('Agent protocol frame 必须是 object');
+        }
+        const parsed = frame as AgentProtocolFrame;
+        frames.push(parsed);
+        if (parsed.type === 'event' && parsed.event && typeof parsed.event === 'object') {
+          onEvent(parsed.event as AgentEvent);
+        }
+      };
+
       child.stdout.on('data', (chunk) => {
-        stdout = limitedAppend(stdout, chunk, maxStdoutBytes);
+        if (settled) return;
+        pending += decoder.write(chunk);
+        try {
+          let newline = pending.indexOf('\n');
+          while (newline >= 0) {
+            acceptLine(pending.slice(0, newline).replace(/\r$/u, ''));
+            pending = pending.slice(newline + 1);
+            newline = pending.indexOf('\n');
+          }
+          if (Buffer.byteLength(pending) > maxStdoutBytes) {
+            throw new Error('Python CUA Agent 单帧输出超过大小限制');
+          }
+        } catch (error) {
+          child.kill();
+          finish(new Error(`无法解析 Python CUA Agent 输出：${String(error)}`));
+        }
       });
       child.stderr.on('data', (chunk) => {
         diagnostics = limitedAppend(diagnostics, chunk, maxDiagnosticsBytes);
       });
       child.once('error', (error) => finish(new Error(`无法启动 Python CUA Agent：${error.message}`)));
       child.once('close', (code, signal) => {
-        const frames: AgentProtocolFrame[] = [];
         try {
-          for (const line of stdout.split(/\r?\n/u).filter((item) => item.trim())) {
-            const frame: unknown = JSON.parse(line);
-            if (!frame || typeof frame !== 'object' || Array.isArray(frame)) {
-              throw new Error('Agent protocol frame 必须是 object');
-            }
-            frames.push(frame as AgentProtocolFrame);
-          }
+          acceptLine(`${pending}${decoder.end()}`);
         } catch (error) {
           finish(new Error(`无法解析 Python CUA Agent 输出：${String(error)}\n${diagnostics.trim()}`));
           return;

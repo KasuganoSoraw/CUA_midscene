@@ -53,6 +53,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
   let executionClosed = false;
   let agentClosed = false;
   let agentTask = '';
+  let releaseAgentStream: () => void = () => {};
   let executionStatus: TaskExecutionStatus = { phase: 'idle' };
   const recorder: RecorderControl = {
     status: () => ({ ...recorderStatus }),
@@ -133,6 +134,26 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
             }],
           };
         },
+        invokeStreaming: async (request, onEvent) => {
+          agentTask = request.task;
+          const event = {
+            schemaVersion: '1.0' as const,
+            invocationId: 'inv-review',
+            type: 'assistant.delta' as const,
+            timestamp: '2026-08-28T00:00:00.000Z',
+            data: { turn: 1, text: '正在查询' },
+          };
+          onEvent(event);
+          await new Promise<void>((resolve) => { releaseAgentStream = resolve; });
+          return {
+            schemaVersion: '1.0',
+            invocationId: 'inv-review',
+            status: 'completed',
+            reply: 'Agent 已完成查询。',
+            toolCalls: [],
+            events: [event],
+          };
+        },
         close: async () => { agentClosed = true; },
       },
       createFromRecording: async (options) => {
@@ -180,6 +201,29 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     assert.equal(invocationResult.reply, 'Agent 已完成查询。');
     assert.equal(invocationResult.events[0].type, 'agent.completed');
     assert.equal(agentTask, '查询 NE001 当前告警');
+    const streamed = await fetch(new URL('/api/agent/invocations/stream', base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task: '查询 NE001 当前告警' }),
+    });
+    assert.equal(streamed.status, 200);
+    assert.match(streamed.headers.get('content-type') ?? '', /application\/x-ndjson/u);
+    const reader = streamed.body!.getReader();
+    const first = await reader.read();
+    assert.equal(first.done, false);
+    const firstText = new TextDecoder().decode(first.value);
+    assert.match(firstText, /assistant\.delta/u);
+    releaseAgentStream();
+    let remaining = '';
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      remaining += new TextDecoder().decode(chunk.value);
+    }
+    const streamFrames = `${firstText}${remaining}`.trim().split('\n').map((line) => JSON.parse(line) as any);
+    assert.equal(streamFrames[0].type, 'event');
+    assert.equal(streamFrames[0].event.data.text, '正在查询');
+    assert.equal(streamFrames[1].type, 'result');
 
     assert.equal((await (await fetch(new URL('/api/recorder/status', base))).json() as any).phase, 'idle');
     const displays = await (await fetch(new URL('/api/recorder/displays/refresh', base), { method: 'POST' })).json() as any;
@@ -358,6 +402,11 @@ test('review server 未配置录制根时保持任务复核可用并返回环境
     try {
       assert.equal((await fetch(new URL('/api/agent/status', configured.url))).status, 404);
       assert.equal((await fetch(new URL('/api/agent/invocations', configured.url), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ task: '默认模式不开放' }),
+      })).status, 404);
+      assert.equal((await fetch(new URL('/api/agent/invocations/stream', configured.url), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ task: '默认模式不开放' }),

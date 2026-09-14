@@ -18,6 +18,7 @@ import type {
   TaskExecutionStatus,
 } from '../../shared/types.js';
 import type {
+  AgentEvent,
   AgentInvocationRequest,
   AgentInvocationResult,
   AgentStatus,
@@ -27,6 +28,58 @@ export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
   }
+}
+
+export async function streamAgentInvocation(
+  body: AgentInvocationRequest,
+  onEvent: (event: AgentEvent) => void,
+  signal?: AbortSignal,
+): Promise<AgentInvocationResult> {
+  const response = await fetch('/api/agent/invocations/stream', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const value = await response.json().catch(() => ({})) as { error?: string };
+    throw new ApiError(value.error ?? `请求失败：${response.status}`, response.status);
+  }
+  if (!response.body) throw new Error('Agent 流缺少响应体');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = '';
+  let result: AgentInvocationResult | undefined;
+  const acceptLine = (line: string) => {
+    if (!line.trim()) return;
+    const frame = JSON.parse(line) as {
+      type: 'event' | 'result' | 'error';
+      event?: AgentEvent;
+      result?: AgentInvocationResult;
+      error?: { message?: string };
+    };
+    if (frame.type === 'event' && frame.event) onEvent(frame.event);
+    else if (frame.type === 'result' && frame.result) result = frame.result;
+    else if (frame.type === 'error') throw new Error(frame.error?.message ?? 'Agent 调用失败');
+  };
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      pending += decoder.decode(value, { stream: true });
+      let newline = pending.indexOf('\n');
+      while (newline >= 0) {
+        acceptLine(pending.slice(0, newline));
+        pending = pending.slice(newline + 1);
+        newline = pending.indexOf('\n');
+      }
+    }
+    acceptLine(`${pending}${decoder.decode()}`);
+  } finally {
+    reader.releaseLock();
+  }
+  if (!result) throw new Error('Agent 流缺少最终结果');
+  return result;
 }
 
 async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> {
@@ -49,6 +102,7 @@ export const api = {
   invokeAgent: (body: AgentInvocationRequest) => request<AgentInvocationResult>(
     '/api/agent/invocations', { method: 'POST', body: JSON.stringify(body) },
   ),
+  streamAgent: streamAgentInvocation,
   scenes: () => request<ReviewCatalogResponse>('/api/scenes'),
   recordings: () => request<ReviewRecordingCatalog>('/api/recordings'),
   recorderStatus: () => request<RecorderStatus>('/api/recorder/status'),

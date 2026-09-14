@@ -244,6 +244,37 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
       const body = requireObjectBody<AgentInvocationRequest>(request.body);
       return agent!.invoke(body);
     });
+
+    app.post<{ Body: JsonObject }>('/api/agent/invocations/stream', {
+      schema: { body: subagentInvocationBodySchema },
+    }, async (request, reply) => {
+      const body = requireObjectBody<AgentInvocationRequest>(request.body);
+      const controller = new AbortController();
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'content-type': 'application/x-ndjson; charset=utf-8',
+        'cache-control': 'no-cache, no-transform',
+        'x-accel-buffering': 'no',
+      });
+      const writeFrame = (frame: object) => {
+        if (!reply.raw.destroyed) reply.raw.write(`${JSON.stringify(frame)}\n`);
+      };
+      reply.raw.once('close', () => {
+        if (!reply.raw.writableEnded) controller.abort();
+      });
+      try {
+        const result = await agent!.invokeStreaming(
+          body,
+          (event) => writeFrame({ type: 'event', event }),
+          controller.signal,
+        );
+        writeFrame({ type: 'result', result });
+      } catch (error) {
+        writeFrame({ type: 'error', error: { message: error instanceof Error ? error.message : String(error) } });
+      } finally {
+        reply.raw.end();
+      }
+    });
   }
 
   app.get('/api/recorder/status', async () => recorder.status());

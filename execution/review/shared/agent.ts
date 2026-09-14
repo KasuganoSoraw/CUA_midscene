@@ -22,6 +22,9 @@ export interface AgentEvent {
   type:
     | 'agent.started'
     | 'progress'
+    | 'assistant.started'
+    | 'assistant.delta'
+    | 'assistant.completed'
     | 'tool.started'
     | 'tool.completed'
     | 'execution.started'

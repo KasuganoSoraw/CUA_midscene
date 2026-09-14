@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import type {
+  AgentEvent,
   AgentInvocationResult,
   AgentStatus,
   AgentToolTrace,
@@ -10,6 +11,9 @@ import { api } from '../api';
 interface InvocationRecord {
   task: string;
   submittedAt: string;
+  events: AgentEvent[];
+  liveText: string;
+  lastVisibleTurn?: number;
   result?: AgentInvocationResult;
   error?: string;
 }
@@ -33,6 +37,14 @@ function json(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+function eventDetail(event: AgentEvent): string {
+  if (event.type === 'assistant.delta') return String(event.data?.text ?? '');
+  if (event.type === 'tool.started' || event.type === 'tool.completed') {
+    return json(event.data).slice(0, 4000);
+  }
+  return event.message ?? '';
+}
+
 function workbenchUrl(trace: AgentToolTrace): string | undefined {
   const value = trace.output?.url;
   return typeof value === 'string' && /^https?:\/\//i.test(value) ? value : undefined;
@@ -51,12 +63,25 @@ async function refreshStatus(): Promise<void> {
 async function submit(): Promise<void> {
   if (!canSubmit.value) return;
   const text = message.value.trim();
-  const record: InvocationRecord = { task: text, submittedAt: new Date().toISOString() };
+  const record = reactive<InvocationRecord>({
+    task: text,
+    submittedAt: new Date().toISOString(),
+    events: [],
+    liveText: '',
+  });
   records.value.unshift(record);
   message.value = '';
   busy.value = true;
   try {
-    record.result = await api.invokeAgent({ task: text });
+    record.result = await api.streamAgent({ task: text }, (event) => {
+      record.events.push(event);
+      if (event.type === 'assistant.delta' && typeof event.data?.text === 'string') {
+        const turn = typeof event.data.turn === 'number' ? event.data.turn : undefined;
+        if (record.liveText && turn !== record.lastVisibleTurn) record.liveText += '\n\n';
+        record.liveText += event.data.text;
+        record.lastVisibleTurn = turn;
+      }
+    });
   } catch (error) {
     record.error = error instanceof Error ? error.message : String(error);
     await refreshStatus();
@@ -116,7 +141,7 @@ onMounted(refreshStatus);
         <div v-if="!records.length" class="agent-empty">
           <span>◎</span>
           <strong>提交一个完整的 Computer-Use 任务</strong>
-          <p>每次提交都是不继承上下文的独立任务。HTTP 调用在完成后一次性返回累计事件；页面不选择执行策略，也不会绕过 Subagent 直接操作桌面。</p>
+          <p>每次提交都是不继承上下文的独立任务。页面实时展示调用事件，不选择执行策略，也不会绕过 Subagent 直接操作桌面。</p>
         </div>
 
         <article v-for="record in records" :key="record.submittedAt" class="agent-record">
@@ -133,13 +158,6 @@ onMounted(refreshStatus);
               <code>{{ record.result.invocationId }}</code>
             </div>
             <p class="agent-reply">{{ record.result.reply }}</p>
-
-            <details v-if="record.result.events.length" class="agent-event-log">
-              <summary>调用事件 · {{ record.result.events.length }}</summary>
-              <div class="agent-trace-grid">
-                <pre>{{ json(record.result.events) }}</pre>
-              </div>
-            </details>
 
             <div v-if="record.result.toolCalls.length" class="agent-traces">
               <details v-for="trace in record.result.toolCalls" :key="trace.callId">
@@ -159,7 +177,19 @@ onMounted(refreshStatus);
             </div>
             <p v-else class="agent-no-tools">本次调用没有 Tool 轨迹。</p>
           </div>
-          <div v-else class="agent-pending"><span></span>Subagent 正在处理这次任务…</div>
+          <div v-else class="agent-pending">
+            <div class="agent-pending-label"><span></span>Subagent 正在处理这次任务…</div>
+            <p v-if="record.liveText" class="agent-reply">{{ record.liveText }}</p>
+          </div>
+          <details v-if="record.events.length" class="agent-event-log" open>
+            <summary>实时事件 · {{ record.events.length }}</summary>
+            <div class="agent-trace-grid">
+              <div v-for="(event, index) in record.events" :key="index">
+                <code>{{ event.type }}</code>
+                <pre v-if="eventDetail(event)">{{ eventDetail(event) }}</pre>
+              </div>
+            </div>
+          </details>
         </article>
       </div>
 
