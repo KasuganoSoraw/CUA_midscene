@@ -88,6 +88,7 @@ export interface ExecutorResult {
   dryRun: boolean;
   taskCount?: number | null;
   midsceneResult?: Record<string, unknown> | null;
+  reportPath?: string | null;
   finishedAt: string;
   error?: string | null;
 }
@@ -98,6 +99,7 @@ export interface NativeAiActExecutorResult {
   sourcePromptPath: string;
   dryRun: boolean;
   midsceneResult?: string | null;
+  reportPath?: string | null;
   finishedAt: string;
   error?: string | null;
 }

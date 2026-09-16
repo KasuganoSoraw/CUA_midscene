@@ -13,10 +13,12 @@ import {
   type ComputerAgentOptions,
 } from './computer-agent.js';
 import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
+import { existingMidsceneHtmlReport, midsceneReportFileName } from './midscene-report.js';
 
 interface AgentLike {
   aiAct(prompt: TUserPrompt, options?: AiActOptions): Promise<string | undefined>;
   addDumpUpdateListener?: (listener: ReturnType<typeof createMidsceneProgressListener>) => () => void;
+  reportFile?: string | null;
   destroy(): Promise<void>;
 }
 
@@ -51,6 +53,7 @@ export async function executeMidsceneAiAct(
     const promptText = typeof prompt === 'string' ? prompt : prompt.prompt;
     if (!promptText.trim()) throw new Error('Midscene aiAct prompt 不能为空');
     let midsceneResult: string | undefined;
+    let reportPath: string | undefined;
 
     if (!options.dryRun) {
       warnIfNodeVersionIsOld();
@@ -63,6 +66,7 @@ export async function executeMidsceneAiAct(
         agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)({
           ...(options.displayId === undefined ? {} : { displayId: options.displayId }),
           generateReport: true,
+          reportFileName: midsceneReportFileName,
           groupName: 'native-ai-act',
           groupDescription: '执行原生 Midscene aiAct 电脑操作',
           aiActContext: keyboardInputAiActContext,
@@ -82,7 +86,10 @@ export async function executeMidsceneAiAct(
           removeProgressListener?.();
         } finally {
           try {
-            if (agent) await agent.destroy();
+            if (agent) {
+              await agent.destroy();
+              reportPath = await existingMidsceneHtmlReport(agent.reportFile);
+            }
           } finally {
             if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
             else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
@@ -97,6 +104,7 @@ export async function executeMidsceneAiAct(
       sourcePromptPath,
       dryRun: options.dryRun,
       ...(midsceneResult === undefined ? {} : { midsceneResult }),
+      ...(reportPath === undefined ? {} : { reportPath }),
       finishedAt: new Date().toISOString(),
     };
     await writeResult(resultPath, result);

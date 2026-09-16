@@ -29,6 +29,16 @@
         }
       ]
     },
+    "reportPath": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "schemaVersion": {
       "const": "0.1",
       "type": "string"

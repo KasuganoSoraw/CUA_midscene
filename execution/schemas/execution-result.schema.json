@@ -36,6 +36,18 @@
       "default": null,
       "title": "Midsceneresult"
     },
+    "reportPath": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reportpath"
+    },
     "schemaVersion": {
       "const": "0.2",
       "title": "Schemaversion",

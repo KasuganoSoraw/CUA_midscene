@@ -8,10 +8,12 @@ import {
   type ComputerAgentOptions,
 } from './computer-agent.js';
 import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
+import { existingMidsceneHtmlReport, midsceneReportFileName } from './midscene-report.js';
 
 interface AgentLike {
   runYaml(content: string): Promise<{ result: Record<string, unknown> }>;
   addDumpUpdateListener?: (listener: ReturnType<typeof createMidsceneProgressListener>) => () => void;
+  reportFile?: string | null;
   destroy(): Promise<void>;
 }
 
@@ -49,6 +51,7 @@ export async function executeMidsceneYaml(
     }
     taskCount = script.tasks.length;
     let midsceneResult: Record<string, unknown> | undefined;
+    let reportPath: string | undefined;
 
     if (!options.dryRun) {
       warnIfNodeVersionIsOld();
@@ -62,6 +65,7 @@ export async function executeMidsceneYaml(
           ...(script.agent ?? {}),
           ...(script.computer?.displayId ? { displayId: script.computer.displayId } : {}),
           generateReport: script.agent?.generateReport ?? true,
+          reportFileName: midsceneReportFileName,
           groupName: script.agent?.groupName ?? 'midscene-yaml-task',
           groupDescription: script.agent?.groupDescription ?? '执行 Midscene YAML 电脑操作任务',
         };
@@ -78,7 +82,10 @@ export async function executeMidsceneYaml(
           removeProgressListener?.();
         } finally {
           try {
-            if (agent) await agent.destroy();
+            if (agent) {
+              await agent.destroy();
+              reportPath = await existingMidsceneHtmlReport(agent.reportFile);
+            }
           } finally {
             if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
             else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
@@ -94,6 +101,7 @@ export async function executeMidsceneYaml(
       dryRun: options.dryRun,
       taskCount,
       ...(midsceneResult === undefined ? {} : { midsceneResult }),
+      ...(reportPath === undefined ? {} : { reportPath }),
       finishedAt: new Date().toISOString(),
     };
     await writeResult(resultPath, result);

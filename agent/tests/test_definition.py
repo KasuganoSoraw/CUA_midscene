@@ -7,6 +7,10 @@ def test_definition_is_loaded_from_packaged_markdown() -> None:
     assert "完整任务" in CUA_AGENT_DEFINITION.description
     assert "Recorded Skill" in CUA_AGENT_DEFINITION.instructions
     assert "薄模型 Tool Calling loop" in CUA_AGENT_DEFINITION.instructions
+    assert "不输出隐藏推理、思维链或长篇分析" in CUA_AGENT_DEFINITION.instructions
+    assert "不要机械说明每一次 Tool 调用" in CUA_AGENT_DEFINITION.instructions
+    assert "最终回复必须包含 Tool 返回的 `url`" in CUA_AGENT_DEFINITION.instructions
+    assert "最终回复必须包含该 Midscene HTML 报告路径" in CUA_AGENT_DEFINITION.instructions
 
 
 def test_loading_definition_does_not_share_mutable_invocation_state() -> None:

@@ -56,6 +56,7 @@ export async function cuaExecute(
       runDir: run.runDirectory,
       promptPath: run.promptPath,
       resultPath: run.resultPath,
+      ...(run.executorResult.reportPath == null ? {} : { reportPath: run.executorResult.reportPath }),
       executor: run.executorResult,
     };
   }
@@ -76,6 +77,7 @@ export async function cuaExecute(
       status: run.executorResult.status,
       runDir: path.dirname(run.resolvedTaskPath),
       resolvedTaskPath: run.resolvedTaskPath,
+      ...(run.executorResult.reportPath == null ? {} : { reportPath: run.executorResult.reportPath }),
       executor: run.executorResult,
     };
   }
@@ -87,6 +89,7 @@ export async function cuaExecute(
       runDir: path.dirname(run.resolvedTaskPath),
       resolvedTaskPath: run.resolvedTaskPath,
       promptPath: run.promptPath,
+      ...(run.executorResult.reportPath == null ? {} : { reportPath: run.executorResult.reportPath }),
       executor: run.executorResult,
     };
   }

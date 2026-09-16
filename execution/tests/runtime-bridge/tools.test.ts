@@ -50,6 +50,7 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
     status: 'succeeded',
     sourceYamlPath: 'C:\\cua-data\\runs\\1\\resolved-task.yaml',
     dryRun: true,
+    reportPath: 'C:\\cua-data\\runs\\1\\midscene\\report\\execution-report.html',
     finishedAt: '2026-08-27T00:00:00.000Z',
   } as const;
   const nativeExecutor: NativeAiActExecutorResult = {
@@ -57,6 +58,7 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
     status: 'succeeded',
     sourcePromptPath: 'C:\\cua-data\\runs\\3\\ai-act-prompt.txt',
     dryRun: true,
+    reportPath: 'C:\\cua-data\\runs\\3\\midscene\\report\\execution-report.html',
     finishedAt: '2026-08-27T00:00:00.000Z',
   };
   const onProgress: ExecutionProgressSink = () => {};
@@ -113,8 +115,36 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
 
   assert.deepEqual(calls, ['replay', 'guided', 'freeform']);
   assert.equal(replay.strategy, 'replay');
+  assert.equal(replay.reportPath, yamlExecutor.reportPath);
   assert.equal(guided.promptPath, 'C:\\cua-data\\runs\\2\\ai-act-prompt.txt');
+  assert.equal(guided.reportPath, yamlExecutor.reportPath);
   assert.equal(freeform.runDir, 'C:\\cua-data\\runs\\3');
+  assert.equal(freeform.reportPath, nativeExecutor.reportPath);
+});
+
+test('Runtime execute 在底层没有报告时不生成 reportPath', async () => {
+  const executorResult: NativeAiActExecutorResult = {
+    schemaVersion: '0.1',
+    status: 'succeeded',
+    sourcePromptPath: 'C:\\cua-data\\runs\\4\\ai-act-prompt.txt',
+    dryRun: true,
+    finishedAt: '2026-08-27T00:00:00.000Z',
+  };
+  const dependencies = {
+    resolveRuntimeLayout: async () => layout,
+    requireDataPaths: async () => data,
+    runNaturalLanguageAiAct: async () => ({
+      runDirectory: 'C:\\cua-data\\runs\\4',
+      promptPath: 'C:\\cua-data\\runs\\4\\ai-act-prompt.txt',
+      resultPath: 'C:\\cua-data\\runs\\4\\ai-act-result.json',
+      executorResult,
+    }),
+  } as unknown as Partial<CuaExecuteDependencies>;
+
+  const result = await cuaExecute({
+    strategy: 'freeform', goal: '打开 Chrome', dryRun: true,
+  }, dependencies);
+  assert.equal(result.reportPath, undefined);
 });
 
 test('Runtime execute 保留底层错误且不调用其他策略', async () => {

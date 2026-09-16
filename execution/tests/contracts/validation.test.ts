@@ -51,12 +51,29 @@ test('原生 aiAct 执行结果通过独立文件契约校验', async () => {
     schemaVersion: '0.1',
     status: 'succeeded',
     sourcePromptPath: path.join(root, 'ai-act-prompt.txt'),
+    reportPath: path.join(root, 'midscene', 'report', 'execution-report.html'),
     dryRun: true,
     finishedAt: new Date().toISOString(),
   }), 'utf8');
   const result = await readNativeAiActExecutorResult(source);
   assert.equal(result.status, 'succeeded');
   assert.equal(result.dryRun, true);
+  assert.match(result.reportPath ?? '', /execution-report\.html$/);
+});
+
+test('YAML 执行结果接受可选 HTML 报告路径', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-yaml-contract-'));
+  const source = path.join(root, 'execution-result.json');
+  await writeFile(source, JSON.stringify({
+    schemaVersion: '0.2',
+    status: 'succeeded',
+    sourceYamlPath: path.join(root, 'resolved-task.yaml'),
+    dryRun: false,
+    reportPath: path.join(root, 'midscene', 'report', 'execution-report.html'),
+    finishedAt: new Date().toISOString(),
+  }), 'utf8');
+  const result = await readExecutorResult(source);
+  assert.match(result.reportPath ?? '', /execution-report\.html$/);
 });
 
 test('trace 缺少结构化 operation 时直接失败', async () => {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -36,6 +36,7 @@ test('原生 aiAct dry-run 校验 prompt 且不创建 Agent', async () => {
 
 test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', async () => {
   const fixture = await executionFixture();
+  const reportPath = path.join(fixture.runDirectory, 'midscene', 'report', 'execution-report.html');
   const required = [
     'MIDSCENE_MODEL_BASE_URL',
     'MIDSCENE_MODEL_NAME',
@@ -60,6 +61,7 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
       agentFactory: async (options) => {
         assert.equal(options.displayId, '1');
         assert.equal(options.generateReport, true);
+        assert.equal(options.reportFileName, 'execution-report');
         const context = String(options.aiActContext);
         assert.match(context, /ASCII.*必须使用 KeyboardTypeText/);
         assert.match(context, /包含中文.*使用默认 Input/);
@@ -68,6 +70,7 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
         assert.equal(process.env.MIDSCENE_RUN_DIR, path.join(fixture.runDirectory, 'midscene'));
         let listener: ((dump: string, executionDump?: ExecutionDump) => void) | undefined;
         return {
+          reportFile: reportPath,
           addDumpUpdateListener: (callback: typeof listener) => {
             listener = callback;
             return () => { listenerRemoved = true; };
@@ -82,6 +85,8 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
           },
           destroy: async () => {
             destroyed = true;
+            await mkdir(path.dirname(reportPath), { recursive: true });
+            await writeFile(reportPath, '<html></html>', 'utf8');
           },
         };
       },
@@ -89,6 +94,8 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
 
     assert.equal(result.status, 'succeeded');
     assert.equal(result.midsceneResult, '操作完成');
+    assert.equal(result.reportPath, reportPath);
+    assert.equal(JSON.parse(await readFile(fixture.resultPath, 'utf8')).reportPath, reportPath);
     assert.equal(destroyed, true);
     assert.equal(listenerRemoved, true);
     assert.equal(process.env.MIDSCENE_RUN_DIR, 'previous-directory');
@@ -99,6 +106,37 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
     }
     if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
     else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
+  }
+});
+
+test('原生 aiAct 未生成报告文件时保持成功且不返回 reportPath', async () => {
+  const fixture = await executionFixture();
+  const required = [
+    'MIDSCENE_MODEL_BASE_URL',
+    'MIDSCENE_MODEL_NAME',
+    'MIDSCENE_MODEL_API_KEY',
+    'MIDSCENE_MODEL_FAMILY',
+  ];
+  const previous = Object.fromEntries(required.map((key) => [key, process.env[key]]));
+  for (const key of required) process.env[key] = 'test';
+  try {
+    const result = await executeMidsceneAiAct({
+      ...fixture,
+      prompt: '打开 Chrome',
+      dryRun: false,
+      agentFactory: async () => ({
+        reportFile: path.join(fixture.runDirectory, 'midscene', 'report', 'missing.html'),
+        aiAct: async () => '操作完成',
+        destroy: async () => undefined,
+      }),
+    });
+    assert.equal(result.status, 'succeeded');
+    assert.equal(result.reportPath, undefined);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
 });
 
