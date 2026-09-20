@@ -204,10 +204,12 @@ def test_terminal_execute_stops_remaining_calls_and_finalizes_without_tools() ->
         assert [trace.tool for trace in result.tool_calls] == ["cua_execute"]
         assert len(model.calls) == 2
         assert model.tool_sets[1] == ()
-        assert model.calls[1][-2].role == "tool"
-        assert report_path in (model.calls[1][-2].content or "")
-        assert model.calls[1][-1].role == "system"
-        assert "不得再调用" in (model.calls[1][-1].content or "")
+        final_messages = model.calls[1]
+        assert final_messages[0].role == "system"
+        assert "不得再调用" in (final_messages[0].content or "")
+        assert sum(message.role == "system" for message in final_messages) == 1
+        assert final_messages[-1].role == "tool"
+        assert report_path in (final_messages[-1].content or "")
 
     asyncio.run(scenario())
 

@@ -312,10 +312,7 @@ class CuaAgent:
         cancelled: CancellationCheck | None,
     ) -> InvocationResult:
         _check_cancelled(cancelled)
-        finalization_messages = (
-            *messages,
-            ModelMessage(role="system", content=FINALIZATION_PROTOCOL),
-        )
+        finalization_messages = _build_finalization_messages(messages)
         response = await _stream_model_turn(
             self._model_client,
             finalization_messages,
@@ -354,6 +351,22 @@ def _is_terminal_tool_success(
     if call.name == "cua_workbench":
         return True
     return call.name == "cua_execute" and result.get("status") == "succeeded"
+
+
+def _build_finalization_messages(
+    messages: list[ModelMessage],
+) -> tuple[ModelMessage, ...]:
+    if not messages or messages[0].role != "system" or messages[0].content is None:
+        raise ValueError("Agent messages 必须以包含内容的 system message 开头")
+    if any(message.role == "system" for message in messages[1:]):
+        raise ValueError("Agent messages 只能在开头包含一个 system message")
+    return (
+        ModelMessage(
+            role="system",
+            content=f"{messages[0].content}\n\n{FINALIZATION_PROTOCOL}",
+        ),
+        *messages[1:],
+    )
 
 
 async def _emit_tool_started(
