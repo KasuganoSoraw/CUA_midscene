@@ -13,7 +13,10 @@
 ## 意图与 Surface
 
 - 成熟任务、参数化调用、组合或自动化优先通过内部 CUA Tool 执行。
-- 录制新流程、查看或校准 Skill、诊断首次运行失败，或需要高密度视觉检查时，使用 Workbench。
+- 实际电脑操作统一通过 `cua_execute` 完成。
+- `cua_workbench` 只服务于 Recorded Skill 的录制、复核、校准，以及用户明确要求的已录制任务人工回放或调试。
+- Workbench 不是 `cua_execute` 的执行结果页面，也不是 freeform aiAct 的默认复核页面。
+- 除非用户原始目标明确要求录制、复核或打开 Workbench，否则不要主动启动 Workbench。
 - Workbench 是独立 Human Surface，不依附于本次 invocation 生命周期。
 
 ## 任务发现与执行策略
@@ -23,6 +26,14 @@
 3. 有匹配的录制知识，但当前 UI 需要 Midscene 对完整流程统一规划和适应时，显式选择 `guided`。
 4. 用户明确要求操作电脑且没有合适 Recorded Skill 时，显式选择 `freeform`，把完整 Computer-Use 目标交给 Midscene。
 5. 不要把 Freeform 目标拆成并发命令，不要自己生成点击坐标或重复 Midscene 的截图级规划。
+
+## 成功终止纪律
+
+- `cua_catalog` 仅用于执行前发现 Recorded Skill；它成功后可以继续选择和执行任务。
+- `cua_execute` 返回 `status=succeeded` 表示完整执行目标已经完成。不得通过再次执行相同或相似 GUI 操作来确认、查看或验证第一次操作，也不得重新进行 catalog 发现。
+- freeform `cua_execute` 成功后，不得为了确认、查看、验证或展示执行结果调用 `cua_workbench`。
+- Computer-Use 执行结果以 `cua_execute` 返回的 `status`、`runDir`、`reportPath` 等字段为准。
+- `cua_workbench` 成功返回访问地址后，录制、复核或 Workbench 回放入口任务已经完成，不再调用其他 Tool。
 
 ## 数据、串行与失败边界
 
@@ -48,5 +59,5 @@
 
 - 不再调用 Tool 时，返回结构化 `completed` 或 `needs-input` 状态和面向调用方的中文回复。
 - 不要把内部模型 messages 当作结果，不要声称未执行的操作已成功。
-- `cua_workbench` 成功返回后，最终回复必须包含 Tool 返回的 `url`，并说明它用于录制、复核或执行中的哪一种用途。
+- `cua_workbench` 成功返回后，最终回复必须包含 Tool 返回的 `url`，并说明它用于录制、复核或已录制任务回放中的哪一种用途。
 - `cua_execute` 成功且 Tool 返回 `reportPath` 时，最终回复必须包含该 Midscene HTML 报告路径；没有返回该字段时不得编造报告路径。

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from typing import TypeAlias
 from uuid import uuid4
 
@@ -45,6 +45,18 @@ FINAL_RESPONSE_PROTOCOL = """
 {"status":"completed","reply":"面向调用方的任务结果"}
 或
 {"status":"needs-input","reply":"缺少的信息及原因"}
+""".strip()
+
+FINALIZATION_PROTOCOL = """
+## 成功终态回复
+
+最近一次终态 Tool 已成功完成本次任务。不得再调用、建议调用或模拟调用任何 Tool。
+不得通过新的 GUI 操作确认或验证结果。
+只根据已有任务、Tool Result 和以下规则输出最终 JSON 响应：
+- `cua_execute`：明确说明任务执行成功；Tool Result 包含 `reportPath` 时必须原样返回该路径。
+- `cua_workbench`：必须原样返回 Tool Result 中的 `url`，
+  并说明它用于录制、复核或已录制任务回放中的哪一种用途。
+- `status` 必须为 `completed`。
 """.strip()
 
 
@@ -269,6 +281,15 @@ class CuaAgent:
                         tool_call_id=call.call_id,
                     )
                 )
+                if _is_terminal_tool_success(call, result):
+                    return await self._finalize(
+                        invocation_id,
+                        messages,
+                        traces,
+                        turn=turn + 1,
+                        event_sink=event_sink,
+                        cancelled=cancelled,
+                    )
 
         message = f"Agent 在 {self._max_turns} 轮内未生成最终结果"
         await _emit(event_sink, AgentEvent(invocation_id, "failed", message))
@@ -279,6 +300,60 @@ class CuaAgent:
             tool_calls=tuple(traces),
             error=message,
         )
+
+    async def _finalize(
+        self,
+        invocation_id: str,
+        messages: list[ModelMessage],
+        traces: list[ToolTrace],
+        *,
+        turn: int,
+        event_sink: EventSink | None,
+        cancelled: CancellationCheck | None,
+    ) -> InvocationResult:
+        _check_cancelled(cancelled)
+        finalization_messages = (
+            *messages,
+            ModelMessage(role="system", content=FINALIZATION_PROTOCOL),
+        )
+        response = await _stream_model_turn(
+            self._model_client,
+            finalization_messages,
+            (),
+            invocation_id,
+            turn,
+            event_sink,
+            cancelled,
+        )
+        if response.tool_calls:
+            raise ValueError("成功终态回复不得包含 Tool call")
+        if response.final_status != "completed" or response.content is None:
+            raise ValueError("成功终态回复必须返回 completed")
+        reply = response.content.strip()
+        await _emit(
+            event_sink,
+            AgentEvent(
+                invocation_id,
+                "agent.completed",
+                reply,
+                {"turn": turn, "reply": reply},
+            ),
+        )
+        return InvocationResult(
+            invocation_id=invocation_id,
+            status=InvocationStatus.COMPLETED,
+            reply=reply,
+            tool_calls=tuple(traces),
+        )
+
+
+def _is_terminal_tool_success(
+    call: ModelToolCall,
+    result: Mapping[str, object],
+) -> bool:
+    if call.name == "cua_workbench":
+        return True
+    return call.name == "cua_execute" and result.get("status") == "succeeded"
 
 
 async def _emit_tool_started(

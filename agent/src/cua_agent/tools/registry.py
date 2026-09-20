@@ -62,7 +62,11 @@ CATALOG_TOOL = ToolDefinition(
 
 EXECUTE_TOOL = ToolDefinition(
     name="cua_execute",
-    description="以明确 replay、guided 或 freeform 策略执行一次 Computer-Use 任务。",
+    description=(
+        "执行一次具有真实桌面副作用的完整 Computer-Use 任务。调用时传入完整目标，"
+        "不得用于探测或确认。返回 status=succeeded 表示目标已经完成；成功后不得再次"
+        "执行相同或相似 GUI 操作来验证结果，应直接生成最终回复。"
+    ),
     input_schema={
         "type": "object",
         "oneOf": [
@@ -104,11 +108,22 @@ EXECUTE_TOOL = ToolDefinition(
 
 WORKBENCH_TOOL = ToolDefinition(
     name="cua_workbench",
-    description="启动或复用 CUA Workbench，并返回录制、复核或执行目标的深链接。",
+    description=(
+        "启动或复用 Recorded Skill Workbench。仅用于录制新操作流程、复核或校准已录制任务，"
+        "或用户明确要求在 Workbench 中回放、调试已录制任务。它不是 cua_execute 的结果"
+        "查看页面；freeform 执行成功后不得为了确认或展示结果调用此 Tool。"
+    ),
     input_schema={
         "type": "object",
         "properties": {
-            "mode": {"enum": ["recording", "review", "execution"]},
+            "mode": {
+                "enum": ["recording", "review", "execution"],
+                "description": (
+                    "recording 用于录制新流程，review 用于复核或校准已录制任务；"
+                    "execution 仅表示在 Workbench 中打开已录制任务的执行、回放或调试界面，"
+                    "不表示查看 freeform cua_execute 的执行结果。"
+                ),
+            },
             "scene": {"type": "string", "minLength": 1},
             "task": {"type": "string", "minLength": 1},
         },

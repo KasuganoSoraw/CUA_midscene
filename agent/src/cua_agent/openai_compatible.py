@@ -103,16 +103,15 @@ class OpenAICompatibleModelClient(ModelClient):
         messages: tuple[ModelMessage, ...],
         tools: tuple[ToolDefinition, ...],
     ) -> AsyncIterator[ModelStreamItem]:
-        body = json.dumps(
-            {
-                "model": self._config.model,
-                "messages": [_message_payload(message) for message in messages],
-                "tools": [_tool_payload(tool) for tool in tools],
-                "tool_choice": "auto",
-                "stream": True,
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
+        payload: dict[str, JsonValue] = {
+            "model": self._config.model,
+            "messages": [_message_payload(message) for message in messages],
+            "stream": True,
+        }
+        if tools:
+            payload["tools"] = [_tool_payload(tool) for tool in tools]
+            payload["tool_choice"] = "auto"
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         request = urllib.request.Request(
             self._config.chat_completions_url,
             data=body,

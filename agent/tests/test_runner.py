@@ -29,9 +29,11 @@ class FakeModelClient:
     def __init__(self, responses: list[ModelResponse]) -> None:
         self.responses = iter(responses)
         self.calls: list[tuple[ModelMessage, ...]] = []
+        self.tool_sets: list[object] = []
 
     async def complete(self, messages: tuple[ModelMessage, ...], tools: object) -> ModelResponse:
         self.calls.append(messages)
+        self.tool_sets.append(tools)
         return next(self.responses)
 
     async def stream(
@@ -79,6 +81,16 @@ class FakeRuntimeClient:
                 await delivered
         if self.fail:
             raise RuntimeMethodError("RUNTIME_METHOD_FAILED", "desktop unavailable")
+        if method == "execute":
+            return {
+                "status": "succeeded",
+                "reportPath": "C:/runs/execution-report.html",
+            }
+        if method == "workbench":
+            return {
+                "url": "http://127.0.0.1:47831/?mode=recording",
+                "mode": payload.get("mode", "recording"),
+            }
         return {"method": method, "ok": True}
 
 
@@ -127,7 +139,6 @@ def test_runner_handles_multiple_tool_rounds_and_emits_domain_events() -> None:
             "tool.started",
             "execution.started",
             "tool.completed",
-            "progress",
             "assistant.started",
             "assistant.delta",
             "assistant.completed",
@@ -150,6 +161,130 @@ def test_runner_handles_multiple_tool_rounds_and_emits_domain_events() -> None:
         }
         assert model.calls[0][1] == ModelMessage(role="user", content="打开 Chrome")
         assert model.calls[1][-1].role == "tool"
+        assert model.tool_sets[2] == ()
+
+    asyncio.run(scenario())
+
+
+def test_terminal_execute_stops_remaining_calls_and_finalizes_without_tools() -> None:
+    async def scenario() -> None:
+        report_path = "C:/runs/execution-report.html"
+        model = FakeModelClient(
+            [
+                ModelResponse(
+                    tool_calls=(
+                        ModelToolCall(
+                            "execute-1",
+                            "cua_execute",
+                            {"strategy": "freeform", "goal": "发送消息"},
+                        ),
+                        ModelToolCall(
+                            "workbench-1",
+                            "cua_workbench",
+                            {"mode": "execution"},
+                        ),
+                    )
+                ),
+                ModelResponse(
+                    content=f"任务执行成功。执行报告：{report_path}",
+                    final_status="completed",
+                ),
+            ]
+        )
+        runtime = FakeRuntimeClient()
+        agent = CuaAgent(model, lambda: runtime)  # type: ignore[arg-type]
+
+        result = await agent.invoke(InvocationRequest("发送消息", invocation_id="terminal"))
+
+        assert result.status is InvocationStatus.COMPLETED
+        assert result.reply == f"任务执行成功。执行报告：{report_path}"
+        assert runtime.calls == [
+            ("execute", {"strategy": "freeform", "goal": "发送消息"})
+        ]
+        assert [trace.tool for trace in result.tool_calls] == ["cua_execute"]
+        assert len(model.calls) == 2
+        assert model.tool_sets[1] == ()
+        assert model.calls[1][-2].role == "tool"
+        assert report_path in (model.calls[1][-2].content or "")
+        assert model.calls[1][-1].role == "system"
+        assert "不得再调用" in (model.calls[1][-1].content or "")
+
+    asyncio.run(scenario())
+
+
+def test_finalization_tool_call_never_reaches_runtime() -> None:
+    async def scenario() -> None:
+        model = FakeModelClient(
+            [
+                ModelResponse(
+                    tool_calls=(
+                        ModelToolCall(
+                            "execute-1",
+                            "cua_execute",
+                            {"strategy": "freeform", "goal": "发送消息"},
+                        ),
+                    )
+                ),
+                ModelResponse(
+                    tool_calls=(
+                        ModelToolCall(
+                            "execute-2",
+                            "cua_execute",
+                            {"strategy": "freeform", "goal": "确认消息已发送"},
+                        ),
+                    )
+                ),
+            ]
+        )
+        runtime = FakeRuntimeClient()
+        agent = CuaAgent(model, lambda: runtime)  # type: ignore[arg-type]
+
+        result = await agent.invoke(InvocationRequest("发送消息", invocation_id="no-repeat"))
+
+        assert result.status is InvocationStatus.FAILED
+        assert "不得包含 Tool call" in (result.error or "")
+        assert runtime.calls == [
+            ("execute", {"strategy": "freeform", "goal": "发送消息"})
+        ]
+        assert model.tool_sets[1] == ()
+
+    asyncio.run(scenario())
+
+
+def test_workbench_success_is_terminal_and_final_reply_keeps_url() -> None:
+    async def scenario() -> None:
+        url = "http://127.0.0.1:47831/?mode=recording"
+        model = FakeModelClient(
+            [
+                ModelResponse(
+                    tool_calls=(
+                        ModelToolCall(
+                            "workbench-1",
+                            "cua_workbench",
+                            {"mode": "recording"},
+                        ),
+                        ModelToolCall(
+                            "execute-1",
+                            "cua_execute",
+                            {"strategy": "freeform", "goal": "打开页面"},
+                        ),
+                    )
+                ),
+                ModelResponse(
+                    content=f"录制 Workbench 已启动：{url}",
+                    final_status="completed",
+                ),
+            ]
+        )
+        runtime = FakeRuntimeClient()
+        agent = CuaAgent(model, lambda: runtime)  # type: ignore[arg-type]
+
+        result = await agent.invoke(InvocationRequest("打开录制入口", invocation_id="workbench"))
+
+        assert result.status is InvocationStatus.COMPLETED
+        assert url in result.reply
+        assert runtime.calls == [("workbench", {"mode": "recording"})]
+        assert model.tool_sets[1] == ()
 
     asyncio.run(scenario())
 

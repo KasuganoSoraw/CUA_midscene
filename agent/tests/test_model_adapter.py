@@ -5,6 +5,7 @@ import io
 import json
 import ssl
 import threading
+from urllib.request import Request
 
 import pytest
 
@@ -193,6 +194,33 @@ def test_stream_keeps_final_json_as_model_content(
         assert result.content == "完成"
 
     asyncio.run(scenario())
+
+
+def test_stream_omits_tool_fields_when_no_tools_are_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = _sse({"choices": [{"delta": {"content": "任务完成"}}]})
+    body += b"data: [DONE]\n\n"
+    captured: dict[str, object] = {}
+
+    def urlopen(request: Request, *args: object, **kwargs: object) -> io.BytesIO:
+        request_body = request.data
+        assert request_body is not None
+        captured.update(json.loads(request_body.decode("utf-8")))
+        return io.BytesIO(body)
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    client = OpenAICompatibleModelClient(
+        OpenAICompatibleConfig("https://example.test/v1", "model", "secret")
+    )
+
+    async def scenario() -> None:
+        result = await client.complete((ModelMessage("user", "任务"),), ())
+        assert result.content == "任务完成"
+
+    asyncio.run(scenario())
+    assert "tools" not in captured
+    assert "tool_choice" not in captured
 
 
 def test_stream_rejects_incomplete_tool_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
