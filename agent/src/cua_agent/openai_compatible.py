@@ -14,7 +14,6 @@ from typing import cast
 
 from .contracts import JsonValue
 from .model import (
-    FinalStatus,
     ModelClient,
     ModelContentDelta,
     ModelMessage,
@@ -319,23 +318,4 @@ def _model_response_from(message: dict[str, object]) -> ModelResponse:
     content = message.get("content")
     if not isinstance(content, str) or not content.strip():
         raise ValueError("最终模型响应缺少 content")
-    status, reply = _parse_final_content(content)
-    return ModelResponse(content=reply, final_status=status)
-
-
-def _parse_final_content(content: str) -> tuple[FinalStatus, str]:
-    try:
-        value: object = json.loads(content)
-    except json.JSONDecodeError:
-        return "completed", content.strip()
-    if not isinstance(value, dict):
-        return "completed", content.strip()
-    status = value.get("status")
-    reply = value.get("reply")
-    if (
-        status not in ("completed", "needs-input")
-        or not isinstance(reply, str)
-        or not reply.strip()
-    ):
-        return "completed", content.strip()
-    return cast(FinalStatus, status), reply.strip()
+    return ModelResponse(content=content.strip())

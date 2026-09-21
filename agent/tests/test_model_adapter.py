@@ -99,15 +99,15 @@ def test_adapter_maps_assistant_tool_calls_and_tool_results() -> None:
     }
 
 
-def test_adapter_parses_structured_needs_input_and_accepts_plain_final_text() -> None:
+def test_adapter_preserves_final_content_for_runner_response_modes() -> None:
     needs_input = _model_response_from(
         {"content": '{"status":"needs-input","reply":"请提供目标系统名称"}'}
     )
     plain = _model_response_from({"content": "任务完成"})
 
-    assert needs_input.final_status == "needs-input"
-    assert needs_input.content == "请提供目标系统名称"
-    assert plain.final_status == "completed"
+    assert needs_input.final_status is None
+    assert needs_input.content == '{"status":"needs-input","reply":"请提供目标系统名称"}'
+    assert plain.final_status is None
     assert plain.content == "任务完成"
 
 
@@ -191,7 +191,7 @@ def test_stream_keeps_final_json_as_model_content(
 
     async def scenario() -> None:
         result = await client.complete((ModelMessage("user", "任务"),), ())
-        assert result.content == "完成"
+        assert result.content == '{"status":"completed","reply":"完成"}'
 
     asyncio.run(scenario())
 

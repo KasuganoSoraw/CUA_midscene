@@ -139,9 +139,6 @@ def test_runner_handles_multiple_tool_rounds_and_emits_domain_events() -> None:
             "tool.started",
             "execution.started",
             "tool.completed",
-            "assistant.started",
-            "assistant.delta",
-            "assistant.completed",
             "agent.completed",
         ]
         started = [event for event in events if event.type == "tool.started"]
@@ -207,6 +204,8 @@ def test_terminal_execute_stops_remaining_calls_and_finalizes_without_tools() ->
         final_messages = model.calls[1]
         assert final_messages[0].role == "system"
         assert "不得再调用" in (final_messages[0].content or "")
+        assert "只输出一个 JSON object" not in (final_messages[0].content or "")
+        assert "不要输出 JSON" in (final_messages[0].content or "")
         assert sum(message.role == "system" for message in final_messages) == 1
         assert final_messages[-1].role == "tool"
         assert report_path in (final_messages[-1].content or "")
@@ -249,6 +248,39 @@ def test_finalization_tool_call_never_reaches_runtime() -> None:
             ("execute", {"strategy": "freeform", "goal": "发送消息"})
         ]
         assert model.tool_sets[1] == ()
+
+    asyncio.run(scenario())
+
+
+def test_terminal_finalization_rejects_json_envelope_without_exposing_it() -> None:
+    async def scenario() -> None:
+        raw = 'Task completed {"status":"completed","reply":"Done"}'
+        model = FakeModelClient(
+            [
+                ModelResponse(
+                    tool_calls=(
+                        ModelToolCall(
+                            "execute-1",
+                            "cua_execute",
+                            {"strategy": "freeform", "goal": "Open Chrome"},
+                        ),
+                    )
+                ),
+                ModelResponse(content=raw),
+            ]
+        )
+        events: list[AgentEvent] = []
+        agent = CuaAgent(model, lambda: FakeRuntimeClient())  # type: ignore[arg-type]
+
+        result = await agent.invoke(
+            InvocationRequest("Open Chrome", invocation_id="plain-json"),
+            event_sink=events.append,
+        )
+
+        assert result.status is InvocationStatus.FAILED
+        assert "JSON envelope" in (result.error or "")
+        assert not any(event.type == "agent.completed" for event in events)
+        assert all(raw not in (event.message or "") for event in events)
 
     asyncio.run(scenario())
 
@@ -438,7 +470,7 @@ def test_runner_reports_needs_input_cancellation_and_turn_limit() -> None:
     asyncio.run(scenario())
 
 
-def test_runner_emits_text_before_model_finishes_and_hides_final_json() -> None:
+def test_runner_buffers_structured_final_response_and_hides_protocol_json() -> None:
     class StreamingModel:
         def __init__(self) -> None:
             self.release = asyncio.Event()
@@ -446,10 +478,12 @@ def test_runner_emits_text_before_model_finishes_and_hides_final_json() -> None:
         async def stream(
             self, messages: tuple[ModelMessage, ...], tools: object
         ) -> AsyncIterator[ModelStreamItem]:
-            yield ModelContentDelta("正在查询")
+            yield ModelContentDelta('{"status":"completed",')
             await self.release.wait()
-            yield ModelContentDelta("设备")
-            yield ModelStreamComplete(ModelResponse(content="正在查询设备"))
+            yield ModelContentDelta('"reply":"查询完成"}')
+            yield ModelStreamComplete(
+                ModelResponse(content='{"status":"completed","reply":"查询完成"}')
+            )
 
     async def scenario() -> None:
         model = StreamingModel()
@@ -460,22 +494,13 @@ def test_runner_emits_text_before_model_finishes_and_hides_final_json() -> None:
                 InvocationRequest("查询", invocation_id="stream"), event_sink=events.append
             )
         )
-        for _ in range(100):
-            if any(event.type == "assistant.delta" for event in events):
-                break
-            await asyncio.sleep(0.001)
+        await asyncio.sleep(0.01)
         assert not invocation.done()
-        assert [
-            event.data["text"] for event in events if event.type == "assistant.delta" and event.data
-        ] == ["正在查询"]
+        assert not any(event.type.startswith("assistant.") for event in events)
         model.release.set()
-        assert (await invocation).reply == "正在查询设备"
-        assert [event.type for event in events][-4:] == [
-            "assistant.delta",
-            "assistant.delta",
-            "assistant.completed",
-            "agent.completed",
-        ]
+        assert (await invocation).reply == "查询完成"
+        assert not any(event.type.startswith("assistant.") for event in events)
+        assert events[-1].type == "agent.completed"
 
         class ProtocolModel:
             async def stream(
@@ -496,6 +521,64 @@ def test_runner_emits_text_before_model_finishes_and_hides_final_json() -> None:
         assert result.status is InvocationStatus.NEEDS_INPUT
         assert not any(event.type.startswith("assistant.") for event in protocol_events)
         assert protocol_events[-1].data == {"turn": 1, "reply": "需要目标"}
+
+    asyncio.run(scenario())
+
+
+def test_runner_rejects_mixed_text_and_structured_json_without_leaking_it() -> None:
+    async def scenario() -> None:
+        raw = '任务完成 {"status":"completed","reply":"完成"}'
+        events: list[AgentEvent] = []
+        agent = CuaAgent(
+            FakeModelClient([ModelResponse(content=raw)]),
+            lambda: FakeRuntimeClient(),  # type: ignore[arg-type]
+        )
+
+        result = await agent.invoke(
+            InvocationRequest("查询", invocation_id="invalid-protocol"),
+            event_sink=events.append,
+        )
+
+        assert result.status is InvocationStatus.FAILED
+        assert "单个 JSON object" in (result.error or "")
+        assert not any(event.type.startswith("assistant.") for event in events)
+        assert all(raw not in (event.message or "") for event in events)
+
+    asyncio.run(scenario())
+
+
+def test_runner_emits_tool_call_explanation_after_response_is_complete() -> None:
+    async def scenario() -> None:
+        events: list[AgentEvent] = []
+        model = FakeModelClient(
+            [
+                ModelResponse(
+                    content="I will inspect the available recorded tasks.",
+                    tool_calls=(
+                        ModelToolCall("catalog-1", "cua_catalog", {"action": "list-scenes"}),
+                    ),
+                ),
+                ModelResponse(content="Done", final_status="completed"),
+            ]
+        )
+        agent = CuaAgent(model, lambda: FakeRuntimeClient())  # type: ignore[arg-type]
+
+        result = await agent.invoke(
+            InvocationRequest("List available tasks", invocation_id="tool-explanation"),
+            event_sink=events.append,
+        )
+
+        assert result.status is InvocationStatus.COMPLETED
+        assert [event.type for event in events if event.type.startswith("assistant.")] == [
+            "assistant.started",
+            "assistant.delta",
+            "assistant.completed",
+        ]
+        delta = next(event for event in events if event.type == "assistant.delta")
+        assert delta.data == {
+            "turn": 1,
+            "text": "I will inspect the available recorded tasks.",
+        }
 
     asyncio.run(scenario())
 

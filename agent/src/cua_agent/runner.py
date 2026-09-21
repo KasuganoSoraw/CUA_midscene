@@ -6,7 +6,7 @@ import asyncio
 import inspect
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
-from typing import TypeAlias
+from typing import Literal, TypeAlias, cast
 from uuid import uuid4
 
 from .contracts import (
@@ -37,14 +37,16 @@ from .tools import CuaToolRegistry, ToolDefinition, create_cua_tool_registry
 EventSinkResult: TypeAlias = Awaitable[None] | None
 EventSink: TypeAlias = Callable[[AgentEvent], EventSinkResult]
 RuntimeClientFactory: TypeAlias = Callable[[], ManagedRuntimeClientProtocol]
+FinalResponseMode: TypeAlias = Literal["structured", "plain"]
 
 FINAL_RESPONSE_PROTOCOL = """
 ## 最终响应协议
 
 当你不再调用 Tool 时，只输出一个 JSON object，不要添加 Markdown code fence：
-{"status":"completed","reply":"面向调用方的任务结果"}
+{"status":"completed","reply":"..."}
 或
-{"status":"needs-input","reply":"缺少的信息及原因"}
+{"status":"needs-input","reply":"..."}
+`reply` 使用调用方任务所使用的语言；调用方明确指定其他语言时遵循其要求。
 """.strip()
 
 FINALIZATION_PROTOCOL = """
@@ -52,11 +54,12 @@ FINALIZATION_PROTOCOL = """
 
 最近一次终态 Tool 已成功完成本次任务。不得再调用、建议调用或模拟调用任何 Tool。
 不得通过新的 GUI 操作确认或验证结果。
-只根据已有任务、Tool Result 和以下规则输出最终 JSON 响应：
+只根据已有任务、Tool Result 和以下规则输出面向调用方的普通文本：
 - `cua_execute`：明确说明任务执行成功；Tool Result 包含 `reportPath` 时必须原样返回该路径。
 - `cua_workbench`：必须原样返回 Tool Result 中的 `url`，
   并说明它用于录制、复核或已录制任务回放中的哪一种用途。
-- `status` 必须为 `completed`。
+- 使用调用方任务所使用的语言；调用方明确指定其他语言时遵循其要求。
+- 不要输出 JSON、`status`/`reply` envelope 或 Markdown code fence。
 """.strip()
 
 
@@ -155,6 +158,7 @@ class CuaAgent:
                 turn,
                 event_sink,
                 cancelled,
+                response_mode="structured",
             )
             if not response.tool_calls:
                 assert response.content is not None
@@ -313,20 +317,16 @@ class CuaAgent:
     ) -> InvocationResult:
         _check_cancelled(cancelled)
         finalization_messages = _build_finalization_messages(messages)
-        response = await _stream_model_turn(
-            self._model_client,
-            finalization_messages,
-            (),
-            invocation_id,
-            turn,
-            event_sink,
-            cancelled,
+        response = _normalize_final_response(
+            await _await_model_response(
+                self._model_client.complete(finalization_messages, ()),
+                cancelled,
+            ),
+            "plain",
         )
-        if response.tool_calls:
-            raise ValueError("成功终态回复不得包含 Tool call")
-        if response.final_status != "completed" or response.content is None:
-            raise ValueError("成功终态回复必须返回 completed")
-        reply = response.content.strip()
+        _check_cancelled(cancelled)
+        assert response.content is not None
+        reply = response.content
         await _emit(
             event_sink,
             AgentEvent(
@@ -363,7 +363,7 @@ def _build_finalization_messages(
     return (
         ModelMessage(
             role="system",
-            content=f"{messages[0].content}\n\n{FINALIZATION_PROTOCOL}",
+            content=f"{CUA_AGENT_DEFINITION.instructions}\n\n{FINALIZATION_PROTOCOL}",
         ),
         *messages[1:],
     )
@@ -424,11 +424,9 @@ async def _stream_model_turn(
     turn: int,
     event_sink: EventSink | None,
     cancelled: CancellationCheck | None,
+    *,
+    response_mode: FinalResponseMode,
 ) -> ModelResponse:
-    # 最终协议以 JSON object 开头；其内容只通过终态事件公开。
-    prefix = ""
-    classification: str | None = None
-    visible = False
     response: ModelResponse | None = None
     stream = model_client.stream(messages, definitions)
     while True:
@@ -439,41 +437,80 @@ async def _stream_model_turn(
         _check_cancelled(cancelled)
         if isinstance(item, ModelStreamComplete):
             response = item.response
-            continue
-        if not isinstance(item, ModelContentDelta) or not item.text:
-            continue
-        if classification is None:
-            prefix += item.text
-            stripped = prefix.lstrip()
-            if not stripped:
-                continue
-            classification = "protocol" if stripped.startswith("{") else "visible"
-            if classification == "protocol":
-                continue
-            delta = prefix
-            prefix = ""
-        elif classification == "protocol":
-            continue
-        else:
-            delta = item.text
-        if not visible:
+        elif not isinstance(item, ModelContentDelta):
+            raise ValueError("模型流包含未知事件")
+    if response is None:
+        raise ValueError("模型流缺少完整响应")
+    if response.tool_calls:
+        if response.content is not None and response.content.strip():
+            explanation = response.content.strip()
             await _emit(
                 event_sink,
                 AgentEvent(invocation_id, "assistant.started", data={"turn": turn}),
             )
-            visible = True
-        await _emit(
-            event_sink,
-            AgentEvent(invocation_id, "assistant.delta", data={"turn": turn, "text": delta}),
+            await _emit(
+                event_sink,
+                AgentEvent(
+                    invocation_id,
+                    "assistant.delta",
+                    data={"turn": turn, "text": explanation},
+                ),
+            )
+            await _emit(
+                event_sink,
+                AgentEvent(invocation_id, "assistant.completed", data={"turn": turn}),
+            )
+        return response
+    return _normalize_final_response(response, response_mode)
+
+
+def _normalize_final_response(
+    response: ModelResponse,
+    response_mode: FinalResponseMode,
+) -> ModelResponse:
+    if response_mode == "structured":
+        return _structured_final_response(response)
+    return ModelResponse(content=_plain_final_reply(response))
+
+
+def _structured_final_response(response: ModelResponse) -> ModelResponse:
+    if response.tool_calls:
+        raise ValueError("结构化最终响应不得包含 Tool call")
+    if response.content is None or not response.content.strip():
+        raise ValueError("结构化最终响应缺少 content")
+    if response.final_status is not None:
+        return ModelResponse(
+            content=response.content.strip(),
+            final_status=response.final_status,
         )
-    if visible:
-        await _emit(
-            event_sink,
-            AgentEvent(invocation_id, "assistant.completed", data={"turn": turn}),
-        )
-    if response is None:
-        raise ValueError("模型流缺少完整响应")
-    return response
+    try:
+        value: object = json.loads(response.content)
+    except json.JSONDecodeError as error:
+        raise ValueError("结构化最终响应必须是单个 JSON object") from error
+    if not isinstance(value, dict) or set(value) != {"status", "reply"}:
+        raise ValueError("结构化最终响应必须且只能包含 status 和 reply")
+    status = value.get("status")
+    reply = value.get("reply")
+    if status not in ("completed", "needs-input"):
+        raise ValueError("结构化最终响应 status 无效")
+    if not isinstance(reply, str) or not reply.strip():
+        raise ValueError("结构化最终响应 reply 必须是非空字符串")
+    return ModelResponse(
+        content=reply.strip(),
+        final_status=cast(Literal["completed", "needs-input"], status),
+    )
+
+
+def _plain_final_reply(response: ModelResponse) -> str:
+    if response.tool_calls:
+        raise ValueError("普通最终响应不得包含 Tool call")
+    if response.content is None or not response.content.strip():
+        raise ValueError("普通最终响应缺少 content")
+    reply = response.content.strip()
+    contains_envelope = "{" in reply and '"status"' in reply and '"reply"' in reply
+    if reply.startswith("{") or reply.startswith("```") or contains_envelope:
+        raise ValueError("普通最终响应不得包含 JSON envelope 或 Markdown code fence")
+    return reply
 
 
 async def _next_model_item(
@@ -484,6 +521,23 @@ async def _next_model_item(
         return await anext(stream)
 
     pending = asyncio.create_task(read_next())
+    try:
+        while not pending.done():
+            _check_cancelled(cancelled)
+            await asyncio.wait({pending}, timeout=0.1)
+        _check_cancelled(cancelled)
+        return pending.result()
+    finally:
+        if not pending.done():
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+
+
+async def _await_model_response(
+    response: Awaitable[ModelResponse],
+    cancelled: CancellationCheck | None,
+) -> ModelResponse:
+    pending = asyncio.ensure_future(response)
     try:
         while not pending.done():
             _check_cancelled(cancelled)
