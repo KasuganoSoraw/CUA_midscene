@@ -1,13 +1,19 @@
+<script setup lang="ts">
+import { useI18n } from '../i18n';
+
+const { t } = useI18n();
+</script>
+
 <template>
-  <div class="evidence-placeholder" role="img" aria-label="该步骤没有独立录制截图">
+  <div class="evidence-placeholder" role="img" :aria-label="t('evidence.noneTitle')">
     <svg viewBox="0 0 160 100" aria-hidden="true">
       <rect x="18" y="15" width="124" height="70" rx="10" />
       <circle cx="51" cy="38" r="8" />
       <path d="M30 72 62 48l20 16 18-13 30 21" />
       <path class="slash" d="m25 83 110-66" />
     </svg>
-    <strong>该步骤没有独立录制截图</strong>
-    <span>这里使用默认占位图，不会借用其他步骤的全局图或局部图。</span>
+    <strong>{{ t('evidence.noneTitle') }}</strong>
+    <span>{{ t('evidence.noneDescription') }}</span>
   </div>
 </template>
 

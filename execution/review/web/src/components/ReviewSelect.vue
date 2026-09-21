@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId } from 'vue';
+import { useI18n } from '../i18n';
 
 export interface ReviewSelectOption {
   value: string;
@@ -16,9 +17,11 @@ const props = withDefaults(defineProps<{
   ariaLabel?: string;
 }>(), {
   disabled: false,
-  placeholder: '请选择',
-  ariaLabel: '选择选项',
 });
+
+const { t } = useI18n();
+const resolvedPlaceholder = computed(() => props.placeholder ?? t('common.select'));
+const resolvedAriaLabel = computed(() => props.ariaLabel ?? t('common.selectOption'));
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
@@ -121,7 +124,7 @@ function handleFocusout(event: FocusEvent): void {
       class="review-select-control"
       role="combobox"
       :disabled="disabled"
-      :aria-label="ariaLabel"
+      :aria-label="resolvedAriaLabel"
       :aria-expanded="open"
       aria-haspopup="listbox"
       :aria-controls="listboxId"
@@ -129,7 +132,7 @@ function handleFocusout(event: FocusEvent): void {
       @click="toggleMenu"
       @keydown="handleKeydown"
     >
-      <span :class="{ placeholder: !selected }">{{ selected?.label ?? placeholder }}</span>
+      <span :class="{ placeholder: !selected }">{{ selected?.label ?? resolvedPlaceholder }}</span>
       <span class="review-select-arrow" :class="{ open }" aria-hidden="true"></span>
     </button>
     <div v-if="open" :id="listboxId" class="review-select-options" role="listbox">

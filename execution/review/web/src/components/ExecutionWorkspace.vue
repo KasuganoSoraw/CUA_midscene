@@ -10,13 +10,17 @@ import type {
   TaskExecutionStatus,
 } from '../../../shared/types';
 import { api } from '../api';
+import { useI18n } from '../i18n';
 import ReviewSelect, { type ReviewSelectOption } from './ReviewSelect.vue';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   scenes: SceneCatalogItem[];
   initialScene?: string;
   initialTask?: string;
   targetVersion?: number;
+  developerMode?: boolean;
 }>();
 
 const scene = ref('');
@@ -32,20 +36,20 @@ let poll: ReturnType<typeof setInterval> | undefined;
 
 const sceneOptions = computed<ReviewSelectOption[]>(() => props.scenes.map((item) => ({
   value: item.scene,
-  label: item.status === 'error' ? `${item.title}（不可用）` : item.title,
+  label: item.status === 'error' ? `${item.title} (${t('common.unavailable')})` : item.title,
   description: item.status === 'error' ? item.error : item.description,
   disabled: item.status === 'error',
 })));
 const taskOptions = computed<ReviewSelectOption[]>(() => tasks.value.map((item) => ({
   value: item.task,
-  label: item.status === 'error' ? `${item.title}（不可用）` : item.title,
+  label: item.status === 'error' ? `${item.title} (${t('common.unavailable')})` : item.title,
   description: item.status === 'error' ? item.error : item.description,
   disabled: item.status === 'error',
 })));
-const modeOptions: ReviewSelectOption[] = [
-  { value: 'task', label: '逐步执行', description: '按 task.yaml 的步骤依次运行' },
-  { value: 'act', label: '整体规划', description: '将录制任务转换为一个整体 aiAct' },
-];
+const modeOptions = computed<ReviewSelectOption[]>(() => [
+  { value: 'task', label: t('execution.stepMode'), description: t('execution.stepModeHelp') },
+  { value: 'act', label: t('execution.adaptiveMode'), description: t('execution.adaptiveModeHelp') },
+]);
 const selectedTask = computed<TaskCatalogReadyItem | undefined>(() => {
   const selected = tasks.value.find((item) => item.task === task.value);
   return selected?.status === 'ready' ? selected : undefined;
@@ -64,8 +68,12 @@ const elapsed = computed(() => {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 });
 const phaseLabel = computed(() => ({
-  idle: '等待运行', preparing: `准备中 · ${countdown.value}s`, running: `正在运行 · ${elapsed.value}`,
-  stopping: '正在停止', succeeded: `运行成功 · ${elapsed.value}`, failed: '运行未完成',
+  idle: t('execution.idle'),
+  preparing: t('execution.preparing', { seconds: countdown.value }),
+  running: t('execution.running', { elapsed: elapsed.value }),
+  stopping: t('execution.stoppingLabel'),
+  succeeded: t('execution.succeeded', { elapsed: elapsed.value }),
+  failed: t('execution.failed'),
 })[status.value.phase]);
 
 function applyInputDefaults(): void {
@@ -172,71 +180,71 @@ onUnmounted(() => { if (poll) clearInterval(poll); });
   <section class="execution-console">
     <aside class="panel execution-config">
       <div class="panel-heading execution-heading">
-        <div><p class="eyebrow">TASK TARGET</p><h2>选择执行任务</h2></div>
+        <div><p class="eyebrow">{{ t('execution.target') }}</p><h2>{{ t('execution.choose') }}</h2></div>
       </div>
       <div class="execution-form">
-        <label>场景
-          <ReviewSelect v-model="scene" aria-label="运行场景" :options="sceneOptions" :disabled="active" @change="chooseScene" />
+        <label>{{ t('review.scene') }}
+          <ReviewSelect v-model="scene" :aria-label="t('execution.sceneAria')" :options="sceneOptions" :disabled="active" @change="chooseScene" />
         </label>
-        <label>任务
-          <ReviewSelect v-model="task" aria-label="运行任务" :options="taskOptions" :disabled="active || !scene" @change="chooseTask" />
+        <label>{{ t('review.task') }}
+          <ReviewSelect v-model="task" :aria-label="t('execution.taskAria')" :options="taskOptions" :disabled="active || !scene" @change="chooseTask" />
         </label>
-        <label>运行方式
-          <ReviewSelect v-model="mode" aria-label="运行方式" :options="modeOptions" :disabled="active" />
+        <label>{{ t('execution.mode') }}
+          <ReviewSelect v-model="mode" :aria-label="t('execution.mode')" :options="modeOptions" :disabled="active" />
         </label>
         <div class="execution-task-summary" v-if="selectedTask">
           <strong>{{ selectedTask.title }}</strong>
           <p>{{ selectedTask.description || selectedTask.goal }}</p>
-          <small>{{ selectedTask.taskCount }} 个步骤 · {{ selectedTask.actionCount }} 个动作</small>
+          <small>{{ t('execution.summary', { steps: t('common.steps', { count: selectedTask.taskCount }), actions: t('common.actions', { count: selectedTask.actionCount }) }) }}</small>
         </div>
       </div>
     </aside>
 
     <section class="panel execution-main">
       <div class="panel-heading execution-heading">
-        <div><p class="eyebrow">RUNTIME INPUTS</p><h2>本次运行参数</h2></div>
-        <span>{{ inputEntries.length }} inputs</span>
+        <div><p class="eyebrow">{{ t('execution.inputs') }}</p><h2>{{ t('execution.inputs') }}</h2></div>
+        <span>{{ t('common.items', { count: inputEntries.length }) }}</span>
       </div>
       <div class="execution-inputs" v-if="inputEntries.length">
         <label v-for="([id, definition]) in inputEntries" :key="id">
-          <span><strong>{{ definition.label }}</strong><code>{{ id }}</code></span>
+          <span><strong>{{ definition.label }}</strong><code v-if="developerMode">{{ id }}</code></span>
           <input v-model="inputs[id]" :disabled="active" />
           <small v-if="definition.description">{{ definition.description }}</small>
         </label>
       </div>
       <div v-else class="execution-empty">
-        {{ selectedTask ? '这个任务没有运行时参数，可以直接准备运行。' : '请先选择一个可用任务。' }}
+        {{ selectedTask ? t('execution.noInputs') : t('execution.selectFirst') }}
       </div>
 
       <div class="execution-notice">
-        <strong>执行会直接操作当前 Windows 桌面</strong>
-        <p>点击准备后有 5 秒切换到目标初始界面。录制与任务执行之间没有互斥锁，请不要在执行期间启动录制或手动操作鼠标键盘。</p>
+        <strong>{{ t('execution.warningTitle') }}</strong>
+        <p>{{ t('execution.warning') }}</p>
       </div>
 
       <div v-if="error" class="execution-error">{{ error }}</div>
       <div class="execution-actions">
-        <span>运行时参数只用于本次执行，不会写回任务。</span>
+        <span>{{ t('execution.inputsEphemeral') }}</span>
         <button v-if="active" class="danger execution-stop" :disabled="busy || status.phase === 'stopping'" @click="stop">
-          {{ status.phase === 'preparing' ? '取消准备' : status.phase === 'stopping' ? '正在停止…' : '停止任务' }}
+          {{ status.phase === 'preparing' ? t('execution.cancelPrepare') : status.phase === 'stopping' ? t('execution.stopping') : t('execution.stop') }}
         </button>
-        <button v-else class="primary" :disabled="!canStart" @click="start">准备运行</button>
+        <button v-else class="primary" :disabled="!canStart" @click="start">{{ t('execution.prepare') }}</button>
       </div>
     </section>
 
     <aside class="panel execution-status" :class="`phase-${status.phase}`">
       <div class="execution-status-mark"><span></span></div>
-      <p class="eyebrow">EXECUTION STATUS</p>
+      <p class="eyebrow">{{ t('execution.status') }}</p>
       <h2>{{ phaseLabel }}</h2>
       <p v-if="status.scene">{{ status.scene }} / {{ status.task }}</p>
       <div v-if="status.phase === 'preparing'" class="countdown">{{ countdown }}</div>
       <p v-else-if="status.phase === 'running' || status.phase === 'stopping'" class="elapsed">{{ elapsed }}</p>
-      <p v-if="status.phase === 'succeeded'" class="execution-success">任务执行已成功完成。</p>
+      <p v-if="status.phase === 'succeeded'" class="execution-success">{{ t('execution.success') }}</p>
       <p v-if="status.error" class="execution-error status-error">{{ status.error }}</p>
-      <div v-if="status.result?.runDir" class="execution-result">
-        <small>RUN DIRECTORY</small>
+      <div v-if="developerMode && status.result?.runDir" class="execution-result">
+        <small>{{ t('execution.outputDirectory') }}</small>
         <code :title="status.result.runDir">{{ status.result.runDir }}</code>
       </div>
-      <small v-if="status.phase === 'running'">执行器可能长时间无输出；这里显示的时间来自真实进程状态。</small>
+      <small v-if="status.phase === 'running'">{{ t('execution.noOutputHint') }}</small>
     </aside>
   </section>
 </template>

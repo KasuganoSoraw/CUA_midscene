@@ -8,6 +8,9 @@ import type {
 } from '../../../shared/agent';
 import { api } from '../api';
 import { appendVisibleAgentEvent } from '../agent-progress';
+import { useI18n } from '../i18n';
+
+const { t, formatTime } = useI18n();
 
 interface InvocationRecord {
   task: string;
@@ -28,11 +31,16 @@ const records = ref<InvocationRecord[]>([]);
 const canSubmit = computed(() => Boolean(agentStatus.value?.available && message.value.trim() && !busy.value));
 
 function statusLabel(status: AgentInvocationResult['status']): string {
-  return ({ completed: '已完成', 'needs-input': '等待补充', failed: '未完成', cancelled: '已取消' })[status];
+  return ({
+    completed: t('agent.completed'),
+    'needs-input': t('agent.needsInput'),
+    failed: t('agent.failed'),
+    cancelled: t('agent.cancelled'),
+  })[status];
 }
 
 function toolStatusLabel(status: AgentToolTrace['status']): string {
-  return status === 'succeeded' ? '成功' : '失败';
+  return status === 'succeeded' ? t('agent.toolSucceeded') : t('agent.toolFailed');
 }
 
 function json(value: unknown): string {
@@ -127,49 +135,49 @@ onMounted(refreshStatus);
   <section class="agent-console">
     <aside class="panel agent-identity">
       <div class="panel-heading">
-        <div><p class="eyebrow">SUBAGENT ENDPOINT</p><h2>统一调用入口</h2></div>
+        <div><p class="eyebrow">{{ t('agent.endpoint') }}</p><h2>{{ t('agent.entry') }}</h2></div>
       </div>
       <div class="agent-identity-content">
         <div class="agent-availability" :class="{ available: agentStatus?.available }">
           <span></span>
           <div>
-            <strong>{{ agentStatus?.available ? 'Python Agent 可用' : 'Python Agent 不可用' }}</strong>
-            <small>{{ agentStatus?.reason ?? (statusError || '可以提交 Computer-Use 任务') }}</small>
+            <strong>{{ agentStatus?.available ? t('agent.available') : t('agent.unavailable') }}</strong>
+            <small>{{ agentStatus?.reason ?? (statusError || t('agent.ready')) }}</small>
           </div>
         </div>
 
         <div class="agent-definition-card">
-          <small>CANONICAL AGENT</small>
+          <small>{{ t('agent.definition') }}</small>
           <strong>{{ agentStatus?.name ?? 'Computer-Use' }}</strong>
-          <p>这里直接调用 canonical Python invocation；内部 Tool 不注册为 Host 公共 Tool，页面仅展示受控诊断摘要。</p>
+          <p>{{ t('agent.definitionHelp') }}</p>
         </div>
 
         <div class="agent-tools">
-          <small>RUNTIME BOUNDARY</small>
+          <small>{{ t('agent.runtimeBoundary') }}</small>
           <code>{{ agentStatus?.runtime ?? 'python' }}</code>
-          <code>{{ agentStatus?.modelConfigured ? 'model configured' : 'model missing' }}</code>
+          <code>{{ agentStatus?.modelConfigured ? t('agent.modelConfigured') : t('agent.modelMissing') }}</code>
         </div>
 
-        <button class="secondary" :disabled="busy" @click="refreshStatus">刷新连接状态</button>
+        <button class="secondary" :disabled="busy" @click="refreshStatus">{{ t('agent.refresh') }}</button>
       </div>
     </aside>
 
     <section class="panel agent-invocations">
       <div class="panel-heading agent-heading">
-        <div><p class="eyebrow">INVOCATIONS</p><h2>Subagent 调用记录</h2></div>
-        <span>{{ records.length }} 次</span>
+        <div><p class="eyebrow">{{ t('agent.invocations') }}</p><h2>{{ t('agent.invocations') }}</h2></div>
+        <span>{{ t('agent.count', { count: records.length }) }}</span>
       </div>
 
       <div class="agent-records">
         <div v-if="!records.length" class="agent-empty">
           <span>◎</span>
-          <strong>提交一个完整的 Computer-Use 任务</strong>
-          <p>每次提交都是不继承上下文的独立任务。页面实时展示调用事件，不选择执行策略，也不会绕过 Subagent 直接操作桌面。</p>
+          <strong>{{ t('agent.emptyTitle') }}</strong>
+          <p>{{ t('agent.emptyHelp') }}</p>
         </div>
 
         <article v-for="record in records" :key="record.submittedAt" class="agent-record">
           <header>
-            <div><span class="agent-record-mark">USER</span><time>{{ new Date(record.submittedAt).toLocaleTimeString() }}</time></div>
+            <div><span class="agent-record-mark">USER</span><time>{{ formatTime(record.submittedAt) }}</time></div>
             <p>{{ record.task }}</p>
           </header>
 
@@ -193,19 +201,19 @@ onMounted(refreshStatus);
                   <label v-if="trace.output">OUTPUT<pre>{{ json(trace.output) }}</pre></label>
                   <p v-if="trace.error" class="agent-trace-error">{{ trace.error }}</p>
                   <a v-if="workbenchUrl(trace)" :href="workbenchUrl(trace)" target="_blank" rel="noreferrer">
-                    打开 Workbench ↗
+                    {{ t('agent.openWorkbench') }}
                   </a>
                 </div>
               </details>
             </div>
-            <p v-else class="agent-no-tools">本次调用没有 Tool 轨迹。</p>
+            <p v-else class="agent-no-tools">{{ t('agent.noTools') }}</p>
           </div>
           <div v-else class="agent-pending">
-            <div class="agent-pending-label"><span></span>Subagent 正在处理这次任务…</div>
+            <div class="agent-pending-label"><span></span>{{ t('agent.pending') }}</div>
             <p v-if="record.liveText" class="agent-reply">{{ record.liveText }}</p>
           </div>
           <details v-if="record.visibleEvents.length" class="agent-event-log" open>
-            <summary>实时事件 · {{ record.visibleEvents.length }}</summary>
+            <summary>{{ t('agent.events', { count: record.visibleEvents.length }) }}</summary>
             <div class="agent-trace-grid">
               <div v-for="(event, index) in record.visibleEvents" :key="index">
                 <div v-if="event.type === 'execution.progress'" class="agent-progress-row">
@@ -226,18 +234,18 @@ onMounted(refreshStatus);
       </div>
 
       <div class="agent-composer">
-        <label for="agent-message">本次任务</label>
+        <label for="agent-message">{{ t('agent.task') }}</label>
         <textarea
           id="agent-message"
           v-model="message"
           rows="4"
           :disabled="!agentStatus?.available || busy"
-          placeholder="例如：打开 Chrome，查询 NE001 的当前告警，并告诉我结果"
+          :placeholder="t('agent.placeholder')"
           @keydown="handleComposerKeydown"
         ></textarea>
         <div>
-          <span>{{ agentStatus?.available ? 'Ctrl + Enter 提交 · 每次调用相互独立' : '准备 Python Agent、模型和 Runtime 后才可提交' }}</span>
-          <button class="primary" :disabled="!canSubmit" @click="submit">{{ busy ? '正在调用…' : '提交任务' }}</button>
+          <span>{{ agentStatus?.available ? t('agent.submitHint') : t('agent.notReadyHint') }}</span>
+          <button class="primary" :disabled="!canSubmit" @click="submit">{{ busy ? t('agent.submitting') : t('agent.submit') }}</button>
         </div>
       </div>
     </section>
