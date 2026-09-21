@@ -1,6 +1,8 @@
 import type {
   CreateRecordingTaskRequest,
   CreateRecordingTaskResult,
+  DeleteRecordingResult,
+  DeleteTaskResult,
   RecorderDisplaysResult,
   RecorderStatus,
   ReviewServerIdentity,
@@ -130,8 +132,16 @@ export const api = {
       `/api/recordings/${encodeURIComponent(recording)}/tasks`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
+  deleteRecording: (recording: string) => request<DeleteRecordingResult>(
+    `/api/recordings/${encodeURIComponent(recording)}`,
+    { method: 'DELETE' },
+  ),
   tasks: (scene: string) => request<ReviewTaskListResponse>(`/api/scenes/${encodeURIComponent(scene)}/tasks`),
   task: (scene: string, task: string) => request<ReviewTaskView>(`/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}`),
+  deleteTask: (scene: string, task: string) => request<DeleteTaskResult>(
+    `/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}`,
+    { method: 'DELETE' },
+  ),
   mutate: (scene: string, task: string, draft: ReviewTaskDraft, mutation: ReviewMutation) =>
     request<ReviewMutationResult>(`/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}/mutate`, {
       method: 'POST', body: JSON.stringify({ draft, mutation }),

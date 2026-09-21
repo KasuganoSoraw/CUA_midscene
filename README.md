@@ -87,7 +87,7 @@ npm run cua -- review --no-open
 npm run cua -- review --dev --no-open
 ```
 
-普通 `review` 提供“桌面任务中心”，包含任务检查、录制流程和运行任务，并可在中文与英文之间即时切换；语言选择会在本机保存，也可通过 `?lang=zh-CN` 或 `?lang=en-US` 指定初始语言。进入录制流程时页面会自动检测屏幕并默认选择主屏。`review --dev` 额外提供高级任务数据和无 Session 的 Agent 调试入口。完整 CLI 命令见 [`execution/README.md`](./execution/README.md)，Agent 进程调用见 [`agent/README.md`](./agent/README.md)。
+普通 `review` 提供“桌面任务中心”，包含任务检查、录制流程和运行任务，并可在中文与英文之间即时切换；语言选择会在本机保存，也可通过 `?lang=zh-CN` 或 `?lang=en-US` 指定初始语言。任务检查支持删除可写的用户任务，录制流程支持删除原始录制；两类删除均需在页面内确认，内置任务、活动任务和活动录制受保护。进入录制流程时页面会自动检测屏幕并默认选择主屏。`review --dev` 额外提供高级任务数据和无 Session 的 Agent 调试入口。完整 CLI 命令见 [`execution/README.md`](./execution/README.md)，Agent 进程调用见 [`agent/README.md`](./agent/README.md)。
 
 执行器要求 Node.js `>=22.18.0`。
 

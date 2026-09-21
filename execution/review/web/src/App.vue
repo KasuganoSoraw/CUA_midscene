@@ -26,6 +26,7 @@ import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
 import ExecutionWorkspace from './components/ExecutionWorkspace.vue';
 import RecordingWorkspace from './components/RecordingWorkspace.vue';
 import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect.vue';
+import ConfirmDialog from './components/ConfirmDialog.vue';
 
 const { locale, t, setLocale } = useI18n();
 
@@ -82,6 +83,7 @@ const changes = ref<ReviewChange[]>([]);
 const status = ref(() => t('review.loading'));
 const busy = ref(false);
 const conflict = ref(false);
+const taskDeleteOpen = ref(false);
 const evidenceMode = ref<'full' | 'crop' | 'reference' | 'placeholder'>('full');
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
@@ -431,6 +433,33 @@ async function runCurrentTask(): Promise<void> {
   mode.value = 'execution';
 }
 
+function requestTaskDeletion(): void {
+  if (!view.value?.writable || busy.value) return;
+  taskDeleteOpen.value = true;
+}
+
+async function confirmTaskDeletion(): Promise<void> {
+  if (!view.value?.writable || busy.value) return;
+  const deletedScene = scene.value;
+  const deletedTask = task.value;
+  busy.value = true;
+  conflict.value = false;
+  try {
+    await api.deleteTask(deletedScene, deletedTask);
+    taskDeleteOpen.value = false;
+    task.value = '';
+    clearTaskView();
+    await loadScenes();
+    status.value = () => t('review.taskDeleted', { scene: deletedScene, task: deletedTask });
+  } catch (error) {
+    taskDeleteOpen.value = false;
+    const text = error instanceof Error ? error.message : String(error);
+    status.value = () => text;
+  } finally {
+    busy.value = false;
+  }
+}
+
 function evidencePath(step: ReviewStep | undefined): string | undefined {
   const evidence = step?.evidence;
   return evidenceMode.value === 'crop' ? evidence?.crop ?? evidence?.full : evidence?.full ?? evidence?.crop;
@@ -481,6 +510,7 @@ onMounted(async () => {
           <span class="status-chip" :class="{ readonly: !writable }">{{ writable ? t('review.writable') : t('review.readonly') }}</span>
           <button class="secondary" :disabled="busy || !view" @click="runCurrentTask">{{ dirty && writable ? t('review.saveAndRun') : t('review.runTask') }}</button>
           <button class="secondary" :disabled="busy || !draft" @click="validate">{{ t('review.validate') }}</button>
+          <button v-if="view?.writable" class="destructive" :disabled="busy" @click="requestTaskDeletion">{{ t('review.deleteTask') }}</button>
           <button class="primary" :disabled="busy || !dirty || !writable" @click="save">{{ t('review.save') }}</button>
         </div>
         <div v-else-if="mode === 'recordings'" class="top-actions">
@@ -775,6 +805,18 @@ onMounted(async () => {
     <main v-else-if="mode === 'agent' && devMode" class="workspace agent-layout">
       <AgentWorkspace />
     </main>
+
+    <ConfirmDialog
+      :open="taskDeleteOpen"
+      :title="t('review.deleteTaskTitle')"
+      :message="t('review.deleteTaskMessage')"
+      :target="`${scene}/${task}`"
+      :confirm-label="t('review.deleteTask')"
+      :cancel-label="t('common.cancel')"
+      :busy="busy"
+      @confirm="confirmTaskDeletion"
+      @cancel="taskDeleteOpen = false"
+    />
 
     <footer v-if="mode === 'review'"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
   </div>

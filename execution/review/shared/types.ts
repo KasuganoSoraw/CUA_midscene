@@ -137,6 +137,17 @@ export interface CreateRecordingTaskResult {
   goal: string;
 }
 
+export interface DeleteRecordingResult {
+  deleted: true;
+  recording: string;
+}
+
+export interface DeleteTaskResult {
+  deleted: true;
+  scene: string;
+  task: string;
+}
+
 export type RecorderPhase = 'idle' | 'arming' | 'armed' | 'starting' | 'recording' | 'stopping' | 'failed';
 
 export interface RecorderStatus {

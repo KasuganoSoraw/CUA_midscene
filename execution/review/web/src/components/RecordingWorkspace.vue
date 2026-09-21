@@ -11,6 +11,7 @@ import type {
 import { api } from '../api';
 import { useI18n } from '../i18n';
 import { shouldDetectDisplays } from '../recording-display';
+import ConfirmDialog from './ConfirmDialog.vue';
 
 const { t, formatDateTime } = useI18n();
 
@@ -41,6 +42,7 @@ const recorderDisplays = ref<RecorderDisplay[]>([]);
 const selectedDisplayId = ref('');
 const recorderBusy = ref(false);
 const recorderError = ref('');
+const recordingDeleteOpen = ref(false);
 const clock = ref(Date.now());
 let recorderPoll: ReturnType<typeof setInterval> | undefined;
 
@@ -67,6 +69,9 @@ const sceneOptions = computed(() => {
 const recorderCollapsed = computed(() =>
   ['arming', 'armed', 'starting', 'recording', 'stopping'].includes(recorderStatus.value.phase),
 );
+const canDeleteRecording = computed(() => Boolean(
+  selected.value && !busy.value && !opening.value && !recorderBusy.value && !recorderCollapsed.value,
+));
 const canStartRecorder = computed(() => Boolean(
   selectedDisplayId.value
   && recorderStatus.value.outputRoot
@@ -225,6 +230,29 @@ async function createTask(): Promise<void> {
   }
 }
 
+function requestRecordingDeletion(): void {
+  if (!canDeleteRecording.value) return;
+  recordingDeleteOpen.value = true;
+}
+
+async function confirmRecordingDeletion(): Promise<void> {
+  if (!selected.value || !canDeleteRecording.value) return;
+  const recording = selected.value.id;
+  busy.value = true;
+  error.value = '';
+  try {
+    await api.deleteRecording(recording);
+    recordingDeleteOpen.value = false;
+    await loadRecordings();
+    message.value = () => t('recording.deleted', { recording });
+  } catch (caught) {
+    recordingDeleteOpen.value = false;
+    error.value = caught instanceof Error ? caught.message : String(caught);
+  } finally {
+    busy.value = false;
+  }
+}
+
 onMounted(async () => {
   await Promise.all([loadRecordings(), loadRecorderStatus()]);
   if (shouldDetectDisplays(recorderStatus.value.phase)) await refreshRecorderDisplays();
@@ -366,9 +394,14 @@ onUnmounted(() => {
           <p class="eyebrow">{{ t('recording.details') }}</p>
           <h2>{{ selected.id }}</h2>
         </div>
-        <div class="recording-meta">
-          <span>{{ formatTime(selected.startedAt) }}</span>
-          <span v-if="selected.screen">{{ selected.screen.width }} × {{ selected.screen.height }}</span>
+        <div class="recording-heading-actions">
+          <div class="recording-meta">
+            <span>{{ formatTime(selected.startedAt) }}</span>
+            <span v-if="selected.screen">{{ selected.screen.width }} × {{ selected.screen.height }}</span>
+          </div>
+          <button class="destructive" type="button" :disabled="!canDeleteRecording" @click="requestRecordingDeletion">
+            {{ t('recording.delete') }}
+          </button>
         </div>
       </div>
 
@@ -490,4 +523,16 @@ onUnmounted(() => {
       </div>
     </template>
   </section>
+
+  <ConfirmDialog
+    :open="recordingDeleteOpen"
+    :title="t('recording.deleteTitle')"
+    :message="t('recording.deleteMessage')"
+    :target="selected?.id ?? ''"
+    :confirm-label="t('recording.delete')"
+    :cancel-label="t('common.cancel')"
+    :busy="busy"
+    @confirm="confirmRecordingDeletion"
+    @cancel="recordingDeleteOpen = false"
+  />
 </template>

@@ -24,6 +24,7 @@ import {
 } from '../service/python-agent.js';
 import { loadReviewTask, resolveReviewTaskRoot } from '../service/review-task.js';
 import { saveReviewTask, validateReviewDraft } from '../service/task-save.js';
+import { deleteRecording, deleteUserTask } from '../service/asset-deletion.js';
 import {
   TaskExecutionManager,
   type TaskExecutionControl,
@@ -322,6 +323,15 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     schema: { params: recordingParamsSchema },
   }, async (request) => describeRecording(request.params.recording, recordingOptions()));
 
+  app.delete<{ Params: RecordingParams }>('/api/recordings/:recording', {
+    schema: { params: recordingParamsSchema },
+  }, async (request) => {
+    if (['arming', 'armed', 'starting', 'recording', 'stopping'].includes(recorder.status().phase)) {
+      throw Object.assign(new Error('录制正在准备、进行或停止，暂时不能删除录制资产'), { statusCode: 409 });
+    }
+    return deleteRecording(request.params.recording, recordingOptions());
+  });
+
   app.post<{ Params: RecordingParams }>('/api/recordings/:recording/open-folder', {
     schema: { params: recordingParamsSchema },
   }, async (request) => {
@@ -381,6 +391,22 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     const scene = requireIdentifier(request.params.scene, 'scene');
     const task = requireIdentifier(request.params.task, 'task');
     return loadReviewTask(scene, task, options.layout.catalog);
+  });
+
+  app.delete<{ Params: TaskParams }>('/api/tasks/:scene/:task', {
+    schema: { params: taskParamsSchema },
+  }, async (request) => {
+    const scene = requireIdentifier(request.params.scene, 'scene');
+    const task = requireIdentifier(request.params.task, 'task');
+    const active = execution.status();
+    if (
+      ['preparing', 'running', 'stopping'].includes(active.phase)
+      && active.scene === scene
+      && active.task === task
+    ) {
+      throw Object.assign(new Error(`任务正在准备或运行，暂时不能删除：${scene}/${task}`), { statusCode: 409 });
+    }
+    return deleteUserTask(scene, task, options.layout.catalog);
   });
 
   app.get<{ Params: TaskParams; Querystring: EvidenceQuery }>(

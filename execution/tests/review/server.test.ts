@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -285,6 +285,23 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     assert.equal(createRequest?.recording, path.join(recordingsRoot, 'Recording_demo'));
     assert.equal(createRequest?.runsRoot, path.join(root, 'runs'));
 
+    recorderStatus = {
+      phase: 'recording', outputRoot: recordingsRoot,
+      recordingId: 'Recording_demo', startedAt: '2026-08-19T10:00:00.000',
+    };
+    const activeRecordingDelete = await fetch(new URL('/api/recordings/Recording_demo', base), {
+      method: 'DELETE',
+    });
+    assert.equal(activeRecordingDelete.status, 409);
+    await access(path.join(recordingsRoot, 'Recording_demo'));
+    recorderStatus = { phase: 'idle', outputRoot: recordingsRoot };
+    const deletedRecording = await fetch(new URL('/api/recordings/Recording_demo', base), {
+      method: 'DELETE',
+    });
+    assert.equal(deletedRecording.status, 200);
+    assert.deepEqual(await deletedRecording.json(), { deleted: true, recording: 'Recording_demo' });
+    await assert.rejects(access(path.join(recordingsRoot, 'Recording_demo')));
+
     const escapedRecording = await fetch(new URL('/api/recordings/..%5Coutside/open-folder', base), {
       method: 'POST',
     });
@@ -321,6 +338,27 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     });
     assert.equal(readonly.status, 403);
     assert.match(String((await readonly.json() as { error: string }).error), /内置任务不可修改/);
+
+    const readonlyDelete = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo', base), {
+      method: 'DELETE',
+    });
+    assert.equal(readonlyDelete.status, 403);
+    executionStatus = { phase: 'running', scene: 'browser-demo', task: 'search-demo', mode: 'task' };
+    const activeTaskDelete = await fetch(new URL('/api/tasks/browser-demo/search-demo', base), {
+      method: 'DELETE',
+    });
+    assert.equal(activeTaskDelete.status, 409);
+    await access(path.join(root, 'projects', 'browser-demo', 'search-demo'));
+    executionStatus = { phase: 'idle' };
+    const deletedTask = await fetch(new URL('/api/tasks/browser-demo/search-demo', base), {
+      method: 'DELETE',
+    });
+    assert.equal(deletedTask.status, 200);
+    assert.deepEqual(await deletedTask.json(), {
+      deleted: true, scene: 'browser-demo', task: 'search-demo',
+    });
+    await assert.rejects(access(path.join(root, 'projects', 'browser-demo', 'search-demo')));
+    await access(path.join(root, 'projects', 'browser-demo', 'scene.json'));
 
     const tooLarge = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo/validate', base), {
       method: 'POST',
