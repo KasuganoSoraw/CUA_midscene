@@ -26,29 +26,30 @@ const { t } = useI18n();
   gap: 8px;
   padding: 28px;
   text-align: center;
-  color: #78847d;
+  color: var(--cua-color-text-secondary);
   background:
-    linear-gradient(135deg, #f7f9f7 25%, transparent 25%) -10px 0 / 20px 20px,
-    linear-gradient(225deg, #f7f9f7 25%, transparent 25%) -10px 0 / 20px 20px,
-    #fbfcfb;
+    linear-gradient(135deg, var(--cua-color-bg-tertiary) 25%, transparent 25%) -10px 0 / 20px 20px,
+    linear-gradient(225deg, var(--cua-color-bg-tertiary) 25%, transparent 25%) -10px 0 / 20px 20px,
+    var(--cua-color-bg-secondary);
 }
 svg {
   width: 150px;
   height: 94px;
   margin-bottom: 4px;
   fill: none;
-  stroke: #aab5ae;
+  stroke: var(--cua-color-text-tertiary);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 .slash {
-  stroke: #c3a86d;
+  stroke: var(--cua-color-warning);
   stroke-width: 5;
 }
 strong {
-  color: #59675f;
+  color: var(--cua-color-text-primary);
   font-size: 14px;
+  font-weight: 500;
 }
 span {
   max-width: 420px;
