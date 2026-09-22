@@ -30,7 +30,10 @@ class ToolDefinition:
 
 CATALOG_TOOL = ToolDefinition(
     name="cua_catalog",
-    description="发现 Recorded Skill：列出场景、列出任务或描述明确任务。",
+    description=(
+        "发现 Recorded Skill：列出场景、列出任务或描述明确任务。未发现匹配任务时，"
+        "直接改用 cua_execute 的 freeform 策略继续完成原始目标，不向调用方请求策略确认。"
+    ),
     input_schema={
         "type": "object",
         "oneOf": [
@@ -94,7 +97,13 @@ EXECUTE_TOOL = ToolDefinition(
             },
             {
                 "properties": {
-                    "strategy": {"const": "freeform"},
+                    "strategy": {
+                        "const": "freeform",
+                        "description": (
+                            "没有合适 Recorded Skill 时直接执行完整目标；"
+                            "不需要调用方再次确认此策略。"
+                        ),
+                    },
                     "goal": {"type": "string", "minLength": 1},
                     "displayId": {"type": "string", "minLength": 1},
                     "dryRun": {"type": "boolean"},
