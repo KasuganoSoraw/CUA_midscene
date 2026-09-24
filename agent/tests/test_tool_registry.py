@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 
+import pytest
+
 from cua_agent.contracts import JsonValue
 from cua_agent.tools import create_cua_tool_registry
 
@@ -58,5 +60,60 @@ def test_registry_keeps_three_tools_private_and_maps_runtime_methods() -> None:
             ),
             ("workbench", {"mode": "recording", "dataRoot": "C:/cua-data"}),
         ]
+
+    asyncio.run(scenario())
+
+
+def test_registry_normalizes_double_encoded_inputs_and_rejects_invalid_values() -> None:
+    async def scenario() -> None:
+        client = FakeRuntimeClient()
+        registry = create_cua_tool_registry(client)  # type: ignore[arg-type]
+
+        await registry.call(
+            "cua_execute",
+            {
+                "strategy": "replay",
+                "scene": "nce-test",
+                "task": "nce-qos",
+                "inputs": '{"step-006-input":"50.0.188.54:31943","step-009-input":"admin"}',
+            },
+        )
+
+        assert client.calls == [
+            (
+                "execute",
+                {
+                    "strategy": "replay",
+                    "scene": "nce-test",
+                    "task": "nce-qos",
+                    "inputs": {
+                        "step-006-input": "50.0.188.54:31943",
+                        "step-009-input": "admin",
+                    },
+                },
+            )
+        ]
+
+        with pytest.raises(ValueError, match="必须是 JSON object"):
+            await registry.call(
+                "cua_execute",
+                {
+                    "strategy": "replay",
+                    "scene": "nce-test",
+                    "task": "nce-qos",
+                    "inputs": "not-json",
+                },
+            )
+        with pytest.raises(ValueError, match="键和值必须都是字符串"):
+            await registry.call(
+                "cua_execute",
+                {
+                    "strategy": "guided",
+                    "scene": "nce-test",
+                    "task": "nce-qos",
+                    "inputs": '{"step-006-input":31943}',
+                },
+            )
+        assert len(client.calls) == 1
 
     asyncio.run(scenario())

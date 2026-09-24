@@ -6,6 +6,7 @@ import {
   cuaExecute,
   cuaWorkbench,
   type CuaCatalogDependencies,
+  type CuaExecuteRequest,
   type CuaExecuteDependencies,
   type CuaWorkbenchDependencies,
 } from '../../runtime-bridge/index.js';
@@ -145,6 +146,44 @@ test('Runtime execute 在底层没有报告时不生成 reportPath', async () =>
     strategy: 'freeform', goal: '打开 Chrome', dryRun: true,
   }, dependencies);
   assert.equal(result.reportPath, undefined);
+});
+
+test('Runtime execute 在调用底层 API 前严格校验 inputs', async () => {
+  const calls: string[] = [];
+  const dependencies = {
+    resolveRuntimeLayout: async () => {
+      calls.push('layout');
+      return layout;
+    },
+  } as unknown as Partial<CuaExecuteDependencies>;
+
+  await assert.rejects(
+    cuaExecute({
+      strategy: 'replay',
+      scene: 'nce-test',
+      task: 'nce-qos',
+      inputs: '{"step-006-input":"50.0.188.54:31943"}',
+    } as unknown as CuaExecuteRequest, dependencies),
+    /inputs 必须是 JSON object/,
+  );
+  await assert.rejects(
+    cuaExecute({
+      strategy: 'guided',
+      scene: 'nce-test',
+      task: 'nce-qos',
+      inputs: { 'step-006-input': 31943 },
+    } as unknown as CuaExecuteRequest, dependencies),
+    /inputs\.step-006-input 必须是字符串/,
+  );
+  await assert.rejects(
+    cuaExecute({
+      strategy: 'freeform',
+      goal: '打开 Chrome',
+      inputs: {},
+    } as unknown as CuaExecuteRequest, dependencies),
+    /freeform cua_execute 不接受 inputs/,
+  );
+  assert.deepEqual(calls, []);
 });
 
 test('Runtime execute 保留底层错误且不调用其他策略', async () => {

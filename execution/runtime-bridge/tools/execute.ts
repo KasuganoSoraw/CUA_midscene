@@ -30,6 +30,17 @@ function requiredString(value: unknown, name: string): string {
   return value.trim();
 }
 
+function optionalStringRecord(value: unknown, name: string): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`${name} 必须是 JSON object`);
+  }
+  const entries = Object.entries(value);
+  const invalid = entries.find(([, item]) => typeof item !== 'string');
+  if (invalid) throw new Error(`${name}.${invalid[0]} 必须是字符串`);
+  return Object.fromEntries(entries) as Record<string, string>;
+}
+
 export async function cuaExecute(
   request: CuaExecuteRequest,
   dependencies: Partial<CuaExecuteDependencies> = {},
@@ -38,6 +49,11 @@ export async function cuaExecute(
   if (!['replay', 'guided', 'freeform'].includes(request.strategy)) {
     throw new Error(`无法识别 cua_execute strategy：${String((request as { strategy?: unknown }).strategy)}`);
   }
+  const rawInputs = (request as { inputs?: unknown }).inputs;
+  if (request.strategy === 'freeform' && rawInputs !== undefined) {
+    throw new Error('freeform cua_execute 不接受 inputs');
+  }
+  const inputs = optionalStringRecord(rawInputs, 'inputs');
   const api = { ...defaultDependencies, ...dependencies };
   const layout = await api.resolveRuntimeLayout(request.dataRoot);
   const data = await api.requireDataPaths(layout);
@@ -66,7 +82,7 @@ export async function cuaExecute(
     task: requiredString(request.task, 'task'),
     catalog: layout.catalog,
     runsRoot: data.runsRoot,
-    ...(request.inputs === undefined ? {} : { inputs: request.inputs }),
+    ...(inputs === undefined ? {} : { inputs }),
     dryRun: request.dryRun,
     ...(onProgress === undefined ? {} : { onProgress }),
   };

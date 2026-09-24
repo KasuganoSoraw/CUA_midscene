@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -175,7 +176,7 @@ class CuaToolRegistry:
         if entry is None:
             raise ValueError(f"无法识别 CUA Agent Tool：{name}")
         _definition, method = entry
-        payload = dict(arguments)
+        payload = _normalize_tool_arguments(name, arguments)
         if self._data_root is not None and "dataRoot" not in payload:
             payload["dataRoot"] = self._data_root
         if method == "execute" and on_event is not None:
@@ -183,6 +184,35 @@ class CuaToolRegistry:
                 method, payload, cancelled=cancelled, on_event=on_event
             )
         return await self._client.request(method, payload, cancelled=cancelled)
+
+
+def _normalize_tool_arguments(
+    name: str,
+    arguments: Mapping[str, JsonValue],
+) -> dict[str, JsonValue]:
+    payload = dict(arguments)
+    if name != "cua_execute" or "inputs" not in payload:
+        return payload
+
+    raw_inputs = payload["inputs"]
+    parsed: object = raw_inputs
+    if isinstance(raw_inputs, str):
+        try:
+            parsed = json.loads(raw_inputs)
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                "cua_execute.inputs 必须是 JSON object；收到的字符串不是合法 JSON"
+            ) from error
+    if not isinstance(parsed, dict):
+        raise ValueError("cua_execute.inputs 必须是 JSON object")
+
+    normalized: dict[str, JsonValue] = {}
+    for key, value in parsed.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise ValueError("cua_execute.inputs 的键和值必须都是字符串")
+        normalized[key] = value
+    payload["inputs"] = normalized
+    return payload
 
 
 def create_cua_tool_registry(
