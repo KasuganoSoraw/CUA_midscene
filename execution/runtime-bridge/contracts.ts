@@ -19,11 +19,13 @@ interface CuaToolRequestBase {
 export type CuaCatalogRequest =
   | (CuaToolRequestBase & { action: 'list-scenes' })
   | (CuaToolRequestBase & { action: 'list-tasks'; scene: string })
+  | (CuaToolRequestBase & { action: 'find-task'; task: string })
   | (CuaToolRequestBase & { action: 'describe-task'; scene: string; task: string });
 
 export type CuaCatalogResult =
   | { action: 'list-scenes'; scenes: SceneCatalogItem[] }
   | { action: 'list-tasks'; scene: string; tasks: TaskCatalogItem[] }
+  | { action: 'find-task'; task: string; matches: TaskCatalogItem[] }
   | { action: 'describe-task'; scene: string; task: string; description: TaskDescription };
 
 interface CuaRecordedExecutionRequest extends CuaToolRequestBase {

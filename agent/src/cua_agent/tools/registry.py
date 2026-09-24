@@ -32,20 +32,30 @@ class ToolDefinition:
 CATALOG_TOOL = ToolDefinition(
     name="cua_catalog",
     description=(
-        "发现 Recorded Skill：列出场景、列出任务或描述明确任务。未发现匹配任务时，"
+        "发现 Recorded Skill。调用方明确提供 task 标识但未提供 scene 时，优先使用 "
+        "find-task；只有自然语言目标、尚不知道 task 时，使用 list-scenes 和 list-tasks "
+        "浏览；已知 scene 和 task 时，使用 describe-task 获取详情。未发现匹配任务时，"
         "直接改用 cua_execute 的 freeform 策略继续完成原始目标，不向调用方请求策略确认。"
     ),
     input_schema={
         "type": "object",
         "oneOf": [
             {
-                "properties": {"action": {"const": "list-scenes"}},
+                "properties": {
+                    "action": {
+                        "const": "list-scenes",
+                        "description": "尚不知道明确 scene 或 task 时，从场景开始浏览。",
+                    }
+                },
                 "required": ["action"],
                 "additionalProperties": False,
             },
             {
                 "properties": {
-                    "action": {"const": "list-tasks"},
+                    "action": {
+                        "const": "list-tasks",
+                        "description": "已知 scene、尚不知道明确 task 时，列出该场景的任务。",
+                    },
                     "scene": {"type": "string", "minLength": 1},
                 },
                 "required": ["action", "scene"],
@@ -53,7 +63,24 @@ CATALOG_TOOL = ToolDefinition(
             },
             {
                 "properties": {
-                    "action": {"const": "describe-task"},
+                    "action": {
+                        "const": "find-task",
+                        "description": (
+                            "调用方给出明确 task 标识但未知 scene 时，按 task ID 跨场景精确查找；"
+                            "不用于自然语言语义搜索。"
+                        ),
+                    },
+                    "task": {"type": "string", "minLength": 1},
+                },
+                "required": ["action", "task"],
+                "additionalProperties": False,
+            },
+            {
+                "properties": {
+                    "action": {
+                        "const": "describe-task",
+                        "description": "scene 和 task 均已确定时，读取任务详情与输入要求。",
+                    },
                     "scene": {"type": "string", "minLength": 1},
                     "task": {"type": "string", "minLength": 1},
                 },

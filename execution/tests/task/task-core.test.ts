@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { loadRuntimeInputs } from '../../cua/task/inputs.js';
-import { describeTask, listScenes, listTasks, resolveTask } from '../../cua/task/tasks.js';
+import { describeTask, findTask, listScenes, listTasks, resolveTask } from '../../cua/task/tasks.js';
 import { readYamlDocument, writeYamlDocument } from '../../cua/task/yaml-task.js';
 import { createTaskFixture } from '../helpers/task-fixture.js';
 
@@ -158,6 +158,27 @@ test('catalog 合并场景并将重复任务标记为错误', async () => {
   const duplicate = (await listTasks('browser-demo', catalog))[0];
   assert.equal(duplicate.status, 'error');
   assert.match(duplicate.status === 'error' ? duplicate.error : '', /同时存在于内置与用户 catalog/);
+});
+
+test('catalog 按明确 task 标识跨场景精确查找', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-find-task-'));
+  const builtin = path.join(root, 'builtin');
+  const user = path.join(root, 'user');
+  await Promise.all([
+    createTaskFixture(builtin, { scene: 'browser-demo', task: 'search-demo' }),
+    createTaskFixture(user, { scene: 'nce-test', task: 'nce-qos' }),
+  ]);
+  const catalog = { builtinProjectsRoot: builtin, userProjectsRoot: user };
+
+  const unique = await findTask('nce-qos', catalog);
+  assert.deepEqual(unique.map((item) => [item.scene, item.task, item.status]), [
+    ['nce-test', 'nce-qos', 'ready'],
+  ]);
+  assert.deepEqual(await findTask('missing-task', catalog), []);
+
+  await createTaskFixture(user, { scene: 'nce-lab', task: 'nce-qos' });
+  const ambiguous = await findTask('nce-qos', catalog);
+  assert.deepEqual(ambiguous.map((item) => item.scene), ['nce-lab', 'nce-test']);
 });
 
 test('catalog 跳过非场景目录并隔离损坏的场景清单', async () => {

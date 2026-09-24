@@ -33,7 +33,7 @@ export {
 } from './recording/recording-catalog.js';
 export { resolveRuntimeLayout, requireDataPaths } from './task/data-paths.js';
 export { loadRuntimeInputs } from './task/inputs.js';
-export { listScenes, listTasks, describeTask, resolveTask } from './task/tasks.js';
+export { listScenes, listTasks, findTask, describeTask, resolveTask } from './task/tasks.js';
 export {
   buildRecordedTaskAiActPrompt,
   runTask,

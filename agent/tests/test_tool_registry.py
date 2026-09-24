@@ -36,6 +36,19 @@ def test_registry_keeps_three_tools_private_and_maps_runtime_methods() -> None:
         ]
         assert all(tool.input_schema["type"] == "object" for tool in registry.definitions)
         catalog, execute, workbench = registry.definitions
+        catalog_actions = {
+            branch["properties"]["action"]["const"]: branch  # type: ignore[index]
+            for branch in catalog.input_schema["oneOf"]  # type: ignore[union-attr]
+        }
+        assert set(catalog_actions) == {
+            "list-scenes",
+            "list-tasks",
+            "find-task",
+            "describe-task",
+        }
+        assert "明确提供 task 标识但未提供 scene" in catalog.description
+        find_action = catalog_actions["find-task"]["properties"]["action"]  # type: ignore[index]
+        assert "跨场景精确查找" in find_action["description"]  # type: ignore[index]
         assert "不向调用方请求策略确认" in catalog.description
         assert "真实桌面副作用" in execute.description
         assert "成功后不得再次" in execute.description

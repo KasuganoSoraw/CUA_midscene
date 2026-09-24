@@ -316,3 +316,19 @@ export async function listTasks(scene: string, catalog: TaskCatalogRoots): Promi
   }
   return result;
 }
+
+export async function findTask(
+  taskValue: string,
+  catalog: TaskCatalogRoots,
+): Promise<TaskCatalogItem[]> {
+  const task = requireIdentifier(taskValue, 'task');
+  const scenes = await listScenes(catalog);
+  const matches: TaskCatalogItem[] = [];
+  for (const scene of scenes) {
+    if (scene.status !== 'ready') continue;
+    const tasks = await listTasks(scene.scene, catalog);
+    const match = tasks.find((item) => item.task === task);
+    if (match) matches.push(match);
+  }
+  return matches.sort((left, right) => left.scene.localeCompare(right.scene));
+}

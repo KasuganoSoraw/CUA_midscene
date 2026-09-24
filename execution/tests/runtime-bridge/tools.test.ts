@@ -37,11 +37,18 @@ test('Runtime catalog 保留 ready/error 任务', async () => {
       assert.equal(scene, 'ems');
       return tasks;
     },
+    findTask: async (task: string) => {
+      assert.equal(task, 'query-alarm');
+      return tasks.filter((item) => item.task === task);
+    },
   } as unknown as Partial<CuaCatalogDependencies>;
 
   const result = await cuaCatalog({ action: 'list-tasks', scene: 'ems' }, dependencies);
   assert.equal(result.action, 'list-tasks');
   assert.deepEqual(result.tasks, tasks);
+  const found = await cuaCatalog({ action: 'find-task', task: 'query-alarm' }, dependencies);
+  assert.equal(found.action, 'find-task');
+  assert.deepEqual(found.matches, [tasks[0]]);
 });
 
 test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
