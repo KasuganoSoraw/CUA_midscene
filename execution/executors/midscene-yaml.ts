@@ -2,7 +2,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseYamlScript } from '@midscene/core/yaml';
 import type { ExecutorResult } from '../cua/contracts/types.js';
-import { createMidsceneProgressListener, type ExecutionProgressSink } from './midscene-progress.js';
+import { createMidsceneExecutionObserver } from './midscene-final-screenshot.js';
+import type { ExecutionProgressSink } from './midscene-progress.js';
 import {
   createKeyboardEnabledComputerAgent,
   type ComputerAgentOptions,
@@ -12,7 +13,9 @@ import { existingMidsceneHtmlReport, midsceneReportFileName } from './midscene-r
 
 interface AgentLike {
   runYaml(content: string): Promise<{ result: Record<string, unknown> }>;
-  addDumpUpdateListener?: (listener: ReturnType<typeof createMidsceneProgressListener>) => () => void;
+  addDumpUpdateListener?: (
+    listener: ReturnType<typeof createMidsceneExecutionObserver>['listener'],
+  ) => () => void;
   reportFile?: string | null;
   destroy(): Promise<void>;
 }
@@ -52,13 +55,15 @@ export async function executeMidsceneYaml(
     taskCount = script.tasks.length;
     let midsceneResult: Record<string, unknown> | undefined;
     let reportPath: string | undefined;
+    let finalScreenshotPath: string | undefined;
 
     if (!options.dryRun) {
       warnIfNodeVersionIsOld();
       checkRequiredModelEnv();
       const previousRunDirectory = process.env.MIDSCENE_RUN_DIR;
       let agent: AgentLike | undefined;
-      let removeProgressListener: (() => void) | undefined;
+      let removeDumpListener: (() => void) | undefined;
+      const observer = createMidsceneExecutionObserver(options.onProgress);
       try {
         process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(options.runDirectory), 'midscene');
         const agentOptions: ComputerAgentOptions = {
@@ -70,16 +75,16 @@ export async function executeMidsceneYaml(
           groupDescription: script.agent?.groupDescription ?? '执行 Midscene YAML 电脑操作任务',
         };
         agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)(agentOptions);
-        if (options.onProgress) {
-          if (!agent.addDumpUpdateListener) throw new Error('Midscene Agent 不支持过程事件');
-          removeProgressListener = agent.addDumpUpdateListener(
-            createMidsceneProgressListener(options.onProgress),
-          );
+        if (agent.addDumpUpdateListener) {
+          removeDumpListener = agent.addDumpUpdateListener(observer.listener);
+        } else if (options.onProgress) {
+          throw new Error('Midscene Agent 不支持过程事件');
         }
         midsceneResult = (await agent.runYaml(content)).result;
+        finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
       } finally {
         try {
-          removeProgressListener?.();
+          removeDumpListener?.();
         } finally {
           try {
             if (agent) {
@@ -102,6 +107,7 @@ export async function executeMidsceneYaml(
       taskCount,
       ...(midsceneResult === undefined ? {} : { midsceneResult }),
       ...(reportPath === undefined ? {} : { reportPath }),
+      ...(finalScreenshotPath === undefined ? {} : { finalScreenshotPath }),
       finishedAt: new Date().toISOString(),
     };
     await writeResult(resultPath, result);

@@ -52,6 +52,7 @@ test('原生 aiAct 执行结果通过独立文件契约校验', async () => {
     status: 'succeeded',
     sourcePromptPath: path.join(root, 'ai-act-prompt.txt'),
     reportPath: path.join(root, 'midscene', 'report', 'execution-report.html'),
+    finalScreenshotPath: path.join(root, 'final-screenshot.png'),
     dryRun: true,
     finishedAt: new Date().toISOString(),
   }), 'utf8');
@@ -59,6 +60,7 @@ test('原生 aiAct 执行结果通过独立文件契约校验', async () => {
   assert.equal(result.status, 'succeeded');
   assert.equal(result.dryRun, true);
   assert.match(result.reportPath ?? '', /execution-report\.html$/);
+  assert.match(result.finalScreenshotPath ?? '', /final-screenshot\.png$/);
 });
 
 test('YAML 执行结果接受可选 HTML 报告路径', async () => {
@@ -70,10 +72,12 @@ test('YAML 执行结果接受可选 HTML 报告路径', async () => {
     sourceYamlPath: path.join(root, 'resolved-task.yaml'),
     dryRun: false,
     reportPath: path.join(root, 'midscene', 'report', 'execution-report.html'),
+    finalScreenshotPath: path.join(root, 'final-screenshot.jpeg'),
     finishedAt: new Date().toISOString(),
   }), 'utf8');
   const result = await readExecutorResult(source);
   assert.match(result.reportPath ?? '', /execution-report\.html$/);
+  assert.match(result.finalScreenshotPath ?? '', /final-screenshot\.jpeg$/);
 });
 
 test('trace 缺少结构化 operation 时直接失败', async () => {

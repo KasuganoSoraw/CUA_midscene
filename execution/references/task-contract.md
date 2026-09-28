@@ -24,6 +24,7 @@
     ├── ai-act-prompt.txt            # guided/freeform 时存在
     ├── ai-act-task.yaml             # guided 时存在
     ├── ai-act-result.json           # freeform 时存在
+    ├── final-screenshot.<png|jpeg>  # 最终 task 的 after-calling 截图（可选）
     └── midscene/
 ```
 
@@ -132,7 +133,7 @@ click/doubleClick 的 `operation.useReferenceImage: true` 表示该步骤需要�
 
 ## 执行边界
 
-TypeScript resolver 写入 `<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml`，随后同进程调用共享 Midscene YAML API。执行器注册 `KeyboardTypeText`、创建 ComputerAgent、调用 `agent.runYaml()`，将结果写入 `execution-result.json`，并把 Midscene 报告定向到 `<run-dir>/midscene`。
+TypeScript resolver 写入 `<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml`，随后同进程调用共享 Midscene YAML API。执行器注册 `KeyboardTypeText`、创建 ComputerAgent、调用 `agent.runYaml()`，将结果写入 `execution-result.json`，并把 Midscene 报告定向到 `<run-dir>/midscene`。成功执行存在最终 `after-calling` 截图时，执行器按原始图片格式写入 `final-screenshot.<png|jpeg>`，并通过可选的 `finalScreenshotPath` 返回绝对路径。
 
 `act run --scene/--task` 从相同 resolved YAML 生成 `ai-act-prompt.txt` 和单 `ai` action 的 `ai-act-task.yaml`；其中会汇总各步骤引用的图片并保留图片名与文字指令的对应关系。sleep 不进入 prompt，未知 action、非法图片或同名图片冲突在创建设备前失败。`act run --prompt` 不读取任务资产。
 

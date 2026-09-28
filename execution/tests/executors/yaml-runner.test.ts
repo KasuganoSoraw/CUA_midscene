@@ -64,6 +64,7 @@ test('实际执行设置本次报告目录并在成功后销毁 Agent 和恢复�
   let destroyed = false;
   let listenerRemoved = false;
   const progress: string[] = [];
+  const screenshotContent = Buffer.from('yaml final screenshot');
   try {
     const result = await executeMidsceneYaml({
       ...fixture,
@@ -81,9 +82,18 @@ test('实际执行设置本次报告目录并在成功后销毁 Agent 和恢复�
           },
           runYaml: async () => {
             listener?.('', { id: 'exec', tasks: [{
-              taskId: 'task-1', status: 'running', type: 'Action Space', subType: 'Tap',
+              taskId: 'task-1', status: 'finished', type: 'Action Space', subType: 'Tap',
+              recorder: [{
+                type: 'screenshot',
+                ts: 1,
+                timing: 'after-calling',
+                screenshot: {
+                  format: 'png',
+                  rawBase64: screenshotContent.toString('base64'),
+                },
+              }],
             }] } as unknown as ExecutionDump);
-            assert.deepEqual(progress, ['running']);
+            assert.deepEqual(progress, ['succeeded']);
             return { result: { ok: true } };
           },
           destroy: async () => {
@@ -97,7 +107,11 @@ test('实际执行设置本次报告目录并在成功后销毁 Agent 和恢复�
     assert.equal(result.status, 'succeeded');
     assert.deepEqual(result.midsceneResult, { ok: true });
     assert.equal(result.reportPath, reportPath);
-    assert.equal(JSON.parse(await readFile(fixture.resultPath, 'utf8')).reportPath, reportPath);
+    assert.equal(result.finalScreenshotPath, path.join(fixture.runDirectory, 'final-screenshot.png'));
+    assert.deepEqual(await readFile(result.finalScreenshotPath), screenshotContent);
+    const persisted = JSON.parse(await readFile(fixture.resultPath, 'utf8'));
+    assert.equal(persisted.reportPath, reportPath);
+    assert.equal(persisted.finalScreenshotPath, result.finalScreenshotPath);
     assert.equal(destroyed, true);
     assert.equal(listenerRemoved, true);
     assert.equal(process.env.MIDSCENE_RUN_DIR, 'previous-directory');
@@ -128,6 +142,7 @@ test('实际执行未生成报告文件时保持成功且不返回 reportPath', 
     });
     assert.equal(result.status, 'succeeded');
     assert.equal(result.reportPath, undefined);
+    assert.equal(result.finalScreenshotPath, undefined);
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];

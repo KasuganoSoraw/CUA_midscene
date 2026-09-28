@@ -15,6 +15,7 @@ import './executors/keyboard-type-action.test.js';
 import './executors/ai-act-runner.test.js';
 import './executors/yaml-runner.test.js';
 import './executors/midscene-progress.test.js';
+import './executors/midscene-final-screenshot.test.js';
 import './skill/package.test.js';
 import './review/service.test.js';
 import './review/asset-deletion.test.js';

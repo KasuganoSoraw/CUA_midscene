@@ -50,6 +50,7 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
   let destroyed = false;
   let listenerRemoved = false;
   const progress: string[] = [];
+  const screenshotContent = Buffer.from('aiAct final screenshot');
 
   try {
     const result = await executeMidsceneAiAct({
@@ -78,9 +79,18 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
           aiAct: async (prompt) => {
             assert.equal(prompt, '打开 Chrome');
             listener?.('', { id: 'exec', tasks: [{
-              taskId: 'task-1', status: 'running', type: 'Planning', subType: 'Act',
+              taskId: 'task-1', status: 'finished', type: 'Planning', subType: 'Act',
+              recorder: [{
+                type: 'screenshot',
+                ts: 1,
+                timing: 'after-calling',
+                screenshot: {
+                  format: 'jpeg',
+                  rawBase64: screenshotContent.toString('base64'),
+                },
+              }],
             }] } as unknown as ExecutionDump);
-            assert.deepEqual(progress, ['running']);
+            assert.deepEqual(progress, ['succeeded']);
             return '操作完成';
           },
           destroy: async () => {
@@ -95,7 +105,11 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
     assert.equal(result.status, 'succeeded');
     assert.equal(result.midsceneResult, '操作完成');
     assert.equal(result.reportPath, reportPath);
-    assert.equal(JSON.parse(await readFile(fixture.resultPath, 'utf8')).reportPath, reportPath);
+    assert.equal(result.finalScreenshotPath, path.join(fixture.runDirectory, 'final-screenshot.jpeg'));
+    assert.deepEqual(await readFile(result.finalScreenshotPath), screenshotContent);
+    const persisted = JSON.parse(await readFile(fixture.resultPath, 'utf8'));
+    assert.equal(persisted.reportPath, reportPath);
+    assert.equal(persisted.finalScreenshotPath, result.finalScreenshotPath);
     assert.equal(destroyed, true);
     assert.equal(listenerRemoved, true);
     assert.equal(process.env.MIDSCENE_RUN_DIR, 'previous-directory');
@@ -132,6 +146,7 @@ test('原生 aiAct 未生成报告文件时保持成功且不返回 reportPath',
     });
     assert.equal(result.status, 'succeeded');
     assert.equal(result.reportPath, undefined);
+    assert.equal(result.finalScreenshotPath, undefined);
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];

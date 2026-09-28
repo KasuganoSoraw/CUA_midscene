@@ -23,6 +23,18 @@
       "title": "Finishedat",
       "type": "string"
     },
+    "finalScreenshotPath": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Finalscreenshotpath"
+    },
     "midsceneResult": {
       "anyOf": [
         {

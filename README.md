@@ -135,6 +135,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
     ├── ai-act-task.yaml             # 仅录制任务整体 aiAct
     ├── execution-result.json
     ├── ai-act-result.json           # 仅原生 aiAct API
+    ├── final-screenshot.<png|jpeg>  # 执行结束后的最终界面截图（可选）
     └── midscene/                    # Midscene 报告、截图等产物
 ```
 

@@ -53,6 +53,7 @@ export interface CuaExecuteResult {
   promptPath?: string;
   resultPath?: string;
   reportPath?: string;
+  finalScreenshotPath?: string;
   executor: ExecutorResult | NativeAiActExecutorResult;
 }
 

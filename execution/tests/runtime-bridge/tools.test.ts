@@ -59,6 +59,7 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
     sourceYamlPath: 'C:\\cua-data\\runs\\1\\resolved-task.yaml',
     dryRun: true,
     reportPath: 'C:\\cua-data\\runs\\1\\midscene\\report\\execution-report.html',
+    finalScreenshotPath: 'C:\\cua-data\\runs\\1\\final-screenshot.png',
     finishedAt: '2026-08-27T00:00:00.000Z',
   } as const;
   const nativeExecutor: NativeAiActExecutorResult = {
@@ -67,6 +68,7 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
     sourcePromptPath: 'C:\\cua-data\\runs\\3\\ai-act-prompt.txt',
     dryRun: true,
     reportPath: 'C:\\cua-data\\runs\\3\\midscene\\report\\execution-report.html',
+    finalScreenshotPath: 'C:\\cua-data\\runs\\3\\final-screenshot.jpeg',
     finishedAt: '2026-08-27T00:00:00.000Z',
   };
   const onProgress: ExecutionProgressSink = () => {};
@@ -124,10 +126,13 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
   assert.deepEqual(calls, ['replay', 'guided', 'freeform']);
   assert.equal(replay.strategy, 'replay');
   assert.equal(replay.reportPath, yamlExecutor.reportPath);
+  assert.equal(replay.finalScreenshotPath, yamlExecutor.finalScreenshotPath);
   assert.equal(guided.promptPath, 'C:\\cua-data\\runs\\2\\ai-act-prompt.txt');
   assert.equal(guided.reportPath, yamlExecutor.reportPath);
+  assert.equal(guided.finalScreenshotPath, yamlExecutor.finalScreenshotPath);
   assert.equal(freeform.runDir, 'C:\\cua-data\\runs\\3');
   assert.equal(freeform.reportPath, nativeExecutor.reportPath);
+  assert.equal(freeform.finalScreenshotPath, nativeExecutor.finalScreenshotPath);
 });
 
 test('Runtime execute 在底层没有报告时不生成 reportPath', async () => {
@@ -153,6 +158,7 @@ test('Runtime execute 在底层没有报告时不生成 reportPath', async () =>
     strategy: 'freeform', goal: '打开 Chrome', dryRun: true,
   }, dependencies);
   assert.equal(result.reportPath, undefined);
+  assert.equal(result.finalScreenshotPath, undefined);
 });
 
 test('Runtime execute 在调用底层 API 前严格校验 inputs', async () => {

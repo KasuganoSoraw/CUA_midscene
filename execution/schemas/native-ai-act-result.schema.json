@@ -19,6 +19,16 @@
       "format": "date-time",
       "type": "string"
     },
+    "finalScreenshotPath": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "midsceneResult": {
       "anyOf": [
         {
