@@ -59,6 +59,8 @@ FINALIZATION_PROTOCOL = """
   必须原样返回该路径。不要返回 `runDir`、`finalScreenshotPath`、
   resolved/prompt/result/source 文件路径或其他内部运行路径。
   执行报告路径是最终自然语言回复中唯一允许出现的执行产物路径。
+  只总结已完成的电脑操作和 Tool 直接返回的结果。不要为了理解最终页面中的
+  业务内容而读取截图、执行报告或尝试新的 GUI 操作；这些执行产物由调用方处理。
 - `cua_workbench`：必须原样返回 Tool Result 中的 `url`，
   并说明它用于录制、复核或已录制任务回放中的哪一种用途。
 - 使用调用方任务所使用的语言；调用方明确指定其他语言时遵循其要求。

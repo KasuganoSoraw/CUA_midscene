@@ -17,6 +17,9 @@ def test_definition_is_loaded_from_packaged_markdown() -> None:
     assert "最终回复必须原样包含该执行报告路径" in CUA_AGENT_DEFINITION.instructions
     assert "不要用它探测、确认或重复验证结果" in CUA_AGENT_DEFINITION.instructions
     assert "Workbench 不是执行结果页面" in CUA_AGENT_DEFINITION.instructions
+    assert "使界面到达目标状态" in CUA_AGENT_DEFINITION.instructions
+    assert "由调用方消费和分析" in CUA_AGENT_DEFINITION.instructions
+    assert "电脑操作任务即已完成" in CUA_AGENT_DEFINITION.instructions
     assert "调用方任务所使用的语言" in CUA_AGENT_DEFINITION.instructions
     assert "简短中文" not in CUA_AGENT_DEFINITION.instructions
     assert "中文回复" not in CUA_AGENT_DEFINITION.instructions
