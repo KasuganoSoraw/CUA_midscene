@@ -2,6 +2,7 @@ import path from 'node:path';
 import {
   requireDataPaths,
   resolveRuntimeLayout,
+  runHybridTask,
   runNaturalLanguageAiAct,
   runRecordedTaskAiAct,
   runTask,
@@ -13,6 +14,7 @@ export interface CuaExecuteDependencies {
   resolveRuntimeLayout: typeof resolveRuntimeLayout;
   requireDataPaths: typeof requireDataPaths;
   runTask: typeof runTask;
+  runHybridTask: typeof runHybridTask;
   runRecordedTaskAiAct: typeof runRecordedTaskAiAct;
   runNaturalLanguageAiAct: typeof runNaturalLanguageAiAct;
 }
@@ -21,6 +23,7 @@ const defaultDependencies: CuaExecuteDependencies = {
   resolveRuntimeLayout,
   requireDataPaths,
   runTask,
+  runHybridTask,
   runRecordedTaskAiAct,
   runNaturalLanguageAiAct,
 };
@@ -46,7 +49,7 @@ export async function cuaExecute(
   dependencies: Partial<CuaExecuteDependencies> = {},
   onProgress?: ExecutionProgressSink,
 ): Promise<CuaExecuteResult> {
-  if (!['replay', 'guided', 'freeform'].includes(request.strategy)) {
+  if (!['replay', 'hybrid', 'guided', 'freeform'].includes(request.strategy)) {
     throw new Error(`无法识别 cua_execute strategy：${String((request as { strategy?: unknown }).strategy)}`);
   }
   const rawInputs = (request as { inputs?: unknown }).inputs;
@@ -91,6 +94,20 @@ export async function cuaExecute(
   };
   if (request.strategy === 'replay') {
     const run = await api.runTask(options);
+    return {
+      strategy: request.strategy,
+      status: run.executorResult.status,
+      runDir: path.dirname(run.resolvedTaskPath),
+      resolvedTaskPath: run.resolvedTaskPath,
+      ...(run.executorResult.reportPath == null ? {} : { reportPath: run.executorResult.reportPath }),
+      ...(run.executorResult.finalScreenshotPath == null
+        ? {}
+        : { finalScreenshotPath: run.executorResult.finalScreenshotPath }),
+      executor: run.executorResult,
+    };
+  }
+  if (request.strategy === 'hybrid') {
+    const run = await api.runHybridTask(options);
     return {
       strategy: request.strategy,
       status: run.executorResult.status,

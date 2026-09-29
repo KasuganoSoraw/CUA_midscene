@@ -12,6 +12,7 @@ export interface ExecutionProgress {
     description?: string;
     status: 'running' | 'succeeded' | 'failed' | 'cancelled';
     executionId?: string;
+    phase?: 'replay' | 'recovery';
   };
 }
 

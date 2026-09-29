@@ -35,6 +35,44 @@
       "default": null,
       "title": "Finalscreenshotpath"
     },
+    "hybrid": {
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "stepIndex": { "type": "integer", "minimum": 0 },
+              "stepId": { "type": "string", "minLength": 1 },
+              "name": { "type": "string", "minLength": 1 },
+              "status": { "enum": ["replayed", "recovered", "failed"] },
+              "replayError": { "type": "string" },
+              "recoveryResult": { "type": ["string", "null"] },
+              "recoveryError": { "type": "string" }
+            },
+            "required": ["stepIndex", "stepId", "name", "status"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "recovery": {
+          "additionalProperties": false,
+          "properties": {
+            "attempted": { "type": "integer", "minimum": 0 },
+            "succeeded": { "type": "integer", "minimum": 0 },
+            "limit": { "type": "integer", "minimum": 0 },
+            "steps": {
+              "items": { "type": "string", "minLength": 1 },
+              "type": "array"
+            }
+          },
+          "required": ["attempted", "succeeded", "limit", "steps"],
+          "type": "object"
+        }
+      },
+      "required": ["steps", "recovery"],
+      "type": "object"
+    },
     "midsceneResult": {
       "anyOf": [
         {

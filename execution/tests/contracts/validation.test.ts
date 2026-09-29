@@ -80,6 +80,35 @@ test('YAML 执行结果接受可选 HTML 报告路径', async () => {
   assert.match(result.finalScreenshotPath ?? '', /final-screenshot\.jpeg$/);
 });
 
+test('YAML 执行结果接受混合回放步骤与恢复摘要', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-hybrid-contract-'));
+  const source = path.join(root, 'execution-result.json');
+  await writeFile(source, JSON.stringify({
+    schemaVersion: '0.2',
+    status: 'succeeded',
+    sourceYamlPath: path.join(root, 'resolved-task.yaml'),
+    dryRun: false,
+    hybrid: {
+      steps: [
+        { stepIndex: 0, stepId: 'step-001', name: 'step-001 | click', status: 'replayed' },
+        {
+          stepIndex: 1,
+          stepId: 'step-002',
+          name: 'step-002 | click',
+          status: 'recovered',
+          replayError: '目标位置变化',
+          recoveryResult: '已点击目标',
+        },
+      ],
+      recovery: { attempted: 1, succeeded: 1, limit: 3, steps: ['step-002'] },
+    },
+    finishedAt: new Date().toISOString(),
+  }), 'utf8');
+  const result = await readExecutorResult(source);
+  assert.equal(result.hybrid?.steps[1].status, 'recovered');
+  assert.equal(result.hybrid?.recovery.succeeded, 1);
+});
+
 test('trace 缺少结构化 operation 时直接失败', async () => {
   const source = path.join(fixtures, 'invalid-showui-trace.json');
   await assert.rejects(readShowuiTrace(source), /operation/);

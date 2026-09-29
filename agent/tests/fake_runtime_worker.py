@@ -35,6 +35,8 @@ for raw_line in sys.stdin:
             event["event"]["data"]["taskId"] = 1
         if action == "progress-long-description":
             event["event"]["data"]["description"] = "x" * 301
+        if action == "progress-phase":
+            event["event"]["data"]["phase"] = "recovery"
         if action == "progress-leak":
             event["event"]["data"]["screenshot"] = "private-image"
         print(json.dumps(event, ensure_ascii=False), flush=True)

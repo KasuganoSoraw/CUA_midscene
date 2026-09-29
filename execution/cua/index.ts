@@ -35,8 +35,13 @@ export { resolveRuntimeLayout, requireDataPaths } from './task/data-paths.js';
 export { loadRuntimeInputs } from './task/inputs.js';
 export { listScenes, listTasks, findTask, describeTask, resolveTask } from './task/tasks.js';
 export {
-  buildRecordedTaskAiActPrompt,
   runTask,
+  runHybridTask,
   runRecordedTaskAiAct,
   runPrompt,
+  type HybridExecutionOptions,
 } from './task/execution.js';
+export {
+  buildRecordedTaskAiActPrompt,
+  type RecordedTaskAiActPrompt,
+} from './task/recorded-task-prompt.js';

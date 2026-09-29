@@ -103,7 +103,10 @@ EXECUTE_TOOL = ToolDefinition(
         "oneOf": [
             {
                 "properties": {
-                    "strategy": {"const": "replay"},
+                    "strategy": {
+                        "const": "replay",
+                        "description": "严格按 Recorded Skill 回放；任一步骤失败即返回失败。",
+                    },
                     "scene": {"type": "string", "minLength": 1},
                     "task": {"type": "string", "minLength": 1},
                     "inputs": {"type": "object", "additionalProperties": {"type": "string"}},
@@ -114,7 +117,27 @@ EXECUTE_TOOL = ToolDefinition(
             },
             {
                 "properties": {
-                    "strategy": {"const": "guided"},
+                    "strategy": {
+                        "const": "hybrid",
+                        "description": (
+                            "优先严格回放 Recorded Skill；单个步骤因轻微界面变化失败时，"
+                            "只恢复当前步骤并继续后续回放。适合作为匹配录制任务的默认策略。"
+                        ),
+                    },
+                    "scene": {"type": "string", "minLength": 1},
+                    "task": {"type": "string", "minLength": 1},
+                    "inputs": {"type": "object", "additionalProperties": {"type": "string"}},
+                    "dryRun": {"type": "boolean"},
+                },
+                "required": ["strategy", "scene", "task"],
+                "additionalProperties": False,
+            },
+            {
+                "properties": {
+                    "strategy": {
+                        "const": "guided",
+                        "description": "使用 Recorded Skill 的完整流程知识进行整体视觉适应执行。",
+                    },
                     "scene": {"type": "string", "minLength": 1},
                     "task": {"type": "string", "minLength": 1},
                     "inputs": {"type": "object", "additionalProperties": {"type": "string"}},

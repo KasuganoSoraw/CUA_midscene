@@ -33,7 +33,7 @@ TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv �
 
 ## Python Agent 与 Runtime Bridge
 
-唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 只调用其高层 `{ task }` invocation；Python Agent 自己运行模型 Tool Calling、判断 Recorded Skill、选择 replay/guided/freeform，并把 GUI 微观规划交给 Midscene。`cua_catalog`、`cua_execute`、`cua_workbench` 是 Python Agent 私有 Tool，不是 GDEClaw 的公共 Tool。
+唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 只调用其高层 `{ task }` invocation；Python Agent 自己运行模型 Tool Calling、判断 Recorded Skill、选择 replay/hybrid/guided/freeform，并把 GUI 微观规划交给 Midscene。`cua_catalog`、`cua_execute`、`cua_workbench` 是 Python Agent 私有 Tool，不是 GDEClaw 的公共 Tool。
 
 GDEClaw 专用 Adapter 属于 Host 产品边界。本仓库提供 Python API、一次一进程的 `cua-agent invoke` 和 Review 开发调用。`execution/SKILL.md` 及场景/任务 `SKILL.md` 面向 CLI 操作、维护和打包；Python Agent 不读取这些 Markdown，`cua_catalog` 只返回结构化 catalog/manifest/YAML 摘要。
 
@@ -127,11 +127,12 @@ node dist/cli/main.js review --no-open
 - `task run` 直接执行参数已解析的多 task YAML，适合稳定页面。
 - `act run --scene/--task` 将相同 resolved YAML 投影为有序完整 prompt，再执行单个 `ai` action。
 - `act run --prompt` 将自然语言要求包装为单 `ai` action，不读取任务资产。
+- `cua_execute(strategy="hybrid")` 逐个严格回放录制步骤；单步失败时在同一个电脑 Agent 中只恢复当前步骤，成功后从下一步骤继续。一次执行最多进行三次局部恢复，并只生成一个报告和一张最终截图。
 - 现有三种 CLI 路径复用 `executors/midscene-yaml.ts`，在同一进程内直接调用 Midscene。
 - `runNaturalLanguageAiAct()` 是底层 TypeScript Runtime 嵌入 API，由 `executors/midscene-ai-act.ts` 直接调用一次 `agent.aiAct()`，不生成 YAML；它不是 GDEClaw Main Agent 的 canonical 入口。
 - 每次实际执行设置 `MIDSCENE_RUN_DIR=<run-dir>/midscene`，并在 `finally` 中销毁 Agent、恢复原环境。
 - Runtime 不提供跨进程并发锁，上层必须串行调用真实 computer use。
-- 系统不维护自定义 flow，不自动切换模式、修改任务、重试或调用替代输入动作。
+- 系统不维护自定义 flow，也不在策略之间自动切换或修改任务。`hybrid` 的局部恢复是该策略内部的受限行为，不改变 `replay`、`guided` 或 `freeform` 的执行语义。
 - 逐步 YAML 和录制任务整体 aiAct 都保留被明确选择的参考图片；图片缺失、路径越界或同名图片指向不同 URL 时启动前失败，不降级为纯文字动作。
 
 原生 aiAct API 从包根入口导入：

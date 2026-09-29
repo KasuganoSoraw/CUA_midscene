@@ -12,6 +12,8 @@ def test_definition_is_loaded_from_packaged_markdown() -> None:
     assert "不要仅为了插入说明而拆散合理的一组 Tool call" in CUA_AGENT_DEFINITION.instructions
     assert "同一模型响应最多调用一个 Tool" not in CUA_AGENT_DEFINITION.instructions
     assert "catalog 未命中后不得询问" in CUA_AGENT_DEFINITION.instructions
+    assert "通常选择 `hybrid`" in CUA_AGENT_DEFINITION.instructions
+    assert "禁止自适应时，选择 `replay`" in CUA_AGENT_DEFINITION.instructions
     assert "不属于信息不足" in CUA_AGENT_DEFINITION.instructions
     assert "最终回复必须包含 Tool 返回的 `url`" in CUA_AGENT_DEFINITION.instructions
     assert "最终回复必须原样包含该执行报告路径" in CUA_AGENT_DEFINITION.instructions

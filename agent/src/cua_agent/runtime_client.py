@@ -365,6 +365,7 @@ class JsonlRuntimeClient:
             "description",
             "status",
             "executionId",
+            "phase",
         }:
             raise RuntimeProtocolError("Runtime event data 包含无效字段")
         if not isinstance(data, dict) or data.get("source") != "midscene":
@@ -393,6 +394,9 @@ class JsonlRuntimeClient:
             not isinstance(execution_id, str) or len(execution_id) > 120
         ):
             raise RuntimeProtocolError("Runtime event executionId 无效")
+        phase = data.get("phase")
+        if phase is not None and phase not in ("replay", "recovery"):
+            raise RuntimeProtocolError("Runtime event phase 无效")
         return RuntimeProgressEvent(message, dict(data))
 
     async def _drain_stderr(self) -> None:

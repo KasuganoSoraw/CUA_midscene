@@ -198,3 +198,16 @@ def test_client_closes_worker_when_progress_consumer_fails() -> None:
             assert not client.running
 
     asyncio.run(scenario())
+
+
+def test_client_accepts_hybrid_progress_phase() -> None:
+    async def scenario() -> None:
+        events: list[RuntimeProgressEvent] = []
+        async with JsonlRuntimeClient(config()) as client:
+            await client.request(
+                "execute", {"action": "progress-phase"}, on_event=events.append
+            )
+        assert len(events) == 1
+        assert events[0].data["phase"] == "recovery"
+
+    asyncio.run(scenario())

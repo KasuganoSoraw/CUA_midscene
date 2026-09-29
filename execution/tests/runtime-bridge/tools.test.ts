@@ -51,7 +51,7 @@ test('Runtime catalog 保留 ready/error 任务', async () => {
   assert.deepEqual(found.matches, [tasks[0]]);
 });
 
-test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
+test('Runtime execute 将四种策略映射到唯一底层 API', async () => {
   const calls: string[] = [];
   const yamlExecutor = {
     schemaVersion: '0.2',
@@ -89,6 +89,15 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
         executorResult: yamlExecutor,
       };
     },
+    runHybridTask: async (options: { onProgress?: ExecutionProgressSink }) => {
+      calls.push('hybrid');
+      assert.equal(options.onProgress, onProgress);
+      return {
+        resolved: {},
+        resolvedTaskPath: 'C:\\cua-data\\runs\\hybrid\\resolved-task.yaml',
+        executorResult: yamlExecutor,
+      };
+    },
     runRecordedTaskAiAct: async (options: { onProgress?: ExecutionProgressSink }) => {
       calls.push('guided');
       assert.equal(options.onProgress, onProgress);
@@ -119,17 +128,22 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
   const guided = await cuaExecute({
     strategy: 'guided', scene: 'ems', task: 'query-alarm', dryRun: true,
   }, dependencies, onProgress);
+  const hybrid = await cuaExecute({
+    strategy: 'hybrid', scene: 'ems', task: 'query-alarm', dryRun: true,
+  }, dependencies, onProgress);
   const freeform = await cuaExecute({
     strategy: 'freeform', goal: '打开 Chrome', dryRun: true,
   }, dependencies, onProgress);
 
-  assert.deepEqual(calls, ['replay', 'guided', 'freeform']);
+  assert.deepEqual(calls, ['replay', 'guided', 'hybrid', 'freeform']);
   assert.equal(replay.strategy, 'replay');
   assert.equal(replay.reportPath, yamlExecutor.reportPath);
   assert.equal(replay.finalScreenshotPath, yamlExecutor.finalScreenshotPath);
   assert.equal(guided.promptPath, 'C:\\cua-data\\runs\\2\\ai-act-prompt.txt');
   assert.equal(guided.reportPath, yamlExecutor.reportPath);
   assert.equal(guided.finalScreenshotPath, yamlExecutor.finalScreenshotPath);
+  assert.equal(hybrid.strategy, 'hybrid');
+  assert.equal(hybrid.runDir, 'C:\\cua-data\\runs\\hybrid');
   assert.equal(freeform.runDir, 'C:\\cua-data\\runs\\3');
   assert.equal(freeform.reportPath, nativeExecutor.reportPath);
   assert.equal(freeform.finalScreenshotPath, nativeExecutor.finalScreenshotPath);

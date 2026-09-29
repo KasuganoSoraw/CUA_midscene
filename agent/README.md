@@ -2,7 +2,7 @@
 
 `cua-agent` 是面向 GDEClaw 和本地开发调试的唯一 canonical Computer-Use Subagent。
 
-它每次接收一个完整任务，在单次调用内负责模型 Tool Calling 和任务级执行策略选择；它不保存跨调用 Session、长期记忆或用户聊天历史。catalog、replay、guided、freeform、workbench 和 Midscene 执行由 TypeScript `execution` Runtime 提供。
+它每次接收一个完整任务，在单次调用内负责模型 Tool Calling 和任务级执行策略选择；它不保存跨调用 Session、长期记忆或用户聊天历史。catalog、replay、hybrid、guided、freeform、workbench 和 Midscene 执行由 TypeScript `execution` Runtime 提供。
 
 本目录是独立 Python 包边界。依赖由安装或部署阶段准备，invocation 不执行 `uv sync`、`pip install`、`npm install` 或 lock 操作。
 
@@ -20,7 +20,7 @@ GDEClaw Main Agent
   -> Midscene
 ```
 
-GDEClaw 不需要注册内部 Tool，也不需要理解 replay、guided 或 freeform。Host Adapter 负责用户会话、任务 ID、后台生命周期和取消；本包只保存一次 invocation 内的 messages 和 Tool result，结束后即释放，不实现长期 Memory、持久 Session、scheduler 或多 Agent routing。Tool 名称和输入/输出摘要可以作为受控诊断数据返回，但不构成 Host 可调用 Tool。
+GDEClaw 不需要注册内部 Tool，也不需要理解 replay、hybrid、guided 或 freeform。Host Adapter 负责用户会话、任务 ID、后台生命周期和取消；本包只保存一次 invocation 内的 messages 和 Tool result，结束后即释放，不实现长期 Memory、持久 Session、scheduler 或多 Agent routing。Tool 名称和输入/输出摘要可以作为受控诊断数据返回，但不构成 Host 可调用 Tool。
 
 ## 开发
 
@@ -47,7 +47,7 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 ## 调用结果与取消
 
-- `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 在模型与 Tool 执行期间发送调用级事件，并支持调用级取消检查。`cua_execute` 的 `execution.progress` 事件包含调用关联信息、执行 ID、任务 ID、动作名称、可选描述及状态。描述可能包含输入文本；Host 应按事件数据策略管理访问与留存。完整 Midscene 报告保存在本次 run 的 `midscene/` 目录。
+- `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 在模型与 Tool 执行期间发送调用级事件，并支持调用级取消检查。`cua_execute` 的 `execution.progress` 事件包含调用关联信息、执行 ID、任务 ID、动作名称、可选描述及状态；混合回放还包含 `replay` 或 `recovery` 阶段。描述可能包含输入文本；Host 应按事件数据策略管理访问与留存。完整 Midscene 报告保存在本次 run 的 `midscene/` 目录。
 - assistant 事件按轮次发送可见文本增量；Tool 事件关联轮次与调用 ID，并携带完整参数及结果或错误。最终响应协议 JSON 只通过终态回复公开。
 - `cua-agent invoke` 逐帧输出事件 JSONL；stdin 协议只提交一次请求，不提供运行中的 cancel frame。
 - Review `--dev` 使用 NDJSON 流实时展示事件和最终结果；页面不提供 Agent 中途取消按钮。完成后返回 JSON 的调用入口也可使用。

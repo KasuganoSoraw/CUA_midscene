@@ -37,6 +37,7 @@ interface CuaRecordedExecutionRequest extends CuaToolRequestBase {
 
 export type CuaExecuteRequest =
   | (CuaRecordedExecutionRequest & { strategy: 'replay' })
+  | (CuaRecordedExecutionRequest & { strategy: 'hybrid' })
   | (CuaRecordedExecutionRequest & { strategy: 'guided' })
   | (CuaToolRequestBase & {
       strategy: 'freeform';

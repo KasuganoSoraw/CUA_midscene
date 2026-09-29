@@ -90,8 +90,29 @@ export interface ExecutorResult {
   midsceneResult?: Record<string, unknown> | null;
   reportPath?: string | null;
   finalScreenshotPath?: string | null;
+  hybrid?: HybridExecutionSummary;
   finishedAt: string;
   error?: string | null;
+}
+
+export interface HybridStepResult {
+  stepIndex: number;
+  stepId: string;
+  name: string;
+  status: 'replayed' | 'recovered' | 'failed';
+  replayError?: string;
+  recoveryResult?: string | null;
+  recoveryError?: string;
+}
+
+export interface HybridExecutionSummary {
+  steps: HybridStepResult[];
+  recovery: {
+    attempted: number;
+    succeeded: number;
+    limit: number;
+    steps: string[];
+  };
 }
 
 export interface NativeAiActExecutorResult {
