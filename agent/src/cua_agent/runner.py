@@ -55,7 +55,10 @@ FINALIZATION_PROTOCOL = """
 最近一次终态 Tool 已成功完成本次任务。不得再调用、建议调用或模拟调用任何 Tool。
 不得通过新的 GUI 操作确认或验证结果。
 只根据已有任务、Tool Result 和以下规则输出面向调用方的普通文本：
-- `cua_execute`：明确说明任务执行成功；Tool Result 包含 `reportPath` 时必须原样返回该路径。
+- `cua_execute`：先正常说明任务的实际执行结果；Tool Result 包含 `reportPath` 时
+  必须原样返回该路径。不要返回 `runDir`、`finalScreenshotPath`、
+  resolved/prompt/result/source 文件路径或其他内部运行路径。
+  执行报告路径是最终自然语言回复中唯一允许出现的执行产物路径。
 - `cua_workbench`：必须原样返回 Tool Result 中的 `url`，
   并说明它用于录制、复核或已录制任务回放中的哪一种用途。
 - 使用调用方任务所使用的语言；调用方明确指定其他语言时遵循其要求。
