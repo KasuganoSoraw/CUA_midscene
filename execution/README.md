@@ -56,7 +56,7 @@ JSONL request 包含 `schemaVersion`、`requestId`、`method`、`payload`；`exe
 
 ## 环境
 
-要求 Node.js `>=22.18.0`，公司基线版本为 Node.js 22.18.0。
+要求 Node.js `>=20.18.1`。Midscene 直接依赖支持该版本，`fetch-socks` 使用的 `undici` 固定为兼容 Node 20 的 `7.30.0`。
 
 ```powershell
 npm ci

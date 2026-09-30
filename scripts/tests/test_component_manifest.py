@@ -45,7 +45,7 @@ class ComponentManifestTest(unittest.TestCase):
                     "version": "1.0.0",
                     "private": True,
                     "type": "module",
-                    "engines": {"node": ">=22.18.0"},
+                    "engines": {"node": ">=20.18.1"},
                     "dependencies": {},
                 }
             ),
@@ -66,6 +66,7 @@ class ComponentManifestTest(unittest.TestCase):
                 {"cua_agent", "cua_recorder", "cua_record"},
                 {package["module"] for package in manifest["python"]["packages"]},
             )
+            self.assertEqual(">=20.18.1", manifest["javascript"]["requiresNode"])
 
     def test_manifest_rejects_absolute_and_missing_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -95,7 +96,7 @@ class ComponentManifestTest(unittest.TestCase):
         source = {
             "name": "cua-midscene",
             "version": "1.0.0",
-            "engines": {"node": ">=22.18.0"},
+            "engines": {"node": ">=20.18.1"},
             "dependencies": {"fastify": "^5.0.0"},
             "devDependencies": {"typescript": "^5.0.0"},
             "scripts": {"build": "tsc"},

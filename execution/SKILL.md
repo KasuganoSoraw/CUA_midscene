@@ -5,7 +5,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 # CUA Midscene
 
-本目录是完整 TypeScript Computer-Use Runtime 与底层 CLI 操作/维护 Skill，要求 Node.js `>=22.18.0`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
+本目录是完整 TypeScript Computer-Use Runtime 与底层 CLI 操作/维护 Skill，要求 Node.js `>=20.18.1`。发布或嵌入后从执行器包根目录使用 `node dist/cli/main.js ...`；在源码仓开发时使用 `npm run cua -- ...`。
 
 唯一 canonical Subagent 位于仓库顶层 Python `agent/`。GDEClaw Main Agent 只向它委派完整任务；Python Agent 通过本包的 `runtime-bridge` 私下调用 catalog、execute 和 workbench。本 Skill 描述开发者、Codex 等维护型调用方如何使用完整 CLI，不是 Python Agent 的运行时 prompt，也不向 GDEClaw 注册内部 Tool。Python `cua_catalog` 不读取本文件或任务目录中的 `SKILL.md`。
 

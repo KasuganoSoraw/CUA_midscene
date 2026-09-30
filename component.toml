@@ -2,7 +2,7 @@ schema-version = "1.0"
 name = "computer-use"
 version = "0.1.0"
 requires-python = ">=3.11"
-requires-node = ">=22.18.0"
+requires-node = ">=20.18.1"
 runtime-bridge-protocol = "1.0"
 
 [[python-packages]]

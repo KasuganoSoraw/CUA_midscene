@@ -35,12 +35,14 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
     files?: string[];
     scripts?: Record<string, string>;
     engines?: Record<string, string>;
+    overrides?: Record<string, Record<string, string>>;
     dependencies?: Record<string, string>;
   };
 
   assert.equal(packageJson.bin?.cua, './dist/cli/main.js');
   assert.equal(packageJson.scripts?.prepack, 'npm run build');
-  assert.equal(packageJson.engines?.node, '>=22.18.0');
+  assert.equal(packageJson.engines?.node, '>=20.18.1');
+  assert.equal(packageJson.overrides?.['fetch-socks']?.undici, '7.30.0');
   assert.match(packageJson.dependencies?.fastify ?? '', /^\^5\./);
   assert.match(packageJson.dependencies?.['@fastify/static'] ?? '', /^\^8\./);
   assert.deepEqual(
@@ -95,7 +97,7 @@ test('Skill 文档面向维护型调用方并使用编译后的 Node CLI', async
   assert.match(skill, /node dist\/cli\/main\.js/);
   assert.match(skill, /维护型调用方/);
   assert.match(skill, /不是 Python Agent 的运行时 prompt/);
-  assert.match(skill, /Node\.js `>=22\.18\.0`/);
+  assert.match(skill, /Node\.js `>=20\.18\.1`/);
   assert.match(skill, /设置足够长的超时/);
   assert.match(skill, /模型请求默认 120 秒.*Runtime 单请求默认 1800 秒.*Review 外层 invocation 默认 40 分钟/);
   assert.match(skill, /task create-from-recording/);

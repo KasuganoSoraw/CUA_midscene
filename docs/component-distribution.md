@@ -4,7 +4,7 @@ Computer-Use Component 是供 GDEClaw 或其他 Host 安装的组件目录。它
 
 ## 构建与验证
 
-构建机需要 Python 3.11+、`uv`、npm 和兼容的 Node.js：
+构建机需要 Python 3.11+、`uv`、npm 和 Node.js `>=20.18.1`：
 
 ```powershell
 uv run --project record --locked python scripts\build_component.py --force
