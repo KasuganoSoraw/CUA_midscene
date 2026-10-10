@@ -148,6 +148,24 @@ const run = await runNaturalLanguageAiAct({
 
 它会保存 `ai-act-prompt.txt`、`ai-act-result.json` 和 Midscene 报告。`dryRun: true` 只校验 prompt 并写入结果，不初始化 ComputerDevice 或调用模型。
 
+## 运行历史空间管理
+
+所有执行入口（Python Agent 的 `cua_execute`、CLI、Review 和嵌入 API）在运行开始及结束时检查运行目录总大小。超过上限后，按最后写入时间从旧到新删除完整运行目录，包括报告、截图和本次输入快照，直到降至目标容量。成功与失败的历史记录采用相同策略，没有按时间到期删除的规则。
+
+在仓库根 `.env.local` 或 Host 进程环境中配置：
+
+| 变量 | 默认值 | 含义 |
+| --- | --- | --- |
+| `CUA_RUNS_MAX_MB` | `5120` | 空间阈值，单位 MiB；`0` 禁用自动清理 |
+| `CUA_RUNS_TARGET_MB` | 上限的 80% | 超限后的清理目标，不能大于上限 |
+| `CUA_RUNS_MIN_AGE_HOURS` | `24` | 最近写入的运行保护窗口；`0` 仅保留当前及活动运行 |
+
+`run-state.json` 记录运行生命周期和进程身份；正在执行、本次返回和保护窗口内的运行不会被删除。进程意外退出留下的旧运行可以回收。已有运行目录通过 `execution-result.json` 或 `ai-act-result.json` 的终态结果识别；未知目录、损坏的状态文件和含链接的目录不删除。扫描范围仅为标准 `<run-id>` 目录，不处理任务、原始录制或其他目录。
+
+保护记录较大或无法删除时，总空间可以暂时超过上限；该策略不限制单次任务的产物大小。清理失败仅记录 stderr 诊断，不改变任务结果，也不增加模型 Tool。没有任务运行时不会启动后台定时器。真实 computer use 仍须由调用方串行执行。
+
+运行目录删除后不可恢复，历史报告和截图路径会失效；需要长期保存的文件应复制到运行目录以外。底层维护 API `cleanupRunHistory({ runsRoot, policy? })` 返回清理前后字节数、已删除运行 ID 和错误列表；`readRunHistoryPolicy()` 读取上述配置。
+
 ## 验证
 
 ```powershell

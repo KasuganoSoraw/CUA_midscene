@@ -17,6 +17,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 - `source/screenshots/*.reference.png` 是可选的干净定位参考；带红叉 crop 只用于理解录制点击点，不能作为 Midscene reference patch。
 - Skill 内 `projects/` 是只读 builtin catalog；用户任务只写入 `<CUA_DATA_ROOT>/projects/`。
 - 运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`。
+- 执行入口按空间滚动清理历史运行，默认超过 5 GiB 清理至 4 GiB，保护当前、活动和最近 24 小时的记录；任务和录制资产不参与清理。需长期保存的报告或截图应复制到运行目录以外，配置见 `README.md` 的运行历史空间管理。
 - computer use 必须由上层串行调用。
 - 维护型外部调用方运行本 CLI 时必须为外围命令设置足够长的超时。Python Agent 的模型请求默认 120 秒、Runtime 单请求默认 1800 秒，Review 外层 invocation 默认 40 分钟；这些限制分层生效，外围超时不能覆盖内部固定超时。
 

@@ -1,4 +1,5 @@
 export type * from './contracts/types.js';
+export { cleanupRunHistory, readRunHistoryPolicy, type RunHistoryPolicy, type RunHistoryCleanupResult } from './run-history.js';
 export {
   runNaturalLanguageAiAct,
   type NaturalLanguageAiActOptions,

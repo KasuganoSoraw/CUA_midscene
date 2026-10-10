@@ -104,7 +104,7 @@ const run = await runNaturalLanguageAiAct({
 });
 ```
 
-该 API 保存 `ai-act-prompt.txt` 和 `ai-act-result.json`，随后由 `executors/midscene-ai-act.ts` 直接调用一次 `agent.aiAct()`。现有三个 CLI 执行模式和任务资产格式均未改变。
+该 API 保存 `ai-act-prompt.txt` 和 `ai-act-result.json`，随后由 `executors/midscene-ai-act.ts` 直接调用一次 `agent.aiAct()`。
 
 `task create-from-recording` 是从原始录制创建任务的默认入口。`--goal` 仅作为创建后任务的描述信息，不会进入 trace 生成 prompt；可以省略，省略时任务 goal/description 与 YAML groupDescription 保存空字符串。命令会运行 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
 
@@ -130,6 +130,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
 ├── projects/<scene>/<task>/         # 用户创建和长期维护的任务数据包
 ├── cache/
 └── runs/<run-id>/
+    ├── run-state.json              # 运行生命周期与进程身份
     ├── resolved-task.yaml
     ├── ai-act-prompt.txt            # 仅录制任务整体 aiAct
     ├── ai-act-task.yaml             # 仅录制任务整体 aiAct
@@ -142,6 +143,8 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
 数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、仓库根 `.env.local`、仓库根 `.env`。`CUA_PYTHON_EXECUTABLE` 是组件宿主提供的统一 Python，必须已经安装 `cua-agent`、`cua-recorder` 与 `cua-record`；源码开发未设置时，record 后处理和 Windows recorder 分别使用相邻工程的 `.venv`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
 
 trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
+
+执行历史在每次运行开始和结束时按空间滚动清理：默认超过 5 GiB 后从最旧记录开始清理至 4 GiB，保留当前、活动和最近 24 小时的运行。任务与原始录制不参与清理；历史报告和截图不是永久资产，需要长期保存时应单独归档。配置与边界见 [`execution/README.md`](./execution/README.md#运行历史空间管理)。
 
 ## 验证与打包
 

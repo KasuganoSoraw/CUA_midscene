@@ -4,7 +4,7 @@ import type { ExecutorResult, JsonObject, ResolvedTaskResult, TaskCatalogRoots }
 import { executeMidsceneYaml, type MidsceneYamlExecutionOptions } from '../../executors/midscene-yaml.js';
 import type { ExecutionProgressSink } from '../../executors/midscene-progress.js';
 import { keyboardInputAiActContext } from '../../executors/computer-agent.js';
-import { createRunDirectory } from '../run-directory.js';
+import { withRunDirectory } from '../run-directory.js';
 import { resolveTask } from './tasks.js';
 import { validateYamlDocument, writeYamlDocument } from './yaml-task.js';
 
@@ -192,45 +192,47 @@ async function execute(
 
 export async function runTask(options: ExecutionOptions): Promise<TaskRun> {
   const resolved = await resolveTask(options);
-  const runDirectory = await createRunDirectory(options.runsRoot);
-  const resolvedTaskPath = path.join(runDirectory, 'resolved-task.yaml');
-  await writeYamlDocument(resolvedTaskPath, resolved.document);
-  const executorResult = await execute(
-    resolvedTaskPath,
-    runDirectory,
-    options.dryRun ?? false,
-    options.executor ?? executeMidsceneYaml,
-    options.onProgress,
-  );
-  return { resolved, resolvedTaskPath, executorResult };
+  return withRunDirectory(options.runsRoot, async (runDirectory) => {
+    const resolvedTaskPath = path.join(runDirectory, 'resolved-task.yaml');
+    await writeYamlDocument(resolvedTaskPath, resolved.document);
+    const executorResult = await execute(
+      resolvedTaskPath,
+      runDirectory,
+      options.dryRun ?? false,
+      options.executor ?? executeMidsceneYaml,
+      options.onProgress,
+    );
+    return { resolved, resolvedTaskPath, executorResult };
+  });
 }
 
 export async function runRecordedTaskAiAct(options: ExecutionOptions): Promise<RecordedTaskAiActRun> {
   const resolved = await resolveTask(options);
   const taskPrompt = buildRecordedTaskAiActPrompt(resolved.document);
-  const runDirectory = await createRunDirectory(options.runsRoot);
-  const resolvedTaskPath = path.join(runDirectory, 'resolved-task.yaml');
-  const promptPath = path.join(runDirectory, 'ai-act-prompt.txt');
-  const aiActYamlPath = path.join(runDirectory, 'ai-act-task.yaml');
-  await writeYamlDocument(resolvedTaskPath, resolved.document);
-  await writeFile(promptPath, taskPrompt.prompt, 'utf8');
-  await writeYamlDocument(
-    aiActYamlPath,
-    aiActYamlDocument(
-      taskPrompt.images.length ? taskPrompt : taskPrompt.prompt,
-      `${options.task}-ai-act`,
-      resolved.manifest.goal,
-      '录制任务整体 aiAct',
-    ),
-  );
-  const executorResult = await execute(
-    aiActYamlPath,
-    runDirectory,
-    options.dryRun ?? false,
-    options.executor ?? executeMidsceneYaml,
-    options.onProgress,
-  );
-  return { resolved, resolvedTaskPath, promptPath, aiActYamlPath, executorResult };
+  return withRunDirectory(options.runsRoot, async (runDirectory) => {
+    const resolvedTaskPath = path.join(runDirectory, 'resolved-task.yaml');
+    const promptPath = path.join(runDirectory, 'ai-act-prompt.txt');
+    const aiActYamlPath = path.join(runDirectory, 'ai-act-task.yaml');
+    await writeYamlDocument(resolvedTaskPath, resolved.document);
+    await writeFile(promptPath, taskPrompt.prompt, 'utf8');
+    await writeYamlDocument(
+      aiActYamlPath,
+      aiActYamlDocument(
+        taskPrompt.images.length ? taskPrompt : taskPrompt.prompt,
+        `${options.task}-ai-act`,
+        resolved.manifest.goal,
+        '录制任务整体 aiAct',
+      ),
+    );
+    const executorResult = await execute(
+      aiActYamlPath,
+      runDirectory,
+      options.dryRun ?? false,
+      options.executor ?? executeMidsceneYaml,
+      options.onProgress,
+    );
+    return { resolved, resolvedTaskPath, promptPath, aiActYamlPath, executorResult };
+  });
 }
 
 export async function runPrompt(options: {
@@ -241,17 +243,18 @@ export async function runPrompt(options: {
 }): Promise<{ yamlPath: string; executorResult: ExecutorResult }> {
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error('自然语言 prompt 不能为空');
-  const runDirectory = await createRunDirectory(options.runsRoot);
-  const yamlPath = path.join(runDirectory, 'resolved-task.yaml');
-  await writeYamlDocument(
-    yamlPath,
-    aiActYamlDocument(prompt, 'natural-language-ai-act', '执行无录制自然语言电脑操作', '自然语言电脑操作'),
-  );
-  const executorResult = await execute(
-    yamlPath,
-    runDirectory,
-    options.dryRun ?? false,
-    options.executor ?? executeMidsceneYaml,
-  );
-  return { yamlPath, executorResult };
+  return withRunDirectory(options.runsRoot, async (runDirectory) => {
+    const yamlPath = path.join(runDirectory, 'resolved-task.yaml');
+    await writeYamlDocument(
+      yamlPath,
+      aiActYamlDocument(prompt, 'natural-language-ai-act', '执行无录制自然语言电脑操作', '自然语言电脑操作'),
+    );
+    const executorResult = await execute(
+      yamlPath,
+      runDirectory,
+      options.dryRun ?? false,
+      options.executor ?? executeMidsceneYaml,
+    );
+    return { yamlPath, executorResult };
+  });
 }
