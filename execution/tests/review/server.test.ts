@@ -46,6 +46,8 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
   await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>review</title>', 'utf8');
   let openedPath = '';
   let createRequest: Record<string, unknown> | undefined;
+  let finishGeneration: () => void = () => {};
+  const generationGate = new Promise<void>((resolve) => { finishGeneration = resolve; });
   const recorderPreview = path.join(root, 'recorder-preview.png');
   await writeFile(recorderPreview, 'preview', 'utf8');
   let recorderStatus: RecorderStatus = { phase: 'idle', outputRoot: recordingsRoot };
@@ -158,6 +160,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
       },
       createFromRecording: async (options) => {
         createRequest = options as unknown as Record<string, unknown>;
+        await generationGate;
         return {
           created: true,
           valid: true,
@@ -274,8 +277,23 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ scene: 'browser-demo', task: 'created-from-web', goal: '创建任务' }),
     });
-    assert.equal(created.status, 200);
-    assert.deepEqual(await created.json(), {
+    assert.equal(created.status, 202);
+    const acceptedGeneration = await created.json() as any;
+    assert.equal(acceptedGeneration.phase, 'running');
+    assert.equal(acceptedGeneration.recording, 'Recording_demo');
+    const runningGeneration = await (await fetch(new URL('/api/recording-generation', base))).json() as any;
+    assert.equal(runningGeneration.phase, 'running');
+    const duplicate = await fetch(new URL('/api/recordings/Recording_demo/tasks', base), {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scene: 'browser-demo', task: 'duplicate' }),
+    });
+    assert.equal(duplicate.status, 409);
+    assert.equal((await fetch(new URL('/api/recordings/Recording_demo', base), { method: 'DELETE' })).status, 409);
+    finishGeneration();
+    await new Promise((resolve) => setImmediate(resolve));
+    const generationStatus = await (await fetch(new URL('/api/recording-generation', base))).json() as any;
+    assert.equal(generationStatus.phase, 'succeeded');
+    assert.deepEqual(generationStatus.result, {
       created: true,
       valid: true,
       scene: 'browser-demo',

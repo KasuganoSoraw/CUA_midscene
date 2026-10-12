@@ -18,6 +18,7 @@ import type {
   StartTaskExecutionRequest,
 } from '../shared/types.js';
 import { applyReviewMutation } from '../service/task-mutations.js';
+import { RecordingGenerationManager } from '../service/recording-generation.js';
 import {
   PythonAgentInvoker,
   type PythonAgentControl,
@@ -191,6 +192,8 @@ async function evidenceFile(
 }
 
 export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = async (app, options) => {
+  const generation = new RecordingGenerationManager();
+  app.get('/api/recording-generation', async () => generation.status());
   const activeRecordingsRoot = await resolveRecordingsRoot(options.recordingsRoot, {
     executionRoot: options.executionRoot,
   });
@@ -326,6 +329,10 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   app.delete<{ Params: RecordingParams }>('/api/recordings/:recording', {
     schema: { params: recordingParamsSchema },
   }, async (request) => {
+    const activeGeneration = generation.status();
+    if (activeGeneration.phase === 'running' && activeGeneration.recording === request.params.recording) {
+      throw Object.assign(new Error('正在使用此录制生成任务，暂时不能删除'), { statusCode: 409 });
+    }
     if (['arming', 'armed', 'starting', 'recording', 'stopping'].includes(recorder.status().phase)) {
       throw Object.assign(new Error('录制正在准备、进行或停止，暂时不能删除录制资产'), { statusCode: 409 });
     }
@@ -348,7 +355,7 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
         body: createRecordingTaskBodySchema,
       },
     },
-    async (request) => {
+    async (request, reply) => {
       if (!options.layout.data) throw new Error('从录制创建任务需要配置 CUA_DATA_ROOT');
       const body = requireObjectBody<CreateRecordingTaskBody>(request.body);
       const scene = requireIdentifier(body.scene, 'scene');
@@ -358,23 +365,27 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
         throw new Error(`录制不可生成：${entry.id}\n${entry.errors.join('\n')}`);
       }
       const recordingPath = await resolveRecordingDirectory(request.params.recording, recordingOptions());
-      const result = await (options.dependencies?.createFromRecording ?? createTaskFromRecording)({
-        scene,
-        task,
-        goal: body.goal,
-        recording: recordingPath,
-        catalog: options.layout.catalog,
-        runsRoot: options.layout.data.runsRoot,
-        executionRoot: options.executionRoot,
-        creationCommand: 'review web',
+      const runsRoot = options.layout.data.runsRoot;
+      const status = generation.start(entry.id, { scene, task, goal: body.goal }, async () => {
+        const result = await (options.dependencies?.createFromRecording ?? createTaskFromRecording)({
+          scene,
+          task,
+          goal: body.goal,
+          recording: recordingPath,
+          catalog: options.layout.catalog,
+          runsRoot,
+          executionRoot: options.executionRoot,
+          creationCommand: 'review web',
+        });
+        return {
+          created: result.created,
+          valid: result.valid,
+          scene: result.scene,
+          task: result.task,
+          goal: result.goal,
+        };
       });
-      return {
-        created: result.created,
-        valid: result.valid,
-        scene: result.scene,
-        task: result.task,
-        goal: result.goal,
-      };
+      return reply.code(202).send(status);
     },
   );
 

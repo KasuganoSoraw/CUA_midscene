@@ -18,8 +18,10 @@ import {
   parseInputPreview,
   parseStepEditor,
   referenceImagesFromFlow,
+  type StepEditorModel,
 } from '../../shared/step-editor';
 import { ApiError, api } from './api';
+import { ReviewDraftStorage } from './draft-storage';
 import { useI18n, type MessageKey } from './i18n';
 import AgentWorkspace from './components/AgentWorkspace.vue';
 import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
@@ -84,9 +86,39 @@ const status = ref(() => t('review.loading'));
 const busy = ref(false);
 const conflict = ref(false);
 const taskDeleteOpen = ref(false);
+const draftDiscardOpen = ref(false);
 const evidenceMode = ref<'full' | 'crop' | 'reference' | 'placeholder'>('full');
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
+let draftStorage: ReviewDraftStorage | undefined;
+let loadingDraft = false;
+let editorDrafts: Record<string, StepEditorModel> = {};
+const draftStorageState = ref<'idle' | 'saved' | 'error'>('idle');
+const draftStorageError = ref('');
+const baseRevision = ref('');
+
+function persistDraft(): void {
+  if (!draft.value || !view.value?.writable || !dirty.value || hydratingEditor || loadingDraft) return;
+  try {
+    if (!draftStorage) throw new Error(t('review.autoSaveUnavailable'));
+    draftStorage.write(view.value.scene, view.value.task, {
+      version: 1, revision: baseRevision.value, draft: clone(draft.value),
+      changes: clone(changes.value), selected: selected.value, editor: clone(editor),
+      editors: clone(editorDrafts),
+    });
+    draftStorageState.value = 'saved';
+    draftStorageError.value = '';
+  } catch (error) {
+    draftStorageState.value = 'error';
+    draftStorageError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+watch(mode, (next) => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('mode', next === 'recordings' ? 'recording' : next);
+  window.history.replaceState(null, '', url);
+});
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -168,6 +200,7 @@ function populateEditor(): void {
   if (!step) return;
   hydratingEditor = true;
   Object.assign(editor, parseStepEditor(step));
+  if (editorDrafts[step.id]) Object.assign(editor, clone(editorDrafts[step.id]));
   advancedEditing.value = false;
   advancedFlowText.value = JSON.stringify(step.flow, null, 2);
   advancedInputText.value = JSON.stringify(inputPreview(step.id, step.input), null, 2);
@@ -187,7 +220,7 @@ function clearTaskView(): void {
   evidenceBySource.clear();
 }
 
-watch(selected, populateEditor);
+watch(selected, () => { populateEditor(); persistDraft(); }, { flush: 'sync' });
 watch(editor, () => {
   if (!hydratingEditor && !advancedEditing.value) syncSemanticDraft();
 }, { deep: true, flush: 'sync' });
@@ -258,13 +291,16 @@ async function openTask(item: TaskCatalogItem): Promise<void> {
   await loadTask();
 }
 
-async function loadTask(): Promise<void> {
+async function loadTask(restoreDraft = true): Promise<void> {
   if (!scene.value || !task.value) return;
   busy.value = true;
+  loadingDraft = true;
   conflict.value = false;
   try {
     const loaded = await api.task(scene.value, task.value);
     view.value = loaded;
+    editorDrafts = {};
+    baseRevision.value = loaded.revision;
     draft.value = { manifest: clone(loaded.manifest), document: clone(loaded.document) };
     evidenceBySource.clear();
     loaded.steps.forEach((item) => { if (item.evidence) evidenceBySource.set(item.evidence.sourceStep, item.evidence); });
@@ -272,12 +308,42 @@ async function loadTask(): Promise<void> {
     selected.value = 0;
     rebuildSteps();
     populateEditor();
+    draftStorageState.value = 'idle';
+    draftStorageError.value = '';
+    if (loaded.writable && restoreDraft) {
+      try {
+        const stored = draftStorage?.read(loaded.scene, loaded.task);
+        if (stored) {
+          editorDrafts = stored.editors ?? {};
+          draft.value = stored.draft;
+          changes.value = stored.changes;
+          baseRevision.value = stored.revision;
+          selected.value = Math.max(0, Math.min(stored.selected, (stored.draft.document.tasks as JsonObject[]).length - 1));
+          rebuildSteps();
+          populateEditor();
+          hydratingEditor = true;
+          Object.assign(editor, stored.editor);
+          hydratingEditor = false;
+          draftStorageState.value = 'saved';
+          conflict.value = stored.revision !== loaded.revision;
+        }
+      } catch (error) {
+        draftStorageState.value = 'error';
+        draftStorageError.value = error instanceof Error ? error.message : String(error);
+      }
+    }
+    if (mode.value === 'review') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('scene', loaded.scene);
+      url.searchParams.set('task', loaded.task);
+      window.history.replaceState(null, '', url);
+    }
     status.value = loaded.writable ? () => t('review.ready') : () => t('review.readonlyStatus');
   } catch (error) {
     clearTaskView();
     const text = error instanceof Error ? error.message : String(error);
     status.value = () => text;
-  } finally { busy.value = false; }
+  } finally { loadingDraft = false; busy.value = false; }
 }
 
 async function mutate(mutation: ReviewMutation): Promise<void> {
@@ -285,10 +351,12 @@ async function mutate(mutation: ReviewMutation): Promise<void> {
   busy.value = true;
   try {
     const result = await api.mutate(scene.value, task.value, draft.value, mutation);
+    editorDrafts = {};
     draft.value = result.draft;
     changes.value.push(result.change);
     rebuildSteps();
     populateEditor();
+    persistDraft();
     status.value = () => t('review.draftValidated');
   } catch (error) {
     const text = error instanceof Error ? error.message : String(error);
@@ -319,6 +387,8 @@ function syncSemanticDraft(): void {
   const existing = changes.value.find((item) => item.kind === 'update' && item.summary === summary);
   if (!existing) changes.value.push({ kind: 'update', summary, details: [t('review.stepUpdated')] });
   status.value = () => t('review.draftUpdated');
+  editorDrafts[step.id] = clone(editor);
+  persistDraft();
 }
 
 function changeOperation(value: string): void {
@@ -396,25 +466,16 @@ async function move(delta: number): Promise<void> {
   selected.value = target;
 }
 
-async function validate(): Promise<void> {
-  if (!draft.value) return;
-  try {
-    await api.validate(scene.value, task.value, draft.value);
-    status.value = () => t('review.valid');
-  } catch (error) {
-    const text = error instanceof Error ? error.message : String(error);
-    status.value = () => text;
-  }
-}
-
 async function save(): Promise<boolean> {
   if (!draft.value || !view.value) return false;
   if (!dirty.value) return true;
   busy.value = true;
   try {
-    const result = await api.save(scene.value, task.value, view.value.revision, draft.value);
+    const result = await api.save(scene.value, task.value, baseRevision.value, clone(draft.value));
+    try { draftStorage?.remove(view.value.scene, view.value.task); } catch { /* Saved task files remain authoritative. */ }
+    changes.value = [];
+    await loadTask(false);
     status.value = () => t('review.saved', { files: result.changed.join(', ') || t('review.noChanges') });
-    await loadTask();
     return true;
   } catch (error) {
     conflict.value = error instanceof ApiError && error.status === 409;
@@ -433,6 +494,19 @@ async function runCurrentTask(): Promise<void> {
   mode.value = 'execution';
 }
 
+async function reloadTask(): Promise<void> {
+  if (!view.value) return;
+  try {
+    draftStorage?.remove(view.value.scene, view.value.task);
+    await loadTask();
+  } catch (error) {
+    const text = error instanceof Error ? error.message : String(error);
+    status.value = () => text;
+  } finally {
+    draftDiscardOpen.value = false;
+  }
+}
+
 function requestTaskDeletion(): void {
   if (!view.value?.writable || busy.value) return;
   taskDeleteOpen.value = true;
@@ -446,6 +520,7 @@ async function confirmTaskDeletion(): Promise<void> {
   conflict.value = false;
   try {
     await api.deleteTask(deletedScene, deletedTask);
+    try { draftStorage?.remove(deletedScene, deletedTask); } catch { /* Deleted task drafts are not restored without a task. */ }
     taskDeleteOpen.value = false;
     task.value = '';
     clearTaskView();
@@ -488,8 +563,15 @@ function unbindReferenceImage(): void {
 }
 
 onMounted(async () => {
-  const [, identity] = await Promise.all([loadScenes(), api.reviewIdentity()]);
-  devMode.value = requestedDevMode && identity.devMode;
+  try {
+    const identity = await api.reviewIdentity();
+    devMode.value = requestedDevMode && identity.devMode;
+    draftStorage = new ReviewDraftStorage(window.localStorage, identity.dataRootKey);
+  } catch (error) {
+    draftStorageState.value = 'error';
+    draftStorageError.value = error instanceof Error ? error.message : String(error);
+  }
+  await loadScenes();
   if (devMode.value && requestedMode === 'agent') mode.value = 'agent';
 });
 </script>
@@ -509,9 +591,8 @@ onMounted(async () => {
         <div v-if="mode === 'review'" class="top-actions">
           <span class="status-chip" :class="{ readonly: !writable }">{{ writable ? t('review.writable') : t('review.readonly') }}</span>
           <button class="secondary" :disabled="busy || !view" @click="runCurrentTask">{{ dirty && writable ? t('review.saveAndRun') : t('review.runTask') }}</button>
-          <button class="secondary" :disabled="busy || !draft" @click="validate">{{ t('review.validate') }}</button>
           <button v-if="view?.writable" class="destructive" :disabled="busy" @click="requestTaskDeletion">{{ t('review.deleteTask') }}</button>
-          <button class="primary" :disabled="busy || !dirty || !writable" @click="save">{{ t('review.save') }}</button>
+          <button class="primary" :disabled="busy || !dirty || !writable || conflict || advancedEditing" @click="save">{{ t('review.save') }}</button>
         </div>
         <div v-else-if="mode === 'recordings'" class="top-actions">
           <span class="status-chip">{{ t('recording.modeStatus') }}</span>
@@ -530,7 +611,7 @@ onMounted(async () => {
 
     <div v-if="mode === 'review' && conflict" class="conflict">
       {{ t('review.conflict') }}
-      <button @click="loadTask">{{ t('review.reload') }}</button>
+      <button @click="draftDiscardOpen = true">{{ t('review.reload') }}</button>
     </div>
 
     <main v-if="mode === 'review'" class="workspace">
@@ -541,6 +622,7 @@ onMounted(async () => {
           class="catalog-select"
           :aria-label="t('review.scene')"
           :options="sceneSelectOptions"
+          :disabled="busy"
           @change="loadTasks"
         />
         <label>{{ t('review.task') }}</label>
@@ -548,7 +630,7 @@ onMounted(async () => {
           v-for="item in tasks" :key="String(item.task)"
           class="task-row"
           :class="{ active: task === item.task, error: item.status === 'error' }"
-          :disabled="item.status === 'error'"
+          :disabled="busy || item.status === 'error'"
           @click="openTask(item)"
         >
           <strong>{{ item.title }}</strong>
@@ -565,7 +647,7 @@ onMounted(async () => {
         <div class="step-list">
           <button
             v-for="(item, index) in steps" :key="item.id"
-            class="step-row" :class="{ active: selected === index }" @click="selected = index"
+            class="step-row" :class="{ active: selected === index }" :disabled="busy" @click="selected = index"
           >
             <span class="step-index">{{ String(index + 1).padStart(2, '0') }}</span>
             <span><strong>{{ operationLabel(item.operation) }}</strong><small v-if="devMode">{{ item.id }}</small></span>
@@ -687,12 +769,12 @@ onMounted(async () => {
               :model-value="editor.operation"
               :aria-label="t('review.operation')"
               :options="operationOptions"
-              :disabled="!writable || advancedEditing"
+              :disabled="busy || !writable || advancedEditing"
               @change="changeOperation"
             />
           </label>
           <label>{{ t('review.delay') }}
-            <input v-model.number="editor.delayMs" type="number" min="0" step="100" :readonly="!writable || advancedEditing" />
+            <input v-model.number="editor.delayMs" type="number" min="0" step="100" :readonly="busy || !writable || advancedEditing" />
           </label>
 
           <div v-if="editor.custom" class="custom-flow-note wide">
@@ -701,50 +783,50 @@ onMounted(async () => {
 
           <template v-else-if="editor.operation === 'click' || editor.operation === 'doubleClick'">
             <label class="wide">{{ t('review.target') }}
-              <textarea v-model="editor.target" rows="3" :readonly="!writable || advancedEditing" :placeholder="t('review.targetPlaceholder')"></textarea>
+              <textarea v-model="editor.target" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.targetPlaceholder')"></textarea>
             </label>
           </template>
 
           <template v-else-if="editor.operation === 'input'">
             <label class="wide">{{ t('review.inputTarget') }}
-              <textarea v-model="editor.target" rows="3" :readonly="!writable || advancedEditing" :placeholder="t('review.inputTargetPlaceholder')"></textarea>
+              <textarea v-model="editor.target" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.inputTargetPlaceholder')"></textarea>
             </label>
             <label>{{ t('review.inputMode') }}
               <ReviewSelect
                 v-model="editor.inputMode"
                 :aria-label="t('review.inputMode')"
                 :options="inputModeOptions"
-                :disabled="!writable || advancedEditing"
+                :disabled="busy || !writable || advancedEditing"
               />
             </label>
             <fieldset class="input-options wide">
               <label class="checkbox">
-                <input v-model="editor.parameterized" type="checkbox" :disabled="!writable || advancedEditing" />
+                <input v-model="editor.parameterized" type="checkbox" :disabled="busy || !writable || advancedEditing" />
                 <span>{{ t('review.parameterized') }}</span>
               </label>
               <div v-if="editor.parameterized" class="input-fields">
-                <label>{{ t('review.inputLabel') }}<input v-model="editor.inputLabel" :readonly="!writable || advancedEditing" /></label>
-                <label>{{ t('review.inputDefault') }}<input v-model="editor.inputDefault" :readonly="!writable || advancedEditing" /></label>
-                <label class="wide">{{ t('review.inputDescription') }}<input v-model="editor.inputDescription" :readonly="!writable || advancedEditing" /></label>
+                <label>{{ t('review.inputLabel') }}<input v-model="editor.inputLabel" :readonly="busy || !writable || advancedEditing" /></label>
+                <label>{{ t('review.inputDefault') }}<input v-model="editor.inputDefault" :readonly="busy || !writable || advancedEditing" /></label>
+                <label class="wide">{{ t('review.inputDescription') }}<input v-model="editor.inputDescription" :readonly="busy || !writable || advancedEditing" /></label>
               </div>
               <div v-else class="input-fields single-field">
-                <label>{{ t('review.inputFixed') }}<input v-model="editor.inputValue" :readonly="!writable || advancedEditing" /></label>
+                <label>{{ t('review.inputFixed') }}<input v-model="editor.inputValue" :readonly="busy || !writable || advancedEditing" /></label>
               </div>
             </fieldset>
           </template>
 
           <template v-else-if="editor.operation === 'keyboard'">
             <label class="wide">{{ t('review.keyName') }}
-              <input v-model="editor.keyName" :readonly="!writable || advancedEditing" :placeholder="t('review.keyPlaceholder')" />
+              <input v-model="editor.keyName" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.keyPlaceholder')" />
             </label>
           </template>
 
           <template v-else-if="editor.operation === 'wait'">
             <label class="wide">{{ t('review.waitCondition') }}
-              <textarea v-model="editor.waitCondition" rows="3" :readonly="!writable || advancedEditing" :placeholder="t('review.waitPlaceholder')"></textarea>
+              <textarea v-model="editor.waitCondition" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.waitPlaceholder')"></textarea>
             </label>
             <label>{{ t('review.timeout') }}
-              <input v-model.number="editor.timeoutMs" type="number" min="1" step="1000" :readonly="!writable || advancedEditing" />
+              <input v-model.number="editor.timeoutMs" type="number" min="1" step="1000" :readonly="busy || !writable || advancedEditing" />
             </label>
           </template>
 
@@ -778,6 +860,8 @@ onMounted(async () => {
         </div>
 
         <div class="changes">
+          <p v-if="draftStorageState === 'saved' && dirty" class="draft-storage-status" role="status">{{ t('review.autoSaved') }}</p>
+          <p v-if="draftStorageState === 'error'" class="inline-error" role="alert">{{ t('review.autoSaveFailed', { error: draftStorageError }) }}</p>
           <div class="panel-heading compact"><h3>{{ t('review.changes') }}</h3><span>{{ changes.length }}</span></div>
           <p v-if="!changes.length" class="muted">{{ t('review.noPendingChanges') }}</p>
           <article v-for="(change, index) in changes" :key="index">
@@ -805,6 +889,18 @@ onMounted(async () => {
     <main v-else-if="mode === 'agent' && devMode" class="workspace agent-layout">
       <AgentWorkspace />
     </main>
+
+    <ConfirmDialog
+      :open="draftDiscardOpen"
+      :title="t('review.discardTitle')"
+      :message="t('review.discardDraft')"
+      :target="`${scene}/${task}`"
+      :confirm-label="t('review.reload')"
+      :cancel-label="t('common.cancel')"
+      :busy="busy"
+      @confirm="reloadTask"
+      @cancel="draftDiscardOpen = false"
+    />
 
     <ConfirmDialog
       :open="taskDeleteOpen"

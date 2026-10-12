@@ -137,6 +137,16 @@ export interface CreateRecordingTaskResult {
   goal: string;
 }
 
+export interface RecordingGenerationStatus {
+  phase: 'idle' | 'running' | 'succeeded' | 'failed';
+  recording?: string;
+  request?: CreateRecordingTaskRequest;
+  startedAt?: string;
+  finishedAt?: string;
+  result?: CreateRecordingTaskResult;
+  error?: string;
+}
+
 export interface DeleteRecordingResult {
   deleted: true;
   recording: string;

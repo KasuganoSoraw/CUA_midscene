@@ -462,6 +462,8 @@ footer code { color: var(--cua-color-text-tertiary); }
 .generation-state { padding: 12px 13px; border: 1px solid #b9c9fb; border-radius: 12px; color: var(--cua-color-primary-active); background: var(--cua-color-primary-light); }
 .generation-state strong { display: block; margin-top: 9px; }
 .generation-state p { margin-top: 4px; color: var(--cua-color-text-secondary); font-size: 12px; }
+.generation-state button { margin-top: 10px; }
+.draft-storage-status { margin-bottom: 12px; color: var(--cua-color-text-secondary); font-size: 12px; line-height: 1.5; }
 .indeterminate-progress { height: 5px; overflow: hidden; border-radius: 999px; background: #dce5ff; }
 .indeterminate-progress span { display: block; width: 38%; height: 100%; border-radius: inherit; background: var(--cua-color-primary); animation: recording-progress 1.2s ease-in-out infinite; }
 .inline-error { padding: 10px 12px; border: 1px solid #efb3b4; border-radius: var(--cua-radius-control); color: var(--cua-color-error); background: #fff3f3; white-space: pre-line; }

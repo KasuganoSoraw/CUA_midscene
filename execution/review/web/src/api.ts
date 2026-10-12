@@ -1,6 +1,6 @@
 import type {
   CreateRecordingTaskRequest,
-  CreateRecordingTaskResult,
+  RecordingGenerationStatus,
   DeleteRecordingResult,
   DeleteTaskResult,
   RecorderDisplaysResult,
@@ -107,6 +107,7 @@ export const api = {
   streamAgent: streamAgentInvocation,
   scenes: () => request<ReviewCatalogResponse>('/api/scenes'),
   recordings: () => request<ReviewRecordingCatalog>('/api/recordings'),
+  recordingGeneration: () => request<RecordingGenerationStatus>('/api/recording-generation'),
   recorderStatus: () => request<RecorderStatus>('/api/recorder/status'),
   refreshRecorderDisplays: () => request<RecorderDisplaysResult>(
     '/api/recorder/displays/refresh', { method: 'POST' },
@@ -128,7 +129,7 @@ export const api = {
       { method: 'POST' },
     ),
   createRecordingTask: (recording: string, body: CreateRecordingTaskRequest) =>
-    request<CreateRecordingTaskResult>(
+    request<RecordingGenerationStatus>(
       `/api/recordings/${encodeURIComponent(recording)}/tasks`,
       { method: 'POST', body: JSON.stringify(body) },
     ),

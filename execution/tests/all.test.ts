@@ -23,6 +23,8 @@ import './review/asset-deletion.test.js';
 import './review/server.test.js';
 import './review/step-editor.test.js';
 import './review/web-api.test.js';
+import './review/recording-generation.test.js';
+import './review/draft-storage.test.js';
 import './review/python-agent.test.js';
 import './review/agent-progress.test.js';
 import './review/i18n.test.js';

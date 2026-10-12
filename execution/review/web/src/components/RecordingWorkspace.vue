@@ -5,6 +5,7 @@ import type {
   CreateRecordingTaskResult,
   RecorderDisplay,
   RecorderStatus,
+  RecordingGenerationStatus,
   ReviewRecording,
   ReviewRecordingCatalog,
 } from '../../../shared/types';
@@ -32,7 +33,9 @@ const selectedId = ref('');
 const sceneId = ref('');
 const taskId = ref('');
 const goal = ref('');
-const busy = ref(false);
+const actionBusy = ref(false);
+const generation = ref<RecordingGenerationStatus>({ phase: 'idle' });
+const busy = computed(() => actionBusy.value || generation.value.phase === 'running');
 const opening = ref(false);
 const sceneMenuOpen = ref(false);
 const error = ref('');
@@ -45,6 +48,35 @@ const recorderError = ref('');
 const recordingDeleteOpen = ref(false);
 const clock = ref(Date.now());
 let recorderPoll: ReturnType<typeof setInterval> | undefined;
+let generationPolling = false;
+let disposed = false;
+
+function applyGeneration(next: RecordingGenerationStatus, restoreForm = false): void {
+  generation.value = next;
+  if (restoreForm && next.request && next.recording) {
+    selectedId.value = next.recording;
+    sceneId.value = next.request.scene;
+    taskId.value = next.request.task;
+    goal.value = next.request.goal ?? '';
+  }
+  if (next.phase === 'running') message.value = () => t('recording.creating');
+  else if (next.phase === 'succeeded' && next.result) {
+    const result = next.result;
+    message.value = () => t('recording.created', { scene: result.scene, task: result.task });
+  } else if (next.phase === 'failed') message.value = () => t('recording.createFailed');
+}
+
+async function loadGeneration(restoreForm = false): Promise<void> {
+  if (generationPolling) return;
+  generationPolling = true;
+  try {
+    applyGeneration(await api.recordingGeneration(), restoreForm);
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : String(caught);
+  } finally {
+    generationPolling = false;
+  }
+}
 
 const selected = computed<ReviewRecording | undefined>(() =>
   catalog.value.recordings.find((item) => item.id === selectedId.value),
@@ -211,22 +243,21 @@ async function openFolder(): Promise<void> {
 
 async function createTask(): Promise<void> {
   if (!selected.value || !canCreate.value) return;
-  busy.value = true;
+  actionBusy.value = true;
   error.value = '';
   message.value = () => t('recording.creating');
   try {
-    const result = await api.createRecordingTask(selected.value.id, {
+    applyGeneration(await api.createRecordingTask(selected.value.id, {
       scene: sceneId.value.trim(),
       task: taskId.value.trim(),
       goal: goal.value.trim(),
-    });
-    message.value = () => t('recording.created', { scene: result.scene, task: result.task });
-    emit('created', result);
+    }));
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
     message.value = () => t('recording.createFailed');
+    await loadGeneration(true);
   } finally {
-    busy.value = false;
+    actionBusy.value = false;
   }
 }
 
@@ -238,7 +269,7 @@ function requestRecordingDeletion(): void {
 async function confirmRecordingDeletion(): Promise<void> {
   if (!selected.value || !canDeleteRecording.value) return;
   const recording = selected.value.id;
-  busy.value = true;
+  actionBusy.value = true;
   error.value = '';
   try {
     await api.deleteRecording(recording);
@@ -249,19 +280,25 @@ async function confirmRecordingDeletion(): Promise<void> {
     recordingDeleteOpen.value = false;
     error.value = caught instanceof Error ? caught.message : String(caught);
   } finally {
-    busy.value = false;
+    actionBusy.value = false;
   }
 }
 
 onMounted(async () => {
   await Promise.all([loadRecordings(), loadRecorderStatus()]);
+  if (disposed) return;
+  await loadGeneration(true);
+  if (disposed) return;
   if (shouldDetectDisplays(recorderStatus.value.phase)) await refreshRecorderDisplays();
+  if (disposed) return;
   recorderPoll = setInterval(() => {
     clock.value = Date.now();
     if (recorderCollapsed.value && !recorderBusy.value) void loadRecorderStatus();
+    if (generation.value.phase === 'running') void loadGeneration();
   }, 1000);
 });
 onUnmounted(() => {
+  disposed = true;
   if (recorderPoll) clearInterval(recorderPoll);
 });
 </script>
@@ -382,6 +419,18 @@ onUnmounted(() => {
   </aside>
 
   <section class="panel recording-detail">
+    <div v-if="generation.phase !== 'idle'" class="recording-content">
+      <div v-if="generation.phase === 'running'" class="generation-state" role="status">
+        <div class="indeterminate-progress"><span></span></div>
+        <strong>{{ t('recording.generating') }} · {{ generation.request?.scene }}/{{ generation.request?.task }}</strong>
+        <p>{{ t('recording.generatingHelp') }}</p>
+      </div>
+      <div v-else-if="generation.phase === 'succeeded' && generation.result" class="generation-state" role="status">
+        <strong>{{ t('recording.created', { scene: generation.result.scene, task: generation.result.task }) }}</strong>
+        <button type="button" class="secondary" @click="emit('created', generation.result)">{{ t('recording.openCreated') }}</button>
+      </div>
+      <div v-else-if="generation.phase === 'failed'" class="inline-error" role="alert">{{ generation.error }}</div>
+    </div>
     <div v-if="!selected" class="recording-detail-empty">
       <div class="recording-placeholder-icon">◎</div>
       <h2>{{ catalog.configured ? t('recording.select') : t('recording.configure', { name: catalog.envName }) }}</h2>
@@ -507,11 +556,6 @@ onUnmounted(() => {
             ></textarea>
           </label>
 
-          <div v-if="busy" class="generation-state wide" role="status">
-            <div class="indeterminate-progress"><span></span></div>
-            <strong>{{ t('recording.generating') }}</strong>
-            <p>{{ t('recording.generatingHelp') }}</p>
-          </div>
           <div v-if="error" class="inline-error wide">{{ error }}</div>
           <div class="recording-form-actions wide">
             <span>{{ message() }}</span>
