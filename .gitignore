@@ -1,6 +1,5 @@
 **/.env
 **/.env.*
-!**/.env.example
 
 **/node_modules/
 **/dist/
@@ -17,3 +16,6 @@
 .local/
 
 record/Aloha_Learn/projects/
+
+.idea/
+gpt来源/
