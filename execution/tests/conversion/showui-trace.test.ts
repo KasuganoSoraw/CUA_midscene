@@ -13,13 +13,12 @@ import { readShowuiTrace, readTaskManifest } from '../../cua/contracts/validatio
 import { readYamlDocument } from '../../cua/task/yaml-task.js';
 
 const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const airTask = path.join(executionRoot, 'projects', 'browser-demo', 'air-tickets-demo');
+const airTask = path.join(executionRoot, 'tests', 'fixtures', 'recorded-projects', 'browser-demo', 'air-tickets-demo');
 const goal = '将 Qatar Airways 订票页面设置为 Singapore 到 Los Angeles 的单程航班搜索';
 
 async function prepare(task: string): Promise<{ root: string; taskRoot: string; options: ConvertOptions }> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-conversion-'));
   const user = path.join(root, 'user');
-  const builtin = path.join(root, 'builtin');
   const taskRoot = path.join(user, 'browser-demo', task);
   await cp(path.join(airTask, 'source'), path.join(taskRoot, 'source'), { recursive: true });
   return {
@@ -29,7 +28,7 @@ async function prepare(task: string): Promise<{ root: string; taskRoot: string; 
       scene: 'browser-demo',
       task,
       goal,
-      catalog: { builtinProjectsRoot: builtin, userProjectsRoot: user },
+      catalog: { userProjectsRoot: user },
       conversionCommand: `npm run cua -- task init-from-trace --scene browser-demo --task ${task}`,
     },
   };
@@ -174,7 +173,8 @@ test('已有任务资产和内置任务均拒绝覆盖', async () => {
   assert.equal(await readFile(path.join(existing.taskRoot, 'task.yaml'), 'utf8'), 'preserve: true\n');
 
   const builtin = await prepare('builtin-task');
-  await cp(airTask, path.join(builtin.options.catalog.builtinProjectsRoot, 'browser-demo', 'builtin-task'), {
+  builtin.options.catalog.builtinProjectsRoot = path.join(builtin.root, 'readonly');
+  await cp(airTask, path.join(builtin.options.catalog.builtinProjectsRoot!, 'browser-demo', 'builtin-task'), {
     recursive: true,
   });
   await assert.rejects(convertTrace(builtin.options), /内置任务不可覆盖/);

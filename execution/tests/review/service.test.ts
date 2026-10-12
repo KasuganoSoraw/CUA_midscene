@@ -20,7 +20,7 @@ const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 
 test('复核视图组合 builtin 任务与录制证据', async () => {
   const view = await loadReviewTask('browser-demo', 'air-tickets-demo', {
-    builtinProjectsRoot: path.join(executionRoot, 'projects'),
+    builtinProjectsRoot: path.join(executionRoot, 'tests', 'fixtures', 'recorded-projects'),
   });
   assert.equal(view.origin, 'builtin');
   assert.equal(view.writable, false);
@@ -114,7 +114,7 @@ test('保存用户任务校验 revision，builtin 任务保持只读', async () 
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-save-'));
   const user = path.join(root, 'projects');
   await createTaskFixture(user);
-  const catalog = { builtinProjectsRoot: path.join(executionRoot, 'projects'), userProjectsRoot: user };
+  const catalog = { builtinProjectsRoot: path.join(executionRoot, 'tests', 'fixtures', 'recorded-projects'), userProjectsRoot: user };
   const view = await loadReviewTask('browser-demo', 'search-demo', catalog);
   const document = structuredClone(view.document);
   ((document.tasks as JsonObject[])[1].flow as JsonObject[])[0].aiTap = '点击更新后的候选项';
@@ -147,7 +147,7 @@ test('联合保存第二个文件失败时回滚已替换的 YAML', async () => 
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-rollback-'));
   const user = path.join(root, 'projects');
   const taskRoot = await createTaskFixture(user);
-  const catalog = { builtinProjectsRoot: path.join(executionRoot, 'projects'), userProjectsRoot: user };
+  const catalog = { builtinProjectsRoot: path.join(executionRoot, 'tests', 'fixtures', 'recorded-projects'), userProjectsRoot: user };
   const view = await loadReviewTask('browser-demo', 'search-demo', catalog);
   const originalYaml = await readFile(path.join(taskRoot, 'task.yaml'), 'utf8');
   const document = structuredClone(view.document);

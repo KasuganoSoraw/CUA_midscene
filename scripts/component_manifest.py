@@ -63,7 +63,7 @@ def build_manifest(metadata: dict[str, Any], wheel_files: dict[str, Path]) -> di
             "requiresNode": str(metadata["requires-node"]),
             "root": "runtime",
             "entry": "dist/runtime-bridge/worker.js",
-            "assets": ["schemas", "projects"],
+            "assets": ["schemas"],
         },
         "protocol": {
             "runtimeBridge": str(metadata["runtime-bridge-protocol"]),

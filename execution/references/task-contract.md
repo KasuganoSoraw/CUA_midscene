@@ -3,7 +3,7 @@
 ## 目录
 
 ```text
-<skill-root>/projects/<scene>/       # 只读 builtin catalog
+<CUA_DATA_ROOT>/projects/<scene>/   # 本地可写任务目录
 ├── scene.json
 ├── SKILL.md
 └── <task>/
@@ -56,7 +56,7 @@ node dist/cli/main.js review --dev --no-open
 
 `task create-from-recording` 是原始录制的默认后处理入口。它通过 `--python-executable`、`CUA_PYTHON_EXECUTABLE` 或源码开发环境选择 Python，运行 `cua_record` 模块，再将生成资产规范化到 user task `source/` 并完成初始化与静态验证。Windows `cua_recorder` 只负责采集 MP4/TXT，并使用相同的宿主 Python 契约。可选 `--goal` 只写入 task goal/description 与 YAML groupDescription，不进入 trace prompt；省略时这些字段均为空字符串。
 
-`task init-from-trace` 用于 source 已经标准化的高级场景。两种创建方式都拒绝覆盖 user/builtin 任务。
+`task init-from-trace` 用于 source 已经标准化的高级场景。两种创建方式都拒绝覆盖已有任务。
 
 源码开发入口是对应的 `npm run cua -- ...`。`--input` 可以重复；`--inputs` 必须是字符串值 JSON 对象，两种来源不得重复同一 ID。
 
@@ -127,7 +127,7 @@ click/doubleClick 的 `operation.useReferenceImage: true` 表示该步骤需要�
 
 ## 校准与重建
 
-维护型调用方校准时必须展示 YAML 位置、原值、新值和原因，等待用户确认后只修改 user catalog 的 `task.yaml` 并运行 `task validate`。Python CUA Agent 不提供任务编辑 Tool。builtin 任务、`source/` 和运行产物只读。
+维护型调用方校准时必须展示 YAML 位置、原值、新值和原因，等待用户确认后只修改本地任务目录的 `task.yaml` 并运行 `task validate`。Python CUA Agent 不提供任务编辑 Tool。`source/` 和运行产物只读。
 
 长期改变输入默认值、标签或说明属于参数契约修改，必须单独展示 `task.json` 差异并确认。重新生成 trace 属于重建，不是校准；已有任务资产不得自动删除或覆盖。
 

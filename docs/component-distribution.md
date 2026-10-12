@@ -1,6 +1,6 @@
 # Computer-Use Component
 
-Computer-Use Component 是供 GDEClaw 或其他 Host 安装的组件目录。它包含三个 Python wheel、编译后的 JavaScript Runtime、production `node_modules`、schemas、内置任务和 manifest；不包含 Python、Node/Electron executable、环境文件、模型配置或数据目录。
+Computer-Use Component 是供 GDEClaw 或其他 Host 安装的组件目录。它包含三个 Python wheel、编译后的 JavaScript Runtime、production `node_modules`、schemas 和 manifest；不包含内置任务、Python、Node/Electron executable、环境文件、模型配置或数据目录。任务在 Host 配置的 `CUA_DATA_ROOT/projects` 中创建和维护。
 
 ## 构建与验证
 
@@ -23,8 +23,7 @@ computer-use-component/
     ├── package.json
     ├── node_modules/
     ├── dist/
-    ├── schemas/
-    └── projects/
+    └── schemas/
 ```
 
 构建脚本使用独立 staging，不会 prune 源码仓的 `node_modules`。`--output`、`--uv` 和 `--npm` 可覆盖默认路径与构建工具。

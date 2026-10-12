@@ -72,10 +72,14 @@ function candidateTaskPaths(
 }
 
 async function taskPaths(scene: string, task: string, catalog: TaskCatalogRoots): Promise<TaskPaths> {
-  const candidates = [candidateTaskPaths(scene, task, catalog.builtinProjectsRoot, 'builtin', false)];
+  const candidates: TaskPaths[] = [];
+  if (catalog.builtinProjectsRoot) {
+    candidates.push(candidateTaskPaths(scene, task, catalog.builtinProjectsRoot, 'builtin', false));
+  }
   if (catalog.userProjectsRoot) {
     candidates.push(candidateTaskPaths(scene, task, catalog.userProjectsRoot, 'user', true));
   }
+  if (!candidates.length) throw new Error('任务发现需要本地数据目录，请提供 --data-root 或配置 CUA_DATA_ROOT');
   const existing: TaskPaths[] = [];
   for (const candidate of candidates) if (await isFile(candidate.taskManifestPath)) existing.push(candidate);
   if (existing.length > 1) {
@@ -184,9 +188,8 @@ export async function resolveTask(options: {
 }
 
 function catalogEntries(catalog: TaskCatalogRoots): Array<['builtin' | 'user', boolean, string]> {
-  const entries: Array<['builtin' | 'user', boolean, string]> = [
-    ['builtin', false, path.resolve(catalog.builtinProjectsRoot)],
-  ];
+  const entries: Array<['builtin' | 'user', boolean, string]> = [];
+  if (catalog.builtinProjectsRoot) entries.push(['builtin', false, path.resolve(catalog.builtinProjectsRoot)]);
   if (catalog.userProjectsRoot) entries.push(['user', true, path.resolve(catalog.userProjectsRoot)]);
   return entries;
 }

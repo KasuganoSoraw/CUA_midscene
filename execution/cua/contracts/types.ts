@@ -139,7 +139,7 @@ export interface ProcessedLogStep {
 }
 
 export interface TaskCatalogRoots {
-  builtinProjectsRoot: string;
+  builtinProjectsRoot?: string;
   userProjectsRoot?: string;
 }
 

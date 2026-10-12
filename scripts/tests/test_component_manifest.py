@@ -27,7 +27,6 @@ class ComponentManifestTest(unittest.TestCase):
             runtime / "dist" / "runtime-bridge",
             runtime / "node_modules",
             runtime / "schemas",
-            runtime / "projects",
         ):
             directory.mkdir(parents=True, exist_ok=True)
         wheel_files = {
@@ -67,6 +66,8 @@ class ComponentManifestTest(unittest.TestCase):
                 {package["module"] for package in manifest["python"]["packages"]},
             )
             self.assertEqual(">=20.18.1", manifest["javascript"]["requiresNode"])
+            self.assertEqual(["schemas"], manifest["javascript"]["assets"])
+            self.assertFalse((component / "runtime" / "projects").exists())
 
     def test_manifest_rejects_absolute_and_missing_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -89,5 +89,5 @@
 <path d="M 40,850 L 95,850" fill="none" stroke="#687889" stroke-width="3" stroke-dasharray="3 7"/>
 <polygon points="95,850 82.0,856.0 82.0,844.0" fill="#687889"/>
 <text x="112" y="850" text-anchor="start" dominant-baseline="central" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="21" font-weight="400" fill="#172B42">资产读取</text>
-<text x="1310" y="887" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="17" font-weight="400" fill="#687889">内置任务只读；用户任务可维护</text>
+<text x="1310" y="887" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="17" font-weight="400" fill="#687889">本地任务数据；支持复核与维护</text>
 </svg>

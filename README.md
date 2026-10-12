@@ -18,7 +18,7 @@ CUA/
 │   ├── cli/                # 开发与安装后的命令入口
 │   ├── executors/          # Midscene 适配与 KeyboardTypeText
 │   ├── runtime-bridge/     # Python Agent 使用的版本化 JSONL Runtime 边界
-│   ├── projects/           # 随 Skill 发布的只读内置任务
+│   ├── tests/fixtures/     # 契约与录制证据测试资产，不随组件发布
 │   ├── schemas/            # Ajv 在文件边界使用的 JSON Schema
 │   ├── SKILL.md            # 执行器 Skill 入口
 │   └── references/         # Agent 按需读取的任务契约
@@ -87,7 +87,7 @@ npm run cua -- review --no-open
 npm run cua -- review --dev --no-open
 ```
 
-普通 `review` 提供“桌面任务中心”，包含任务检查、录制流程和运行任务，并可在中文与英文之间即时切换；语言选择会在本机保存，也可通过 `?lang=zh-CN` 或 `?lang=en-US` 指定初始语言。任务检查支持删除可写的用户任务，录制流程支持删除原始录制；两类删除均需在页面内确认，内置任务、活动任务和活动录制受保护。进入录制流程时页面会自动检测屏幕并默认选择主屏。`review --dev` 额外提供高级任务数据和无 Session 的 Agent 调试入口。完整 CLI 命令见 [`execution/README.md`](./execution/README.md)，Agent 进程调用见 [`agent/README.md`](./agent/README.md)。
+普通 `review` 提供“桌面任务中心”，包含任务检查、录制流程和运行任务，并可在中文与英文之间即时切换；语言选择会在本机保存，也可通过 `?lang=zh-CN` 或 `?lang=en-US` 指定初始语言。任务检查支持删除可写的用户任务，录制流程支持删除原始录制；两类删除均需在页面内确认，活动任务和活动录制受保护。空项目提供从录制创建任务的入口。进入录制流程时页面会自动检测屏幕并默认选择主屏。`review --dev` 额外提供高级任务数据和无 Session 的 Agent 调试入口。完整 CLI 命令见 [`execution/README.md`](./execution/README.md)，Agent 进程调用见 [`agent/README.md`](./agent/README.md)。
 
 执行器要求 Node.js `>=20.18.1`。
 
@@ -119,7 +119,7 @@ npm run cua -- task init-from-trace --scene <scene> --task <task> --goal "<任�
 ## Skill 与用户数据
 
 ```text
-execution/projects/<scene>/          # 随 Skill 发布，只读
+<CUA_DATA_ROOT>/projects/<scene>/    # 本地创建和维护的任务
 └── <task>/
     ├── task.yaml                    # 唯一长期执行事实源
     ├── task.json                    # 元数据、trace 来源和输入默认值
@@ -140,7 +140,7 @@ execution/projects/<scene>/          # 随 Skill 发布，只读
     └── midscene/                    # Midscene 报告、截图等产物
 ```
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、仓库根 `.env.local`、仓库根 `.env`。`CUA_PYTHON_EXECUTABLE` 是组件宿主提供的统一 Python，必须已经安装 `cua-agent`、`cua-recorder` 与 `cua-record`；源码开发未设置时，record 后处理和 Windows recorder 分别使用相邻工程的 `.venv`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。发现命令可只读取内置任务；创建、验证和执行必须配置数据根。同一 `scene/task` 在 builtin 与 user 两处重复会显式失败。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、仓库根 `.env.local`、仓库根 `.env`。`CUA_PYTHON_EXECUTABLE` 是组件宿主提供的统一 Python，必须已经安装 `cua-agent`、`cua-recorder` 与 `cua-record`；源码开发未设置时，record 后处理和 Windows recorder 分别使用相邻工程的 `.venv`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。发布包不附带内置任务，任务发现只读取配置的数据根；空目录返回空列表，创建、验证和执行必须配置数据根。
 
 trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 

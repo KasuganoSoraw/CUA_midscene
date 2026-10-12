@@ -16,7 +16,7 @@ import type { MidsceneYamlExecutionOptions } from '../../executors/midscene-yaml
 import { createTaskFixture } from '../helpers/task-fixture.js';
 
 const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const catalog = { builtinProjectsRoot: path.join(executionRoot, 'projects') };
+const catalog = { userProjectsRoot: path.join(executionRoot, 'tests', 'fixtures', 'recorded-projects') };
 
 async function fakeExecutor(options: MidsceneYamlExecutionOptions): Promise<ExecutorResult> {
   const document = await readYamlDocument(options.yamlPath);

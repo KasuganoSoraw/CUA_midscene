@@ -589,7 +589,7 @@ onMounted(async () => {
           <button :class="{ active: locale === 'en-US' }" @click="setLocale('en-US')">EN</button>
         </div>
         <div v-if="mode === 'review'" class="top-actions">
-          <span class="status-chip" :class="{ readonly: !writable }">{{ writable ? t('review.writable') : t('review.readonly') }}</span>
+          <span v-if="view" class="status-chip" :class="{ readonly: !writable }">{{ writable ? t('review.writable') : t('review.readonly') }}</span>
           <button class="secondary" :disabled="busy || !view" @click="runCurrentTask">{{ dirty && writable ? t('review.saveAndRun') : t('review.runTask') }}</button>
           <button v-if="view?.writable" class="destructive" :disabled="busy" @click="requestTaskDeletion">{{ t('review.deleteTask') }}</button>
           <button class="primary" :disabled="busy || !dirty || !writable || conflict || advancedEditing" @click="save">{{ t('review.save') }}</button>
@@ -614,7 +614,13 @@ onMounted(async () => {
       <button @click="draftDiscardOpen = true">{{ t('review.reload') }}</button>
     </div>
 
-    <main v-if="mode === 'review'" class="workspace">
+    <main v-if="mode === 'review' && !busy && !scenes.length" class="panel review-empty" aria-live="polite">
+      <h2>{{ t('review.emptyTitle') }}</h2>
+      <p>{{ t('review.emptyHelp') }}</p>
+      <button class="primary" @click="mode = 'recordings'">{{ t('review.createFromRecording') }}</button>
+    </main>
+
+    <main v-else-if="mode === 'review'" class="workspace">
       <aside class="catalog panel">
         <label>{{ t('review.scene') }}</label>
         <ReviewSelect
@@ -626,6 +632,10 @@ onMounted(async () => {
           @change="loadTasks"
         />
         <label>{{ t('review.task') }}</label>
+        <div v-if="!busy && !tasks.length" class="catalog-empty">
+          <p>{{ t('review.noTasks') }}</p>
+          <button class="secondary" @click="mode = 'recordings'">{{ t('review.createFromRecording') }}</button>
+        </div>
         <button
           v-for="item in tasks" :key="String(item.task)"
           class="task-row"

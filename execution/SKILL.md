@@ -15,7 +15,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 - `task.json` 保存任务元数据、输入 ID 和录制默认值，不保存执行步骤。
 - `source/` 是校准时的只读录制证据。
 - `source/screenshots/*.reference.png` 是可选的干净定位参考；带红叉 crop 只用于理解录制点击点，不能作为 Midscene reference patch。
-- Skill 内 `projects/` 是只读 builtin catalog；用户任务只写入 `<CUA_DATA_ROOT>/projects/`。
+- 任务只从 `<CUA_DATA_ROOT>/projects/` 发现和维护；发布包不附带内置任务，空数据目录可直接从录制创建任务。
 - 运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`。
 - 执行入口按空间滚动清理历史运行，默认超过 5 GiB 清理至 4 GiB，保护当前、活动和最近 24 小时的记录；任务和录制资产不参与清理。需长期保存的报告或截图应复制到运行目录以外，配置见 `README.md` 的运行历史空间管理。
 - computer use 必须由上层串行调用。
@@ -43,13 +43,13 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 4. 该命令使用宿主 Python 的 `cua_record` 模块完成后处理、规范化 source、初始化并静态验证；调用方不得再手工调用 Python、重命名或搬运录制产物。Windows `cua_recorder` 是采集 Worker，与 `cua_record` 后处理器职责独立，但由同一个组件 Python 环境提供。
 5. 只有 user task 的 `source/showui-trace.json` 和 `source/processed-log-sc.json` 已经标准化时，才运行 `node dist/cli/main.js task init-from-trace --scene <scene> --task <task> --goal "<目标>"`，再运行 `node dist/cli/main.js task validate --scene <scene> --task <task> --json`。
 
-两种创建入口均不得覆盖已有 user 或 builtin 任务；失败时原样报告错误。
+两种创建入口均不得覆盖已有任务；失败时原样报告错误。
 
 ## 校准协议
 
 1. 按 `step-NNN | <operation-type>` 定位 `task.yaml` 步骤，必要时只读查看 source。
 2. 展示 YAML 位置、原值、新值和中文原因。
-3. 确认目标 `origin=user`、`writable=true`；builtin 任务不得修改。
+3. 确认目标 `origin=user`、`writable=true`。
 4. 停止并等待用户明确确认。
 5. 确认后只修改 user task 的 `task.yaml`，再运行 `node dist/cli/main.js task validate --scene <scene> --task <task> --json`。
 6. 除非用户同时要求执行，否则校准完成后不得操作电脑。

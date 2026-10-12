@@ -66,6 +66,10 @@ h3 { color: var(--cua-color-text-primary); font-size: 16px; font-weight: 600; }
 .workspace.execution-layout { display: block; height: calc(100vh - 154px); }
 .workspace.agent-layout { display: block; height: calc(100vh - 154px); }
 .panel { min-height: 0; overflow: hidden; border: 1px solid var(--cua-color-border); border-radius: var(--cua-radius-panel); background: var(--cua-color-bg-secondary); }
+.review-empty { display: flex; min-height: 280px; padding: 32px 20px; align-items: center; justify-content: center; flex-direction: column; gap: 16px; text-align: center; }
+.review-empty p { max-width: 480px; margin: 0; color: var(--cua-color-text-secondary); line-height: 1.7; }
+.catalog-empty p { color: var(--cua-color-text-secondary); font-size: 13px; }
+.catalog-empty button { width: 100%; }
 .catalog { padding: 16px; overflow-y: auto; }
 .catalog > label { display: block; margin: 0 0 7px; color: var(--cua-color-text-secondary); font-size: 12px; font-weight: 500; }
 .form-grid input:not([type="checkbox"]) { width: 100%; min-height: 32px; border: 1px solid var(--cua-color-control-border); border-radius: var(--cua-radius-control); background: white; padding: 5px 12px; font-size: 14px; }

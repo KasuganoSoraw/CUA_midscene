@@ -21,12 +21,12 @@ record trace
 - `runtime-bridge/`：向顶层 Python Agent 提供 JSON/JSONL catalog、execute、workbench 契约；不包含模型、prompt、Session 或 GDEClaw 逻辑。
 - `cua/recording/`：定位外部 record 环境、运行 parser、复制标准化生成资产并编排任务创建。
 - `cua/conversion/`：只根据结构化 trace operation 初始化任务；被标记的 click/doubleClick 会绑定 processed log 中的 reference patch。
-- `cua/task/`：双 catalog、YAML、输入、运行快照和执行编排。
+- `cua/task/`：本地任务发现、YAML、输入、运行快照和执行编排。
 - `cua/act/`：不依赖录制任务或 YAML 的自然语言原生 aiAct 调用。
 - `cli/`：统一命令分发与 stdout/stderr 输出协议。
 - `review/`：与 `cua/` 平级的本地工作台；`service/` 组合任务资产、录制证据、Windows recorder 和执行控制，`server/` 使用 Fastify 提供受控 HTTP，`web/` 使用 Vue 3。
 - `executors/`：Midscene 薄适配器、环境读取和 customAction。
-- `projects/`：随 Skill 发布的只读内置任务。
+- `tests/fixtures/recorded-projects/`：契约、录制证据和转换验证所用的测试资产，不随执行器发布。
 - `schemas/`：CUA 自有持久化 JSON 契约；不复制 Midscene action 类型系统。
 - `tests/`：契约、转换、任务、CLI 和执行器测试。
 TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv 只校验从磁盘进入系统的 scene、task、trace 和执行结果；resolved YAML 最终交给 Midscene parser。
@@ -114,7 +114,7 @@ node dist/cli/main.js review --no-open
 
 `task create-from-recording` 是原始录制的默认创建入口。可用 `--python-executable` 显式选择已经安装 `cua_record` 的 Python，否则按 `CUA_PYTHON_EXECUTABLE` 和源码开发环境解析。record processor 不接收 goal；命令在 trace 生成后将可选 `--goal` 写入任务 goal/description 和 YAML groupDescription。省略时这些字段保存空字符串。Python 进度写入 stderr，stdout 只输出最终 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
-`review` 只启动监听 `127.0.0.1` 的“桌面任务中心”，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT` 与相同开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。页面提供中文与英文即时切换并在本机保存选择；`lang=zh-CN|en-US` 查询参数可指定初始语言。普通模式只展示任务检查、录制流程和运行任务所需的信息；`--dev` 额外启用高级任务数据、revision、运行诊断和 Python Agent 调试入口。“任务检查”读取 builtin/user catalog，builtin 任务只读；用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML，也可在页面内确认后删除整个用户任务目录，场景和其他任务保持不变。“录制流程”进入时自动检测显示器并默认选择主屏，同时提供重新检测操作；它使用 Windows Worker 提供 `Ctrl+Shift+F9` 准备/开始/停止控制，也读取 `CUA_RECORDINGS_ROOT` 的一级目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并复用 `createTaskFromRecording()` 创建完整用户任务。原始录制可在页面内确认后删除，已生成任务不受影响；活动录制期间不允许删除。页面不播放视频、不展示完整日志，也不流式转发 Python 后处理日志；创建期间只显示不可确定的“正在生成”状态，成功后自动进入新任务检查。同一录制可以用于创建不同任务，每次都会重新处理。
+`review` 只启动监听 `127.0.0.1` 的“桌面任务中心”，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT` 与相同开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。页面提供中文与英文即时切换并在本机保存选择；`lang=zh-CN|en-US` 查询参数可指定初始语言。普通模式只展示任务检查、录制流程和运行任务所需的信息；`--dev` 额外启用高级任务数据、revision、运行诊断和 Python Agent 调试入口。“任务检查”只读取 `<CUA_DATA_ROOT>/projects`；发布包不附带内置任务，空项目提供从录制创建的入口。用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML，也可在页面内确认后删除整个用户任务目录，场景和其他任务保持不变。“录制流程”进入时自动检测显示器并默认选择主屏，同时提供重新检测操作；它使用 Windows Worker 提供 `Ctrl+Shift+F9` 准备/开始/停止控制，也读取 `CUA_RECORDINGS_ROOT` 的一级目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并复用 `createTaskFromRecording()` 创建完整用户任务。原始录制可在页面内确认后删除，已生成任务不受影响；活动录制期间不允许删除。页面不播放视频、不展示完整日志，也不流式转发 Python 后处理日志；创建期间只显示不可确定的“正在生成”状态，生成状态由服务保持，切换页签或刷新页面可恢复；成功后可点击进入新任务检查。同一录制可以用于创建不同任务，每次都会重新处理。
 
 未配置 `CUA_RECORDINGS_ROOT` 不会阻止 review 服务和任务复核启动。录制页只提示需要配置的环境变量、仓库根 `.env.local` 配置位置和路径示例，不直接修改环境文件，也不从后台服务进程唤起可能失焦或阻塞的桌面目录选择框。配置后重启 review 服务即可生效。存在零个或多个视频/事件文件的录制目录仍会显示，但不能生成任务。
 

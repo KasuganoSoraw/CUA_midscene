@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { requireDataPaths, resolveRuntimeLayout } from '../../cua/task/data-paths.js';
+import { listScenes, listTasks } from '../../cua/task/tasks.js';
+import { createTaskFixture } from '../helpers/task-fixture.js';
 
 test('数据根遵循显式、进程、env.local、env 优先级', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-data-paths-'));
@@ -25,10 +27,28 @@ test('数据根遵循显式、进程、env.local、env 优先级', async () => {
     const layout = await resolveRuntimeLayout(explicit, { executionRoot: skill });
     assert.equal(layout.data?.root, explicit);
     assert.equal(layout.data?.projectsRoot, path.join(explicit, 'projects'));
+    assert.deepEqual(layout.catalog, { userProjectsRoot: path.join(explicit, 'projects') });
   } finally {
     if (previous === undefined) delete process.env.CUA_DATA_ROOT;
     else process.env.CUA_DATA_ROOT = previous;
   }
+});
+
+test('空数据根不依赖发布任务，可从用户目录创建场景与任务', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-empty-projects-'));
+  const layout = await resolveRuntimeLayout(root);
+  assert.equal(layout.catalog.builtinProjectsRoot, undefined);
+  assert.deepEqual(await listScenes(layout.catalog), []);
+  const data = await requireDataPaths(layout);
+  assert.deepEqual(await listScenes(layout.catalog), []);
+  await createTaskFixture(data.projectsRoot);
+  const scenes = await listScenes(layout.catalog);
+  assert.equal(scenes.length, 1);
+  assert.deepEqual(scenes[0].origins, ['user']);
+  const tasks = await listTasks('browser-demo', layout.catalog);
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].status, 'ready');
+  if (tasks[0].status === 'ready') assert.equal(tasks[0].writable, true);
 });
 
 test('数据根拒绝缺失、相对路径和 Skill 内路径', async () => {

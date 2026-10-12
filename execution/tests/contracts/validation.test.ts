@@ -16,7 +16,7 @@ const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 const fixtures = path.join(executionRoot, 'tests', 'fixtures', 'contracts');
 
 test('现有场景、任务和 trace 通过边界契约', async () => {
-  const sceneRoot = path.join(executionRoot, 'projects', 'browser-demo');
+  const sceneRoot = path.join(executionRoot, 'tests', 'fixtures', 'recorded-projects', 'browser-demo');
   const taskRoot = path.join(sceneRoot, 'air-tickets-demo');
   const scene = await readSceneManifest(path.join(sceneRoot, 'scene.json'));
   const task = await readTaskManifest(path.join(taskRoot, 'task.json'));

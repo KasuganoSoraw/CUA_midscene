@@ -62,7 +62,7 @@ def _sanitized_runtime_package(source: dict[str, Any]) -> dict[str, Any]:
 
 
 def _copy_runtime_assets(execution_root: Path, runtime_root: Path) -> None:
-    for name in ("dist", "schemas", "projects"):
+    for name in ("dist", "schemas"):
         source = execution_root / name
         target = runtime_root / name
         if not source.is_dir():

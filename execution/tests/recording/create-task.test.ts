@@ -151,7 +151,6 @@ test('一键创建规范化 source 并允许空 goal 通过 Midscene dry-run 校
     recording: setup.recordingPath,
     pythonExecutable: setup.pythonExecutable,
     catalog: {
-      builtinProjectsRoot: setup.builtinProjectsRoot,
       userProjectsRoot: setup.userProjectsRoot,
     },
     runsRoot: setup.runsRoot,

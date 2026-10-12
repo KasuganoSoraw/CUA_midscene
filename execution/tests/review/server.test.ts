@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, cp, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -31,9 +31,27 @@ async function unusedLoopbackPort(): Promise<number> {
   return port;
 }
 
+test('空项目启动 review 时只返回空用户 catalog，不加载测试样例', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-empty-'));
+  const started = await startReviewServer({ dataRoot: root, port: 0 });
+  try {
+    const scenes = await fetch(new URL('/api/scenes', started.url));
+    assert.equal(scenes.status, 200);
+    assert.deepEqual((await scenes.json() as any).scenes, []);
+    const task = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo', started.url));
+    assert.equal(task.status, 400);
+    assert.match((await task.json() as any).error, /任务不存在/);
+    await access(path.join(root, 'projects'));
+  } finally {
+    await started.close();
+  }
+});
+
 test('review server 在 loopback 随机端口暴露 catalog，并安全提供静态资源与证据', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-server-'));
   await createTaskFixture(path.join(root, 'projects'));
+  await cp(new URL('../fixtures/recorded-projects/browser-demo/air-tickets-demo/', import.meta.url),
+    path.join(root, 'projects', 'browser-demo', 'air-tickets-demo'), { recursive: true });
   const recordingsRoot = path.join(root, 'recordings');
   const recordingInputs = path.join(recordingsRoot, 'Recording_demo', 'inputs');
   await mkdir(recordingInputs, { recursive: true });
@@ -327,6 +345,8 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
 
     const task = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo', base));
     const view = await task.json() as any;
+    assert.equal(view.origin, 'user');
+    assert.equal(view.writable, true);
     const evidence = new URL('/api/tasks/browser-demo/air-tickets-demo/evidence', base);
     evidence.searchParams.set('path', view.steps[0].evidence.full);
     assert.equal((await fetch(evidence)).status, 200);
@@ -345,7 +365,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     assert.equal(spaFallback.status, 200);
     assert.match(await spaFallback.text(), /<title>review<\/title>/);
 
-    const readonly = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo', base), {
+    const saved = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo', base), {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -354,13 +374,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
         document: view.document,
       }),
     });
-    assert.equal(readonly.status, 403);
-    assert.match(String((await readonly.json() as { error: string }).error), /内置任务不可修改/);
-
-    const readonlyDelete = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo', base), {
-      method: 'DELETE',
-    });
-    assert.equal(readonlyDelete.status, 403);
+    assert.equal(saved.status, 200);
     executionStatus = { phase: 'running', scene: 'browser-demo', task: 'search-demo', mode: 'task' };
     const activeTaskDelete = await fetch(new URL('/api/tasks/browser-demo/search-demo', base), {
       method: 'DELETE',
@@ -517,9 +531,10 @@ test('review server 在固定端口复用相同数据根并拒绝不同数据根
   }
 });
 
-test('顶层 CLI 保持旧命令并只增加 review 启动分发', async () => {
-  const scenes = JSON.parse(await runCliCommand(['scene', 'list', '--json']));
-  assert.equal(scenes.scenes[0].scene, 'browser-demo');
+test('顶层 CLI 读取用户目录并分发 review 启动', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-empty-catalog-'));
+  const scenes = JSON.parse(await runCliCommand(['scene', 'list', '--data-root', root, '--json']));
+  assert.deepEqual(scenes.scenes, []);
   let opened = '';
   let devOption: boolean | undefined;
   const output = JSON.parse(await runCliCommand(['review', '--dev', '--no-open', '--json'], {

@@ -6,7 +6,6 @@ import { readEnvironmentValue } from './environment.js';
 import { packageRoot } from './package-root.js';
 
 export const executionRoot = packageRoot;
-export const builtinProjectsRoot = path.join(executionRoot, 'projects');
 export const dataRootEnv = 'CUA_DATA_ROOT';
 
 function isInside(parent: string, target: string): boolean {
@@ -53,7 +52,7 @@ export async function resolveRuntimeLayout(
   }
   return {
     catalog: {
-      builtinProjectsRoot: path.resolve(options.builtinProjectsRoot ?? path.join(root, 'projects')),
+      ...(options.builtinProjectsRoot ? { builtinProjectsRoot: path.resolve(options.builtinProjectsRoot) } : {}),
       ...(data ? { userProjectsRoot: data.projectsRoot } : {}),
     },
     ...(data ? { data } : {}),

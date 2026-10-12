@@ -1,14 +1,21 @@
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { cp, mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { CliUsageError, helpText, runCliCommand } from '../../cua/cli/main.js';
 
+async function taskDataRoot(): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-cli-data-'));
+  await cp(new URL('../fixtures/recorded-projects/', import.meta.url), path.join(root, 'projects'), { recursive: true });
+  return root;
+}
+
 test('scene/task 查询保持机器可读输出契约', async () => {
-  const scenes = JSON.parse(await runCliCommand(['scene', 'list', '--json']));
+  const common = ['--data-root', await taskDataRoot()];
+  const scenes = JSON.parse(await runCliCommand(['scene', 'list', ...common, '--json']));
   assert.equal(scenes.scenes[0].scene, 'browser-demo');
-  const tasks = JSON.parse(await runCliCommand(['task', 'list', '--scene', 'browser-demo', '--json']));
+  const tasks = JSON.parse(await runCliCommand(['task', 'list', '--scene', 'browser-demo', ...common, '--json']));
   assert.equal(tasks.tasks[0].task, 'air-tickets-demo');
   assert.deepEqual(Object.keys(tasks.tasks[0].inputs), [
     'step-002-input',
@@ -17,16 +24,17 @@ test('scene/task 查询保持机器可读输出契约', async () => {
   ]);
   assert.match(tasks.tasks[0].taskYamlPath, /task\.yaml$/);
   const described = JSON.parse(
-    await runCliCommand(['task', 'describe', '--scene', 'browser-demo', '--task', 'air-tickets-demo', '--json']),
+    await runCliCommand(['task', 'describe', '--scene', 'browser-demo', '--task', 'air-tickets-demo', ...common, '--json']),
   );
   assert.equal(described.taskCount, 16);
 });
 
 test('task inspect 只覆盖本次明确输入', async () => {
+  const common = ['--data-root', await taskDataRoot()];
   const inspected = JSON.parse(
     await runCliCommand([
       'task', 'inspect', '--scene', 'browser-demo', '--task', 'air-tickets-demo',
-      '--input', 'step-002-input=GOOGLE', '--json',
+      '--input', 'step-002-input=GOOGLE', ...common, '--json',
     ]),
   );
   assert.equal(inspected.inputs['step-002-input'], 'GOOGLE');
@@ -54,7 +62,7 @@ test('CLI 拒绝重复、旧命令和非法 aiAct 来源', async () => {
 });
 
 test('task validate、task run dry-run 与两种 aiAct dry-run 生成外部运行资产', async () => {
-  const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'cua-cli-runs-'));
+  const dataRoot = await taskDataRoot();
   const common = ['--data-root', dataRoot];
   const validated = JSON.parse(
     await runCliCommand(['task', 'validate', '--scene', 'browser-demo', '--task', 'air-tickets-demo', ...common]),

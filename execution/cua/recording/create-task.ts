@@ -191,9 +191,11 @@ export async function createTaskFromRecording(
   const sceneRoot = path.dirname(taskRoot);
   const sourceRoot = path.join(taskRoot, 'source');
   if (await pathKind(taskRoot)) throw new Error(`用户任务目录已存在，拒绝覆盖：${taskRoot}`);
-  const builtinTaskRoot = path.resolve(options.catalog.builtinProjectsRoot, scene, task);
-  if (await pathKind(path.join(builtinTaskRoot, 'task.json'))) {
-    throw new Error(`内置任务不可覆盖：${builtinTaskRoot}`);
+  if (options.catalog.builtinProjectsRoot) {
+    const builtinTaskRoot = path.resolve(options.catalog.builtinProjectsRoot, scene, task);
+    if (await pathKind(path.join(builtinTaskRoot, 'task.json'))) {
+      throw new Error(`内置任务不可覆盖：${builtinTaskRoot}`);
+    }
   }
 
   const sceneExisted = (await pathKind(sceneRoot)) === 'directory';

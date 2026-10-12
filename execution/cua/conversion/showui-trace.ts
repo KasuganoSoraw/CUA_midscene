@@ -226,8 +226,10 @@ export async function convertTrace(options: ConvertOptions): Promise<string> {
   const task = requireIdentifier(options.task, 'task');
   const userProjects = path.resolve(options.catalog.userProjectsRoot);
   const taskRoot = path.resolve(userProjects, scene, task);
-  const builtinTask = path.resolve(options.catalog.builtinProjectsRoot, scene, task);
-  if (await pathExists(path.join(builtinTask, 'task.json'))) throw new Error(`内置任务不可覆盖：${builtinTask}`);
+  if (options.catalog.builtinProjectsRoot) {
+    const builtinTask = path.resolve(options.catalog.builtinProjectsRoot, scene, task);
+    if (await pathExists(path.join(builtinTask, 'task.json'))) throw new Error(`内置任务不可覆盖：${builtinTask}`);
+  }
 
   const taskYamlPath = path.join(taskRoot, 'task.yaml');
   const taskManifestPath = path.join(taskRoot, 'task.json');
@@ -262,8 +264,9 @@ export async function convertTrace(options: ConvertOptions): Promise<string> {
       }
     }
   }
-  const builtinScenePath = path.join(options.catalog.builtinProjectsRoot, scene, 'scene.json');
-  const sceneManifest: SceneManifest = (await pathExists(builtinScenePath))
+  const builtinScenePath = options.catalog.builtinProjectsRoot
+    ? path.join(options.catalog.builtinProjectsRoot, scene, 'scene.json') : undefined;
+  const sceneManifest: SceneManifest = builtinScenePath && (await pathExists(builtinScenePath))
     ? await readSceneManifest(builtinScenePath)
     : {
         schemaVersion: '0.1',

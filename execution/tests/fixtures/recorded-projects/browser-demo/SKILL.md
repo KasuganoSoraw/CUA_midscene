@@ -7,7 +7,7 @@ description: 发现和调用浏览器操作示例场景中的本地 CUA 任务�
 
 本场景用于验证浏览器中的 Midscene computer use 流程。
 
-本目录随 Executor Skill 发布，属于只读 builtin catalog。可以发现和运行其中任务，但不得在这里沉淀用户任务或运行产物。
+本目录是场景契约和录制证据测试夹具，不随执行器发布，不存放用户任务或运行产物。
 
 本文件供 CLI 使用者和任务维护者阅读；Python CUA Agent 的 `cua_catalog` 不加载该 Markdown，而是读取 scene/task 的结构化 manifest 与执行摘要。
 
