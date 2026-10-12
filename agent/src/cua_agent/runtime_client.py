@@ -298,6 +298,9 @@ class JsonlRuntimeClient:
         read_task = asyncio.create_task(process.stdout.readline())
         try:
             while True:
+                if cancelled is not None and cancelled():
+                    await self.close()
+                    raise RuntimeCancelledError("Runtime request 已取消")
                 remaining = deadline - asyncio.get_running_loop().time()
                 if remaining <= 0:
                     await self.close()
@@ -305,15 +308,15 @@ class JsonlRuntimeClient:
                         f"Runtime request 超过 {self._config.request_timeout_seconds:g} 秒"
                     )
                 done, _ = await asyncio.wait((read_task,), timeout=min(0.1, remaining))
+                if cancelled is not None and cancelled():
+                    await self.close()
+                    raise RuntimeCancelledError("Runtime request 已取消")
                 if read_task in done:
                     line = read_task.result()
                     if not line:
                         await self._wait_for_exit_briefly()
                         raise RuntimeProcessError(self._process_exit_message())
                     return line
-                if cancelled is not None and cancelled():
-                    await self.close()
-                    raise RuntimeCancelledError("Runtime request 已取消")
         finally:
             if not read_task.done():
                 read_task.cancel()

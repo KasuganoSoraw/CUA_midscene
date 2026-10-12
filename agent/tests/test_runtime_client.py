@@ -187,6 +187,58 @@ def test_client_preserves_total_timeout_and_cancellation_after_progress() -> Non
     asyncio.run(cancelled_scenario())
 
 
+@pytest.mark.parametrize("cancel_when", ["event", "read-completed"])
+def test_client_cancels_and_exits_worker_during_continuous_progress(
+    cancel_when: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        cancel_requested = False
+        events: list[RuntimeProgressEvent] = []
+
+        def on_event(event: RuntimeProgressEvent) -> None:
+            nonlocal cancel_requested
+            events.append(event)
+            if cancel_when == "event" and len(events) == 10:
+                cancel_requested = True
+
+        async with JsonlRuntimeClient(
+            config(request_timeout_seconds=30.0, shutdown_timeout_seconds=0.05)
+        ) as client:
+            process = client._process
+            assert process is not None and process.stdout is not None
+            if cancel_when == "read-completed":
+                reader = process.stdout
+                original_readline = reader.readline
+                reads = 0
+
+                async def readline() -> bytes:
+                    nonlocal cancel_requested, reads
+                    line = await original_readline()
+                    reads += 1
+                    if reads == 10:
+                        cancel_requested = True
+                    return line
+
+                monkeypatch.setattr(reader, "readline", readline)
+
+            with pytest.raises(RuntimeCancelledError):
+                await asyncio.wait_for(
+                    client.request(
+                        "execute",
+                        {"action": "progress-continuous"},
+                        on_event=on_event,
+                        cancelled=lambda: cancel_requested,
+                    ),
+                    timeout=2.0,
+                )
+            assert len(events) == (10 if cancel_when == "event" else 9)
+            assert not client.running
+            assert process.returncode is not None
+            assert await process.wait() == process.returncode
+
+    asyncio.run(scenario())
+
+
 def test_client_closes_worker_when_progress_consumer_fails() -> None:
     async def scenario() -> None:
         def on_event(_event: RuntimeProgressEvent) -> None:

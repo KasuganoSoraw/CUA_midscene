@@ -37,6 +37,10 @@ for raw_line in sys.stdin:
             event["event"]["data"]["description"] = "x" * 301
         if action == "progress-leak":
             event["event"]["data"]["screenshot"] = "private-image"
+        if action == "progress-continuous":
+            while True:
+                print(json.dumps(event, ensure_ascii=False), flush=True)
+                time.sleep(0.001)
         print(json.dumps(event, ensure_ascii=False), flush=True)
         if action in ("progress-delay", "progress-cancel"):
             time.sleep(2)
