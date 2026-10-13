@@ -225,41 +225,55 @@ async function addScene(
     if (manifest.scene !== sceneName) {
       throw new Error(`场景目录 ${sceneName} 与 scene.json 标识 ${manifest.scene} 不一致`);
     }
-    const current = scenes.get(manifest.scene);
-    if (current?.status === 'error') {
-      if (!current.origins.includes(origin)) current.origins.push(origin);
-      if (!current.sceneRoots.includes(sceneRoot)) current.sceneRoots.push(sceneRoot);
-      return;
-    }
-    const ready: SceneCatalogReadyItem = current ?? {
-      ...manifest,
-      status: 'ready',
-      origins: [],
-      writable: false,
-      sceneRoots: [],
-    };
-    if (!ready.origins.includes(origin)) ready.origins.push(origin);
-    ready.writable ||= writable;
-    if (!ready.sceneRoots.includes(sceneRoot)) ready.sceneRoots.push(sceneRoot);
-    scenes.set(manifest.scene, ready);
+    mergeScene(scenes, manifest, sceneRoot, origin, writable);
   } catch (error) {
-    const current = scenes.get(sceneName);
-    const message = error instanceof Error ? error.message : String(error);
-    const origins = current ? [...current.origins] : [];
-    const sceneRoots = current ? [...current.sceneRoots] : [];
-    if (!origins.includes(origin)) origins.push(origin);
-    if (!sceneRoots.includes(sceneRoot)) sceneRoots.push(sceneRoot);
-    scenes.set(sceneName, {
-      status: 'error',
-      scene: sceneName,
-      title: current?.title ?? sceneName,
-      description: current?.description ?? '',
-      origins,
-      writable: false,
-      sceneRoots,
-      error: current?.status === 'error' ? `${current.error}\n${message}` : message,
-    });
+    recordSceneError(scenes, sceneName, sceneRoot, origin, error);
   }
+}
+
+function mergeScene(
+  scenes: Map<string, SceneCatalogItem>, manifest: SceneManifest,
+  sceneRoot: string, origin: 'builtin' | 'user', writable: boolean,
+): void {
+  const current = scenes.get(manifest.scene);
+  if (current?.status === 'error') {
+    if (!current.origins.includes(origin)) current.origins.push(origin);
+    if (!current.sceneRoots.includes(sceneRoot)) current.sceneRoots.push(sceneRoot);
+    return;
+  }
+  const ready: SceneCatalogReadyItem = current ?? {
+    ...manifest,
+    status: 'ready',
+    origins: [],
+    writable: false,
+    sceneRoots: [],
+  };
+  if (!ready.origins.includes(origin)) ready.origins.push(origin);
+  ready.writable ||= writable;
+  if (!ready.sceneRoots.includes(sceneRoot)) ready.sceneRoots.push(sceneRoot);
+  scenes.set(manifest.scene, ready);
+}
+
+function recordSceneError(
+  scenes: Map<string, SceneCatalogItem>, sceneName: string,
+  sceneRoot: string, origin: 'builtin' | 'user', error: unknown,
+): void {
+  const current = scenes.get(sceneName);
+  const message = error instanceof Error ? error.message : String(error);
+  const origins = current ? [...current.origins] : [];
+  const sceneRoots = current ? [...current.sceneRoots] : [];
+  if (!origins.includes(origin)) origins.push(origin);
+  if (!sceneRoots.includes(sceneRoot)) sceneRoots.push(sceneRoot);
+  scenes.set(sceneName, {
+    status: 'error',
+    scene: sceneName,
+    title: current?.title ?? sceneName,
+    description: current?.description ?? '',
+    origins,
+    writable: false,
+    sceneRoots,
+    error: current?.status === 'error' ? `${current.error}\n${message}` : message,
+  });
 }
 
 export async function describeTask(scene: string, task: string, catalog: TaskCatalogRoots): Promise<TaskDescription> {
