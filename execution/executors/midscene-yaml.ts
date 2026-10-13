@@ -34,6 +34,56 @@ async function writeResult(resultPath: string, result: ExecutorResult): Promise<
   await writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 }
 
+async function runMidsceneScript(
+  content: string, script: ReturnType<typeof parseYamlScript>, options: MidsceneYamlExecutionOptions,
+): Promise<{ midsceneResult?: Record<string, unknown>; reportPath?: string; finalScreenshotPath?: string }> {
+  warnIfNodeVersionIsOld();
+  checkRequiredModelEnv();
+  const previousRunDirectory = process.env.MIDSCENE_RUN_DIR;
+  let agent: AgentLike | undefined;
+  let removeDumpListener: (() => void) | undefined;
+  let reportPath: string | undefined;
+  let midsceneResult: Record<string, unknown> | undefined;
+  let finalScreenshotPath: string | undefined;
+  const observer = createMidsceneExecutionObserver(options.onProgress);
+  try {
+    process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(options.runDirectory), 'midscene');
+    const agentOptions: ComputerAgentOptions = {
+      ...(script.agent ?? {}),
+      ...(script.computer?.displayId ? { displayId: script.computer.displayId } : {}),
+      generateReport: script.agent?.generateReport ?? true,
+      reportFileName: midsceneReportFileName,
+      groupName: script.agent?.groupName ?? 'midscene-yaml-task',
+      groupDescription: script.agent?.groupDescription ?? '执行 Midscene YAML 电脑操作任务',
+    };
+    agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)(agentOptions);
+    if (agent.addDumpUpdateListener) {
+      removeDumpListener = agent.addDumpUpdateListener(observer.listener);
+    } else if (options.onProgress) {
+      throw new Error('Midscene Agent 不支持过程事件');
+    }
+    midsceneResult = (await agent.runYaml(content)).result;
+    finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
+  } finally {
+    try {
+      removeDumpListener?.();
+    } finally {
+      try {
+        if (agent) {
+          await agent.destroy();
+          reportPath = await existingMidsceneHtmlReport(agent.reportFile);
+        }
+      } finally {
+        if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
+        else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
+      }
+    }
+  }
+  return { ...(midsceneResult === undefined ? {} : { midsceneResult }),
+    ...(reportPath === undefined ? {} : { reportPath }),
+    ...(finalScreenshotPath === undefined ? {} : { finalScreenshotPath }) };
+}
+
 export async function executeMidsceneYaml(
   options: MidsceneYamlExecutionOptions,
 ): Promise<ExecutorResult> {
@@ -58,45 +108,7 @@ export async function executeMidsceneYaml(
     let finalScreenshotPath: string | undefined;
 
     if (!options.dryRun) {
-      warnIfNodeVersionIsOld();
-      checkRequiredModelEnv();
-      const previousRunDirectory = process.env.MIDSCENE_RUN_DIR;
-      let agent: AgentLike | undefined;
-      let removeDumpListener: (() => void) | undefined;
-      const observer = createMidsceneExecutionObserver(options.onProgress);
-      try {
-        process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(options.runDirectory), 'midscene');
-        const agentOptions: ComputerAgentOptions = {
-          ...(script.agent ?? {}),
-          ...(script.computer?.displayId ? { displayId: script.computer.displayId } : {}),
-          generateReport: script.agent?.generateReport ?? true,
-          reportFileName: midsceneReportFileName,
-          groupName: script.agent?.groupName ?? 'midscene-yaml-task',
-          groupDescription: script.agent?.groupDescription ?? '执行 Midscene YAML 电脑操作任务',
-        };
-        agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)(agentOptions);
-        if (agent.addDumpUpdateListener) {
-          removeDumpListener = agent.addDumpUpdateListener(observer.listener);
-        } else if (options.onProgress) {
-          throw new Error('Midscene Agent 不支持过程事件');
-        }
-        midsceneResult = (await agent.runYaml(content)).result;
-        finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
-      } finally {
-        try {
-          removeDumpListener?.();
-        } finally {
-          try {
-            if (agent) {
-              await agent.destroy();
-              reportPath = await existingMidsceneHtmlReport(agent.reportFile);
-            }
-          } finally {
-            if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
-            else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
-          }
-        }
-      }
+      ({ midsceneResult, reportPath, finalScreenshotPath } = await runMidsceneScript(content, script, options));
     }
 
     const result: ExecutorResult = {

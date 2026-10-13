@@ -144,130 +144,95 @@ class VideoScreenshotExtractor:
             act_str = (a.get("action") or "").strip()
             if act_str == "CONFIG" or act_str.startswith("Active Window"):
                 continue
-            ua = a.copy()
-            raw_coords = a.get('coords')
-            ua['coords'] = self.scale_coordinates(raw_coords, scale_x, scale_y) if need_scaling else raw_coords
-            if act_str == "DragStart at" and "path" in a and isinstance(a["path"], list):
-                ua["path"] = self.scale_path(a["path"], scale_x, scale_y) if need_scaling else a["path"]
-            else:
-                ua["path"] = None
-            evidence_timestamp = a.get('evidence_timestamp', a['timestamp'])
-            timestamp = max(0.0, evidence_timestamp - 0.1)
-            base = f"{timestamp:.3f}s"
-            full_fn = f"{base}.jpg"
-            crop_fn = f"{base}.crop.jpg"
-            reference_fn = f"{base}.reference.png"
-
-            full_path = screenshots_path / full_fn
-            crop_path = screenshots_path / crop_fn
-            reference_path = screenshots_path / reference_fn
-
-            frame = self._get_frame_at(video_path, timestamp)
-            if frame is None:
-                raise RuntimeError(f"Could not read video frame for action at {timestamp}s: {act_str}")
-
-            H, W = frame.shape[:2]
-            pt = self._primary_point_from_coords(ua.get('coords'))
-            actt = act_str.lower()
-            no_coor = (
-                ("scroll" in actt)
-                or ("wheel" in actt)
-                or ("hotkey" in actt)
-                or ("type" in actt)
-                or actt.startswith("press ")
-            )
-            is_reference_action = (
-                "doubleclick" in actt
-                or "dblclick" in actt
-                or ("click" in actt and "right" not in actt and "rclick" not in actt)
-            )
-            reference_ok = True
-
-            if act_str == "DragStart at" and ua.get('path') and len(ua['path']) >= 2:
-                # === DragStart special handling ===
-                # Full image: UNCHANGED
-                full_ok = self._save_jpg(str(full_path), frame)
-
-                # Compute tight bbox around path with 25px padding
-                x1, y1, x2, y2 = self._bbox_with_padding(ua['path'], W, H, pad=25)
-                crop_region = frame[y1:y2, x1:x2].copy()
-
-                # Prepare polyline points relative to crop
-                pts = []
-                for p in ua['path']:
-                    px = int(round(p["x"])) - x1
-                    py = int(round(p["y"])) - y1
-                    pts.append([px, py])
-                # Simplify to "best-fit" polyline using approxPolyDP
-                pts_arr = cv2.approxPolyDP(
-                    np.array(pts, dtype=np.int32), epsilon=2.0, closed=False
-                )
-                if pts_arr.ndim == 3:
-                    pts_arr = pts_arr.reshape(-1, 2)
-                # Draw the simplified polyline in RED
-                for i in range(1, len(pts_arr)):
-                    cv2.line(
-                        crop_region,
-                        tuple(pts_arr[i - 1]),
-                       tuple(pts_arr[i]),
-                        (0, 0, 255),
-                        max(2, self.x_thick)  # a bit thicker for visibility
-                    )
-
-                crop_ok = self._save_jpg(str(crop_path), crop_region)
-            elif (no_coor):
-                full_ok = self._save_jpg(str(full_path), frame)
-                crop_ok = self._save_jpg(str(crop_path), frame)
-            else:
-                # === Default handling (pad crop first, then draw centered semi-transparent X) ===
-                if pt is None:
-                    raise ValueError(f"Action requires coordinates but none were recorded: {act_str}")
-                draw_frame = frame.copy()
-
-                # 1) Crop around click with black padding (keeps center fixed, no shifting)
-                cx_raw, cy_raw = pt
-                crop_img = self._crop_with_black_padding(draw_frame, cx_raw, cy_raw, crop_size=self.crop_size)
-
-                if is_reference_action:
-                    reference_img = self._crop_with_black_padding(
-                        frame,
-                        cx_raw,
-                        cy_raw,
-                        crop_size=self.reference_crop_size,
-                    )
-                    reference_ok = self._save_png(str(reference_path), reference_img)
-                    if reference_ok:
-                        ua['screenshot_reference'] = f"screenshots/{reference_fn}"
-
-                # 2) Draw semi-transparent X AFTER padding so it's fully visible
-                # X centered in the crop
-                cx = cy = self.crop_size // 2
-                outline = self.x_thick + 2
-                # ensure the whole X (including outline) fits inside the crop
-                max_half = (self.crop_size // 2) - 1 - outline
-                half_x = max(1, min(self.x_size // 2, max_half))
-
-                overlay = crop_img.copy()
-                # white outline
-                cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (255, 255, 255), outline)
-                cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (255, 255, 255), outline)
-                # red core
-                cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (0, 0, 255), self.x_thick)
-                cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (0, 0, 255), self.x_thick)
-                # blend 50%
-                crop_img = cv2.addWeighted(overlay, 0.5, crop_img, 0.5, 0)
-
-                full_ok = self._save_jpg(str(full_path), frame)
-                crop_ok = self._save_jpg(str(crop_path), crop_img)
-
-
-            if not full_ok or not crop_ok or not reference_ok:
-                raise RuntimeError(f"Could not save screenshots for action at {timestamp}s: {act_str}")
-            ua['screenshot_full'] = f"screenshots/{full_fn}"
-            ua['screenshot_crop'] = f"screenshots/{crop_fn}"
-
-            updated.append(ua)
+            updated.append(self._process_action(a, act_str, video_path, screenshots_path, need_scaling, scale_x, scale_y))
         return updated
+
+    def _process_action(self, a, act_str, video_path, screenshots_path, need_scaling, scale_x, scale_y):
+        ua = a.copy()
+        raw_coords = a.get('coords')
+        ua['coords'] = self.scale_coordinates(raw_coords, scale_x, scale_y) if need_scaling else raw_coords
+        if act_str == "DragStart at" and "path" in a and isinstance(a["path"], list):
+            ua["path"] = self.scale_path(a["path"], scale_x, scale_y) if need_scaling else a["path"]
+        else:
+            ua["path"] = None
+        evidence_timestamp = a.get('evidence_timestamp', a['timestamp'])
+        timestamp = max(0.0, evidence_timestamp - 0.1)
+        base = f"{timestamp:.3f}s"
+        full_fn = f"{base}.jpg"
+        crop_fn = f"{base}.crop.jpg"
+        reference_fn = f"{base}.reference.png"
+        full_path = screenshots_path / full_fn
+        crop_path = screenshots_path / crop_fn
+        reference_path = screenshots_path / reference_fn
+        frame = self._get_frame_at(video_path, timestamp)
+        if frame is None:
+            raise RuntimeError(f"Could not read video frame for action at {timestamp}s: {act_str}")
+        if act_str == "DragStart at" and ua.get('path') and len(ua['path']) >= 2:
+            full_ok, crop_ok = self._save_drag_screenshots(frame, ua['path'], full_path, crop_path)
+            reference_ok = True
+        elif self._needs_full_frame(act_str):
+            full_ok = self._save_jpg(str(full_path), frame)
+            crop_ok = self._save_jpg(str(crop_path), frame)
+            reference_ok = True
+        else:
+            full_ok, crop_ok, reference_ok = self._save_target_screenshots(
+                frame, ua, act_str, full_path, crop_path, reference_path, reference_fn,
+            )
+        if not full_ok or not crop_ok or not reference_ok:
+            raise RuntimeError(f"Could not save screenshots for action at {timestamp}s: {act_str}")
+        ua['screenshot_full'] = f"screenshots/{full_fn}"
+        ua['screenshot_crop'] = f"screenshots/{crop_fn}"
+        return ua
+
+    def _needs_full_frame(self, act_str):
+        actt = act_str.lower()
+        return any(part in actt for part in ("scroll", "wheel", "hotkey", "type")) or actt.startswith("press ")
+
+    def _save_drag_screenshots(self, frame, drag_path, full_path, crop_path):
+        full_ok = self._save_jpg(str(full_path), frame)
+        H, W = frame.shape[:2]
+        x1, y1, x2, y2 = self._bbox_with_padding(drag_path, W, H, pad=25)
+        crop_region = frame[y1:y2, x1:x2].copy()
+        pts = [[int(round(p["x"])) - x1, int(round(p["y"])) - y1] for p in drag_path]
+        pts_arr = cv2.approxPolyDP(np.array(pts, dtype=np.int32), epsilon=2.0, closed=False)
+        if pts_arr.ndim == 3:
+            pts_arr = pts_arr.reshape(-1, 2)
+        for i in range(1, len(pts_arr)):
+            cv2.line(crop_region, tuple(pts_arr[i - 1]), tuple(pts_arr[i]), (0, 0, 255), max(2, self.x_thick))
+        return full_ok, self._save_jpg(str(crop_path), crop_region)
+
+    def _save_target_screenshots(self, frame, ua, act_str, full_path, crop_path, reference_path, reference_fn):
+        pt = self._primary_point_from_coords(ua.get('coords'))
+        if pt is None:
+            raise ValueError(f"Action requires coordinates but none were recorded: {act_str}")
+        cx_raw, cy_raw = pt
+        crop_img = self._crop_with_black_padding(frame.copy(), cx_raw, cy_raw, crop_size=self.crop_size)
+        actt = act_str.lower()
+        is_reference_action = (
+            "doubleclick" in actt or "dblclick" in actt
+            or ("click" in actt and "right" not in actt and "rclick" not in actt)
+        )
+        reference_ok = True
+        if is_reference_action:
+            reference_img = self._crop_with_black_padding(
+                frame, cx_raw, cy_raw, crop_size=self.reference_crop_size,
+            )
+            reference_ok = self._save_png(str(reference_path), reference_img)
+            if reference_ok:
+                ua['screenshot_reference'] = f"screenshots/{reference_fn}"
+        cx = cy = self.crop_size // 2
+        outline = self.x_thick + 2
+        max_half = (self.crop_size // 2) - 1 - outline
+        half_x = max(1, min(self.x_size // 2, max_half))
+        overlay = crop_img.copy()
+        cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (255, 255, 255), outline)
+        cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (255, 255, 255), outline)
+        cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (0, 0, 255), self.x_thick)
+        cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (0, 0, 255), self.x_thick)
+        crop_img = cv2.addWeighted(overlay, 0.5, crop_img, 0.5, 0)
+        full_ok = self._save_jpg(str(full_path), frame)
+        crop_ok = self._save_jpg(str(crop_path), crop_img)
+        return full_ok, crop_ok, reference_ok
     
     def _crop_with_black_padding(self, frame, x, y, crop_size=256):
         if x is None or y is None:
@@ -310,7 +275,39 @@ class VideoScreenshotExtractor:
 
 
     def process_project(self, project_name):
-        # --- Normalize input path ---
+        project_dir, video_path, log_path = self._project_inputs(project_name)
+        screenshots_dir = project_dir / "screenshots"
+        with open(log_path, "r", encoding="utf-8") as f:
+            actions = json.load(f)
+
+        ow, oh = self._parse_config_resolution(actions)
+        if ow is None or oh is None:
+            raise ValueError("Could not find screen resolution in the CONFIG action")
+
+        frame_w, frame_h = self.target_width, self.target_height
+        need_scaling = not (ow == frame_w and oh == frame_h)
+        scale_x = frame_w / ow if ow else 1.0
+        scale_y = frame_h / oh if oh else 1.0
+
+        updated_actions = self.process_actions(
+            actions, video_path, screenshots_dir, need_scaling, scale_x, scale_y
+        )
+        out_json_sc = project_dir / f"{project_dir.name}_processed_log_sc.json"
+        with open(out_json_sc, "w", encoding="utf-8") as f:
+            json.dump(updated_actions, f, ensure_ascii=False, indent=2)
+
+        meta = {
+            "video_file": str(video_path),
+            "log_file": str(log_path),
+            "coordinate_scaling": need_scaling,
+            "original_resolution": f"{ow}x{oh}" if ow and oh else "unknown",
+            "target_resolution": f"{frame_w}x{frame_h}",
+            "saved_log_sc": str(out_json_sc)
+        }
+
+        return updated_actions, screenshots_dir, meta
+
+    def _project_inputs(self, project_name):
         project_path = Path(project_name)
 
         # If user passed only the name (e.g., "mathQuiz"), try to locate under ./projects/
@@ -358,38 +355,7 @@ class VideoScreenshotExtractor:
         if not log_path.exists():
             raise FileNotFoundError(f"Processed log not found: {log_path}")
 
-        screenshots_dir = project_dir / "screenshots"
-
-        # --- Load actions ---
-        with open(log_path, "r", encoding="utf-8") as f:
-            actions = json.load(f)
-
-        ow, oh = self._parse_config_resolution(actions)
-        if ow is None or oh is None:
-            raise ValueError("Could not find screen resolution in the CONFIG action")
-
-        frame_w, frame_h = self.target_width, self.target_height
-        need_scaling = not (ow == frame_w and oh == frame_h)
-        scale_x = frame_w / ow if ow else 1.0
-        scale_y = frame_h / oh if oh else 1.0
-
-        updated_actions = self.process_actions(
-            actions, video_path, screenshots_dir, need_scaling, scale_x, scale_y
-        )
-        out_json_sc = project_dir / f"{project_dir.name}_processed_log_sc.json"
-        with open(out_json_sc, "w", encoding="utf-8") as f:
-            json.dump(updated_actions, f, ensure_ascii=False, indent=2)
-
-        meta = {
-            "video_file": str(video_path),
-            "log_file": str(log_path),
-            "coordinate_scaling": need_scaling,
-            "original_resolution": f"{ow}x{oh}" if ow and oh else "unknown",
-            "target_resolution": f"{frame_w}x{frame_h}",
-            "saved_log_sc": str(out_json_sc)
-        }
-
-        return updated_actions, screenshots_dir, meta
+        return project_dir, video_path, log_path
     
 if __name__ == "__main__":
     import argparse

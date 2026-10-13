@@ -226,16 +226,9 @@ export async function convertTrace(options: ConvertOptions): Promise<string> {
   const task = requireIdentifier(options.task, 'task');
   const userProjects = path.resolve(options.catalog.userProjectsRoot);
   const taskRoot = path.resolve(userProjects, scene, task);
-  if (options.catalog.builtinProjectsRoot) {
-    const builtinTask = path.resolve(options.catalog.builtinProjectsRoot, scene, task);
-    if (await pathExists(path.join(builtinTask, 'task.json'))) throw new Error(`内置任务不可覆盖：${builtinTask}`);
-  }
-
   const taskYamlPath = path.join(taskRoot, 'task.yaml');
   const taskManifestPath = path.join(taskRoot, 'task.json');
-  const existing: string[] = [];
-  for (const candidate of [taskYamlPath, taskManifestPath]) if (await pathExists(candidate)) existing.push(candidate);
-  if (existing.length) throw new Error(`任务资产已存在，拒绝覆盖：${existing.join(', ')}`);
+  await ensureTraceTarget(options, scene, task, taskYamlPath, taskManifestPath);
 
   const sourceRoot = path.join(taskRoot, 'source');
   const [trace, processedSteps] = await Promise.all([
@@ -243,7 +236,42 @@ export async function convertTrace(options: ConvertOptions): Promise<string> {
     readProcessedLog(path.join(sourceRoot, 'processed-log-sc.json')),
   ]);
   const assets = buildTaskAssets(trace, processedSteps, options);
-  for (const task of assets.document.tasks as JsonObject[]) {
+  await validateReferenceImages(assets.document, taskRoot);
+  const sceneManifest = await sourceSceneManifest(options, scene);
+
+  await mkdir(taskRoot, { recursive: true });
+  await writeYamlDocument(taskYamlPath, assets.document);
+  await writeJsonFile(taskManifestPath, assets.manifest);
+  const sceneRoot = path.dirname(taskRoot);
+  if (!(await pathExists(path.join(sceneRoot, 'scene.json')))) {
+    await writeJsonFile(path.join(sceneRoot, 'scene.json'), sceneManifest);
+  }
+  await writeTextIfMissing(path.join(sceneRoot, 'SKILL.md'), sceneSkillContent(scene));
+  await writeTextIfMissing(path.join(taskRoot, 'SKILL.md'), taskSkillContent(scene, task));
+  return taskYamlPath;
+}
+
+async function ensureTraceTarget(
+  options: ConvertOptions, scene: string, task: string, taskYamlPath: string, taskManifestPath: string,
+): Promise<void> {
+  if (options.catalog.builtinProjectsRoot) {
+    const builtinTask = path.resolve(options.catalog.builtinProjectsRoot, scene, task);
+    if (await pathExists(path.join(builtinTask, 'task.json'))) throw new Error(`内置任务不可覆盖：${builtinTask}`);
+  }
+  const existing: string[] = [];
+  for (const candidate of [taskYamlPath, taskManifestPath]) if (await pathExists(candidate)) existing.push(candidate);
+  if (existing.length) throw new Error(`任务资产已存在，拒绝覆盖：${existing.join(', ')}`);
+}
+
+async function sourceSceneManifest(options: ConvertOptions, scene: string): Promise<SceneManifest> {
+  const builtinScenePath = options.catalog.builtinProjectsRoot
+    ? path.join(options.catalog.builtinProjectsRoot, scene, 'scene.json') : undefined;
+  if (builtinScenePath && (await pathExists(builtinScenePath))) return readSceneManifest(builtinScenePath);
+  return { schemaVersion: '0.1', scene, title: scene, description: `${scene} 场景任务集合` };
+}
+
+async function validateReferenceImages(document: JsonObject, taskRoot: string): Promise<void> {
+  for (const task of document.tasks as JsonObject[]) {
     for (const action of task.flow as JsonObject[]) {
       const locate = action.locate;
       if (!locate || typeof locate !== 'object' || Array.isArray(locate)) continue;
@@ -264,25 +292,4 @@ export async function convertTrace(options: ConvertOptions): Promise<string> {
       }
     }
   }
-  const builtinScenePath = options.catalog.builtinProjectsRoot
-    ? path.join(options.catalog.builtinProjectsRoot, scene, 'scene.json') : undefined;
-  const sceneManifest: SceneManifest = builtinScenePath && (await pathExists(builtinScenePath))
-    ? await readSceneManifest(builtinScenePath)
-    : {
-        schemaVersion: '0.1',
-        scene,
-        title: scene,
-        description: `${scene} 场景任务集合`,
-      };
-
-  await mkdir(taskRoot, { recursive: true });
-  await writeYamlDocument(taskYamlPath, assets.document);
-  await writeJsonFile(taskManifestPath, assets.manifest);
-  const sceneRoot = path.dirname(taskRoot);
-  if (!(await pathExists(path.join(sceneRoot, 'scene.json')))) {
-    await writeJsonFile(path.join(sceneRoot, 'scene.json'), sceneManifest);
-  }
-  await writeTextIfMissing(path.join(sceneRoot, 'SKILL.md'), sceneSkillContent(scene));
-  await writeTextIfMissing(path.join(taskRoot, 'SKILL.md'), taskSkillContent(scene, task));
-  return taskYamlPath;
 }

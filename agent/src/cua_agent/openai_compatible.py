@@ -131,46 +131,51 @@ class OpenAICompatibleModelClient(ModelClient):
                     timeout=self._config.timeout_seconds,
                     context=_tls_context(self._config.verify_tls),
                 )
-                data_lines: list[str] = []
-                while True:
-                    raw_line = await asyncio.to_thread(response.readline)  # type: ignore[attr-defined]
-                    if not raw_line:
-                        break
-                    line = raw_line.decode("utf-8").rstrip("\r\n")
-                    if line.startswith("data:"):
-                        data_lines.append(line[5:].lstrip())
-                        continue
-                    if line:
-                        continue
-                    if not data_lines:
-                        continue
-                    data = "\n".join(data_lines)
-                    data_lines.clear()
-                    if data == "[DONE]":
-                        yield ModelStreamComplete(assembler.complete())
-                        return
-                    for delta in assembler.accept(data):
-                        yield delta
-                if data_lines:
-                    data = "\n".join(data_lines)
-                    if data == "[DONE]":
-                        yield ModelStreamComplete(assembler.complete())
-                        return
-                    for delta in assembler.accept(data):
-                        yield delta
-                raise ValueError("流缺少 [DONE] 终止帧")
+                async for item in _read_stream(response, assembler):
+                    yield item
         except urllib.error.HTTPError as error:
             response_body = error.read().decode("utf-8", errors="replace")
             raise ModelRequestError(
                 f"Agent model HTTP {error.code}：{response_body[:2000]}"
             ) from error
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
+        except OSError as error:
             raise ModelRequestError(f"Agent model 请求失败：{error}") from error
-        except (ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
+        except (ValueError, KeyError, TypeError) as error:
             raise ModelRequestError(f"Agent model 返回了无效响应：{error}") from error
         finally:
             if response is not None:
                 response.close()  # type: ignore[attr-defined]
+
+
+async def _read_stream(
+    response: object, assembler: _StreamAssembler
+) -> AsyncIterator[ModelStreamItem]:
+    data_lines: list[str] = []
+    while True:
+        raw_line = await asyncio.to_thread(response.readline)  # type: ignore[attr-defined]
+        if not raw_line:
+            break
+        line = raw_line.decode("utf-8").rstrip("\r\n")
+        if line.startswith("data:"):
+            data_lines.append(line[5:].lstrip())
+            continue
+        if line or not data_lines:
+            continue
+        data = "\n".join(data_lines)
+        data_lines.clear()
+        if data == "[DONE]":
+            yield ModelStreamComplete(assembler.complete())
+            return
+        for delta in assembler.accept(data):
+            yield delta
+    if data_lines:
+        data = "\n".join(data_lines)
+        if data == "[DONE]":
+            yield ModelStreamComplete(assembler.complete())
+            return
+        for delta in assembler.accept(data):
+            yield delta
+    raise ValueError("流缺少 [DONE] 终止帧")
 
 
 class _StreamAssembler:

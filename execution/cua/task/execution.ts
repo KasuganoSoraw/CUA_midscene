@@ -76,22 +76,8 @@ function readUserPrompt(value: unknown, field: string, context: string): Recorde
 }
 
 function renderAction(action: JsonObject, context: string): RecordedTaskAiActPrompt | undefined {
-  if (Object.hasOwn(action, 'sleep')) {
-    if (Object.keys(action).length !== 1) throw new Error(`${context} 的 sleep 不能与其他字段组合`);
-    if (!Number.isInteger(action.sleep)) throw new Error(`${context} 的 sleep 必须是整数`);
-    return undefined;
-  }
-  const supported = ['ai', 'aiDoubleClick', 'aiTap', 'aiWaitFor', 'KeyboardPress', 'KeyboardTypeText'];
-  const names = supported.filter((name) => Object.hasOwn(action, name));
-  if (names.length !== 1) {
-    throw new Error(`${context} 必须且只能包含一个受支持动作，当前字段：${Object.keys(action).sort().join(', ') || '空动作'}`);
-  }
-  const name = names[0];
-  const allowed = new Set([name]);
-  if (name === 'aiWaitFor') allowed.add('timeout');
-  if (name === 'aiTap' || name === 'aiDoubleClick') allowed.add('locate');
-  const unexpected = Object.keys(action).filter((key) => !allowed.has(key));
-  if (unexpected.length) throw new Error(`${context} 包含无法解释的字段：${unexpected.sort().join(', ')}`);
+  const name = validatedActionName(action, context);
+  if (name === 'sleep') return undefined;
   const value = action[name];
   if (name === 'aiTap' || name === 'aiDoubleClick') {
     const hasLocate = Object.hasOwn(action, 'locate');
@@ -116,6 +102,30 @@ function renderAction(action: JsonObject, context: string): RecordedTaskAiActPro
       images: [],
     };
   }
+  return renderKeyboardTypeText(parameters, context);
+}
+
+function validatedActionName(action: JsonObject, context: string): string {
+  if (Object.hasOwn(action, 'sleep')) {
+    if (Object.keys(action).length !== 1) throw new Error(`${context} 的 sleep 不能与其他字段组合`);
+    if (!Number.isInteger(action.sleep)) throw new Error(`${context} 的 sleep 必须是整数`);
+    return 'sleep';
+  }
+  const supported = ['ai', 'aiDoubleClick', 'aiTap', 'aiWaitFor', 'KeyboardPress', 'KeyboardTypeText'];
+  const names = supported.filter((name) => Object.hasOwn(action, name));
+  if (names.length !== 1) {
+    throw new Error(`${context} 必须且只能包含一个受支持动作，当前字段：${Object.keys(action).sort().join(', ') || '空动作'}`);
+  }
+  const name = names[0];
+  const allowed = new Set([name]);
+  if (name === 'aiWaitFor') allowed.add('timeout');
+  if (name === 'aiTap' || name === 'aiDoubleClick') allowed.add('locate');
+  const unexpected = Object.keys(action).filter((key) => !allowed.has(key));
+  if (unexpected.length) throw new Error(`${context} 包含无法解释的字段：${unexpected.sort().join(', ')}`);
+  return name;
+}
+
+function renderKeyboardTypeText(parameters: JsonObject, context: string): RecordedTaskAiActPrompt {
   const locate = requiredString(parameters.locate, 'locate', context);
   if (typeof parameters.value !== 'string') throw new Error(`${context} 的 KeyboardTypeText.value 必须是字符串`);
   const mode = parameters.mode ?? 'replace';

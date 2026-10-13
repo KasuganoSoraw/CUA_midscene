@@ -79,7 +79,7 @@ def smoke_component(
     javascript_environment: dict[str, str] | None = None,
     timeout_seconds: float = 30.0,
 ) -> None:
-    manifest = verify_component(component_root)
+    verify_component(component_root)
     python_runtime = python_executable.resolve()
     javascript_runtime = javascript_executable.resolve()
     if not python_runtime.is_file():
@@ -92,70 +92,57 @@ def smoke_component(
         shutil.copytree(component_root, component)
         manifest = verify_component(component)
 
-        site_packages = isolated / "site-packages"
-        wheels = [
-            _component_path(component, str(package["wheel"]))
-            for package in manifest["python"]["packages"]
-        ]
-        _extract_wheels(wheels, site_packages)
-        python_environment = {
-            **os.environ,
-            "PYTHONUTF8": "1",
-            "PYTHONIOENCODING": "utf-8",
-            "PYTHONPATH": os.pathsep.join(
-                value
-                for value in (str(site_packages), os.environ.get("PYTHONPATH", ""))
-                if value
-            ),
-        }
-        _run(
-            [
-                str(python_runtime),
-                "-c",
-                "import cua_agent, cua_recorder, cua_record; print('python modules ready')",
-            ],
-            cwd=isolated,
-            env=python_environment,
-        )
-        _run(
-            [str(python_runtime), "-m", "cua_record", "doctor"],
-            cwd=isolated,
-            env=python_environment,
-        )
+        _smoke_python(component, isolated, manifest, python_runtime)
+        _smoke_javascript(component, manifest, javascript_runtime, javascript_environment, timeout_seconds)
 
-        runtime = _component_path(component, str(manifest["javascript"]["root"]))
-        bridge = _component_path(runtime, str(manifest["javascript"]["entry"]))
-        runtime_environment = {
-            **os.environ,
-            **(javascript_environment or {}),
-        }
-        request = {
-            "schemaVersion": manifest["protocol"]["runtimeBridge"],
-            "requestId": "component-smoke",
-            "method": "catalog",
-            "payload": {"action": "list-scenes"},
-        }
-        process = subprocess.run(
-            [str(javascript_runtime), str(bridge)],
-            cwd=runtime,
-            env=runtime_environment,
-            input=json.dumps(request, ensure_ascii=False) + "\n",
-            text=True,
-            encoding="utf-8",
-            capture_output=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
-        if process.returncode != 0:
-            raise RuntimeError(
-                f"Runtime bridge smoke 失败：exit={process.returncode}\n{process.stderr.strip()}"
-            )
-        lines = [line for line in process.stdout.splitlines() if line.strip()]
-        if len(lines) != 1:
-            raise RuntimeError(f"Runtime bridge stdout 应包含一个 JSON frame：{process.stdout}")
-        response = json.loads(lines[0])
-        if response.get("requestId") != "component-smoke" or response.get("ok") is not True:
-            raise RuntimeError(f"Runtime bridge 返回失败：{response}")
+
+def _smoke_python(component: Path, isolated: Path, manifest: dict, python_runtime: Path) -> None:
+    site_packages = isolated / "site-packages"
+    wheels = [_component_path(component, str(package["wheel"])) for package in manifest["python"]["packages"]]
+    _extract_wheels(wheels, site_packages)
+    python_environment = {
+        **os.environ,
+        "PYTHONUTF8": "1",
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONPATH": os.pathsep.join(
+            value for value in (str(site_packages), os.environ.get("PYTHONPATH", "")) if value
+        ),
+    }
+    _run(
+        [str(python_runtime), "-c", "import cua_agent, cua_recorder, cua_record; print('python modules ready')"],
+        cwd=isolated, env=python_environment,
+    )
+    _run([str(python_runtime), "-m", "cua_record", "doctor"], cwd=isolated, env=python_environment)
+
+
+def _smoke_javascript(
+    component: Path, manifest: dict, javascript_runtime: Path,
+    javascript_environment: dict[str, str] | None, timeout_seconds: float,
+) -> None:
+    runtime = _component_path(component, str(manifest["javascript"]["root"]))
+    bridge = _component_path(runtime, str(manifest["javascript"]["entry"]))
+    runtime_environment = {**os.environ, **(javascript_environment or {})}
+    request = {
+        "schemaVersion": manifest["protocol"]["runtimeBridge"],
+        "requestId": "component-smoke",
+        "method": "catalog",
+        "payload": {"action": "list-scenes"},
+    }
+    process = subprocess.run(
+        [str(javascript_runtime), str(bridge)],
+        cwd=runtime, env=runtime_environment,
+        input=json.dumps(request, ensure_ascii=False) + "\n",
+        text=True, encoding="utf-8", capture_output=True,
+        timeout=timeout_seconds, check=False,
+    )
+    if process.returncode != 0:
+        raise RuntimeError(f"Runtime bridge smoke 失败：exit={process.returncode}\n{process.stderr.strip()}")
+    lines = [line for line in process.stdout.splitlines() if line.strip()]
+    if len(lines) != 1:
+        raise RuntimeError(f"Runtime bridge stdout 应包含一个 JSON frame：{process.stdout}")
+    response = json.loads(lines[0])
+    if response.get("requestId") != "component-smoke" or response.get("ok") is not True:
+        raise RuntimeError(f"Runtime bridge 返回失败：{response}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -183,7 +170,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         OSError,
         RuntimeError,
         ValueError,
-        json.JSONDecodeError,
         subprocess.CalledProcessError,
         subprocess.TimeoutExpired,
     ) as error:

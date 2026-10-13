@@ -199,57 +199,58 @@ export class TaskExecutionManager implements TaskExecutionControl {
       this.fail(generation, `任务执行进程错误：${error.message}`);
     });
     child.once('close', (code, signal) => {
-      if (generation !== this.generation) return;
-      this.child = undefined;
-      const finishedAt = new Date().toISOString();
-      if (this.stopRequested) {
-        this.current = {
-          ...this.current,
-          phase: 'failed',
-          finishedAt,
-          error: `任务已由用户停止${signal ? `（signal=${signal}）` : ''}`,
-        };
-        return;
-      }
-      let payload: JsonObject | undefined;
-      try {
-        payload = objectValue(JSON.parse(stdout.trim()));
-      } catch {
-        // The diagnostic below includes the process result without echoing runtime inputs.
-      }
-      const executor = objectValue(payload?.executor);
-      const executorSummary = safeExecutorSummary(executor, request.inputs);
-      if (code === 0 && executor?.status === 'succeeded') {
-        this.current = {
-          ...this.current,
-          phase: 'succeeded',
-          finishedAt,
-          result: {
-            ...(typeof payload?.runDir === 'string' ? { runDir: payload.runDir } : {}),
-            ...(typeof payload?.resolvedTaskPath === 'string' ? { resolvedTaskPath: payload.resolvedTaskPath } : {}),
-            ...(executorSummary ? { executor: executorSummary } : {}),
-          },
-        };
-        return;
-      }
-      const executorError = typeof executor?.error === 'string'
-        ? redactInputs(executor.error, request.inputs)
-        : undefined;
-      const detail = redactInputs(diagnostics.trim(), request.inputs);
-      this.current = {
-        ...this.current,
-        phase: 'failed',
-        finishedAt,
-        error: executorError || detail || `任务执行失败：exit=${String(code)} signal=${signal ?? '-'}`,
-        ...(payload ? {
-          result: {
-            ...(typeof payload.runDir === 'string' ? { runDir: payload.runDir } : {}),
-            ...(typeof payload.resolvedTaskPath === 'string' ? { resolvedTaskPath: payload.resolvedTaskPath } : {}),
-            ...(executorSummary ? { executor: executorSummary } : {}),
-          },
-        } : {}),
-      };
+      this.completeExecution(generation, request, code, signal, stdout, diagnostics);
     });
+  }
+
+  private completeExecution(
+    generation: number, request: StartTaskExecutionRequest,
+    code: number | null, signal: NodeJS.Signals | null, stdout: string, diagnostics: string,
+  ): void {
+    if (generation !== this.generation) return;
+    this.child = undefined;
+    const finishedAt = new Date().toISOString();
+    if (this.stopRequested) {
+      this.current = {
+        ...this.current, phase: 'failed', finishedAt,
+        error: `任务已由用户停止${signal ? `（signal=${signal}）` : ''}`,
+      };
+      return;
+    }
+    let payload: JsonObject | undefined;
+    try {
+      payload = objectValue(JSON.parse(stdout.trim()));
+    } catch {
+      // The diagnostic below includes the process result without echoing runtime inputs.
+    }
+    const executor = objectValue(payload?.executor);
+    const executorSummary = safeExecutorSummary(executor, request.inputs);
+    if (code === 0 && executor?.status === 'succeeded') {
+      this.current = {
+        ...this.current, phase: 'succeeded', finishedAt,
+        result: {
+          ...(typeof payload?.runDir === 'string' ? { runDir: payload.runDir } : {}),
+          ...(typeof payload?.resolvedTaskPath === 'string' ? { resolvedTaskPath: payload.resolvedTaskPath } : {}),
+          ...(executorSummary ? { executor: executorSummary } : {}),
+        },
+      };
+      return;
+    }
+    const executorError = typeof executor?.error === 'string'
+      ? redactInputs(executor.error, request.inputs)
+      : undefined;
+    const detail = redactInputs(diagnostics.trim(), request.inputs);
+    this.current = {
+      ...this.current, phase: 'failed', finishedAt,
+      error: executorError || detail || `任务执行失败：exit=${String(code)} signal=${signal ?? '-'}`,
+      ...(payload ? {
+        result: {
+          ...(typeof payload.runDir === 'string' ? { runDir: payload.runDir } : {}),
+          ...(typeof payload.resolvedTaskPath === 'string' ? { resolvedTaskPath: payload.resolvedTaskPath } : {}),
+          ...(executorSummary ? { executor: executorSummary } : {}),
+        },
+      } : {}),
+    };
   }
 
   private fail(generation: number, message: string): void {

@@ -241,7 +241,8 @@ class JsonlRuntimeClient:
                 "method": method,
                 "payload": dict(payload),
             }
-            assert process.stdin is not None
+            if process.stdin is None:
+                raise RuntimeProcessError("Runtime worker 缺少 stdin")
             process.stdin.write((json.dumps(frame, ensure_ascii=False) + "\n").encode("utf-8"))
             try:
                 await process.stdin.drain()
@@ -266,22 +267,25 @@ class JsonlRuntimeClient:
             except BaseException:
                 await self.close()
                 raise
-            if response.get("ok") is not True:
-                runtime_error = response.get("error")
-                if not isinstance(runtime_error, dict):
-                    raise RuntimeProtocolError("Runtime error response 缺少 error object")
-                code = runtime_error.get("code")
-                message = runtime_error.get("message")
-                details = runtime_error.get("details")
-                raise RuntimeMethodError(
-                    str(code or "RUNTIME_METHOD_FAILED"),
-                    str(message or "Runtime method 执行失败"),
-                    details if isinstance(details, dict) else None,
-                )
-            result = response.get("result")
-            if not isinstance(result, dict):
-                raise RuntimeProtocolError("Runtime success response 缺少 result object")
-            return result
+            return self._response_result(response)
+
+    def _response_result(self, response: dict[str, JsonValue]) -> dict[str, JsonValue]:
+        if response.get("ok") is not True:
+            runtime_error = response.get("error")
+            if not isinstance(runtime_error, dict):
+                raise RuntimeProtocolError("Runtime error response 缺少 error object")
+            code = runtime_error.get("code")
+            message = runtime_error.get("message")
+            details = runtime_error.get("details")
+            raise RuntimeMethodError(
+                str(code or "RUNTIME_METHOD_FAILED"),
+                str(message or "Runtime method 执行失败"),
+                details if isinstance(details, dict) else None,
+            )
+        result = response.get("result")
+        if not isinstance(result, dict):
+            raise RuntimeProtocolError("Runtime success response 缺少 result object")
+        return result
 
     def _require_process(self) -> asyncio.subprocess.Process:
         if self._process is None:
@@ -294,7 +298,8 @@ class JsonlRuntimeClient:
         self, cancelled: CancellationCheck | None, deadline: float
     ) -> bytes:
         process = self._require_process()
-        assert process.stdout is not None
+        if process.stdout is None:
+            raise RuntimeProcessError("Runtime worker 缺少 stdout")
         read_task = asyncio.create_task(process.stdout.readline())
         try:
             while True:
@@ -372,17 +377,24 @@ class JsonlRuntimeClient:
             raise RuntimeProtocolError("Runtime event data 包含无效字段")
         if not isinstance(data, dict) or data.get("source") != "midscene":
             raise RuntimeProtocolError("Runtime event source 无效")
+        self._validate_event_task(data)
+        self._validate_event_details(data)
+        return RuntimeProgressEvent(message, dict(data))
+
+    def _validate_event_task(self, data: dict[str, JsonValue]) -> None:
         task_index = data.get("taskIndex")
         task_id = data.get("taskId")
         action = data.get("action")
-        description = data.get("description")
-        status = data.get("status")
         if type(task_index) is not int or task_index < 0:
             raise RuntimeProtocolError("Runtime event taskIndex 无效")
         if not isinstance(task_id, str) or not task_id.strip() or len(task_id) > 120:
             raise RuntimeProtocolError("Runtime event taskId 无效")
         if not isinstance(action, str) or not action or len(action) > 80:
             raise RuntimeProtocolError("Runtime event action 无效")
+
+    def _validate_event_details(self, data: dict[str, JsonValue]) -> None:
+        description = data.get("description")
+        status = data.get("status")
         if description is not None and (
             not isinstance(description, str)
             or not description.strip()
@@ -396,7 +408,6 @@ class JsonlRuntimeClient:
             not isinstance(execution_id, str) or len(execution_id) > 120
         ):
             raise RuntimeProtocolError("Runtime event executionId 无效")
-        return RuntimeProgressEvent(message, dict(data))
 
     async def _drain_stderr(self) -> None:
         process = self._process

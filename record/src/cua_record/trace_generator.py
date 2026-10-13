@@ -362,99 +362,7 @@ Overall Task: {overall_task}
                 continue
 
             ts = float(it.get("timestamp") or 0.0)
-            raw = by_ts.get(ts, it)
-
-            crop = raw.get("screenshot_crop") or raw.get("screenshot")
-            full = raw.get("screenshot_full") or raw.get("screenshot")
-            if not crop and not full:
-                raise RuntimeError(f"录制动作缺少截图：timestamp={ts}, action={act_str}")
-
-            if isinstance(crop, str) and crop.startswith("screenshots/"):
-                crop = crop.replace("screenshots/", "")
-            if isinstance(full, str) and full.startswith("screenshots/"):
-                full = full.replace("screenshots/", "")
-
-            crop_path = os.path.join(screenshots_dir, crop) if crop else None
-            full_path = os.path.join(screenshots_dir, full) if full else None
-            crop_b64 = self._encode_image(crop_path) if crop_path else None
-            full_b64 = self._encode_image(full_path) if full_path else None
-            if not crop_b64 and not full_b64:
-                raise RuntimeError(f"录制动作的截图无法读取：timestamp={ts}, action={act_str}")
-
-            act = it.get("action") or ""
-            expected_operation_type = self._recorded_operation_type(act)
-            coords = it.get("coords")
-            if coords and isinstance(coords, list):
-                coord_str = ", ".join(f"({c.get('x')},{c.get('y')})" for c in coords)
-            else:
-                coord_str = ""
-            print(f"parsing Step {step_idx}: {act} {coord_str}", flush=True)
-
-            recent = []
-            for prev in reversed(traj[-3:]):
-                cap = prev.get("caption", {}) or {}
-                recent.append({
-                    "step_idx": prev.get("step_idx"),
-                    "Observation": cap.get("observation", ""),
-                    "Think": cap.get("think", ""),
-                    "Action": cap.get("action", ""),
-                    "Expectation": cap.get("expectation", ""),
-                    "Operation": cap.get("operation", {})
-                })
-
-            prompt = self._prompt(it, overall_task, step_idx, recent)
-            if self.api_provider == "claude":
-                txt = self._call_claude(prompt, crop_b64, full_b64)
-            else:
-                txt = self._call_openai(prompt, crop_b64, full_b64)
-
-            data = self._extract_json(txt)
-            cap = {
-                "observation": self._val(data, "Observation", "observation", default=""),
-                "think": self._val(data, "Think", "think", default=""),
-                "action": self._val(data, "Action", "action", default=""),
-                "expectation": self._val(data, "Expectation", "expectation", default=""),
-                "operation": self._val(data, "Operation", "operation", default={})
-            }
-            cap = self._sanitize_caption(cap)
-
-            if self._caption_needs_retry(cap, expected_operation_type):
-                operation_error = self._operation_error(
-                    cap.get("operation"),
-                    expected_operation_type,
-                )
-                retry_prompt = (
-                    f"{prompt}\n\n"
-                    f"上一次输出缺少有效 Action 或 Operation：{operation_error or 'Action 为空'}。"
-                    "请重新输出完整 JSON，必须包含非空 Action，"
-                    "并且 Operation.type 必须是 click、doubleClick、input、keyboard 或 wait；"
-                    "各类型的必需字段必须完整。"
-                )
-                if self.api_provider == "claude":
-                    txt = self._call_claude(retry_prompt, crop_b64, full_b64)
-                else:
-                    txt = self._call_openai(retry_prompt, crop_b64, full_b64)
-
-                data = self._extract_json(txt)
-                cap = {
-                    "observation": self._val(data, "Observation", "observation", default=""),
-                    "think": self._val(data, "Think", "think", default=""),
-                    "action": self._val(data, "Action", "action", default=""),
-                    "expectation": self._val(data, "Expectation", "expectation", default=""),
-                    "operation": self._val(data, "Operation", "operation", default={})
-                }
-                cap = self._sanitize_caption(cap)
-
-            if self._caption_needs_retry(cap, expected_operation_type):
-                operation_error = self._operation_error(
-                    cap.get("operation"),
-                    expected_operation_type,
-                )
-                raise RuntimeError(
-                    f"trace step {step_idx} 在纠错重试后仍缺少可执行 operation："
-                    f"{operation_error or 'Action 为空'}"
-                )
-
+            cap = self._trace_step(it, by_ts.get(ts, it), screenshots_dir, overall_task, traj, step_idx, ts, act_str)
             traj.append({"step_idx": step_idx, "caption": cap})
             step_idx += 1
             time.sleep(0.1)
@@ -463,6 +371,79 @@ Overall Task: {overall_task}
             raise RuntimeError("录制中没有可生成 trace 的操作步骤")
         with open(output_trace_path, "w", encoding="utf-8") as f:
             json.dump({"trajectory": traj}, f, ensure_ascii=False, indent=2)
+
+    def _trace_step(self, item, raw, screenshots_dir, overall_task, traj, step_idx, ts, act_str):
+        crop_b64, full_b64 = self._step_images(raw, screenshots_dir, ts, act_str)
+        act = item.get("action") or ""
+        expected_operation_type = self._recorded_operation_type(act)
+        coords = item.get("coords")
+        coord_str = ", ".join(f"({c.get('x')},{c.get('y')})" for c in coords) if coords and isinstance(coords, list) else ""
+        print(f"parsing Step {step_idx}: {act} {coord_str}", flush=True)
+        recent = self._recent_captions(traj)
+        prompt = self._prompt(item, overall_task, step_idx, recent)
+        cap = self._request_caption(prompt, crop_b64, full_b64)
+        if self._caption_needs_retry(cap, expected_operation_type):
+            operation_error = self._operation_error(cap.get("operation"), expected_operation_type)
+            retry_prompt = (
+                f"{prompt}\n\n"
+                f"上一次输出缺少有效 Action 或 Operation：{operation_error or 'Action 为空'}。"
+                "请重新输出完整 JSON，必须包含非空 Action，"
+                "并且 Operation.type 必须是 click、doubleClick、input、keyboard 或 wait；"
+                "各类型的必需字段必须完整。"
+            )
+            cap = self._request_caption(retry_prompt, crop_b64, full_b64)
+        if self._caption_needs_retry(cap, expected_operation_type):
+            operation_error = self._operation_error(cap.get("operation"), expected_operation_type)
+            raise RuntimeError(
+                f"trace step {step_idx} 在纠错重试后仍缺少可执行 operation："
+                f"{operation_error or 'Action 为空'}"
+            )
+        return cap
+
+    def _step_images(self, raw, screenshots_dir, ts, act_str):
+        crop = raw.get("screenshot_crop") or raw.get("screenshot")
+        full = raw.get("screenshot_full") or raw.get("screenshot")
+        if not crop and not full:
+            raise RuntimeError(f"录制动作缺少截图：timestamp={ts}, action={act_str}")
+        if isinstance(crop, str) and crop.startswith("screenshots/"):
+            crop = crop.replace("screenshots/", "")
+        if isinstance(full, str) and full.startswith("screenshots/"):
+            full = full.replace("screenshots/", "")
+        crop_path = os.path.join(screenshots_dir, crop) if crop else None
+        full_path = os.path.join(screenshots_dir, full) if full else None
+        crop_b64 = self._encode_image(crop_path) if crop_path else None
+        full_b64 = self._encode_image(full_path) if full_path else None
+        if not crop_b64 and not full_b64:
+            raise RuntimeError(f"录制动作的截图无法读取：timestamp={ts}, action={act_str}")
+        return crop_b64, full_b64
+
+    def _recent_captions(self, traj):
+        recent = []
+        for prev in reversed(traj[-3:]):
+            cap = prev.get("caption", {}) or {}
+            recent.append({
+                "step_idx": prev.get("step_idx"),
+                "Observation": cap.get("observation", ""),
+                "Think": cap.get("think", ""),
+                "Action": cap.get("action", ""),
+                "Expectation": cap.get("expectation", ""),
+                "Operation": cap.get("operation", {})
+            })
+        return recent
+
+    def _request_caption(self, prompt, crop_b64, full_b64):
+        if self.api_provider == "claude":
+            txt = self._call_claude(prompt, crop_b64, full_b64)
+        else:
+            txt = self._call_openai(prompt, crop_b64, full_b64)
+        data = self._extract_json(txt)
+        return self._sanitize_caption({
+            "observation": self._val(data, "Observation", "observation", default=""),
+            "think": self._val(data, "Think", "think", default=""),
+            "action": self._val(data, "Action", "action", default=""),
+            "expectation": self._val(data, "Expectation", "expectation", default=""),
+            "operation": self._val(data, "Operation", "operation", default={})
+        })
 
 
 if __name__ == "__main__":

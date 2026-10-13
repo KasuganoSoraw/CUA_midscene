@@ -49,6 +49,40 @@ interface AgentProtocolFrame {
 const maxStdoutBytes = 4 * 1024 * 1024;
 const maxDiagnosticsBytes = 32 * 1024;
 
+function acceptAgentLine(
+  line: string, frames: AgentProtocolFrame[], onEvent: (event: AgentEvent) => void,
+): void {
+  if (!line.trim()) return;
+  const frame: unknown = JSON.parse(line);
+  if (!frame || typeof frame !== 'object' || Array.isArray(frame)) {
+    throw new Error('Agent protocol frame 必须是 object');
+  }
+  const parsed = frame as AgentProtocolFrame;
+  frames.push(parsed);
+  if (parsed.type === 'event' && parsed.event && typeof parsed.event === 'object') {
+    onEvent(parsed.event as AgentEvent);
+  }
+}
+
+function completedAgentResult(
+  frames: AgentProtocolFrame[], diagnostics: string, code: number | null, signal: NodeJS.Signals | null,
+): AgentInvocationResult {
+  const errorFrame = frames.find((frame) => frame.type === 'error');
+  if (errorFrame) {
+    const value = errorFrame.error as { message?: unknown } | undefined;
+    throw new Error(String(value?.message ?? diagnostics.trim() ?? 'Python Agent 启动失败'));
+  }
+  const rawResult = [...frames].reverse().find((frame) => frame.type === 'result')?.result;
+  if (code !== 0 || !rawResult || typeof rawResult !== 'object' || Array.isArray(rawResult)) {
+    throw new Error(diagnostics.trim() || `Python CUA Agent 未正常完成：exit=${String(code)} signal=${signal ?? '-'}`);
+  }
+  const events = frames
+    .filter((frame) => frame.type === 'event')
+    .map((frame) => frame.event)
+    .filter((event): event is AgentEvent => Boolean(event && typeof event === 'object'));
+  return { ...(rawResult as Omit<AgentInvocationResult, 'events'>), events };
+}
+
 function limitedAppend(current: string, chunk: Buffer | string, limit: number): string {
   return `${current}${chunk.toString()}`.slice(-limit);
 }
@@ -162,23 +196,7 @@ export class PythonAgentInvoker implements PythonAgentControl {
       let settled = false;
       const frames: AgentProtocolFrame[] = [];
       const decoder = new StringDecoder('utf8');
-      const child = (this.options.spawnProcess ?? spawn)(
-        launch.pythonExecutable,
-        ['-m', 'cua_agent', 'invoke'],
-        {
-          cwd: launch.agentRoot,
-          env: {
-            ...process.env,
-            PYTHONUTF8: '1',
-            CUA_AGENT_JS_RUNTIME_EXECUTABLE: launch.javascriptRuntimeExecutable,
-            CUA_AGENT_RUNTIME_BRIDGE: launch.runtimeBridge,
-            CUA_DATA_ROOT: this.options.dataRoot,
-          },
-          shell: false,
-          windowsHide: true,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        },
-      );
+      const child = this.startAgentProcess(launch);
       this.child = child;
       const timeout = setTimeout(() => child.kill(), timeoutMs);
 
@@ -200,18 +218,7 @@ export class PythonAgentInvoker implements PythonAgentControl {
       signal?.addEventListener('abort', abort, { once: true });
       if (signal?.aborted) abort();
 
-      const acceptLine = (line: string) => {
-        if (!line.trim()) return;
-        const frame: unknown = JSON.parse(line);
-        if (!frame || typeof frame !== 'object' || Array.isArray(frame)) {
-          throw new Error('Agent protocol frame 必须是 object');
-        }
-        const parsed = frame as AgentProtocolFrame;
-        frames.push(parsed);
-        if (parsed.type === 'event' && parsed.event && typeof parsed.event === 'object') {
-          onEvent(parsed.event as AgentEvent);
-        }
-      };
+      const acceptLine = (line: string) => acceptAgentLine(line, frames, onEvent);
 
       child.stdout.on('data', (chunk) => {
         if (settled) return;
@@ -242,29 +249,35 @@ export class PythonAgentInvoker implements PythonAgentControl {
           finish(new Error(`无法解析 Python CUA Agent 输出：${String(error)}\n${diagnostics.trim()}`));
           return;
         }
-        const errorFrame = frames.find((frame) => frame.type === 'error');
-        if (errorFrame) {
-          const value = errorFrame.error as { message?: unknown } | undefined;
-          finish(new Error(String(value?.message ?? diagnostics.trim() ?? 'Python Agent 启动失败')));
-          return;
+        try {
+          finish(undefined, completedAgentResult(frames, diagnostics, code, signal));
+        } catch (error) {
+          finish(error instanceof Error ? error : new Error(String(error)));
         }
-        const rawResult = [...frames].reverse().find((frame) => frame.type === 'result')?.result;
-        if (code !== 0 || !rawResult || typeof rawResult !== 'object' || Array.isArray(rawResult)) {
-          finish(new Error(
-            diagnostics.trim()
-              || `Python CUA Agent 未正常完成：exit=${String(code)} signal=${signal ?? '-'}`,
-          ));
-          return;
-        }
-        const events = frames
-          .filter((frame) => frame.type === 'event')
-          .map((frame) => frame.event)
-          .filter((event): event is AgentEvent => Boolean(event && typeof event === 'object'));
-        finish(undefined, { ...(rawResult as Omit<AgentInvocationResult, 'events'>), events });
       });
 
       child.stdin.end(JSON.stringify({ task, invocationId }));
     });
+  }
+
+  private startAgentProcess(launch: PythonAgentLaunch): ChildProcessWithoutNullStreams {
+    return (this.options.spawnProcess ?? spawn)(
+      launch.pythonExecutable,
+      ['-m', 'cua_agent', 'invoke'],
+      {
+        cwd: launch.agentRoot,
+        env: {
+          ...process.env,
+          PYTHONUTF8: '1',
+          CUA_AGENT_JS_RUNTIME_EXECUTABLE: launch.javascriptRuntimeExecutable,
+          CUA_AGENT_RUNTIME_BRIDGE: launch.runtimeBridge,
+          CUA_DATA_ROOT: this.options.dataRoot,
+        },
+        shell: false,
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    );
   }
 
   async close(): Promise<void> {

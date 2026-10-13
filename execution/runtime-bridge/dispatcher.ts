@@ -102,10 +102,11 @@ export async function dispatchRuntimeBridgeRequest(
   }
 
   try {
-    const result = request.method === 'catalog'
-      ? await handlers.catalog(request.payload as unknown as CuaCatalogRequest)
-      : request.method === 'execute'
-        ? await handlers.execute(
+    let result;
+    if (request.method === 'catalog') {
+      result = await handlers.catalog(request.payload as unknown as CuaCatalogRequest);
+    } else if (request.method === 'execute') {
+      result = await handlers.execute(
           request.payload as unknown as CuaExecuteRequest,
           onEvent === undefined ? undefined : (event) => onEvent({
             schemaVersion: runtimeBridgeSchemaVersion,
@@ -113,8 +114,10 @@ export async function dispatchRuntimeBridgeRequest(
             type: 'event',
             event,
           }),
-        )
-        : await handlers.workbench(request.payload as unknown as CuaWorkbenchRequest);
+        );
+    } else {
+      result = await handlers.workbench(request.payload as unknown as CuaWorkbenchRequest);
+    }
     return {
       schemaVersion: runtimeBridgeSchemaVersion,
       requestId: request.requestId,

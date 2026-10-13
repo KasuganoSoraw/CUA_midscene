@@ -204,66 +204,7 @@ class PyAVVideoRecorder:
                 timeout=(20.0, 20.0),
             )
             output = av.open(str(self._output_path), mode="w", format="mp4", options={"movflags": "+faststart"})
-            stream = output.add_stream(
-                "h264_mf",
-                rate=self._framerate,
-                options=desktop_encoder_options(),
-            )
-            stream.width = self._display.width
-            stream.height = self._display.height
-            stream.pix_fmt = "nv12"
-            stream.bit_rate = H264_MF_BIT_RATE
-            stream.gop_size = self._framerate * H264_MF_GOP_SECONDS
-            time_base = Fraction(1, self._framerate)
-            last_slot = -1
-            last_frame: av.VideoFrame | None = None
-
-            def encode_at(frame: av.VideoFrame, slot: int) -> None:
-                encoded = prepare_video_frame(
-                    frame,
-                    width=self._display.width,
-                    height=self._display.height,
-                    frame_index=slot,
-                    time_base=time_base,
-                )
-                for packet in stream.encode(encoded):
-                    output.mux(packet)
-
-            for frame in source.decode(video=0):
-                if self._stop_requested.is_set():
-                    break
-                captured_ns = self._clock_ns()
-                if self._origin_ns is None:
-                    self._origin_ns = captured_ns
-                    target_slot = 0
-                else:
-                    target_slot = video_slot_at(
-                        captured_ns - self._origin_ns,
-                        self._framerate,
-                        round_up=True,
-                    )
-                if target_slot <= last_slot:
-                    continue
-                if last_frame is not None:
-                    for slot in range(last_slot + 1, target_slot):
-                        encode_at(last_frame, slot)
-                encode_at(frame, target_slot)
-                last_frame = frame
-                last_slot = target_slot
-                if last_slot == 0:
-                    self._ready.set()
-            if last_frame is None or self._origin_ns is None:
-                raise RecorderError("gdigrab 在结束前未产生视频帧")
-            if self._stop_ns is not None:
-                stop_slot = video_slot_at(
-                    self._stop_ns - self._origin_ns,
-                    self._framerate,
-                    round_up=False,
-                )
-                for slot in range(last_slot + 1, stop_slot + 1):
-                    encode_at(last_frame, slot)
-            for packet in stream.encode(None):
-                output.mux(packet)
+            self._encode_video(source, output)
         except BaseException as error:
             self._error = error
             self._ready.set()
@@ -278,3 +219,50 @@ class PyAVVideoRecorder:
                     self._error = error
             self._ready.set()
             self._finished.set()
+
+    def _encode_video(self, source: Any, output: Any) -> None:
+        stream = output.add_stream("h264_mf", rate=self._framerate, options=desktop_encoder_options())
+        stream.width = self._display.width
+        stream.height = self._display.height
+        stream.pix_fmt = "nv12"
+        stream.bit_rate = H264_MF_BIT_RATE
+        stream.gop_size = self._framerate * H264_MF_GOP_SECONDS
+        time_base = Fraction(1, self._framerate)
+        last_slot = -1
+        last_frame: av.VideoFrame | None = None
+
+        def encode_at(frame: av.VideoFrame, slot: int) -> None:
+            encoded = prepare_video_frame(
+                frame, width=self._display.width, height=self._display.height,
+                frame_index=slot, time_base=time_base,
+            )
+            for packet in stream.encode(encoded):
+                output.mux(packet)
+
+        for frame in source.decode(video=0):
+            if self._stop_requested.is_set():
+                break
+            captured_ns = self._clock_ns()
+            if self._origin_ns is None:
+                self._origin_ns = captured_ns
+                target_slot = 0
+            else:
+                target_slot = video_slot_at(captured_ns - self._origin_ns, self._framerate, round_up=True)
+            if target_slot <= last_slot:
+                continue
+            if last_frame is not None:
+                for slot in range(last_slot + 1, target_slot):
+                    encode_at(last_frame, slot)
+            encode_at(frame, target_slot)
+            last_frame = frame
+            last_slot = target_slot
+            if last_slot == 0:
+                self._ready.set()
+        if last_frame is None or self._origin_ns is None:
+            raise RecorderError("gdigrab 在结束前未产生视频帧")
+        if self._stop_ns is not None:
+            stop_slot = video_slot_at(self._stop_ns - self._origin_ns, self._framerate, round_up=False)
+            for slot in range(last_slot + 1, stop_slot + 1):
+                encode_at(last_frame, slot)
+        for packet in stream.encode(None):
+            output.mux(packet)
