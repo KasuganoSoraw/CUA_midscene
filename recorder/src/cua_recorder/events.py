@@ -214,34 +214,43 @@ class AlohaEventFormatter:
         if event.kind == "mouse_wheel":
             return f"{'ScrollUp' if (event.wheel_delta or 0) > 0 else 'ScrollDown'} at {coordinate}"
         if event.kind == "mouse_down" and event.button:
-            prefix = BUTTON_PREFIX.get(event.button, event.button.upper())
-            previous = self._last_click.get(event.button)
-            is_double = bool(
-                previous
-                and event.time_ns - previous[0] <= self._double_click_ns
-                and abs(x - previous[1]) <= self._double_click_distance
-                and abs(y - previous[2]) <= self._double_click_distance
-            )
-            self._buttons[event.button] = MouseButtonState(x, y)
-            self._last_click[event.button] = (event.time_ns, x, y)
-            return f"{prefix}{'DoubleClick' if is_double else 'Click'} at {coordinate}"
+            return self._format_mouse_down(event, event.button, x, y, coordinate)
         if event.kind == "mouse_move":
-            state = self._buttons.get("left")
-            if not state:
-                return None
-            if not state.dragging:
-                if max(abs(x - state.down_x), abs(y - state.down_y)) < self._drag_distance:
-                    return None
-                state.dragging = True
-                self._write(event.time_ns, f"DragStart at ({state.down_x}, {state.down_y})")
-            return f"DragMove at {coordinate}"
+            return self._format_mouse_move(event, x, y, coordinate)
         if event.kind == "mouse_up" and event.button:
-            prefix = BUTTON_PREFIX.get(event.button, event.button.upper())
-            state = self._buttons.pop(event.button, None)
-            if event.button == "left" and state and state.dragging:
-                return f"LDragEnd at {coordinate}"
-            return f"{prefix}Release at {coordinate}"
+            return self._format_mouse_up(event, event.button, coordinate)
         return None
+
+    def _format_mouse_down(self, event: RawInputEvent, button: str, x: int, y: int, coordinate: str) -> str:
+        prefix = BUTTON_PREFIX.get(button, button.upper())
+        previous = self._last_click.get(button)
+        is_double = bool(
+            previous
+            and event.time_ns - previous[0] <= self._double_click_ns
+            and abs(x - previous[1]) <= self._double_click_distance
+            and abs(y - previous[2]) <= self._double_click_distance
+        )
+        self._buttons[button] = MouseButtonState(x, y)
+        self._last_click[button] = (event.time_ns, x, y)
+        return f"{prefix}{'DoubleClick' if is_double else 'Click'} at {coordinate}"
+
+    def _format_mouse_move(self, event: RawInputEvent, x: int, y: int, coordinate: str) -> str | None:
+        state = self._buttons.get("left")
+        if not state:
+            return None
+        if not state.dragging:
+            if max(abs(x - state.down_x), abs(y - state.down_y)) < self._drag_distance:
+                return None
+            state.dragging = True
+            self._write(event.time_ns, f"DragStart at ({state.down_x}, {state.down_y})")
+        return f"DragMove at {coordinate}"
+
+    def _format_mouse_up(self, event: RawInputEvent, button: str, coordinate: str) -> str:
+        prefix = BUTTON_PREFIX.get(button, button.upper())
+        state = self._buttons.pop(button, None)
+        if button == "left" and state and state.dragging:
+            return f"LDragEnd at {coordinate}"
+        return f"{prefix}Release at {coordinate}"
 
     def _pressed_modifier_names(self) -> set[str]:
         return {MODIFIERS[vk_code] for vk_code in self._pressed_modifier_keys}

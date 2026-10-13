@@ -87,6 +87,41 @@ function limitedAppend(current: string, chunk: Buffer | string, limit: number): 
   return `${current}${chunk.toString()}`.slice(-limit);
 }
 
+function invocationTask(request: AgentInvocationRequest): string {
+  const task = typeof request.task === 'string' ? request.task.trim() : '';
+  if (!task) throw new Error('Subagent task 必须是非空字符串');
+  return task;
+}
+
+function acceptAgentChunk(
+  stdout: { pending: string }, chunk: Buffer, decoder: StringDecoder,
+  acceptLine: (line: string) => void,
+): void {
+  stdout.pending += decoder.write(chunk);
+  let newline = stdout.pending.indexOf('\n');
+  while (newline >= 0) {
+    acceptLine(stdout.pending.slice(0, newline).replace(/\r$/u, ''));
+    stdout.pending = stdout.pending.slice(newline + 1);
+    newline = stdout.pending.indexOf('\n');
+  }
+  if (Buffer.byteLength(stdout.pending) > maxStdoutBytes) {
+    throw new Error('Python CUA Agent 单帧输出超过大小限制');
+  }
+}
+
+function completedAgentOutput(
+  pending: string, decoder: StringDecoder, acceptLine: (line: string) => void,
+  frames: AgentProtocolFrame[], diagnostics: string,
+  code: number | null, signal: NodeJS.Signals | null,
+): AgentInvocationResult {
+  try {
+    acceptLine(`${pending}${decoder.end()}`);
+  } catch (error) {
+    throw new Error(`无法解析 Python CUA Agent 输出：${String(error)}\n${diagnostics.trim()}`);
+  }
+  return completedAgentResult(frames, diagnostics, code, signal);
+}
+
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await access(filePath);
@@ -184,14 +219,13 @@ export class PythonAgentInvoker implements PythonAgentControl {
         statusCode: 503,
       });
     }
-    const task = typeof request.task === 'string' ? request.task.trim() : '';
-    if (!task) throw new Error('Subagent task 必须是非空字符串');
+    const task = invocationTask(request);
     const invocationId = request.invocationId?.trim() || randomUUID();
     const launch = pythonAgentPaths(this.options);
     const timeoutMs = this.options.timeoutMs ?? 40 * 60 * 1000;
 
     return new Promise<AgentInvocationResult>((resolve, reject) => {
-      let pending = '';
+      const stdout = { pending: '' };
       let diagnostics = '';
       let settled = false;
       const frames: AgentProtocolFrame[] = [];
@@ -222,17 +256,8 @@ export class PythonAgentInvoker implements PythonAgentControl {
 
       child.stdout.on('data', (chunk) => {
         if (settled) return;
-        pending += decoder.write(chunk);
         try {
-          let newline = pending.indexOf('\n');
-          while (newline >= 0) {
-            acceptLine(pending.slice(0, newline).replace(/\r$/u, ''));
-            pending = pending.slice(newline + 1);
-            newline = pending.indexOf('\n');
-          }
-          if (Buffer.byteLength(pending) > maxStdoutBytes) {
-            throw new Error('Python CUA Agent 单帧输出超过大小限制');
-          }
+          acceptAgentChunk(stdout, chunk, decoder, acceptLine);
         } catch (error) {
           child.kill();
           finish(new Error(`无法解析 Python CUA Agent 输出：${String(error)}`));
@@ -244,13 +269,7 @@ export class PythonAgentInvoker implements PythonAgentControl {
       child.once('error', (error) => finish(new Error(`无法启动 Python CUA Agent：${error.message}`)));
       child.once('close', (code, signal) => {
         try {
-          acceptLine(`${pending}${decoder.end()}`);
-        } catch (error) {
-          finish(new Error(`无法解析 Python CUA Agent 输出：${String(error)}\n${diagnostics.trim()}`));
-          return;
-        }
-        try {
-          finish(undefined, completedAgentResult(frames, diagnostics, code, signal));
+          finish(undefined, completedAgentOutput(stdout.pending, decoder, acceptLine, frames, diagnostics, code, signal));
         } catch (error) {
           finish(error instanceof Error ? error : new Error(String(error)));
         }
