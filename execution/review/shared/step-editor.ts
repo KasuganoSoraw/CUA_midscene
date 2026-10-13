@@ -147,43 +147,59 @@ export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flo
   result.inputDescription = step.input?.description ?? '';
   result.inputDefault = step.input?.default ?? '';
   if (!standard || !action) {
-    return { ...result, custom: true, customFlow: clone(step.flow) };
+    return customStepEditor(result, step.flow);
   }
 
   if (step.operation === 'click' || step.operation === 'doubleClick') {
-    const parsed = parseClickAction(action, step.operation);
-    if (!parsed) {
-      return { ...result, custom: true, customFlow: clone(step.flow) };
-    }
-    result.target = parsed.target;
-    result.referenceImages = clone(parsed.referenceImages);
-    result.convertHttpImage2Base64 = parsed.convertHttpImage2Base64;
-    return result;
+    return parseClickEditor(result, action, step);
   }
   if (step.operation === 'input') {
-    const keyboard = objectValue(action.KeyboardTypeText);
-    if (!keyboard || Object.keys(action).length !== 1) {
-      return { ...result, custom: true, customFlow: clone(step.flow) };
-    }
-    result.target = stringValue(keyboard.locate);
-    result.inputMode = keyboard.mode === 'append' ? 'append' : 'replace';
-    const value = stringValue(keyboard.value);
-    result.inputValue = value === `{{${step.id}-input}}` ? result.inputDefault : value;
-    return result;
+    return parseInputEditor(result, action, step);
   }
   if (step.operation === 'keyboard') {
-    const keyboard = objectValue(action.KeyboardPress);
-    if (!keyboard || Object.keys(action).length !== 1) {
-      return { ...result, custom: true, customFlow: clone(step.flow) };
-    }
-    result.keyName = stringValue(keyboard.keyName);
-    return result;
+    return parseKeyboardEditor(result, action, step.flow);
   }
   if (typeof action.aiWaitFor !== 'string' || !Object.keys(action).every((key) => key === 'aiWaitFor' || key === 'timeout')) {
-    return { ...result, custom: true, customFlow: clone(step.flow) };
+    return customStepEditor(result, step.flow);
   }
   result.waitCondition = action.aiWaitFor;
   result.timeoutMs = numberValue(action.timeout, 15_000);
+  return result;
+}
+
+function customStepEditor(result: StepEditorModel, flow: JsonObject[]): StepEditorModel {
+  return { ...result, custom: true, customFlow: clone(flow) };
+}
+
+function parseClickEditor(
+  result: StepEditorModel, action: JsonObject,
+  step: Pick<ReviewStep, 'operation' | 'flow'>,
+): StepEditorModel {
+  const parsed = parseClickAction(action, step.operation as 'click' | 'doubleClick');
+  if (!parsed) return customStepEditor(result, step.flow);
+  result.target = parsed.target;
+  result.referenceImages = clone(parsed.referenceImages);
+  result.convertHttpImage2Base64 = parsed.convertHttpImage2Base64;
+  return result;
+}
+
+function parseInputEditor(
+  result: StepEditorModel, action: JsonObject,
+  step: Pick<ReviewStep, 'id' | 'flow'>,
+): StepEditorModel {
+  const keyboard = objectValue(action.KeyboardTypeText);
+  if (!keyboard || Object.keys(action).length !== 1) return customStepEditor(result, step.flow);
+  result.target = stringValue(keyboard.locate);
+  result.inputMode = keyboard.mode === 'append' ? 'append' : 'replace';
+  const value = stringValue(keyboard.value);
+  result.inputValue = value === `{{${step.id}-input}}` ? result.inputDefault : value;
+  return result;
+}
+
+function parseKeyboardEditor(result: StepEditorModel, action: JsonObject, flow: JsonObject[]): StepEditorModel {
+  const keyboard = objectValue(action.KeyboardPress);
+  if (!keyboard || Object.keys(action).length !== 1) return customStepEditor(result, flow);
+  result.keyName = stringValue(keyboard.keyName);
   return result;
 }
 

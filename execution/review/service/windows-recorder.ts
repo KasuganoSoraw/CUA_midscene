@@ -201,42 +201,9 @@ export class WindowsRecorderManager implements RecorderControl {
         for (const line of split.lines.filter(Boolean)) {
           try {
             const event = parseWorkerEvent(line);
-            if (event.event === 'armed') {
-              this.currentStatus = {
-                phase: 'armed',
-                outputRoot,
-                hotkey: typeof event.hotkey === 'string' ? event.hotkey : undefined,
-              };
-              if (!settledStart) {
-                settledStart = true;
-                resolve(this.status());
-              }
-            } else if (event.event === 'starting') {
-              this.currentStatus = {
-                ...this.currentStatus,
-                phase: 'starting',
-                recordingId: String(event.recording_id ?? ''),
-              };
-            } else if (event.event === 'recording') {
-              this.currentStatus = {
-                phase: 'recording',
-                outputRoot,
-                recordingId: String(event.recording_id ?? ''),
-                startedAt: typeof event.started_at === 'string' ? event.started_at : undefined,
-                hotkey: this.currentStatus.hotkey,
-              };
-              if (!settledStart) {
-                settledStart = true;
-                resolve(this.status());
-              }
-            } else if (event.event === 'stopping') {
-              this.currentStatus = { ...this.currentStatus, phase: 'stopping' };
-            } else if (event.event === 'completed') {
-              this.currentStatus = { phase: 'idle', outputRoot };
-            } else if (event.event === 'cancelled') {
-              this.currentStatus = { phase: 'idle', outputRoot };
-            } else if (event.event === 'error') {
-              throw new Error(event.message || '录制 Worker 报告未知错误');
+            if (this.applyWorkerEvent(event, outputRoot) && !settledStart) {
+              settledStart = true;
+              resolve(this.status());
             }
           } catch (error) {
             const resolved = error instanceof Error ? error : new Error(String(error));
@@ -278,6 +245,36 @@ export class WindowsRecorderManager implements RecorderControl {
       });
     });
     return started;
+  }
+
+  private applyWorkerEvent(event: ReturnType<typeof parseWorkerEvent>, outputRoot: string): boolean {
+    if (event.event === 'armed') {
+      this.currentStatus = {
+        phase: 'armed', outputRoot,
+        hotkey: typeof event.hotkey === 'string' ? event.hotkey : undefined,
+      };
+      return true;
+    }
+    if (event.event === 'starting') {
+      this.currentStatus = {
+        ...this.currentStatus, phase: 'starting', recordingId: String(event.recording_id ?? ''),
+      };
+    } else if (event.event === 'recording') {
+      this.currentStatus = {
+        phase: 'recording', outputRoot,
+        recordingId: String(event.recording_id ?? ''),
+        startedAt: typeof event.started_at === 'string' ? event.started_at : undefined,
+        hotkey: this.currentStatus.hotkey,
+      };
+      return true;
+    } else if (event.event === 'stopping') {
+      this.currentStatus = { ...this.currentStatus, phase: 'stopping' };
+    } else if (event.event === 'completed' || event.event === 'cancelled') {
+      this.currentStatus = { phase: 'idle', outputRoot };
+    } else if (event.event === 'error') {
+      throw new Error(event.message || '录制 Worker 报告未知错误');
+    }
+    return false;
   }
 
   async stop(): Promise<RecorderStatus> {

@@ -158,36 +158,42 @@ class AlohaEventFormatter:
 
     def _format_message(self, event: RawInputEvent) -> str | None:
         if event.kind in ("key_down", "key_up"):
-            vk_code = event.vk_code
-            physical_name = key_name(vk_code)
-            modifier = MODIFIERS.get(vk_code or -1)
-            if event.kind == "key_down":
-                repeated = vk_code is not None and vk_code in self._pressed_keys
-                if vk_code is not None:
-                    self._pressed_keys.add(vk_code)
-                if vk_code == 0x14 and not repeated:
-                    self._caps_lock_on = not self._caps_lock_on
-                if modifier:
-                    if vk_code is not None:
-                        self._pressed_modifier_keys.add(vk_code)
-                    name = physical_name
-                else:
-                    name = self._key_name_for_current_state(vk_code, physical_name)
-                    if vk_code is not None:
-                        self._pressed_key_names[vk_code] = name
-                modifiers = self._pressed_modifier_names()
-                if not modifier and modifiers:
-                    order = [item for item in ("CTRL", "ALT", "SHIFT", "WIN") if item in modifiers]
-                    return f"Hotkey: {'+'.join([*order, name])}"
-                return f"Key Press: {name}"
-            name = self._pressed_key_names.pop(vk_code, physical_name) if vk_code is not None else physical_name
+            return self._format_key_message(event)
+
+        return self._format_mouse_message(event)
+
+    def _format_key_message(self, event: RawInputEvent) -> str:
+        vk_code = event.vk_code
+        physical_name = key_name(vk_code)
+        modifier = MODIFIERS.get(vk_code or -1)
+        if event.kind == "key_down":
+            repeated = vk_code is not None and vk_code in self._pressed_keys
+            if vk_code is not None:
+                self._pressed_keys.add(vk_code)
+            if vk_code == 0x14 and not repeated:
+                self._caps_lock_on = not self._caps_lock_on
             if modifier:
                 if vk_code is not None:
-                    self._pressed_modifier_keys.discard(vk_code)
+                    self._pressed_modifier_keys.add(vk_code)
+                name = physical_name
+            else:
+                name = self._key_name_for_current_state(vk_code, physical_name)
+                if vk_code is not None:
+                    self._pressed_key_names[vk_code] = name
+            modifiers = self._pressed_modifier_names()
+            if not modifier and modifiers:
+                order = [item for item in ("CTRL", "ALT", "SHIFT", "WIN") if item in modifiers]
+                return f"Hotkey: {'+'.join([*order, name])}"
+            return f"Key Press: {name}"
+        name = self._pressed_key_names.pop(vk_code, physical_name) if vk_code is not None else physical_name
+        if modifier:
             if vk_code is not None:
-                self._pressed_keys.discard(vk_code)
-            return f"Key Release: {name}"
+                self._pressed_modifier_keys.discard(vk_code)
+        if vk_code is not None:
+            self._pressed_keys.discard(vk_code)
+        return f"Key Release: {name}"
 
+    def _format_mouse_message(self, event: RawInputEvent) -> str | None:
         if event.x is None or event.y is None:
             return None
         x = event.x - self._coordinate_origin[0]

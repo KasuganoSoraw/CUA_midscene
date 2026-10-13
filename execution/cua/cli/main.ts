@@ -83,6 +83,15 @@ function parseCommand(argv: string[]): { domain: string; command: string; option
   const command = argv[1];
   const definition = commandOptions[`${domain} ${command}`];
   if (!definition) throw new CliUsageError(`不支持的命令：${domain} ${command}`);
+  const options = parseOptions(argv, definition);
+  for (const required of definition.required ?? []) {
+    if (options[required] === undefined) throw new CliUsageError(`必须提供 --${required}`);
+  }
+  if (domain === 'act') validateActOptions(options);
+  return { domain, command, options };
+}
+
+function parseOptions(argv: string[], definition: typeof commandOptions[string]): ParsedOptions {
   const options: ParsedOptions = {};
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
@@ -104,20 +113,18 @@ function parseCommand(argv: string[]): { domain: string; command: string; option
     }
     index += 1;
   }
-  for (const required of definition.required ?? []) {
-    if (options[required] === undefined) throw new CliUsageError(`必须提供 --${required}`);
+  return options;
+}
+
+function validateActOptions(options: ParsedOptions): void {
+  const hasPrompt = options.prompt !== undefined;
+  const providedTaskOptions = ['scene', 'task', 'inputs', 'input'].filter((name) => options[name] !== undefined);
+  if (hasPrompt && providedTaskOptions.length) {
+    throw new CliUsageError(`--prompt 不能与任务参数混用：${providedTaskOptions.map((name) => `--${name}`).join(', ')}`);
   }
-  if (domain === 'act') {
-    const hasPrompt = options.prompt !== undefined;
-    const providedTaskOptions = ['scene', 'task', 'inputs', 'input'].filter((name) => options[name] !== undefined);
-    if (hasPrompt && providedTaskOptions.length) {
-      throw new CliUsageError(`--prompt 不能与任务参数混用：${providedTaskOptions.map((name) => `--${name}`).join(', ')}`);
-    }
-    if (!hasPrompt && (options.scene === undefined || options.task === undefined)) {
-      throw new CliUsageError('必须提供 --prompt，或同时提供 --scene 和 --task');
-    }
+  if (!hasPrompt && (options.scene === undefined || options.task === undefined)) {
+    throw new CliUsageError('必须提供 --prompt，或同时提供 --scene 和 --task');
   }
-  return { domain, command, options };
 }
 
 function value(options: ParsedOptions, name: string): string | undefined {
@@ -160,13 +167,11 @@ function buildCreationCommand(options: ParsedOptions): string {
   return parts.join(' ');
 }
 
-export async function runCliCommand(
-  argv: string[],
-  dependencies: { createFromRecording?: typeof createTaskFromRecording } = {},
-): Promise<string> {
-  const { domain, command, options } = parseCommand(argv);
-  const layout = await resolveRuntimeLayout(value(options, 'data-root'));
+type RuntimeLayout = Awaited<ReturnType<typeof resolveRuntimeLayout>>;
 
+async function runCatalogCommand(
+  domain: string, command: string, options: ParsedOptions, layout: RuntimeLayout,
+): Promise<string | undefined> {
   if (domain === 'scene') {
     const scenes = await listScenes(layout.catalog);
     if (options.json) return json({ scenes });
@@ -185,6 +190,13 @@ export async function runCliCommand(
   if (domain === 'task' && command === 'describe') {
     return json(await describeTask(value(options, 'scene')!, value(options, 'task')!, layout.catalog));
   }
+  return undefined;
+}
+
+async function runCreationCommand(
+  domain: string, command: string, options: ParsedOptions, layout: RuntimeLayout,
+  dependencies: { createFromRecording?: typeof createTaskFromRecording },
+): Promise<string | undefined> {
   if (domain === 'task' && command === 'create-from-recording') {
     const data = await requireDataPaths(layout);
     return json(await (dependencies.createFromRecording ?? createTaskFromRecording)({
@@ -219,6 +231,19 @@ export async function runCliCommand(
     });
     return json({ initialized: true, scene, task, taskYamlPath });
   }
+  return undefined;
+}
+
+export async function runCliCommand(
+  argv: string[],
+  dependencies: { createFromRecording?: typeof createTaskFromRecording } = {},
+): Promise<string> {
+  const { domain, command, options } = parseCommand(argv);
+  const layout = await resolveRuntimeLayout(value(options, 'data-root'));
+  const catalogResult = await runCatalogCommand(domain, command, options, layout);
+  if (catalogResult !== undefined) return catalogResult;
+  const creationResult = await runCreationCommand(domain, command, options, layout, dependencies);
+  if (creationResult !== undefined) return creationResult;
 
   const runtimeInputs = await loadRuntimeInputs(
     value(options, 'inputs'),

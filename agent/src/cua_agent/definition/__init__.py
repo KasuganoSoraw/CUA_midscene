@@ -1,5 +1,7 @@
 """从 Python 包内加载唯一 canonical CUA Agent definition。"""
 
+__all__ = ["CUA_AGENT_DEFINITION", "load_agent_definition"]
+
 from importlib.resources import files
 
 from ..contracts import AgentDefinition
@@ -21,5 +23,3 @@ def load_agent_definition() -> AgentDefinition:
 
 
 CUA_AGENT_DEFINITION = load_agent_definition()
-
-__all__ = ["CUA_AGENT_DEFINITION", "load_agent_definition"]

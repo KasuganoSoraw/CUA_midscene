@@ -122,7 +122,9 @@ export async function startReviewServer(options: {
 }
 
 export function openSystemBrowser(url: string): void {
-  const command = process.platform === 'win32' ? 'rundll32' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  let command = 'xdg-open';
+  if (process.platform === 'win32') command = 'rundll32';
+  else if (process.platform === 'darwin') command = 'open';
   const args = process.platform === 'win32' ? ['url.dll,FileProtocolHandler', url] : [url];
   const child = spawn(command, args, { detached: true, stdio: 'ignore', windowsHide: true });
   child.unref();

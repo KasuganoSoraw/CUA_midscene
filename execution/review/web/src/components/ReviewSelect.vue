@@ -81,9 +81,10 @@ function selectOption(option: ReviewSelectOption): void {
 function moveHighlight(direction: 1 | -1): void {
   if (!open.value) openMenu();
   if (!open.value || !props.options.length) return;
-  const start = highlighted.value < 0
-    ? (direction === 1 ? 0 : props.options.length - 1)
-    : highlighted.value + direction;
+  let start = highlighted.value + direction;
+  if (highlighted.value < 0) {
+    start = direction === 1 ? 0 : props.options.length - 1;
+  }
   highlighted.value = enabledIndex(start, direction);
 }
 

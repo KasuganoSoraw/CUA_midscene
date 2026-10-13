@@ -30,98 +30,65 @@ class LogProcessor:
         """Process the input log file and extract actions"""
         if not os.path.exists(log_file_path):
             raise FileNotFoundError(f"Log file not found: {log_file_path}")
-            
         actions = []
         current_software = None
-        coord_pattern = r'\((\d+),\s*(\d+)\)'
-        
         with open(log_file_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            
-            for line in lines:
+            for line in f.readlines():
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                    
                 try:
-                    event_data = json.loads(line)
-                    
-                    # Skip video start time info
-                    if "video_start_time" in event_data:
-                        continue
-                        
-                    timestamp = event_data.get("timestamp")
-                    message = event_data.get("message")
-                    window = event_data.get("window")
-                    
-                    # Skip Screen Recorder events
-                    if window and "Screen Recorder" in window:
-                        if isinstance(message, str):
-                            if (message.startswith("Initial Active Window")
-                                or message.startswith("Active Window")):
-                                continue
-                    
-                    if message.startswith("Active Window"):
-                        continue
-                    # Convert timestamp to seconds
-                    timestamp_seconds = self.timestamp_to_seconds(timestamp)
-                    if timestamp_seconds is None:
-                        continue
-                    
-                    # Parse coordinates
-                    coords = []
-                    coord_matches = re.finditer(coord_pattern, message)
-                    for coord_match in coord_matches:
-                        coords.append({
-                            "x": int(coord_match.group(1)),
-                            "y": int(coord_match.group(2))
-                        })
-                    
-                    # Handle special cases
-                    if "Initial Active Window:" in message or "Active Window:" in message:
-                        current_software = window
-                        action = "Active Window"
-                    else:
-                        action = message
-                        # Clean coordinates from action description
-                        if coords:
-                            action = re.sub(r'\s*\(\d+,\s*\d+\)', '', action)
-                    
-                    # Handle configuration info (first line)
-                    if timestamp == "00:00:00.000" and current_software is None:
-                        try:
-                            config_data = json.loads(message)
-                            action_dict = {
-                                "timestamp": timestamp_seconds,
-                                "action": "CONFIG",
-                                "coords": config_data,
-                                "current_software": "System Info"
-                            }
-                            actions.append(action_dict)
-                            continue
-                        except:
-                            pass
-                    
-                    action_dict = {
-                        "timestamp": timestamp_seconds,
-                        "action": action,
-                        "coords": coords if coords else None,
-                        "current_software": window
-                    }
-                    actions.append(action_dict)
-                    
-                except json.JSONDecodeError as e:
+                    action, current_software = self._parse_log_line(line, current_software)
+                    if action is not None:
+                        actions.append(action)
+                except json.JSONDecodeError:
                     print(f"Warning: JSON parsing error: {line}")
                     continue
                 except Exception as e:
                     print(f"Warning: Processing error: {line}\nError: {str(e)}")
                     continue
-        
         if not actions:
             raise ValueError("No valid actions found in log file")
-            
         self.actions = actions
         return actions
+
+    def _parse_log_line(self, line, current_software):
+        event_data = json.loads(line)
+        if "video_start_time" in event_data:
+            return None, current_software
+        timestamp = event_data.get("timestamp")
+        message = event_data.get("message")
+        window = event_data.get("window")
+        if (window and "Screen Recorder" in window and isinstance(message, str)
+                and message.startswith(("Initial Active Window", "Active Window"))):
+            return None, current_software
+        if message.startswith("Active Window"):
+            return None, current_software
+        timestamp_seconds = self.timestamp_to_seconds(timestamp)
+        if timestamp_seconds is None:
+            return None, current_software
+        coords = [
+            {"x": int(match.group(1)), "y": int(match.group(2))}
+            for match in re.finditer(r'\((\d+),\s*(\d+)\)', message)
+        ]
+        if "Initial Active Window:" in message or "Active Window:" in message:
+            current_software = window
+            action = "Active Window"
+        else:
+            action = re.sub(r'\s*\(\d+,\s*\d+\)', '', message) if coords else message
+        if timestamp == "00:00:00.000" and current_software is None:
+            try:
+                config_data = json.loads(message)
+                return {
+                    "timestamp": timestamp_seconds, "action": "CONFIG",
+                    "coords": config_data, "current_software": "System Info",
+                }, current_software
+            except (json.JSONDecodeError, TypeError) as error:
+                print(f"Warning: Invalid recording configuration: {error}")
+        return {
+            "timestamp": timestamp_seconds, "action": action,
+            "coords": coords if coords else None, "current_software": window,
+        }, current_software
     
     def calculate_backspace_deletions(self, duration, base_rate=10):
         """Calculate how many characters to delete based on backspace duration"""
@@ -152,7 +119,6 @@ class LogProcessor:
         last_timestamp = None
         current_window = None
         last_click_coords = None
-        special_keys = {'ENTER'}
         
         i = 0
         while i < len(actions):
@@ -163,7 +129,6 @@ class LogProcessor:
                 i += 1
                 continue
                 
-            timestamp = action["timestamp"]
             message = action["action"]
             window = action["current_software"]
             
@@ -177,172 +142,119 @@ class LogProcessor:
             # Handle backspace events (including with modifiers)
             if ("BACKSPACE" in message and 
                 ("Key Press:" in message or "Hotkey:" in message)):
-                
-                # Find the end of backspace sequence
-                backspace_start = timestamp
-                backspace_end = timestamp
-                j = i + 1
-                
-                # Look for release or next non-backspace event
-                while j < len(actions):
-                    next_action = actions[j]
-                    next_message = next_action["action"]
-                    
-                    if "Key Release:" in next_message and "BACKSPACE" in next_message:
-                        backspace_end = next_action["timestamp"]
-                        break
-                    elif not ("BACKSPACE" in next_message and 
-                            ("Key Press:" in next_message or "Hotkey:" in next_message)):
-                        # Next non-backspace event
-                        break
-                    j += 1
-                
-                # Calculate deletion duration and characters to delete
-                duration = backspace_end - backspace_start
-                chars_to_delete = self.calculate_backspace_deletions(duration)
-                
-                # Apply deletions to buffer
-                if buffer:
-                    original_length = len(buffer)
-                    if chars_to_delete >= original_length:
-                        # Delete entire buffer
-                        buffer = []
-                    else:
-                        # Delete from end
-                        buffer = buffer[:-chars_to_delete]
-                
-                # Skip to after the backspace sequence
-                i = j
+                i, buffer = self._consume_backspace(actions, i, buffer)
                 continue
             
             # Handle regular key press events
             elif "Key Press:" in message:
                 key = message.replace("Key Press:", "").strip()
-                normalized_key = self.normalize_typing_key(key)
-                
-                if key in special_keys:
-                    # Flush current typing before ENTER
-                    if buffer:
-                        merged_message = "".join(buffer)
-                        merged_actions.append({
-                            "timestamp": last_timestamp,
-                            "action": f"Type: {merged_message}",
-                            "coords": last_click_coords,
-                            "current_software": current_window
-                        })
-                        buffer = []
-                    # Record ENTER explicitly as its own action (at press time)
-                    merged_actions.append({
-                        "timestamp": timestamp,
-                        "action": "Press ENTER",
-                        "coords": last_click_coords,
-                        "current_software": current_window
-                    })
-
-                elif key == 'SPACE':
-                    # Include space character in typing buffer
-                    if last_timestamp and (timestamp - last_timestamp) > time_threshold and buffer:
-                        merged_message = "".join(buffer)
-                        merged_actions.append({
-                            "timestamp": last_timestamp,
-                            "action": f"Type: {merged_message}",
-                            "coords": last_click_coords,
-                            "current_software": current_window
-                        })
-                        buffer = []
-                    buffer.append(" ")
-                    last_timestamp = timestamp
-                    current_window = current_window or action.get("current_software")
-                    if action.get("coords") is not None:
-                        last_click_coords = action.get("coords")
-                
-                elif key == 'DELETE' or key == 'BACKSPACE':
-                    # Surface DELETE as an explicit action (not typing)
-                    # Flush any buffered typing first
-                    if buffer:
-                        merged_message = "".join(buffer)
-                        merged_actions.append({
-                            "timestamp": last_timestamp,
-                            "action": f"Type: {merged_message}",
-                            "coords": last_click_coords,
-                            "current_software": current_window
-                        })
-                        buffer = []
-                    merged_actions.append({
-                        "timestamp": timestamp,
-                        "action": "Press " + key,
-                        "coords": last_click_coords,
-                        "current_software": current_window
-                    })
-                        
-                elif len(normalized_key) == 1:
-                    # Check time gap
-                    if last_timestamp and (timestamp - last_timestamp) > time_threshold and buffer:
-                        merged_message = "".join(buffer)
-                        merged_action = {
-                            "timestamp": last_timestamp,
-                            "action": f"Type: {merged_message}",
-                            "coords": last_click_coords,
-                            "current_software": current_window
-                        }
-                        merged_actions.append(merged_action)
-                        buffer = []
-                    
-                    buffer.append(normalized_key)
-                    last_timestamp = timestamp
+                buffer, last_timestamp, current_window, last_click_coords = self._process_key_press(
+                    key, action, merged_actions, buffer, last_timestamp,
+                    current_window, last_click_coords, time_threshold,
+                )
             
-            # Handle shift+key combinations (but not shift+backspace which is handled above)
-            elif ("Hotkey: SHIFT+" in message and 
-                  "BACKSPACE" not in message and 
-                  len(message.replace("Hotkey: SHIFT+", "").strip()) == 1):
-                key = message.replace("Hotkey: SHIFT+", "").strip()
-                buffer.append(key)
-                last_timestamp = timestamp
-            
-            elif message.startswith("Hotkey: CTRL+"):
-                # Record CTRL hotkeys (e.g., CTRL+S, CTRL+C) as separate actions
-                merged_actions.append({
-                    "timestamp": timestamp,
-                    "action": message,   # e.g., "Hotkey: CTRL+S"
-                    "coords": last_click_coords,
-                    "current_software": current_window
-                })
-            
-            # Skip key release events and standalone hotkeys
-            elif ("Key Release:" in message or 
-                  message == "Hotkey: SHIFT" or
-                  ("Hotkey:" in message and "BACKSPACE" not in message)):
-                pass
-            
-            # Other events - flush buffer first
             else:
-                if buffer:
-                    merged_message = "".join(buffer)
-                    merged_action = {
-                        "timestamp": last_timestamp,
-                        "action": f"Type: {merged_message}",
-                        "coords": last_click_coords,
-                        "current_software": current_window
-                    }
-                    merged_actions.append(merged_action)
-                    buffer = []
-                
-                merged_actions.append(action)
+                buffer, last_timestamp = self._process_non_key_event(
+                    action, merged_actions, buffer, last_timestamp, last_click_coords, current_window,
+                )
             
             i += 1
         
         # Handle remaining buffer
         if buffer:
-            merged_message = "".join(buffer)
-            merged_action = {
-                "timestamp": last_timestamp,
-                "action": f"Type: {merged_message}",
-                "coords": last_click_coords,
-                "current_software": current_window
-            }
-            merged_actions.append(merged_action)
+            self._flush_typing(merged_actions, buffer, last_timestamp, last_click_coords, current_window)
         
         return merged_actions
+
+    def _process_non_key_event(
+        self, action, merged_actions, buffer, last_timestamp, last_click_coords, current_window,
+    ):
+        message = action["action"]
+        if ("Hotkey: SHIFT+" in message and "BACKSPACE" not in message
+                and len(message.replace("Hotkey: SHIFT+", "").strip()) == 1):
+            buffer.append(message.replace("Hotkey: SHIFT+", "").strip())
+            last_timestamp = action["timestamp"]
+        elif message.startswith("Hotkey: CTRL+"):
+            merged_actions.append({
+                "timestamp": action["timestamp"], "action": message,
+                "coords": last_click_coords, "current_software": current_window,
+            })
+        elif ("Key Release:" in message or message == "Hotkey: SHIFT"
+              or ("Hotkey:" in message and "BACKSPACE" not in message)):
+            pass
+        else:
+            if buffer:
+                self._flush_typing(merged_actions, buffer, last_timestamp, last_click_coords, current_window)
+                buffer = []
+            merged_actions.append(action)
+        return buffer, last_timestamp
+
+    def _flush_typing(self, merged_actions, buffer, last_timestamp, last_click_coords, current_window):
+        merged_actions.append({
+            "timestamp": last_timestamp, "action": f"Type: {''.join(buffer)}",
+            "coords": last_click_coords, "current_software": current_window,
+        })
+
+    def _process_key_press(
+        self, key, action, merged_actions, buffer, last_timestamp,
+        current_window, last_click_coords, time_threshold,
+    ):
+        timestamp = action["timestamp"]
+        normalized_key = self.normalize_typing_key(key)
+        if key == 'ENTER':
+            if buffer:
+                self._flush_typing(merged_actions, buffer, last_timestamp, last_click_coords, current_window)
+                buffer = []
+            merged_actions.append({
+                "timestamp": timestamp, "action": "Press ENTER",
+                "coords": last_click_coords, "current_software": current_window,
+            })
+        elif key == 'SPACE':
+            if last_timestamp and (timestamp - last_timestamp) > time_threshold and buffer:
+                self._flush_typing(merged_actions, buffer, last_timestamp, last_click_coords, current_window)
+                buffer = []
+            buffer.append(" ")
+            last_timestamp = timestamp
+            current_window = current_window or action.get("current_software")
+            if action.get("coords") is not None:
+                last_click_coords = action.get("coords")
+        elif key == 'DELETE' or key == 'BACKSPACE':
+            if buffer:
+                self._flush_typing(merged_actions, buffer, last_timestamp, last_click_coords, current_window)
+                buffer = []
+            merged_actions.append({
+                "timestamp": timestamp, "action": "Press " + key,
+                "coords": last_click_coords, "current_software": current_window,
+            })
+        elif len(normalized_key) == 1:
+            if last_timestamp and (timestamp - last_timestamp) > time_threshold and buffer:
+                self._flush_typing(merged_actions, buffer, last_timestamp, last_click_coords, current_window)
+                buffer = []
+            buffer.append(normalized_key)
+            last_timestamp = timestamp
+        return buffer, last_timestamp, current_window, last_click_coords
+
+    def _consume_backspace(self, actions, index, buffer):
+        backspace_start = actions[index]["timestamp"]
+        backspace_end = backspace_start
+        next_index = index + 1
+        while next_index < len(actions):
+            next_action = actions[next_index]
+            next_message = next_action["action"]
+            if "Key Release:" in next_message and "BACKSPACE" in next_message:
+                backspace_end = next_action["timestamp"]
+                break
+            if not ("BACKSPACE" in next_message and
+                    ("Key Press:" in next_message or "Hotkey:" in next_message)):
+                break
+            next_index += 1
+        chars_to_delete = self.calculate_backspace_deletions(backspace_end - backspace_start)
+        if buffer:
+            if chars_to_delete >= len(buffer):
+                buffer = []
+            else:
+                buffer = buffer[:-chars_to_delete]
+        return next_index, buffer
 
     
     def merge_mouse_events(self, actions):
@@ -412,80 +324,58 @@ class LogProcessor:
         """Group consecutive scroll events"""
         processed_actions = []
         i = 0
-        
         while i < len(actions):
             current_action = actions[i]
             message = current_action["action"]
-            
             if "Scroll" in message:
-                scroll_down_count = 0
-                scroll_up_count = 0
-                coords_events = []
-                
-                # Count initial scroll
-                if "ScrollDown" in message:
-                    scroll_down_count += 1
-                elif "ScrollUp" in message:
-                    scroll_up_count += 1
-                
-                coords_events.append((current_action["timestamp"], 
-                                   current_action["coords"][0] if current_action["coords"] else None))
-                
-                # Look for consecutive scroll events
+                scroll_actions = [current_action]
                 while i + 1 < len(actions) and "Scroll" in actions[i + 1]["action"]:
                     i += 1
-                    next_action = actions[i]
-                    if "ScrollDown" in next_action["action"]:
-                        scroll_down_count += 1
-                    elif "ScrollUp" in next_action["action"]:
-                        scroll_up_count += 1
-                    
-                    coords_events.append((next_action["timestamp"], 
-                                       next_action["coords"][0] if next_action["coords"] else None))
-                
-                # Find most common coordinate
-                coords_count = {}
-                for timestamp, coord in coords_events:
-                    if coord:
-                        coord_str = f"{coord['x']},{coord['y']}"
-                        if coord_str in coords_count:
-                            coords_count[coord_str][0] += 1
-                        else:
-                            coords_count[coord_str] = [1, timestamp, coord]
-                
-                # Get most frequent coordinate
-                max_count = 0
-                best_timestamp = current_action["timestamp"]
-                best_coord = current_action["coords"][0] if current_action["coords"] else None
-                
-                for coord_str, (count, timestamp, coord) in coords_count.items():
-                    if count > max_count:
-                        max_count = count
-                        best_timestamp = timestamp
-                        best_coord = coord
-                
-                # Create merged scroll event
-                if scroll_down_count >= scroll_up_count:
-                    scroll_action = "ScrollDown"
-                    scroll_count = scroll_down_count - scroll_up_count
-                else:
-                    scroll_action = "ScrollUp"
-                    scroll_count = scroll_up_count - scroll_down_count
-                
-                merged_action = {
-                    "timestamp": best_timestamp,
-                    "action": f"{scroll_action} at",
-                    "coords": [best_coord] if best_coord else None,
-                    "current_software": current_action["current_software"],
-                    "scroll_count": scroll_count
-                }
-                processed_actions.append(merged_action)
+                    scroll_actions.append(actions[i])
+                processed_actions.append(self._merge_scroll_group(scroll_actions))
             else:
                 processed_actions.append(current_action)
-            
             i += 1
-        
         return processed_actions
+
+    def _merge_scroll_group(self, scroll_actions):
+        current_action = scroll_actions[0]
+        scroll_down_count = 0
+        scroll_up_count = 0
+        coords_count = {}
+        for action in scroll_actions:
+            if "ScrollDown" in action["action"]:
+                scroll_down_count += 1
+            elif "ScrollUp" in action["action"]:
+                scroll_up_count += 1
+            coord = action["coords"][0] if action["coords"] else None
+            if coord:
+                coord_str = f"{coord['x']},{coord['y']}"
+                if coord_str in coords_count:
+                    coords_count[coord_str][0] += 1
+                else:
+                    coords_count[coord_str] = [1, action["timestamp"], coord]
+        max_count = 0
+        best_timestamp = current_action["timestamp"]
+        best_coord = current_action["coords"][0] if current_action["coords"] else None
+        for count, timestamp, coord in coords_count.values():
+            if count > max_count:
+                max_count = count
+                best_timestamp = timestamp
+                best_coord = coord
+        if scroll_down_count >= scroll_up_count:
+            scroll_action = "ScrollDown"
+            scroll_count = scroll_down_count - scroll_up_count
+        else:
+            scroll_action = "ScrollUp"
+            scroll_count = scroll_up_count - scroll_down_count
+        return {
+            "timestamp": best_timestamp,
+            "action": f"{scroll_action} at",
+            "coords": [best_coord] if best_coord else None,
+            "current_software": current_action["current_software"],
+            "scroll_count": scroll_count,
+        }
     
     def merge_adjacent_typing(self, actions, time_threshold=5.0):
         """Merge adjacent typing actions that are close in time and location"""
@@ -729,6 +619,24 @@ class LogProcessor:
 
 def main():
     """Command line interface for the log processor"""
+    args = _build_parser().parse_args()
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    input_dir = os.path.join(base_dir, "projects", args.project, "inputs")
+    input_file = _find_input_file(input_dir, args.project)
+    if input_file is None:
+        return 1
+    args.output = _resolve_output_path(args.output, base_dir, args.project)
+    try:
+        return _run_processor(args, input_file)
+    except Exception as error:
+        print(f"Error processing log: {error}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        return 1
+
+
+def _build_parser():
     parser = argparse.ArgumentParser(
         description='Process GUI automation log files',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -765,19 +673,14 @@ Examples:
         help='Enable verbose output'
     )
     
-    args = parser.parse_args()
-    
-    # Construct input directory path
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    input_dir = os.path.join(base_dir, "projects", args.project, "inputs")
-    
-    # Check if input directory exists
+    return parser
+
+
+def _find_input_file(input_dir, project):
     if not os.path.exists(input_dir):
         print(f"Error: Project directory not found: {input_dir}")
-        print(f"Please ensure the project '{args.project}' exists and has an inputs folder.")
-        return 1
-    
-    # Find log file in input directory
+        print(f"Please ensure the project '{project}' exists and has an inputs folder.")
+        return None
     log_files = []
     for ext in ['*.txt', '*.log', '*.json']:
         log_files.extend(glob.glob(os.path.join(input_dir, ext)))
@@ -785,7 +688,7 @@ Examples:
     if not log_files:
         print(f"Error: No log files found in {input_dir}")
         print("Supported formats: .txt, .log, .json")
-        return 1
+        return None
     
     if len(log_files) > 1:
         print(f"Error: Multiple log files found in {input_dir}")
@@ -793,61 +696,45 @@ Examples:
         for f in log_files:
             print(f"  {os.path.basename(f)}")
         print("Please ensure only one log file exists in the inputs directory.")
-        return 1
-    
-    input_file = log_files[0]
-    
-    # Set default output path if not provided
-    if not args.output:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        project_dir = os.path.join(base_dir, "projects", args.project)
+        return None
+    return log_files[0]
+
+
+def _resolve_output_path(output, base_dir, project):
+    if not output:
+        project_dir = os.path.join(base_dir, "projects", project)
         os.makedirs(project_dir, exist_ok=True)
-        args.output = os.path.join(project_dir, f"{args.project}_processed_log.json")
+        return os.path.join(project_dir, f"{project}_processed_log.json")
     else:
-        # Create output directory if needed
-        output_dir = os.path.dirname(args.output)
+        output_dir = os.path.dirname(output)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
-    
-    try:
-        processor = LogProcessor()
-        
-        if args.verbose:
-            print(f"Project: {args.project}")
-            print(f"Input file: {input_file}")
-            print(f"Output file: {args.output}")
-            print(f"Typing delay threshold: {args.typing_delay}s")
-            print("-" * 50)
-        
-        processed_actions = processor.process_log_file(
-            input_file, 
-            args.output, 
-            time_threshold=args.typing_delay
-        )
-        
-        # Print summary
-        print(f"Processing completed successfully")
-        print(f"Total actions: {len(processed_actions)}")
-        print(f"Output saved to: {args.output}")
-        
-        if args.verbose:
-            action_types = {}
-            for action in processed_actions:
-                action_type = action["action"].split()[0] if action["action"] else "Unknown"
-                action_types[action_type] = action_types.get(action_type, 0) + 1
-            
-            print("\nAction breakdown:")
-            for action_type, count in sorted(action_types.items()):
-                print(f"  {action_type}: {count}")
-        
-        return 0
-        
-    except Exception as e:
-        print(f"Error processing log: {e}")
-        if args.verbose:
-            import traceback
-            traceback.print_exc()
-        return 1
+        return output
+
+
+def _run_processor(args, input_file):
+    processor = LogProcessor()
+    if args.verbose:
+        print(f"Project: {args.project}")
+        print(f"Input file: {input_file}")
+        print(f"Output file: {args.output}")
+        print(f"Typing delay threshold: {args.typing_delay}s")
+        print("-" * 50)
+    processed_actions = processor.process_log_file(
+        input_file, args.output, time_threshold=args.typing_delay
+    )
+    print("Processing completed successfully")
+    print(f"Total actions: {len(processed_actions)}")
+    print(f"Output saved to: {args.output}")
+    if args.verbose:
+        action_types = {}
+        for action in processed_actions:
+            action_type = action["action"].split()[0] if action["action"] else "Unknown"
+            action_types[action_type] = action_types.get(action_type, 0) + 1
+        print("\nAction breakdown:")
+        for action_type, count in sorted(action_types.items()):
+            print(f"  {action_type}: {count}")
+    return 0
 
 # Example usage
 if __name__ == "__main__":

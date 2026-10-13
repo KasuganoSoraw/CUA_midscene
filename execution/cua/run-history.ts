@@ -174,8 +174,16 @@ async function performCleanup(root: string, options: Parameters<typeof cleanupRu
   result.beforeBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
   result.afterBytes = result.beforeBytes;
   if (result.beforeBytes <= policy.maxBytes) return result;
+  await removeEligibleRuns(entries, result, policy.targetBytes, cutoff, protectedRuns, canonicalRoot);
+  return result;
+}
+
+async function removeEligibleRuns(
+  entries: RunEntry[], result: RunHistoryCleanupResult, targetBytes: number,
+  cutoff: number, protectedRuns: Set<string>, canonicalRoot: string,
+): Promise<void> {
   for (const entry of entries.filter((item) => item.eligible).sort((a, b) => a.modifiedAt - b.modifiedAt)) {
-    if (result.afterBytes <= policy.targetBytes) break;
+    if (result.afterBytes <= targetBytes) break;
     try {
       const current = await inspectRun(entry.directory, cutoff, protectedRuns);
       if (!current?.eligible) continue;
@@ -188,7 +196,6 @@ async function performCleanup(root: string, options: Parameters<typeof cleanupRu
       result.errors.push(`${path.basename(entry.directory)}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  return result;
 }
 
 export async function cleanupRunHistorySafely(runsRoot: string, protectedRunDirectory: string): Promise<void> {

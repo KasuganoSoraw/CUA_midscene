@@ -35,9 +35,9 @@ const { locale, t, setLocale } = useI18n();
 const initialParams = new URLSearchParams(window.location.search);
 const requestedMode = initialParams.get('mode');
 const requestedDevMode = initialParams.get('dev') === '1';
-const initialMode = requestedMode === 'recording'
-  ? 'recordings'
-  : requestedMode === 'execution' ? 'execution' : 'review';
+let initialMode: 'review' | 'recordings' | 'execution' = 'review';
+if (requestedMode === 'recording') initialMode = 'recordings';
+else if (requestedMode === 'execution') initialMode = 'execution';
 const initialScene = initialParams.get('scene')?.trim() ?? '';
 const initialTask = initialParams.get('task')?.trim() ?? '';
 
@@ -87,6 +87,8 @@ const busy = ref(false);
 const conflict = ref(false);
 const taskDeleteOpen = ref(false);
 const draftDiscardOpen = ref(false);
+const pendingOperation = ref<ReviewOperation>();
+const pendingStepRemoval = ref<{ index: number; name: string }>();
 const evidenceMode = ref<'full' | 'crop' | 'reference' | 'placeholder'>('full');
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
@@ -205,9 +207,9 @@ function populateEditor(): void {
   advancedFlowText.value = JSON.stringify(step.flow, null, 2);
   advancedInputText.value = JSON.stringify(inputPreview(step.id, step.input), null, 2);
   const evidence = step.evidence;
-  evidenceMode.value = evidence?.crop
-    ? 'crop'
-    : evidence?.full ? 'full' : 'placeholder';
+  evidenceMode.value = 'placeholder';
+  if (evidence?.crop) evidenceMode.value = 'crop';
+  else if (evidence?.full) evidenceMode.value = 'full';
   hydratingEditor = false;
 }
 
@@ -394,9 +396,13 @@ function syncSemanticDraft(): void {
 function changeOperation(value: string): void {
   const next = value as ReviewOperation;
   if (next === editor.operation) return;
-  if (!confirm(t('review.confirmOperation', { from: operationLabel(editor.operation), to: operationLabel(next) }))) {
-    return;
-  }
+  pendingOperation.value = next;
+}
+
+function confirmOperationChange(): void {
+  const next = pendingOperation.value;
+  pendingOperation.value = undefined;
+  if (!next) return;
   const nextEditor = defaultStepEditor(next, editor.delayMs);
   hydratingEditor = true;
   Object.assign(editor, nextEditor);
@@ -454,8 +460,13 @@ async function insertStep(): Promise<void> {
 }
 
 async function removeStep(): Promise<void> {
-  if (!confirm(t('review.confirmRemove', { name: current.value?.name ?? '' }))) return;
-  await mutate({ type: 'remove', index: selected.value });
+  pendingStepRemoval.value = { index: selected.value, name: current.value?.name ?? '' };
+}
+
+async function confirmStepRemoval(): Promise<void> {
+  const pending = pendingStepRemoval.value;
+  pendingStepRemoval.value = undefined;
+  if (pending) await mutate({ type: 'remove', index: pending.index });
 }
 
 async function move(delta: number): Promise<void> {
@@ -899,6 +910,29 @@ onMounted(async () => {
     <main v-else-if="mode === 'agent' && devMode" class="workspace agent-layout">
       <AgentWorkspace />
     </main>
+
+    <ConfirmDialog
+      :open="pendingOperation !== undefined"
+      :title="t('review.operation')"
+      :message="t('review.confirmOperation', { from: operationLabel(editor.operation), to: operationLabel(pendingOperation ?? editor.operation) })"
+      :target="current?.name ?? ''"
+      :confirm-label="t('common.continue')"
+      :cancel-label="t('common.cancel')"
+      @confirm="confirmOperationChange"
+      @cancel="pendingOperation = undefined"
+    />
+
+    <ConfirmDialog
+      :open="pendingStepRemoval !== undefined"
+      :title="t('common.delete')"
+      :message="t('review.confirmRemove', { name: pendingStepRemoval?.name ?? '' })"
+      :target="pendingStepRemoval?.name ?? ''"
+      :confirm-label="t('common.delete')"
+      :cancel-label="t('common.cancel')"
+      :busy="busy"
+      @confirm="confirmStepRemoval"
+      @cancel="pendingStepRemoval = undefined"
+    />
 
     <ConfirmDialog
       :open="draftDiscardOpen"

@@ -107,52 +107,17 @@ class RecordingSession:
             seconds=max(0, time.perf_counter_ns() - started_ns) / 1_000_000_000,
         )
         try:
-            with temporary_log.open("w", encoding="utf-8", newline="\n") as log_stream:
-                write_log_header(log_stream, started_at=started_at, display=self._display)
-                thresholds = input_thresholds()
-                formatter = AlohaEventFormatter(
-                    log_stream,
-                    started_ns=started_ns,
-                    window_provider=foreground_window_label,
-                    include_injected=self._include_injected,
-                    coordinate_origin=(self._display.left, self._display.top),
-                    coordinate_size=(self._display.width, self._display.height),
-                    caps_lock_on=caps_lock_enabled(),
-                    **thresholds,
-                )
-                hotkey_filter = HotkeyInputFilter(formatter.handle)
-                self._hook = self._hook_factory(hotkey_filter.handle)
-                self._hook.start()
-                status(
-                    "recording",
-                    recording_id=recording_id,
-                    video=str(final_video),
-                    log=str(final_log),
-                    started_at=started_at.isoformat(timespec="milliseconds"),
-                )
-                try:
-                    signals.get()
-                finally:
-                    self._hook.stop()
-                    self._hook = None
-                    hotkey_filter.finish()
-                    formatter.finish(time.perf_counter_ns())
+            self._capture_log(
+                temporary_log, started_at, started_ns, recording_id, final_video, final_log,
+                signals, status,
+            )
 
             status("stopping", recording_id=recording_id)
             self._finish_video()
-            if not temporary_video.is_file() or temporary_video.stat().st_size == 0:
-                raise RecorderError("PyAV 未生成非空视频文件")
-            if not temporary_log.is_file() or temporary_log.stat().st_size == 0:
-                raise RecorderError("键鼠记录器未生成非空日志文件")
-            os.replace(temporary_video, final_video)
-            os.replace(temporary_log, final_log)
-            result = {
-                "recording_id": recording_id,
-                "recording_root": str(recording_root),
-                "video": str(final_video),
-                "log": str(final_log),
-                "duration_ms": (time.perf_counter_ns() - started_ns) // 1_000_000,
-            }
+            result = self._publish_recording(
+                recording_id, recording_root, temporary_video, temporary_log,
+                final_video, final_log, started_ns,
+            )
             status("completed", **result)
             return result
         except BaseException:
@@ -161,6 +126,59 @@ class RecordingSession:
                 self._hook = None
             self._stop_video_after_failure()
             raise
+
+    def _publish_recording(
+        self, recording_id: str, recording_root: Path,
+        temporary_video: Path, temporary_log: Path,
+        final_video: Path, final_log: Path, started_ns: int,
+    ) -> dict[str, object]:
+        if not temporary_video.is_file() or temporary_video.stat().st_size == 0:
+            raise RecorderError("PyAV 未生成非空视频文件")
+        if not temporary_log.is_file() or temporary_log.stat().st_size == 0:
+            raise RecorderError("键鼠记录器未生成非空日志文件")
+        os.replace(temporary_video, final_video)
+        os.replace(temporary_log, final_log)
+        return {
+            "recording_id": recording_id,
+            "recording_root": str(recording_root),
+            "video": str(final_video),
+            "log": str(final_log),
+            "duration_ms": (time.perf_counter_ns() - started_ns) // 1_000_000,
+        }
+
+    def _capture_log(
+        self, temporary_log: Path, started_at: datetime, started_ns: int,
+        recording_id: str, final_video: Path, final_log: Path,
+        signals: queue.Queue[str], status: Callable[..., None],
+    ) -> None:
+        with temporary_log.open("w", encoding="utf-8", newline="\n") as log_stream:
+            write_log_header(log_stream, started_at=started_at, display=self._display)
+            thresholds = input_thresholds()
+            formatter = AlohaEventFormatter(
+                log_stream,
+                started_ns=started_ns,
+                window_provider=foreground_window_label,
+                include_injected=self._include_injected,
+                coordinate_origin=(self._display.left, self._display.top),
+                coordinate_size=(self._display.width, self._display.height),
+                caps_lock_on=caps_lock_enabled(),
+                **thresholds,
+            )
+            hotkey_filter = HotkeyInputFilter(formatter.handle)
+            self._hook = self._hook_factory(hotkey_filter.handle)
+            self._hook.start()
+            status(
+                "recording", recording_id=recording_id,
+                video=str(final_video), log=str(final_log),
+                started_at=started_at.isoformat(timespec="milliseconds"),
+            )
+            try:
+                signals.get()
+            finally:
+                self._hook.stop()
+                self._hook = None
+                hotkey_filter.finish()
+                formatter.finish(time.perf_counter_ns())
 
     def stop(self) -> None:
         if self._stopped:

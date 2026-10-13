@@ -7,7 +7,7 @@ import threading
 import time
 from ctypes import wintypes
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 from .protocol import RecorderError
 
@@ -158,16 +158,7 @@ class Win32HookRecorder:
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
         hook_proc = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, WPARAM, LPARAM)
-        user32.SetWindowsHookExW.argtypes = [ctypes.c_int, hook_proc, wintypes.HINSTANCE, wintypes.DWORD]
-        user32.SetWindowsHookExW.restype = wintypes.HANDLE
-        user32.CallNextHookEx.argtypes = [wintypes.HANDLE, ctypes.c_int, WPARAM, LPARAM]
-        user32.CallNextHookEx.restype = LRESULT
-        user32.UnhookWindowsHookEx.argtypes = [wintypes.HANDLE]
-        user32.UnhookWindowsHookEx.restype = wintypes.BOOL
-        kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
-        kernel32.GetModuleHandleW.restype = wintypes.HMODULE
-        kernel32.GetCurrentThreadId.argtypes = []
-        kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+        self._configure_hook_api(user32, kernel32, hook_proc)
 
         def keyboard_callback(code: int, message: int, data_pointer: int) -> int:
             if code == HC_ACTION and message in (WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP):
@@ -183,6 +174,47 @@ class Win32HookRecorder:
                 )
             return int(user32.CallNextHookEx(self._keyboard_hook, code, message, data_pointer))
 
+        self._keyboard_callback = hook_proc(keyboard_callback)
+        self._mouse_callback = hook_proc(self._create_mouse_callback(user32))
+        self._thread_id = int(kernel32.GetCurrentThreadId())
+        try:
+            module = kernel32.GetModuleHandleW(None)
+            self._keyboard_hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._keyboard_callback, module, 0)
+            if not self._keyboard_hook:
+                raise ctypes.WinError(kernel32.GetLastError())
+            self._mouse_hook = user32.SetWindowsHookExW(WH_MOUSE_LL, self._mouse_callback, module, 0)
+            if not self._mouse_hook:
+                raise ctypes.WinError(kernel32.GetLastError())
+            self._ready.set()
+            message = wintypes.MSG()
+            while user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
+                user32.TranslateMessage(ctypes.byref(message))
+                user32.DispatchMessageW(ctypes.byref(message))
+        except BaseException as error:
+            self._start_error = error
+            self._ready.set()
+        finally:
+            if self._mouse_hook:
+                user32.UnhookWindowsHookEx(self._mouse_hook)
+            if self._keyboard_hook:
+                user32.UnhookWindowsHookEx(self._keyboard_hook)
+            self._mouse_hook = None
+            self._keyboard_hook = None
+            self._ready.set()
+
+    def _configure_hook_api(self, user32: Any, kernel32: Any, hook_proc: Any) -> None:
+        user32.SetWindowsHookExW.argtypes = [ctypes.c_int, hook_proc, wintypes.HINSTANCE, wintypes.DWORD]
+        user32.SetWindowsHookExW.restype = wintypes.HANDLE
+        user32.CallNextHookEx.argtypes = [wintypes.HANDLE, ctypes.c_int, WPARAM, LPARAM]
+        user32.CallNextHookEx.restype = LRESULT
+        user32.UnhookWindowsHookEx.argtypes = [wintypes.HANDLE]
+        user32.UnhookWindowsHookEx.restype = wintypes.BOOL
+        kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+        kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+        kernel32.GetCurrentThreadId.argtypes = []
+        kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+
+    def _create_mouse_callback(self, user32: Any) -> Callable[[int, int, int], int]:
         mouse_messages = {
             WM_MOUSEMOVE: ("mouse_move", None),
             WM_LBUTTONDOWN: ("mouse_down", "left"),
@@ -209,39 +241,11 @@ class Win32HookRecorder:
                     RawInputEvent(
                         kind=kind,
                         time_ns=time.perf_counter_ns(),
-                        x=int(data.pt.x),
-                        y=int(data.pt.y),
-                        button=button,
+                        x=int(data.pt.x), y=int(data.pt.y), button=button,
                         wheel_delta=wheel_delta,
                         injected=bool(data.flags & LLMHF_INJECTED),
                     )
                 )
             return int(user32.CallNextHookEx(self._mouse_hook, code, message, data_pointer))
 
-        self._keyboard_callback = hook_proc(keyboard_callback)
-        self._mouse_callback = hook_proc(mouse_callback)
-        self._thread_id = int(kernel32.GetCurrentThreadId())
-        try:
-            module = kernel32.GetModuleHandleW(None)
-            self._keyboard_hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._keyboard_callback, module, 0)
-            if not self._keyboard_hook:
-                raise ctypes.WinError(kernel32.GetLastError())
-            self._mouse_hook = user32.SetWindowsHookExW(WH_MOUSE_LL, self._mouse_callback, module, 0)
-            if not self._mouse_hook:
-                raise ctypes.WinError(kernel32.GetLastError())
-            self._ready.set()
-            message = wintypes.MSG()
-            while user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
-                user32.TranslateMessage(ctypes.byref(message))
-                user32.DispatchMessageW(ctypes.byref(message))
-        except BaseException as error:
-            self._start_error = error
-            self._ready.set()
-        finally:
-            if self._mouse_hook:
-                user32.UnhookWindowsHookEx(self._mouse_hook)
-            if self._keyboard_hook:
-                user32.UnhookWindowsHookEx(self._keyboard_hook)
-            self._mouse_hook = None
-            self._keyboard_hook = None
-            self._ready.set()
+        return mouse_callback

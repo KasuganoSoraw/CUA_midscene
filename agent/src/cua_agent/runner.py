@@ -13,6 +13,7 @@ from .contracts import (
     InvocationRequest,
     InvocationResult,
     InvocationStatus,
+    JsonValue,
     ToolTrace,
 )
 from .definition import CUA_AGENT_DEFINITION
@@ -66,6 +67,16 @@ FINALIZATION_PROTOCOL = """
 - 使用调用方任务所使用的语言；调用方明确指定其他语言时遵循其要求。
 - 不要输出 JSON、`status`/`reply` envelope 或 Markdown code fence。
 """.strip()
+
+
+def _initial_messages(task: str) -> list[ModelMessage]:
+    return [
+        ModelMessage(
+            role="system",
+            content=f"{CUA_AGENT_DEFINITION.instructions}\n\n{FINAL_RESPONSE_PROTOCOL}",
+        ),
+        ModelMessage(role="user", content=task),
+    ]
 
 
 class CuaAgent:
@@ -135,13 +146,7 @@ class CuaAgent:
         event_sink: EventSink | None,
         cancelled: CancellationCheck | None,
     ) -> InvocationResult:
-        messages = [
-            ModelMessage(
-                role="system",
-                content=f"{CUA_AGENT_DEFINITION.instructions}\n\n{FINAL_RESPONSE_PROTOCOL}",
-            ),
-            ModelMessage(role="user", content=task),
-        ]
+        messages = _initial_messages(task)
         traces: list[ToolTrace] = []
 
         for turn in range(1, self._max_turns + 1):
@@ -166,31 +171,9 @@ class CuaAgent:
                 response_mode="structured",
             )
             if not response.tool_calls:
-                assert response.content is not None
-                status = (
-                    InvocationStatus.NEEDS_INPUT
-                    if response.final_status == "needs-input"
-                    else InvocationStatus.COMPLETED
+                return await self._finish_response(
+                    invocation_id, response, traces, turn, event_sink
                 )
-                event_type: AgentEventType = (
-                    "needs-input" if status is InvocationStatus.NEEDS_INPUT else "agent.completed"
-                )
-                await _emit(
-                    event_sink,
-                    AgentEvent(
-                        invocation_id,
-                        event_type,
-                        response.content,
-                        {"turn": turn, "reply": response.content.strip()},
-                    ),
-                )
-                return InvocationResult(
-                    invocation_id=invocation_id,
-                    status=status,
-                    reply=response.content.strip(),
-                    tool_calls=tuple(traces),
-                )
-
             messages.append(
                 ModelMessage(
                     role="assistant",
@@ -199,115 +182,174 @@ class CuaAgent:
                 )
             )
             for call in response.tool_calls:
-                _check_cancelled(cancelled)
-                await _emit_tool_started(event_sink, invocation_id, turn, call)
-                if call.name == "cua_execute":
-                    await _emit(
-                        event_sink,
-                        AgentEvent(
-                            invocation_id,
-                            "execution.started",
-                            "Computer-Use 执行已开始",
-                            {"callId": call.call_id, "turn": turn},
-                        ),
-                    )
-                try:
-                    result = await tools.call(
-                        call.name,
-                        call.arguments,
-                        cancelled=cancelled,
-                        on_event=(
-                            _runtime_progress_sink(event_sink, invocation_id, turn, call)
-                            if call.name == "cua_execute" and event_sink is not None
-                            else None
-                        ),
-                    )
-                except RuntimeCancelledError:
-                    raise
-                except Exception as error:
-                    message = str(error) or error.__class__.__name__
-                    traces.append(
-                        ToolTrace(
-                            call_id=call.call_id,
-                            tool=call.name,
-                            input=dict(call.arguments),
-                            status="failed",
-                            error=message,
-                        )
-                    )
-                    await _emit(
-                        event_sink,
-                        AgentEvent(
-                            invocation_id,
-                            "tool.completed",
-                            f"{call.name} 执行失败",
-                            {
-                                "callId": call.call_id,
-                                "tool": call.name,
-                                "turn": turn,
-                                "status": "failed",
-                                "error": message,
-                            },
-                        ),
-                    )
-                    await _emit(event_sink, AgentEvent(invocation_id, "failed", message))
-                    return InvocationResult(
-                        invocation_id=invocation_id,
-                        status=InvocationStatus.FAILED,
-                        reply=f"{call.name} 执行失败：{message}",
-                        tool_calls=tuple(traces),
-                        error=message,
-                    )
+                result = await self._run_tool_call(
+                    invocation_id, turn, call, tools, messages, traces, event_sink, cancelled
+                )
+                if result is not None:
+                    return result
+        return await self._max_turns_result(invocation_id, traces, event_sink)
 
-                traces.append(
-                    ToolTrace(
-                        call_id=call.call_id,
-                        tool=call.name,
-                        input=dict(call.arguments),
-                        status="succeeded",
-                        output=result,
-                    )
-                )
-                await _emit(
-                    event_sink,
-                    AgentEvent(
-                        invocation_id,
-                        "tool.completed",
-                        f"{call.name} 执行完成",
-                        {
-                            "callId": call.call_id,
-                            "tool": call.name,
-                            "turn": turn,
-                            "status": "succeeded",
-                            "output": result,
-                        },
-                    ),
-                )
-                messages.append(
-                    ModelMessage(
-                        role="tool",
-                        content=json.dumps(result, ensure_ascii=False),
-                        tool_call_id=call.call_id,
-                    )
-                )
-                if _is_terminal_tool_success(call, result):
-                    return await self._finalize(
-                        invocation_id,
-                        messages,
-                        traces,
-                        turn=turn + 1,
-                        event_sink=event_sink,
-                        cancelled=cancelled,
-                    )
-
+    async def _max_turns_result(
+        self, invocation_id: str, traces: list[ToolTrace], event_sink: EventSink | None,
+    ) -> InvocationResult:
         message = f"Agent 在 {self._max_turns} 轮内未生成最终结果"
+        await _emit(event_sink, AgentEvent(invocation_id, "failed", message))
+        return InvocationResult(
+            invocation_id=invocation_id, status=InvocationStatus.FAILED,
+            reply=message, tool_calls=tuple(traces), error=message,
+        )
+
+    async def _finish_response(
+        self, invocation_id: str, response: ModelResponse, traces: list[ToolTrace],
+        turn: int, event_sink: EventSink | None,
+    ) -> InvocationResult:
+        if response.content is None:
+            raise ValueError("Agent model 缺少最终回复")
+        status = (
+            InvocationStatus.NEEDS_INPUT
+            if response.final_status == "needs-input"
+            else InvocationStatus.COMPLETED
+        )
+        event_type: AgentEventType = (
+            "needs-input" if status is InvocationStatus.NEEDS_INPUT else "agent.completed"
+        )
+        await _emit(
+            event_sink,
+            AgentEvent(
+                invocation_id,
+                event_type,
+                response.content,
+                {"turn": turn, "reply": response.content.strip()},
+            ),
+        )
+        return InvocationResult(
+            invocation_id=invocation_id,
+            status=status,
+            reply=response.content.strip(),
+            tool_calls=tuple(traces),
+        )
+
+
+    async def _run_tool_call(
+        self, invocation_id: str, turn: int, call: ModelToolCall,
+        tools: CuaToolRegistry, messages: list[ModelMessage], traces: list[ToolTrace],
+        event_sink: EventSink | None, cancelled: CancellationCheck | None,
+    ) -> InvocationResult | None:
+        _check_cancelled(cancelled)
+        await _emit_tool_started(event_sink, invocation_id, turn, call)
+        if call.name == "cua_execute":
+            await _emit(
+                event_sink,
+                AgentEvent(
+                    invocation_id,
+                    "execution.started",
+                    "Computer-Use 执行已开始",
+                    {"callId": call.call_id, "turn": turn},
+                ),
+            )
+        try:
+            result = await tools.call(
+                call.name,
+                call.arguments,
+                cancelled=cancelled,
+                on_event=(
+                    _runtime_progress_sink(event_sink, invocation_id, turn, call)
+                    if call.name == "cua_execute" and event_sink is not None
+                    else None
+                ),
+            )
+        except RuntimeCancelledError:
+            raise
+        except Exception as error:
+            return await self._failed_tool_call(
+                invocation_id, turn, call, traces, event_sink, error
+            )
+        await self._record_tool_result(invocation_id, turn, call, traces, event_sink, result)
+
+        messages.append(
+            ModelMessage(
+                role="tool",
+                content=json.dumps(result, ensure_ascii=False),
+                tool_call_id=call.call_id,
+            )
+        )
+        if _is_terminal_tool_success(call, result):
+            return await self._finalize(
+                invocation_id,
+                messages,
+                traces,
+                turn=turn + 1,
+                event_sink=event_sink,
+                cancelled=cancelled,
+            )
+
+        return None
+
+    async def _failed_tool_call(
+        self, invocation_id: str, turn: int, call: ModelToolCall, traces: list[ToolTrace],
+        event_sink: EventSink | None, error: Exception,
+    ) -> InvocationResult:
+        message = str(error) or error.__class__.__name__
+        traces.append(
+            ToolTrace(
+                call_id=call.call_id,
+                tool=call.name,
+                input=dict(call.arguments),
+                status="failed",
+                error=message,
+            )
+        )
+        await _emit(
+            event_sink,
+            AgentEvent(
+                invocation_id,
+                "tool.completed",
+                f"{call.name} 执行失败",
+                {
+                    "callId": call.call_id,
+                    "tool": call.name,
+                    "turn": turn,
+                    "status": "failed",
+                    "error": message,
+                },
+            ),
+        )
         await _emit(event_sink, AgentEvent(invocation_id, "failed", message))
         return InvocationResult(
             invocation_id=invocation_id,
             status=InvocationStatus.FAILED,
-            reply=message,
+            reply=f"{call.name} 执行失败：{message}",
             tool_calls=tuple(traces),
             error=message,
+        )
+
+    async def _record_tool_result(
+        self, invocation_id: str, turn: int, call: ModelToolCall, traces: list[ToolTrace],
+        event_sink: EventSink | None, result: dict[str, JsonValue],
+    ) -> None:
+        traces.append(
+            ToolTrace(
+                call_id=call.call_id,
+                tool=call.name,
+                input=dict(call.arguments),
+                status="succeeded",
+                output=result,
+            )
+        )
+        await _emit(
+            event_sink,
+            AgentEvent(
+                invocation_id,
+                "tool.completed",
+                f"{call.name} 执行完成",
+                {
+                    "callId": call.call_id,
+                    "tool": call.name,
+                    "turn": turn,
+                    "status": "succeeded",
+                    "output": result,
+                },
+            ),
         )
 
     async def _finalize(
@@ -330,7 +372,8 @@ class CuaAgent:
             "plain",
         )
         _check_cancelled(cancelled)
-        assert response.content is not None
+        if response.content is None:
+            raise ValueError("Agent model 缺少最终回复")
         reply = response.content
         await _emit(
             event_sink,
