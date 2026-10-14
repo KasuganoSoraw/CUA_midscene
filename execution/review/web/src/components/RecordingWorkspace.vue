@@ -411,9 +411,9 @@ onUnmounted(() => {
             <div v-if="selected.errors.length" class="recording-errors"><strong>{{ t('recording.invalid') }}</strong><span v-for="item in selected.errors" :key="item">{{ item }}</span></div>
             <form class="recording-form" @submit.prevent="createTask">
               <h3>{{ t('recording.create') }}</h3>
-              <label>{{ t('review.task') }}<input v-model="taskId" :disabled="busy" autocomplete="off" :placeholder="t('recording.taskPlaceholder')" /></label>
+              <label>{{ t('recording.taskName') }}<input v-model="taskId" :disabled="busy" autocomplete="off" :placeholder="t('recording.taskPlaceholder')" /></label>
           <div class="recording-field">
-            <label for="recording-scene-input">{{ t('review.scene') }}</label>
+            <label for="recording-scene-input">{{ t('recording.sceneGroup') }}</label>
             <div class="scene-combobox" @focusout="closeSceneMenu">
               <input
                 id="recording-scene-input"
