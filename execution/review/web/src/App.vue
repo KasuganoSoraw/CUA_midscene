@@ -579,10 +579,13 @@ onMounted(async () => {
 <template>
   <div class="shell">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">{{ t('app.subtitle') }}</p>
-        <h1>{{ t('app.title') }}</h1>
-      </div>
+      <h1 class="sr-only">{{ t('app.title') }}</h1>
+    <nav class="mode-tabs" :aria-label="t('app.navLabel')">
+      <button :class="{ active: mode === 'recordings' }" @click="mode = 'recordings'">{{ t('app.mode.recordings') }}</button>
+      <button :class="{ active: mode === 'review' }" @click="mode = 'review'">{{ t('app.mode.review') }}</button>
+      <button :class="{ active: mode === 'execution' }" @click="mode = 'execution'">{{ t('app.mode.execution') }}</button>
+      <button v-if="devMode" :class="{ active: mode === 'agent' }" @click="mode = 'agent'">{{ t('app.mode.agent') }}</button>
+    </nav>
       <div class="topbar-right">
         <div class="language-switch" role="group" :aria-label="t('app.language')">
           <button :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">中文</button>
@@ -602,12 +605,6 @@ onMounted(async () => {
       </div>
     </header>
 
-    <nav class="mode-tabs" :aria-label="t('app.navLabel')">
-      <button :class="{ active: mode === 'review' }" @click="mode = 'review'">{{ t('app.mode.review') }}</button>
-      <button :class="{ active: mode === 'recordings' }" @click="mode = 'recordings'">{{ t('app.mode.recordings') }}</button>
-      <button :class="{ active: mode === 'execution' }" @click="mode = 'execution'">{{ t('app.mode.execution') }}</button>
-      <button v-if="devMode" :class="{ active: mode === 'agent' }" @click="mode = 'agent'">{{ t('app.mode.agent') }}</button>
-    </nav>
 
     <div v-if="mode === 'review' && conflict" class="conflict">
       {{ t('review.conflict') }}
