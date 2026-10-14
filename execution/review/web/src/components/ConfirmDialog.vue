@@ -9,6 +9,7 @@ const props = defineProps<{
   confirmLabel: string;
   cancelLabel: string;
   busy?: boolean;
+  variant?: 'danger' | 'primary';
 }>();
 
 const emit = defineEmits<{
@@ -17,15 +18,30 @@ const emit = defineEmits<{
 }>();
 
 const cancelButton = ref<HTMLButtonElement>();
+const dialog = ref<HTMLElement>();
+let previousFocus: HTMLElement | undefined;
 
 watch(() => props.open, async (open) => {
-  if (!open) return;
+  if (!open) {
+    if (previousFocus?.isConnected) previousFocus.focus();
+    return;
+  }
+  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
   await nextTick();
   cancelButton.value?.focus();
 });
 
 function cancel(): void {
   if (!props.busy) emit('cancel');
+}
+
+function trapFocus(event: KeyboardEvent): void {
+  const buttons = Array.from(dialog.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
+  if (!buttons.length) { event.preventDefault(); return; }
+  const first = buttons[0];
+  const last = buttons[buttons.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 }
 </script>
 
@@ -36,8 +52,10 @@ function cancel(): void {
       class="dialog-backdrop"
       @click.self="cancel"
       @keydown.esc.stop.prevent="cancel"
+      @keydown.tab="trapFocus"
     >
       <section
+        ref="dialog"
         class="confirm-dialog"
         role="alertdialog"
         aria-modal="true"
@@ -54,7 +72,7 @@ function cancel(): void {
           <button ref="cancelButton" class="secondary" type="button" :disabled="busy" @click="cancel">
             {{ cancelLabel }}
           </button>
-          <button class="destructive" type="button" :disabled="busy" @click="emit('confirm')">
+          <button :class="variant === 'primary' ? 'primary' : 'destructive'" type="button" :disabled="busy" @click="emit('confirm')">
             {{ confirmLabel }}
           </button>
         </div>

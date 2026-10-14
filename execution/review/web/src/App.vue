@@ -29,6 +29,8 @@ import ExecutionWorkspace from './components/ExecutionWorkspace.vue';
 import RecordingWorkspace from './components/RecordingWorkspace.vue';
 import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
+import TaskCatalog from './components/TaskCatalog.vue';
+import WorkbenchIcon from './components/WorkbenchIcon.vue';
 
 const { locale, t, setLocale } = useI18n();
 
@@ -87,6 +89,10 @@ const busy = ref(false);
 const conflict = ref(false);
 const taskDeleteOpen = ref(false);
 const draftDiscardOpen = ref(false);
+const stepDeleteOpen = ref(false);
+const pendingOperation = ref<ReviewOperation>();
+const dragIndex = ref<number>();
+const catalogVersion = ref(0);
 const evidenceMode = ref<'full' | 'crop' | 'reference' | 'placeholder'>('full');
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
@@ -291,6 +297,13 @@ async function openTask(item: TaskCatalogItem): Promise<void> {
   await loadTask();
 }
 
+async function openCatalogTask(target: { scene: string; task: string }): Promise<void> {
+  if (busy.value) return;
+  scene.value = target.scene;
+  task.value = target.task;
+  await loadTasks();
+}
+
 async function loadTask(restoreDraft = true): Promise<void> {
   if (!scene.value || !task.value) return;
   busy.value = true;
@@ -394,14 +407,18 @@ function syncSemanticDraft(): void {
 function changeOperation(value: string): void {
   const next = value as ReviewOperation;
   if (next === editor.operation) return;
-  if (!confirm(t('review.confirmOperation', { from: operationLabel(editor.operation), to: operationLabel(next) }))) {
-    return;
-  }
+  pendingOperation.value = next;
+}
+
+function confirmOperation(): void {
+  const next = pendingOperation.value;
+  if (!next) return;
   const nextEditor = defaultStepEditor(next, editor.delayMs);
   hydratingEditor = true;
   Object.assign(editor, nextEditor);
   hydratingEditor = false;
   syncSemanticDraft();
+  pendingOperation.value = undefined;
 }
 
 function enableAdvancedEditing(): void {
@@ -454,8 +471,16 @@ async function insertStep(): Promise<void> {
 }
 
 async function removeStep(): Promise<void> {
-  if (!confirm(t('review.confirmRemove', { name: current.value?.name ?? '' }))) return;
   await mutate({ type: 'remove', index: selected.value });
+  stepDeleteOpen.value = false;
+}
+
+async function dropStep(index: number): Promise<void> {
+  const from = dragIndex.value;
+  dragIndex.value = undefined;
+  if (from === undefined || from === index || busy.value || !writable.value) return;
+  await mutate({ type: 'move', from, to: index });
+  selected.value = index;
 }
 
 async function move(delta: number): Promise<void> {
@@ -474,6 +499,7 @@ async function save(): Promise<boolean> {
     const result = await api.save(scene.value, task.value, baseRevision.value, clone(draft.value));
     try { draftStorage?.remove(view.value.scene, view.value.task); } catch { /* Saved task files remain authoritative. */ }
     changes.value = [];
+    catalogVersion.value += 1;
     await loadTask(false);
     status.value = () => t('review.saved', { files: result.changed.join(', ') || t('review.noChanges') });
     return true;
@@ -617,158 +643,66 @@ onMounted(async () => {
       <button class="primary" @click="mode = 'recordings'">{{ t('review.createFromRecording') }}</button>
     </main>
 
-    <main v-else-if="mode === 'review'" class="workspace">
-      <aside class="catalog panel">
-        <label>{{ t('review.scene') }}</label>
-        <ReviewSelect
-          v-model="scene"
-          class="catalog-select"
-          :aria-label="t('review.scene')"
-          :options="sceneSelectOptions"
-          :disabled="busy"
-          @change="loadTasks"
-        />
-        <label>{{ t('review.task') }}</label>
-        <div v-if="!busy && !tasks.length" class="catalog-empty">
-          <p>{{ t('review.noTasks') }}</p>
-          <button class="secondary" @click="mode = 'recordings'">{{ t('review.createFromRecording') }}</button>
-        </div>
-        <button
-          v-for="item in tasks" :key="String(item.task)"
-          class="task-row"
-          :class="{ active: task === item.task, error: item.status === 'error' }"
-          :disabled="busy || item.status === 'error'"
-          @click="openTask(item)"
-        >
-          <strong>{{ item.title }}</strong>
-          <small v-if="devMode">{{ item.task }}</small>
-          <span v-if="item.status === 'error'" class="task-error">{{ item.error }}</span>
-        </button>
-      </aside>
-
+    <main v-else-if="mode === 'review'" class="workspace review-layout">
+      <TaskCatalog :scenes="scenes" :scene="scene" :task="task" :busy="busy" :version="catalogVersion" :current-step-count="steps.length" @select="openCatalogTask" @create="mode = 'recordings'" />
       <section class="steps panel">
-        <div class="panel-heading">
-          <div><p class="eyebrow">{{ t('review.workflow') }}</p><h2>{{ view?.title ?? t('review.selectTask') }}</h2></div>
-          <span>{{ t('common.steps', { count: steps.length }) }}</span>
-        </div>
+        <div class="review-steps-heading"><h2>{{ t('review.workflow') }}</h2><div><span>{{ view?.title ?? t('review.selectTask') }}</span><small>{{ t('common.steps', { count: steps.length }) }}</small></div></div>
+        <button class="secondary add-step" :disabled="!writable || busy" @click="insertStep"><WorkbenchIcon name="add" />{{ t('review.insert') }}</button>
         <div class="step-list">
-          <button
-            v-for="(item, index) in steps" :key="item.id"
-            class="step-row" :class="{ active: selected === index }" :disabled="busy" @click="selected = index"
-          >
-            <span class="step-index">{{ String(index + 1).padStart(2, '0') }}</span>
-            <span><strong>{{ operationLabel(item.operation) }}</strong><small v-if="devMode">{{ item.id }}</small></span>
-            <span class="step-markers">
+          <div v-for="(item, index) in steps" :key="item.id" class="step-row"
+            :class="{ active: selected === index, dragging: dragIndex === index }"
+            :draggable="writable && !busy && !advancedEditing" @dragstart="dragIndex = index" @dragend="dragIndex = undefined" @dragover.prevent @drop.prevent="dropStep(index)">
+            <span class="drag-handle" :title="t('review.dragStep')"><WorkbenchIcon name="grip" /></span>
+            <button class="step-select" :disabled="busy" @click="selected = index" @keydown.alt.up.prevent="move(-1)" @keydown.alt.down.prevent="move(1)">
+              <span class="step-index">{{ index + 1 }}</span><span class="step-label">{{ operationLabel(item.operation) }}</span>
               <span v-if="item.evidence" class="evidence-dot" :title="t('review.hasEvidence')"></span>
-              <span
-                v-if="item.referenceImages?.length"
-                class="reference-mark"
-                :title="t('review.referenceUsed')"
-              >▣</span>
-              <span
-                v-else-if="item.evidence?.reference"
-                class="reference-mark available"
-                :title="t('review.referenceAvailable')"
-              >▢</span>
-            </span>
-          </button>
+              <WorkbenchIcon v-if="item.referenceImages?.length" name="image" class="reference-mark" :title="t('review.referenceUsed')" />
+            </button>
+            <button class="step-delete" :disabled="!writable || busy || steps.length <= 1" :aria-label="t('review.deleteStep', { index: index + 1 })" @click="selected = index; stepDeleteOpen = true"><WorkbenchIcon name="trash" /></button>
+          </div>
         </div>
         <div class="structure-actions">
-          <button :disabled="!writable || busy" @click="insertStep">{{ t('review.insert') }}</button>
           <button :disabled="!writable || busy || selected === 0" :title="t('review.moveUp')" @click="move(-1)">↑</button>
           <button :disabled="!writable || busy || selected === steps.length - 1" :title="t('review.moveDown')" @click="move(1)">↓</button>
-          <button class="danger" :disabled="!writable || busy || steps.length <= 1" @click="removeStep">{{ t('common.delete') }}</button>
+          <small>{{ t('review.reorderHelp') }}</small>
         </div>
       </section>
 
       <section class="editor panel">
-        <div class="panel-heading">
-          <div><p class="eyebrow">{{ t('review.stepConfig') }}</p><h2>{{ currentTitle }}</h2></div>
-        </div>
-
-        <div class="evidence-viewer" v-if="current?.evidence || displayedReferenceImages.length">
+        <header class="review-editor-heading">
+          <h2>{{ currentTitle }}</h2>
+          <div v-if="current" class="step-provenance"><span><i class="evidence-dot" :class="{ manual: !current.evidence }"></i>{{ current.evidence ? t('review.recordedStep') : t('review.manualStep') }}</span><span v-if="editor.operation === 'click' || editor.operation === 'doubleClick'"><WorkbenchIcon name="image" />{{ referenceImagesBound ? t('review.referenceEnabled') : t('review.referenceDisabled') }}</span></div>
+        </header>
+        <section v-if="current" class="step-evidence">
           <div class="evidence-tabs">
-            <button
-              v-if="current.evidence?.full"
-              :class="{ active: evidenceMode === 'full' }"
-              @click="evidenceMode = 'full'"
-            >{{ t('review.globalImage') }}</button>
-            <button
-              v-if="current.evidence?.crop"
-              :class="{ active: evidenceMode === 'crop' }"
-              @click="evidenceMode = 'crop'"
-            >{{ t('review.cropImage') }}</button>
-            <button
-              v-if="!current.evidence?.full && !current.evidence?.crop"
-              :class="{ active: evidenceMode === 'placeholder' }"
-              @click="evidenceMode = 'placeholder'"
-            >{{ t('review.noRecordedImage') }}</button>
-            <button
-              v-if="displayedReferenceImages.length"
-              :class="{ active: evidenceMode === 'reference' }"
-              @click="evidenceMode = 'reference'"
-            >{{ t('review.referenceImage') }}</button>
-            <small v-if="evidenceMode === 'reference'">{{ referenceBindingStatus }}</small>
-            <small v-else-if="current.evidence">{{ devMode ? t('review.sourceStep', { step: current.evidence.sourceStep }) : t('review.hasEvidence') }}</small>
-            <small v-else>{{ t('review.noIndependentEvidence') }}</small>
+            <button v-if="current.evidence?.full" :class="{ active: evidenceMode === 'full' }" @click="evidenceMode = 'full'">{{ t('review.globalImage') }}</button>
+            <button v-if="current.evidence?.crop" :class="{ active: evidenceMode === 'crop' }" @click="evidenceMode = 'crop'">{{ t('review.cropImage') }}</button>
+            <button v-if="editor.operation === 'click' || editor.operation === 'doubleClick'" :class="{ active: evidenceMode === 'reference' }" @click="evidenceMode = 'reference'">{{ t('review.referenceImage') }}</button>
+            <span>{{ t('review.recordedImage') }}</span>
           </div>
           <div v-if="evidenceMode === 'reference'" class="reference-gallery">
-            <article
-              v-for="(image, imageIndex) in displayedReferenceImages"
-              :key="`${image.name}:${image.url}`"
-              :class="{ 'compatibility-item': multipleReferenceImages }"
-            >
-              <div class="reference-image-frame">
-                <img :src="referenceImageUrl(image)" :alt="t('review.referenceImage')" />
-              </div>
+            <article v-for="(image, imageIndex) in displayedReferenceImages" :key="`${image.name}:${image.url}`">
+              <div class="reference-image-frame"><img :src="referenceImageUrl(image)" :alt="t('review.referenceImage')" /></div>
               <div class="reference-card-content">
-                <div class="reference-card-heading">
-                  <strong>{{ multipleReferenceImages ? t('review.referenceImageNumber', { index: imageIndex + 1 }) : t('review.referenceImage') }}</strong>
-                  <span class="reference-state" :class="{ bound: referenceImagesBound }">
-                    {{ referenceBindingStatus }}
-                  </span>
-                </div>
-                <template v-if="multipleReferenceImages && devMode">
-                  <code :title="image.name">{{ image.name }}</code>
-                  <code :title="image.url">{{ image.url }}</code>
-                </template>
-                <p v-if="imageIndex === 0">
-                  {{ t('review.referenceHelp') }}
-                </p>
-                <div v-if="imageIndex === 0" class="reference-actions">
-                  <button
-                    v-if="referenceImagesBound"
-                    class="reference-action secondary"
-                    :disabled="Boolean(referenceBindingDisabledReason)"
-                    :title="referenceBindingDisabledReason"
-                    @click="unbindReferenceImage"
-                  >{{ t('review.referenceUnbind') }}</button>
-                  <button
-                    v-else
-                    class="reference-action primary"
-                    :disabled="Boolean(referenceBindingDisabledReason)"
-                    :title="referenceBindingDisabledReason"
-                    @click="bindReferenceImage"
-                  >{{ t('review.referenceBind') }}</button>
-                </div>
-                <small v-if="imageIndex === 0 && referenceBindingDisabledReason" class="reference-disabled-reason">
-                  {{ referenceBindingDisabledReason }}
-                </small>
+                <label v-if="imageIndex === 0" class="reference-switch-label">{{ t('review.enableReference') }}
+                  <button type="button" class="reference-switch" role="switch" :aria-label="t('review.enableReference')" :aria-checked="referenceImagesBound" :disabled="Boolean(referenceBindingDisabledReason)" :title="referenceBindingDisabledReason" @click="referenceImagesBound ? unbindReferenceImage() : bindReferenceImage()"><span></span></button>
+                </label>
+                <p v-if="imageIndex === 0">{{ t('review.referenceHelp') }}</p>
+                <small v-if="imageIndex === 0 && referenceBindingDisabledReason" class="reference-disabled-reason">{{ referenceBindingDisabledReason }}</small>
+                <code v-if="multipleReferenceImages && devMode">{{ image.name }}</code>
               </div>
             </article>
+            <article v-if="!displayedReferenceImages.length">
+              <div class="reference-image-frame reference-empty"><WorkbenchIcon name="image" :size="48" /><span>{{ t('review.referenceMissing') }}</span></div>
+              <div class="reference-card-content"><label class="reference-switch-label">{{ t('review.enableReference') }}<button class="reference-switch" role="switch" :aria-label="t('review.enableReference')" :aria-checked="false" disabled><span></span></button></label><p>{{ t('review.referenceHelp') }}</p></div>
+            </article>
           </div>
-          <EvidencePlaceholder v-else-if="evidenceMode === 'placeholder'" />
-          <template v-else>
-            <img
-              v-if="evidencePath(current)"
-              :src="api.evidenceUrl(scene, task, evidencePath(current)!)"
-              :alt="t('review.evidenceAlt', { name: current.name })"
-            />
-          </template>
-        </div>
-        <div v-else class="evidence-viewer placeholder-only">
-          <EvidencePlaceholder />
-        </div>
+          <div v-else class="recorded-image-frame">
+            <img v-if="evidencePath(current)" :src="api.evidenceUrl(scene, task, evidencePath(current)!)" :alt="t('review.evidenceAlt', { name: current.name })" />
+            <EvidencePlaceholder v-else />
+          </div>
+        </section>
+        <h3 v-if="current" class="action-config-title">{{ t('review.actionConfig') }}</h3>
 
         <div class="form-grid" v-if="current">
           <label>{{ t('review.operation') }}
@@ -896,6 +830,9 @@ onMounted(async () => {
     <main v-else-if="mode === 'agent' && devMode" class="workspace agent-layout">
       <AgentWorkspace />
     </main>
+
+    <ConfirmDialog :open="stepDeleteOpen" :title="t('review.deleteStepTitle')" :message="t('review.confirmRemove', { name: currentTitle })" :target="currentTitle" :confirm-label="t('common.delete')" :cancel-label="t('common.cancel')" :busy="busy" @confirm="removeStep" @cancel="stepDeleteOpen = false" />
+    <ConfirmDialog :open="Boolean(pendingOperation)" variant="primary" :target="currentTitle" :title="t('review.operationTitle')" :message="t('review.confirmOperation', { from: operationLabel(editor.operation), to: pendingOperation ? operationLabel(pendingOperation) : '' })" :confirm-label="t('review.confirmChange')" :cancel-label="t('common.cancel')" :busy="busy" @confirm="confirmOperation" @cancel="pendingOperation = undefined" />
 
     <ConfirmDialog
       :open="draftDiscardOpen"
