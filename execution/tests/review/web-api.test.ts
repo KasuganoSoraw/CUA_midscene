@@ -33,6 +33,7 @@ test('review web 只在存在 JSON 请求体时设置 content-type', async () =>
     await api.agentStatus();
     await api.invokeAgent({ task: '查询 NE001 当前告警' });
     await api.deleteTask('browser demo', 'search/demo');
+    await api.uploadReferenceImage('browser demo', 'search/demo', 'sha256:123', new File(['image'], 'image.png', { type: 'image/png' }));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -63,6 +64,9 @@ test('review web 只在存在 JSON 请求体时设置 content-type', async () =>
   assert.equal(requests[11]?.input, '/api/tasks/browser%20demo/search%2Fdemo');
   assert.equal(requests[11]?.init.method, 'DELETE');
   assert.equal(new Headers(requests[11]?.init.headers).has('content-type'), false);
+  assert.equal(requests[12]?.input, '/api/tasks/browser%20demo/search%2Fdemo/reference-images?revision=sha256%3A123');
+  assert.equal(new Headers(requests[12]?.init.headers).get('content-type'), 'image/png');
+  assert.ok(requests[12]?.init.body instanceof File);
 });
 
 test('review web 逐帧读取 Agent 事件并等待最终结果', async () => {

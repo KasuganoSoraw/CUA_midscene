@@ -22,6 +22,7 @@ import {
 } from '../../shared/step-editor';
 import { ApiError, api } from './api';
 import { ReviewDraftStorage } from './draft-storage';
+import { referenceImageMaxBytes, referenceImageMimeTypes } from '../../shared/reference-upload';
 import { useI18n, type MessageKey } from './i18n';
 import AgentWorkspace from './components/AgentWorkspace.vue';
 import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
@@ -31,6 +32,7 @@ import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import TaskCatalog from './components/TaskCatalog.vue';
 import WorkbenchIcon from './components/WorkbenchIcon.vue';
+import uploadPlaceholder from './assets/ucd/upload-placeholder.svg';
 
 const { locale, t, setLocale } = useI18n();
 
@@ -93,6 +95,9 @@ const stepDeleteOpen = ref(false);
 const pendingOperation = ref<ReviewOperation>();
 const dragIndex = ref<number>();
 const catalogVersion = ref(0);
+const referenceFileInput = ref<HTMLInputElement>();
+const referenceUploading = ref(false);
+const referenceUploadError = ref('');
 const evidenceMode = ref<'full' | 'crop' | 'reference' | 'placeholder'>('full');
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
@@ -136,6 +141,7 @@ const currentTitle = computed(() => current.value
   : t('review.noStep'));
 const writable = computed(() => Boolean(view.value?.writable));
 const referenceImageCandidate = computed<ReviewReferenceImage | undefined>(() => {
+  if (editor.referenceCandidate) return editor.referenceCandidate;
   const step = current.value;
   return step?.evidence?.reference
     ? { name: `${step.id}-reference`, url: step.evidence.reference }
@@ -167,6 +173,8 @@ const referenceBindingDisabledReason = computed<string | undefined>(() => {
   }
   return undefined;
 });
+const referenceUploadDisabled = computed(() => !writable.value || busy.value || conflict.value || advancedEditing.value
+  || editor.custom || multipleReferenceImages.value || (editor.operation !== 'click' && editor.operation !== 'doubleClick'));
 const dirty = computed(() => changes.value.length > 0);
 const builtContent = computed(() => buildStepContent(editor, current.value?.id ?? 'step-001'));
 const flowPreview = computed(() => JSON.stringify(builtContent.value.flow, null, 2));
@@ -204,7 +212,9 @@ function rebuildSteps(): void {
 function populateEditor(): void {
   const step = current.value;
   if (!step) return;
+  referenceUploadError.value = '';
   hydratingEditor = true;
+  delete editor.referenceCandidate;
   Object.assign(editor, parseStepEditor(step));
   if (editorDrafts[step.id]) Object.assign(editor, clone(editorDrafts[step.id]));
   advancedEditing.value = false;
@@ -213,7 +223,8 @@ function populateEditor(): void {
   const evidence = step.evidence;
   evidenceMode.value = evidence?.crop
     ? 'crop'
-    : evidence?.full ? 'full' : 'placeholder';
+    : evidence?.full ? 'full'
+      : (editor.operation === 'click' || editor.operation === 'doubleClick') ? 'reference' : 'placeholder';
   hydratingEditor = false;
 }
 
@@ -361,6 +372,11 @@ async function loadTask(restoreDraft = true): Promise<void> {
 
 async function mutate(mutation: ReviewMutation): Promise<void> {
   if (!draft.value || !writable.value) return;
+  const candidates = steps.value.map(item => editorDrafts[item.id]?.referenceCandidate);
+  if (current.value) candidates[selected.value] = editor.referenceCandidate;
+  if (mutation.type === 'insert') candidates.splice(mutation.index, 0, undefined);
+  else if (mutation.type === 'remove') candidates.splice(mutation.index, 1);
+  else if (mutation.type === 'move') candidates.splice(mutation.to, 0, ...candidates.splice(mutation.from, 1));
   busy.value = true;
   try {
     const result = await api.mutate(scene.value, task.value, draft.value, mutation);
@@ -368,6 +384,9 @@ async function mutate(mutation: ReviewMutation): Promise<void> {
     draft.value = result.draft;
     changes.value.push(result.change);
     rebuildSteps();
+    steps.value.forEach((item, index) => {
+      if (candidates[index]) editorDrafts[item.id] = { ...parseStepEditor(item), referenceCandidate: clone(candidates[index]) };
+    });
     populateEditor();
     persistDraft();
     status.value = () => t('review.draftValidated');
@@ -415,6 +434,7 @@ function confirmOperation(): void {
   if (!next) return;
   const nextEditor = defaultStepEditor(next, editor.delayMs);
   hydratingEditor = true;
+  delete editor.referenceCandidate;
   Object.assign(editor, nextEditor);
   hydratingEditor = false;
   syncSemanticDraft();
@@ -483,6 +503,15 @@ async function dropStep(index: number): Promise<void> {
   selected.value = index;
 }
 
+function startStepDrag(event: DragEvent, index: number): void {
+  if (busy.value || !writable.value || advancedEditing.value) { event.preventDefault(); return; }
+  dragIndex.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
+  }
+}
+
 async function move(delta: number): Promise<void> {
   const target = selected.value + delta;
   if (target < 0 || target >= steps.value.length) return;
@@ -494,6 +523,7 @@ async function move(delta: number): Promise<void> {
 async function save(): Promise<boolean> {
   if (!draft.value || !view.value) return false;
   if (!dirty.value) return true;
+  const selectedIndex = selected.value;
   busy.value = true;
   try {
     const result = await api.save(scene.value, task.value, baseRevision.value, clone(draft.value));
@@ -501,6 +531,8 @@ async function save(): Promise<boolean> {
     changes.value = [];
     catalogVersion.value += 1;
     await loadTask(false);
+    selected.value = Math.min(selectedIndex, steps.value.length - 1);
+    populateEditor();
     status.value = () => t('review.saved', { files: result.changed.join(', ') || t('review.noChanges') });
     return true;
   } catch (error) {
@@ -584,8 +616,52 @@ function unbindReferenceImage(): void {
     editor.referenceImages.length !== 1
     || referenceBindingDisabledReason.value
   ) return;
+  editor.referenceCandidate = clone(editor.referenceImages[0]);
   editor.referenceImages = [];
   editor.convertHttpImage2Base64 = false;
+}
+
+async function uploadReference(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  referenceUploadError.value = '';
+  if (!file || referenceUploadDisabled.value) return;
+  if (!referenceImageMimeTypes.includes(file.type as typeof referenceImageMimeTypes[number])) {
+    referenceUploadError.value = t('review.referenceFormatError');
+    return;
+  }
+  if (!file.size || file.size > referenceImageMaxBytes) {
+    referenceUploadError.value = t('review.referenceSizeError');
+    return;
+  }
+  const targetScene = scene.value;
+  const targetTask = task.value;
+  const targetStep = current.value?.id;
+  if (!targetStep) return;
+  busy.value = true;
+  referenceUploading.value = true;
+  try {
+    const result = await api.uploadReferenceImage(targetScene, targetTask, baseRevision.value, file);
+    if (scene.value !== targetScene || task.value !== targetTask || current.value?.id !== targetStep) {
+      throw new Error(t('review.referenceTargetChanged'));
+    }
+    hydratingEditor = true;
+    editor.referenceCandidate = clone(result.image);
+    editor.referenceImages = [clone(result.image)];
+    editor.convertHttpImage2Base64 = false;
+    hydratingEditor = false;
+    syncSemanticDraft();
+    evidenceMode.value = 'reference';
+    status.value = () => t('review.referenceUploaded');
+  } catch (error) {
+    conflict.value = error instanceof ApiError && error.status === 409;
+    referenceUploadError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    hydratingEditor = false;
+    referenceUploading.value = false;
+    busy.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -651,7 +727,7 @@ onMounted(async () => {
         <div class="step-list">
           <div v-for="(item, index) in steps" :key="item.id" class="step-row"
             :class="{ active: selected === index, dragging: dragIndex === index }"
-            :draggable="writable && !busy && !advancedEditing" @dragstart="dragIndex = index" @dragend="dragIndex = undefined" @dragover.prevent @drop.prevent="dropStep(index)">
+            :draggable="writable && !busy && !advancedEditing" @dragstart="startStepDrag($event, index)" @dragend="dragIndex = undefined" @dragover.prevent @drop.prevent="dropStep(index)">
             <span class="drag-handle" :title="t('review.dragStep')"><WorkbenchIcon name="grip" /></span>
             <button class="step-select" :disabled="busy" @click="selected = index" @keydown.alt.up.prevent="move(-1)" @keydown.alt.down.prevent="move(1)">
               <span class="step-index">{{ index + 1 }}</span><span class="step-label">{{ operationLabel(item.operation) }}</span>
@@ -674,15 +750,18 @@ onMounted(async () => {
           <div v-if="current" class="step-provenance"><span><i class="evidence-dot" :class="{ manual: !current.evidence }"></i>{{ current.evidence ? t('review.recordedStep') : t('review.manualStep') }}</span><span v-if="editor.operation === 'click' || editor.operation === 'doubleClick'"><WorkbenchIcon name="image" />{{ referenceImagesBound ? t('review.referenceEnabled') : t('review.referenceDisabled') }}</span></div>
         </header>
         <section v-if="current" class="step-evidence">
+          <input ref="referenceFileInput" hidden type="file" tabindex="-1" accept="image/png,image/jpeg,image/webp" :disabled="referenceUploadDisabled" @change="uploadReference" />
           <div class="evidence-tabs">
             <button v-if="current.evidence?.full" :class="{ active: evidenceMode === 'full' }" @click="evidenceMode = 'full'">{{ t('review.globalImage') }}</button>
             <button v-if="current.evidence?.crop" :class="{ active: evidenceMode === 'crop' }" @click="evidenceMode = 'crop'">{{ t('review.cropImage') }}</button>
             <button v-if="editor.operation === 'click' || editor.operation === 'doubleClick'" :class="{ active: evidenceMode === 'reference' }" @click="evidenceMode = 'reference'">{{ t('review.referenceImage') }}</button>
-            <span>{{ t('review.recordedImage') }}</span>
+            <span>{{ evidenceMode === 'reference' ? t('review.referenceImage') : t('review.recordedImage') }}</span>
           </div>
           <div v-if="evidenceMode === 'reference'" class="reference-gallery">
             <article v-for="(image, imageIndex) in displayedReferenceImages" :key="`${image.name}:${image.url}`">
-              <div class="reference-image-frame"><img :src="referenceImageUrl(image)" :alt="t('review.referenceImage')" /></div>
+              <div class="reference-image-frame"><img :src="referenceImageUrl(image)" :alt="t('review.referenceImage')" />
+                <button v-if="imageIndex === 0" class="secondary reference-replace" :disabled="referenceUploadDisabled" @click="referenceFileInput?.click()"><WorkbenchIcon name="upload" />{{ referenceUploading ? t('review.referenceUploading') : t('review.replaceReference') }}</button>
+              </div>
               <div class="reference-card-content">
                 <label v-if="imageIndex === 0" class="reference-switch-label">{{ t('review.enableReference') }}
                   <button type="button" class="reference-switch" role="switch" :aria-label="t('review.enableReference')" :aria-checked="referenceImagesBound" :disabled="Boolean(referenceBindingDisabledReason)" :title="referenceBindingDisabledReason" @click="referenceImagesBound ? unbindReferenceImage() : bindReferenceImage()"><span></span></button>
@@ -693,7 +772,7 @@ onMounted(async () => {
               </div>
             </article>
             <article v-if="!displayedReferenceImages.length">
-              <div class="reference-image-frame reference-empty"><WorkbenchIcon name="image" :size="48" /><span>{{ t('review.referenceMissing') }}</span></div>
+              <button class="reference-image-frame reference-empty reference-upload" :disabled="referenceUploadDisabled" @click="referenceFileInput?.click()"><span class="upload-empty-art" aria-hidden="true"><span class="empty-document"><i></i><i></i><i></i><i></i><i></i></span><img class="upload-placeholder" :src="uploadPlaceholder" alt="" /></span><span>{{ referenceUploading ? t('review.referenceUploading') : t('review.uploadReference') }}</span></button>
               <div class="reference-card-content"><label class="reference-switch-label">{{ t('review.enableReference') }}<button class="reference-switch" role="switch" :aria-label="t('review.enableReference')" :aria-checked="false" disabled><span></span></button></label><p>{{ t('review.referenceHelp') }}</p></div>
             </article>
           </div>
@@ -701,6 +780,8 @@ onMounted(async () => {
             <img v-if="evidencePath(current)" :src="api.evidenceUrl(scene, task, evidencePath(current)!)" :alt="t('review.evidenceAlt', { name: current.name })" />
             <EvidencePlaceholder v-else />
           </div>
+          <p v-if="evidenceMode === 'reference'" class="reference-upload-help">{{ t('review.referenceUploadHelp') }}</p>
+          <p v-if="referenceUploadError" class="inline-error" role="alert">{{ referenceUploadError }}</p>
         </section>
         <h3 v-if="current" class="action-config-title">{{ t('review.actionConfig') }}</h3>
 

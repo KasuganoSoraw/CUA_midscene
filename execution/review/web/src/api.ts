@@ -9,6 +9,7 @@ import type {
   ReviewCatalogResponse,
   ReviewMutation,
   ReviewMutationResult,
+  ReviewReferenceImage,
   ReviewRecording,
   ReviewRecordingCatalog,
   ReviewTaskDraft,
@@ -155,6 +156,12 @@ export const api = {
     request<SaveReviewTaskResult>(`/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}`, {
       method: 'PUT', body: JSON.stringify({ expectedRevision: revision, ...draft }),
     }),
+  uploadReferenceImage: (scene: string, task: string, revision: string, file: File) => {
+    const params = new URLSearchParams({ revision });
+    return request<{ image: ReviewReferenceImage }>(`/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}/reference-images?${params}`, {
+      method: 'POST', headers: { 'content-type': file.type }, body: file,
+    });
+  },
   evidenceUrl: (scene: string, task: string, evidencePath: string) => {
     const url = new URL(`/api/tasks/${encodeURIComponent(scene)}/${encodeURIComponent(task)}/evidence`, location.origin);
     url.searchParams.set('path', evidencePath);

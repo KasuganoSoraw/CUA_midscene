@@ -18,6 +18,8 @@ import type {
   StartTaskExecutionRequest,
 } from '../shared/types.js';
 import { applyReviewMutation } from '../service/task-mutations.js';
+import { uploadReferenceImage } from '../service/reference-images.js';
+import { referenceImageMaxBytes, referenceImageMimeTypes } from '../shared/reference-upload.js';
 import { RecordingGenerationManager } from '../service/recording-generation.js';
 import {
   PythonAgentInvoker,
@@ -192,6 +194,7 @@ async function evidenceFile(
 }
 
 export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = async (app, options) => {
+  app.addContentTypeParser([...referenceImageMimeTypes], { parseAs: 'buffer', bodyLimit: referenceImageMaxBytes }, (_request, body, done) => done(null, body));
   const generation = new RecordingGenerationManager();
   app.get('/api/recording-generation', async () => generation.status());
   const activeRecordingsRoot = await resolveRecordingsRoot(options.recordingsRoot, {
@@ -438,6 +441,28 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
       if (!request.query.path) throw new Error('缺少证据 path');
       const file = await evidenceFile(scene, task, request.query.path, options.layout);
       return reply.type(file.type).send(file.body);
+    },
+  );
+
+  app.post<{ Params: TaskParams; Querystring: { revision: string }; Body: Buffer }>(
+    '/api/tasks/:scene/:task/reference-images',
+    {
+      bodyLimit: referenceImageMaxBytes,
+      schema: {
+        params: taskParamsSchema,
+        querystring: { type: 'object', required: ['revision'], properties: { revision: { type: 'string', minLength: 1 } }, additionalProperties: false },
+      },
+    },
+    async (request, reply) => {
+      const result = await uploadReferenceImage({
+        scene: requireIdentifier(request.params.scene, 'scene'),
+        task: requireIdentifier(request.params.task, 'task'),
+        catalog: options.layout.catalog,
+        expectedRevision: request.query.revision,
+        contentType: String(request.headers['content-type'] ?? '').split(';')[0].trim(),
+        data: request.body,
+      });
+      return reply.code(201).send(result);
     },
   );
 

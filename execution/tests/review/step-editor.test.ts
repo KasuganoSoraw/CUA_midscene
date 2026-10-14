@@ -7,6 +7,18 @@ import {
   parseStepEditor,
 } from '../../review/shared/step-editor.js';
 
+test('上传图的名称进入定位 prompt，语义编辑保留目标描述并支持停用', () => {
+  const editor = parseStepEditor({ id: 'step-001', operation: 'click', flow: [{ aiTap: '点击保存按钮' }] });
+  editor.referenceImages = [{ name: 'reference-image', url: 'source/reference-images/example.png' }];
+  const content = buildStepContent(editor, 'step-001');
+  assert.equal((content.flow[0].locate as any).prompt, '点击保存按钮\n参考定位图：reference-image');
+  const reopened = parseStepEditor({ id: 'step-001', operation: 'click', flow: content.flow });
+  assert.equal(reopened.target, '点击保存按钮');
+  reopened.referenceCandidate = reopened.referenceImages[0];
+  reopened.referenceImages = [];
+  assert.deepEqual(buildStepContent(reopened, 'step-001').flow, [{ aiTap: '点击保存按钮' }]);
+});
+
 test('input 语义表单与 Flow/参数定义双向转换', () => {
   const parsed = parseStepEditor({
     id: 'step-010',
@@ -93,7 +105,7 @@ test('带参考图的点击类 Flow 通过普通表单无损往返', () => {
     {
       aiTap: null,
       locate: {
-        prompt: '点击工具栏中的无文字图标',
+        prompt: '点击工具栏中的无文字图标\n参考定位图：step-012-target',
         images: [{ name: 'step-012-target', url: 'source/screenshots/target.reference.png' }],
         convertHttpImage2Base64: true,
       },
@@ -132,7 +144,7 @@ test('点击步骤绑定和解绑单张定位参考图时保留语义字段', ()
     {
       aiTap: null,
       locate: {
-        prompt: '点击右上角的个人头像',
+        prompt: '点击右上角的个人头像\n参考定位图：step-006-reference',
         images: [{
           name: 'step-006-reference',
           url: 'source/screenshots/step-006.reference.png',
