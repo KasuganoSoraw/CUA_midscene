@@ -772,7 +772,7 @@ onMounted(async () => {
               </div>
             </article>
             <article v-if="!displayedReferenceImages.length">
-              <button class="reference-image-frame reference-empty reference-upload" :disabled="referenceUploadDisabled" @click="referenceFileInput?.click()"><span class="upload-empty-art" aria-hidden="true"><span class="empty-document"><i></i><i></i><i></i><i></i><i></i></span><img class="upload-placeholder" :src="uploadPlaceholder" alt="" /></span><span>{{ referenceUploading ? t('review.referenceUploading') : t('review.uploadReference') }}</span></button>
+              <button class="reference-image-frame reference-empty reference-upload" :disabled="referenceUploadDisabled" @click="referenceFileInput?.click()"><img class="upload-placeholder" :src="uploadPlaceholder" alt="" aria-hidden="true" /><span>{{ referenceUploading ? t('review.referenceUploading') : t('review.uploadReference') }}</span></button>
               <div class="reference-card-content"><label class="reference-switch-label">{{ t('review.enableReference') }}<button class="reference-switch" role="switch" :aria-label="t('review.enableReference')" :aria-checked="false" disabled><span></span></button></label><p>{{ t('review.referenceHelp') }}</p></div>
             </article>
           </div>
@@ -780,7 +780,6 @@ onMounted(async () => {
             <img v-if="evidencePath(current)" :src="api.evidenceUrl(scene, task, evidencePath(current)!)" :alt="t('review.evidenceAlt', { name: current.name })" />
             <EvidencePlaceholder v-else />
           </div>
-          <p v-if="evidenceMode === 'reference'" class="reference-upload-help">{{ t('review.referenceUploadHelp') }}</p>
           <p v-if="referenceUploadError" class="inline-error" role="alert">{{ referenceUploadError }}</p>
         </section>
         <h3 v-if="current" class="action-config-title">{{ t('review.actionConfig') }}</h3>
