@@ -9,6 +9,13 @@ import { translate } from '../../review/web/src/i18n.js';
 
 const webRoot = new URL('../../review/web/src/', import.meta.url);
 
+test('动作配置标题与图片区域保留独立的垂直间距', async () => {
+  const css = await readFile(new URL('review.css', webRoot), 'utf8');
+  const rule = css.match(/\.review-layout \.action-config-title\s*\{([^}]+)\}/)?.[1] ?? '';
+  assert.ok(/padding-top:\s*28px/.test(rule));
+  assert.ok(/margin:\s*0 0 16px/.test(rule));
+});
+
 test('等待配置以两列展示条件和最长等待时间', async () => {
   const app = await readFile(new URL('App.vue', webRoot), 'utf8');
   const css = await readFile(new URL('review.css', webRoot), 'utf8');
