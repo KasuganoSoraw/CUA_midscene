@@ -3,6 +3,12 @@ import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { cleanupRunHistorySafely, runStateFilename } from './run-history.js';
 
+const failedRuns = new WeakMap<Error, string>();
+
+export function failedRunDirectory(error: unknown): string | undefined {
+  return error instanceof Error ? failedRuns.get(error) : undefined;
+}
+
 export async function createRunDirectory(runsRoot: string): Promise<string> {
   const root = path.resolve(runsRoot);
   await mkdir(root, { recursive: true });
@@ -42,6 +48,9 @@ export async function withRunDirectory<T>(
     const result = await operation(runDirectory);
     state = 'completed';
     return result;
+  } catch (error) {
+    if (error instanceof Error) failedRuns.set(error, runDirectory);
+    throw error;
   } finally {
     try {
       await writeState(state);

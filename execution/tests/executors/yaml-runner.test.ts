@@ -158,23 +158,30 @@ test('Agent 执行失败仍会销毁并恢复环境', async () => {
   const previousRunDirectory = process.env.MIDSCENE_RUN_DIR;
   for (const key of required) process.env[key] = 'test';
   let destroyed = false;
+  const reportPath = path.join(fixture.runDirectory, 'midscene', 'report', 'failed.html');
   try {
     await assert.rejects(
       executeMidsceneYaml({
         ...fixture,
         dryRun: false,
         agentFactory: async () => ({
+          reportFile: reportPath,
           runYaml: async () => {
             throw new Error('KeyboardTypeText 不支持字符');
           },
           destroy: async () => {
             destroyed = true;
+            await mkdir(path.dirname(reportPath), { recursive: true });
+            await writeFile(reportPath, '<html>failed run</html>', 'utf8');
           },
         }),
       }),
       /KeyboardTypeText 不支持字符/,
     );
     assert.equal(destroyed, true);
+    const persisted = JSON.parse(await readFile(fixture.resultPath, 'utf8'));
+    assert.equal(persisted.status, 'failed');
+    assert.equal(persisted.reportPath, reportPath);
     assert.equal(process.env.MIDSCENE_RUN_DIR, previousRunDirectory);
   } finally {
     for (const [key, value] of Object.entries(previous)) {

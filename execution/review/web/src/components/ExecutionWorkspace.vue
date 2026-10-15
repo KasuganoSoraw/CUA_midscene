@@ -74,6 +74,7 @@ const phaseLabel = computed(() => ({
   stopping: t('execution.stoppingLabel'),
   succeeded: t('execution.succeeded', { elapsed: elapsed.value }),
   failed: t('execution.failed'),
+  stopped: t('execution.stopped'),
 })[status.value.phase]);
 
 function applyInputDefaults(): void {

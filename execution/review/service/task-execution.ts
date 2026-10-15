@@ -7,6 +7,7 @@ import type {
   StartTaskExecutionRequest,
   TaskExecutionStatus,
 } from '../shared/types.js';
+import { resolveExecutionReport } from './execution-report.js';
 
 export interface TaskExecutionControl {
   status(): TaskExecutionStatus;
@@ -186,7 +187,7 @@ export class TaskExecutionManager implements TaskExecutionControl {
       });
       child.stdin.end();
     } catch (error) {
-      this.fail(generation, `无法启动任务执行进程：${errorMessage(error)}`);
+      this.fail(generation, `无法启动任务执行进程：${errorMessage(error)}`, 'launch');
       return;
     }
     this.child = child;
@@ -196,23 +197,24 @@ export class TaskExecutionManager implements TaskExecutionControl {
     child.stdout.on('data', (chunk) => { stdout = limitedAppend(stdout, chunk, maxStdoutBytes); });
     child.stderr.on('data', (chunk) => { diagnostics = limitedAppend(diagnostics, chunk, maxDiagnosticsBytes); });
     child.once('error', (error) => {
-      this.fail(generation, `任务执行进程错误：${error.message}`);
+      this.fail(generation, `任务执行进程错误：${error.message}`, 'launch');
     });
     child.once('close', (code, signal) => {
-      this.completeExecution(generation, request, code, signal, stdout, diagnostics);
+      void this.completeExecution(generation, request, code, signal, stdout, diagnostics)
+        .catch((error) => this.fail(generation, `无法整理执行结果：${errorMessage(error)}`));
     });
   }
 
-  private completeExecution(
+  private async completeExecution(
     generation: number, request: StartTaskExecutionRequest,
     code: number | null, signal: NodeJS.Signals | null, stdout: string, diagnostics: string,
-  ): void {
-    if (generation !== this.generation) return;
+  ): Promise<void> {
+    if (generation !== this.generation || !activePhases.has(this.current.phase)) return;
     this.child = undefined;
     const finishedAt = new Date().toISOString();
     if (this.stopRequested) {
       this.current = {
-        ...this.current, phase: 'failed', finishedAt,
+        ...this.current, phase: 'stopped', finishedAt,
         error: `任务已由用户停止${signal ? `（signal=${signal}）` : ''}`,
       };
       return;
@@ -225,10 +227,24 @@ export class TaskExecutionManager implements TaskExecutionControl {
     }
     const executor = objectValue(payload?.executor);
     const executorSummary = safeExecutorSummary(executor, request.inputs);
+    let reportUrl: string | undefined;
+    if (typeof payload?.runDir === 'string') {
+      const runsRoot = path.resolve(this.options.dataRoot, 'runs');
+      const runDir = path.resolve(payload.runDir);
+      if (path.dirname(runDir) === runsRoot) {
+        const runId = path.basename(runDir);
+        try {
+          await resolveExecutionReport(runsRoot, runId);
+          reportUrl = `/api/execution/runs/${encodeURIComponent(runId)}/report`;
+        } catch { /* Report availability does not change the execution result. */ }
+      }
+    }
+    if (generation !== this.generation) return;
     if (code === 0 && executor?.status === 'succeeded') {
       this.current = {
         ...this.current, phase: 'succeeded', finishedAt,
         result: {
+          ...(reportUrl ? { reportUrl } : {}),
           ...(typeof payload?.runDir === 'string' ? { runDir: payload.runDir } : {}),
           ...(typeof payload?.resolvedTaskPath === 'string' ? { resolvedTaskPath: payload.resolvedTaskPath } : {}),
           ...(executorSummary ? { executor: executorSummary } : {}),
@@ -245,6 +261,7 @@ export class TaskExecutionManager implements TaskExecutionControl {
       error: executorError || detail || `任务执行失败：exit=${String(code)} signal=${signal ?? '-'}`,
       ...(payload ? {
         result: {
+          ...(reportUrl ? { reportUrl } : {}),
           ...(typeof payload.runDir === 'string' ? { runDir: payload.runDir } : {}),
           ...(typeof payload.resolvedTaskPath === 'string' ? { resolvedTaskPath: payload.resolvedTaskPath } : {}),
           ...(executorSummary ? { executor: executorSummary } : {}),
@@ -253,12 +270,13 @@ export class TaskExecutionManager implements TaskExecutionControl {
     };
   }
 
-  private fail(generation: number, message: string): void {
+  private fail(generation: number, message: string, failureKind?: 'launch'): void {
     if (generation !== this.generation) return;
     this.child = undefined;
     this.current = {
       ...this.current,
       phase: 'failed',
+      ...(failureKind ? { failureKind } : {}),
       finishedAt: new Date().toISOString(),
       error: message,
     };
