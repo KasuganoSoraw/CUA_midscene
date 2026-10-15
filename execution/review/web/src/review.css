@@ -66,6 +66,7 @@
 .wait-fields textarea { min-height: 104px; background: white; font: inherit; line-height: 1.5; }
 @container (max-width: 520px) { .wait-fields { grid-template-columns: minmax(0, 1fr); } }
 .review-layout .input-options { padding: 12px; border-radius: 8px; background: #fcfcfd; }
+.runtime-input-toggle { display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--cua-color-text-secondary); font-size: 12px; }
 .review-layout .changes { margin: 24px 0 0; padding: 12px; border: 1px solid var(--cua-color-border); border-radius: 8px; background: #fcfcfd; }
 .review-layout .changes h3 { font-size: 13px; }
 .review-layout .changes article { font-size: 12px; }

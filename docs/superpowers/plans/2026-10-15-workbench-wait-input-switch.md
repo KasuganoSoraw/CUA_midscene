@@ -51,20 +51,21 @@ assert.match(translate('zh-CN', 'review.timeoutHelp'), /最长/);
 
 ## 任务 2：运行时输入开关
 
-- [ ] 添加失败测试：输入区域必须使用 `ReviewSwitch`；编译真实 Vue SFC 并断言 `role="switch"`、名称、布尔 `aria-checked`、原生 `disabled` 和点击更新事件。
-- [ ] 创建 `ReviewSwitch.vue`，使用以下状态接口和点击规则：
+- [x] 添加失败测试：输入区域必须使用 `ReviewSwitch`；编译真实 Vue SFC 并断言 `role="switch"`、名称、布尔 `aria-checked`、原生 `disabled` 和点击更新事件。
+- [x] 创建 `ReviewSwitch.vue`，使用以下状态接口和点击规则：
 
 ```ts
-const props = defineProps<{ modelValue: boolean; disabled?: boolean; ariaLabel: string }>();
+const props = defineProps<{ modelValue: boolean; disabled?: boolean; label: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>();
 function toggle(): void {
   if (!props.disabled) emit('update:modelValue', !props.modelValue);
 }
 ```
 
-- [ ] 模板使用原生 `button type="button" role="switch"`，绑定 `aria-label`、`aria-checked`、`disabled` 和 `@click="toggle"`。利用原生按钮的 Enter/Space 行为，不重复注册键盘切换事件。
-- [ ] CSS 使用 38×20 轨道、16 像素圆形滑块、32 像素点击区；开启颜色 `#0067d1`，关闭中性灰，分别提供 focus-visible、disabled 和 reduced-motion 样式。
-- [ ] 将参数化复选框替换为“文字 + 右侧开关”，使用 `v-model="editor.parameterized"` 和原有禁用表达式。保留条件字段、草稿与序列化逻辑。
-- [ ] 验证开关两态、禁用时不发事件、往返切换后参数字段仍保留。运行 `npm.cmd run typecheck`、相关测试与 `npm.cmd run build:web`。
-- [ ] 在本地预览核对等待布局、开关和 SVG；不保存或清空用户的任务草稿。
-- [ ] 显式暂存本任务路径并提交“使用运行时输入开关控制任务参数”。不推送、不合并。
+- [x] 模板使用原生 `button type="button" role="switch"`，绑定 `aria-label`、`aria-checked`、`disabled` 和 `@click="toggle"`。利用原生按钮的 Enter/Space 行为，不重复注册键盘切换事件。
+- [x] CSS 使用 38×20 轨道、16 像素圆形滑块、32 像素点击区；开启颜色 `#0067d1`，关闭中性灰，分别提供 focus-visible、disabled 和 reduced-motion 样式。
+- [x] 将参数化复选框替换为“文字 + 右侧开关”，使用 `v-model="editor.parameterized"` 和原有禁用表达式。保留条件字段、草稿与序列化逻辑。
+- [x] 验证开关两态、禁用时不发事件、往返切换后参数字段仍保留。运行 `npm.cmd run typecheck`、相关测试与 `npm.cmd run build:web`。
+- [x] 启动本地预览，确认静态资源与录制列表接口可用；不保存或清空用户的任务草稿。
+- [ ] 在浏览器核对等待布局、开关和 SVG 的视觉效果。
+- [x] 显式暂存本任务路径并提交“使用运行时输入开关控制任务参数”。不推送、不合并。

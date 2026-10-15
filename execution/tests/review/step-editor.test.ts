@@ -83,6 +83,20 @@ test('高级参数 JSON 只接受当前步骤的单个 string 定义', () => {
   assert.throws(() => parseInputPreview({ other: { type: 'string', label: 'x', default: '' } }, 'step-003'));
 });
 
+test('运行时输入开关往返切换保留标签、默认值和说明', () => {
+  const editor = parseStepEditor({
+    id: 'step-002', operation: 'input',
+    flow: [{ KeyboardTypeText: { locate: '搜索框', value: '{{step-002-input}}', mode: 'append' } }],
+    input: { type: 'string', label: '关键词', default: 'demo', description: '搜索内容' },
+  });
+  const parameterized = buildStepContent(editor, 'step-002');
+  editor.parameterized = false;
+  editor.inputValue = 'fixed';
+  assert.equal(buildStepContent(editor, 'step-002').input, null);
+  editor.parameterized = true;
+  assert.deepEqual(buildStepContent(editor, 'step-002'), parameterized);
+});
+
 test('无法识别的 Flow 保留为自定义结构', () => {
   const flow = [{ sleep: 300 }, { aiTap: '按钮' }, { aiWaitFor: '完成' }];
   const parsed = parseStepEditor({ id: 'step-001', operation: 'click', flow });

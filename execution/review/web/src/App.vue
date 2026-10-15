@@ -30,6 +30,7 @@ import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
 import ExecutionWorkspace from './components/ExecutionWorkspace.vue';
 import RecordingWorkspace from './components/RecordingWorkspace.vue';
 import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect.vue';
+import ReviewSwitch from './components/ReviewSwitch.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import TaskCatalog from './components/TaskCatalog.vue';
 import WorkbenchIcon from './components/WorkbenchIcon.vue';
@@ -803,10 +804,14 @@ onMounted(async () => {
               />
             </label>
             <fieldset class="input-options wide">
-              <label class="checkbox">
-                <input v-model="editor.parameterized" type="checkbox" :disabled="busy || !writable || advancedEditing" />
+              <div class="runtime-input-toggle">
                 <span>{{ t('review.parameterized') }}</span>
-              </label>
+                <ReviewSwitch
+                  v-model="editor.parameterized"
+                  :label="t('review.parameterized')"
+                  :disabled="busy || !writable || advancedEditing"
+                />
+              </div>
               <div v-if="editor.parameterized" class="input-fields">
                 <label>{{ t('review.inputLabel') }}<input v-model="editor.inputLabel" :readonly="busy || !writable || advancedEditing" /></label>
                 <label>{{ t('review.inputDefault') }}<input v-model="editor.inputDefault" :readonly="busy || !writable || advancedEditing" /></label>
