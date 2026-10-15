@@ -9,12 +9,26 @@ import { runPrompt, runRecordedTaskAiAct, runTask } from '../task/execution.js';
 import { loadRuntimeInputs } from '../task/inputs.js';
 import { describeTask, listScenes, listTasks, resolveTask } from '../task/tasks.js';
 import { dumpYamlDocument } from '../task/yaml-task.js';
+import { readExecutorResult } from '../contracts/validation.js';
+import { failedRunDirectory } from '../run-directory.js';
 
 type OptionValue = string | string[] | boolean;
 type ParsedOptions = Record<string, OptionValue | undefined>;
 
 export class CliUsageError extends Error {
   readonly exitCode = 2;
+}
+
+export async function failedRunOutput(error: unknown): Promise<string | undefined> {
+  const runDir = failedRunDirectory(error);
+  if (!runDir) return undefined;
+  try {
+    const executor = await readExecutorResult(path.join(runDir, 'execution-result.json'));
+    return json({ runDir, executor });
+  } catch (diagnosticError) {
+    console.error(`无法读取本次执行结果：${diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError)}`);
+    return undefined;
+  }
 }
 
 export const helpText = `CUA 场景、任务与 Midscene YAML 执行工具
@@ -343,6 +357,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     const output = await runCliCommand(argv);
     process.stdout.write(output);
   } catch (error) {
+    const failure = await failedRunOutput(error);
+    if (failure) process.stdout.write(failure);
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = error instanceof CliUsageError ? error.exitCode : 1;
   } finally {

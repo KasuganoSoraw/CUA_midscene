@@ -23,7 +23,7 @@ async function fixture() {
 
 async function waitFor(
   manager: TaskExecutionManager,
-  phase: 'running' | 'succeeded' | 'failed',
+  phase: 'running' | 'succeeded' | 'failed' | 'stopped',
 ): Promise<void> {
   const deadline = Date.now() + 4_000;
   while (manager.status().phase !== phase && Date.now() < deadline) {
@@ -126,9 +126,51 @@ test('任务执行管理器报告 CLI 失败并可停止运行中进程', async 
     await running.start(request);
     await waitFor(running, 'running');
     assert.equal((await running.stop()).phase, 'stopping');
-    await waitFor(running, 'failed');
+    await waitFor(running, 'stopped');
     assert.match(running.status().error ?? '', /用户停止/);
   } finally {
     await running.close();
+  }
+});
+
+test('成功和失败结果均提供实际存在的本地报告入口，并脱敏技术错误', async () => {
+  const { root, catalog } = await fixture();
+  const runDir = path.join(root, 'runs', 'test-run');
+  const reportPath = path.join(runDir, 'report.html');
+  await mkdir(runDir, { recursive: true });
+  await writeFile(reportPath, '<html>report</html>');
+  for (const status of ['succeeded', 'failed']) {
+    const executor = { schemaVersion: '0.2', status, dryRun: false, sourceYamlPath: path.join(runDir, 'task.yaml'), finishedAt: new Date().toISOString(), reportPath, ...(status === 'failed' ? { error: 'runner failed 测试输入' } : {}) };
+    await writeFile(path.join(runDir, 'execution-result.json'), JSON.stringify(executor));
+    const payload = JSON.stringify({ runDir, executor });
+    const manager = new TaskExecutionManager({
+      catalog, dataRoot: root, executionRoot: root, countdownMs: 0,
+      resolveLaunch: async () => ({ command: process.execPath, prefixArgs: ['-e', `process.stdout.write(${JSON.stringify(payload)});process.exit(${status === 'failed' ? 1 : 0})`, '--'] }),
+    });
+    try {
+      await manager.start(request);
+      await waitFor(manager, status as 'succeeded' | 'failed');
+      assert.equal(manager.status().result?.reportUrl, '/api/execution/runs/test-run/report');
+      if (status === 'failed') assert.equal(manager.status().error, 'runner failed [运行时输入]');
+    } finally { await manager.close(); }
+  }
+});
+
+test('技术详情不公开模型访问凭据', async () => {
+  const { root, catalog } = await fixture();
+  const previous = process.env.MIDSCENE_MODEL_API_KEY;
+  process.env.MIDSCENE_MODEL_API_KEY = 'secret-key-for-test';
+  const manager = new TaskExecutionManager({
+    catalog, dataRoot: root, executionRoot: root, countdownMs: 0,
+    resolveLaunch: async () => ({ command: process.execPath, prefixArgs: ['-e', 'process.stderr.write("401 Unauthorized secret-key-for-test");process.exit(1)', '--'] }),
+  });
+  try {
+    await manager.start(request);
+    await waitFor(manager, 'failed');
+    assert.equal(manager.status().error, '401 Unauthorized [访问凭据]');
+  } finally {
+    await manager.close();
+    if (previous === undefined) delete process.env.MIDSCENE_MODEL_API_KEY;
+    else process.env.MIDSCENE_MODEL_API_KEY = previous;
   }
 });

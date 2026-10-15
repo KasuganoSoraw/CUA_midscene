@@ -1,9 +1,29 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp } from 'node:fs/promises';
+import { cp, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { CliUsageError, helpText, runCliCommand } from '../../cua/cli/main.js';
+import { CliUsageError, failedRunOutput, helpText, runCliCommand } from '../../cua/cli/main.js';
+import { withRunDirectory } from '../../cua/run-directory.js';
+
+test('CLI 失败输出保留结构化运行结果，原始异常保持不变', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-cli-failure-'));
+  const failure = new Error('execution failed');
+  let runDir = '';
+  await assert.rejects(withRunDirectory(root, async directory => {
+    runDir = directory;
+    await writeFile(path.join(directory, 'execution-result.json'), JSON.stringify({
+      schemaVersion: '0.2', status: 'failed', sourceYamlPath: path.join(directory, 'task.yaml'),
+      dryRun: false, finishedAt: new Date().toISOString(), error: failure.message,
+    }));
+    throw failure;
+  }), actual => actual === failure);
+  const output = JSON.parse((await failedRunOutput(failure))!);
+  assert.equal(output.runDir, runDir);
+  assert.equal(output.executor.status, 'failed');
+  assert.equal(output.executor.error, failure.message);
+  assert.equal(await failedRunOutput(new Error('startup')), undefined);
+});
 
 async function taskDataRoot(): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-cli-data-'));

@@ -33,3 +33,5 @@ import './review/evidence-mode.test.js';
 import './review/workbench-controls.test.js';
 import './review/windows-recorder.test.js';
 import './review/task-execution.test.js';
+import './review/execution-report.test.js';
+import './review/execution-feedback.test.js';

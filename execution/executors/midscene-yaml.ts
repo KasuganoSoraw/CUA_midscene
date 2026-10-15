@@ -36,15 +36,13 @@ async function writeResult(resultPath: string, result: ExecutorResult): Promise<
 
 async function runMidsceneScript(
   content: string, script: ReturnType<typeof parseYamlScript>, options: MidsceneYamlExecutionOptions,
-): Promise<{ midsceneResult?: Record<string, unknown>; reportPath?: string; finalScreenshotPath?: string }> {
+  artifacts: Pick<ExecutorResult, 'midsceneResult' | 'reportPath' | 'finalScreenshotPath'>,
+): Promise<void> {
   warnIfNodeVersionIsOld();
   checkRequiredModelEnv();
   const previousRunDirectory = process.env.MIDSCENE_RUN_DIR;
   let agent: AgentLike | undefined;
   let removeDumpListener: (() => void) | undefined;
-  let reportPath: string | undefined;
-  let midsceneResult: Record<string, unknown> | undefined;
-  let finalScreenshotPath: string | undefined;
   const observer = createMidsceneExecutionObserver(options.onProgress);
   try {
     process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(options.runDirectory), 'midscene');
@@ -62,16 +60,16 @@ async function runMidsceneScript(
     } else if (options.onProgress) {
       throw new Error('Midscene Agent 不支持过程事件');
     }
-    midsceneResult = (await agent.runYaml(content)).result;
-    finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
+    artifacts.midsceneResult = (await agent.runYaml(content)).result;
+    artifacts.finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
   } finally {
     try {
       removeDumpListener?.();
     } finally {
       try {
         if (agent) {
-          await agent.destroy();
-          reportPath = await existingMidsceneHtmlReport(agent.reportFile);
+          try { await agent.destroy(); }
+          finally { artifacts.reportPath = await existingMidsceneHtmlReport(agent.reportFile); }
         }
       } finally {
         if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
@@ -79,9 +77,6 @@ async function runMidsceneScript(
       }
     }
   }
-  return { ...(midsceneResult === undefined ? {} : { midsceneResult }),
-    ...(reportPath === undefined ? {} : { reportPath }),
-    ...(finalScreenshotPath === undefined ? {} : { finalScreenshotPath }) };
 }
 
 export async function executeMidsceneYaml(
@@ -90,6 +85,7 @@ export async function executeMidsceneYaml(
   const yamlPath = path.resolve(options.yamlPath);
   const resultPath = path.resolve(options.resultPath);
   let taskCount: number | undefined;
+  const artifacts: Pick<ExecutorResult, 'midsceneResult' | 'reportPath' | 'finalScreenshotPath'> = {};
   try {
     let content: string;
     try {
@@ -103,12 +99,8 @@ export async function executeMidsceneYaml(
       throw new Error('Midscene YAML tasks 必须是非空数组');
     }
     taskCount = script.tasks.length;
-    let midsceneResult: Record<string, unknown> | undefined;
-    let reportPath: string | undefined;
-    let finalScreenshotPath: string | undefined;
-
     if (!options.dryRun) {
-      ({ midsceneResult, reportPath, finalScreenshotPath } = await runMidsceneScript(content, script, options));
+      await runMidsceneScript(content, script, options, artifacts);
     }
 
     const result: ExecutorResult = {
@@ -117,9 +109,7 @@ export async function executeMidsceneYaml(
       sourceYamlPath: yamlPath,
       dryRun: options.dryRun,
       taskCount,
-      ...(midsceneResult === undefined ? {} : { midsceneResult }),
-      ...(reportPath === undefined ? {} : { reportPath }),
-      ...(finalScreenshotPath === undefined ? {} : { finalScreenshotPath }),
+      ...artifacts,
       finishedAt: new Date().toISOString(),
     };
     await writeResult(resultPath, result);
@@ -132,6 +122,7 @@ export async function executeMidsceneYaml(
       sourceYamlPath: yamlPath,
       dryRun: options.dryRun,
       ...(taskCount === undefined ? {} : { taskCount }),
+      ...artifacts,
       finishedAt: new Date().toISOString(),
       error: message,
     });
