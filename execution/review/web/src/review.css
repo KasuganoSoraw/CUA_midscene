@@ -20,8 +20,6 @@
 .step-delete { display: flex; align-items: center; padding: 4px; border: 0; background: transparent; color: var(--cua-color-text-secondary); opacity: 0; }
 .step-row.active .step-delete, .step-row:hover .step-delete, .step-row:focus-within .step-delete { opacity: 1; }
 .step-delete:hover:not(:disabled) { color: var(--cua-color-error); }
-.review-layout .structure-actions { align-items: center; padding: 12px 0 0; margin-top: 8px; }
-.structure-actions small { margin-left: auto; color: var(--cua-color-text-tertiary); font-size: 11px; }
 .review-layout .editor { min-width: 0; padding: 4px 0 0 20px; overflow-y: auto; }
 .review-editor-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .review-editor-heading h2 { font-size: 15px; }

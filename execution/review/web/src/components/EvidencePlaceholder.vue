@@ -13,7 +13,6 @@ const { t } = useI18n();
       <path class="slash" d="m25 83 110-66" />
     </svg>
     <strong>{{ t('evidence.noneTitle') }}</strong>
-    <span>{{ t('evidence.noneDescription') }}</span>
   </div>
 </template>
 
@@ -50,10 +49,5 @@ strong {
   color: var(--cua-color-text-primary);
   font-size: 14px;
   font-weight: 500;
-}
-span {
-  max-width: 420px;
-  font-size: 12px;
-  line-height: 1.55;
 }
 </style>

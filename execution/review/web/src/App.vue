@@ -22,6 +22,7 @@ import {
 } from '../../shared/step-editor';
 import { ApiError, api } from './api';
 import { ReviewDraftStorage } from './draft-storage';
+import { resolveEvidenceMode, type EvidenceMode } from './evidence-mode';
 import { referenceImageMaxBytes, referenceImageMimeTypes } from '../../shared/reference-upload';
 import { useI18n, type MessageKey } from './i18n';
 import AgentWorkspace from './components/AgentWorkspace.vue';
@@ -91,14 +92,12 @@ const busy = ref(false);
 const conflict = ref(false);
 const taskDeleteOpen = ref(false);
 const draftDiscardOpen = ref(false);
-const stepDeleteOpen = ref(false);
-const pendingOperation = ref<ReviewOperation>();
 const dragIndex = ref<number>();
 const catalogVersion = ref(0);
 const referenceFileInput = ref<HTMLInputElement>();
 const referenceUploading = ref(false);
 const referenceUploadError = ref('');
-const evidenceMode = ref<'full' | 'crop' | 'reference' | 'placeholder'>('full');
+const requestedEvidenceMode = ref<EvidenceMode>('full');
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
 let draftStorage: ReviewDraftStorage | undefined;
@@ -136,6 +135,10 @@ function clone<T>(value: T): T {
 }
 
 const current = computed(() => steps.value[selected.value]);
+const evidenceMode = computed({
+  get: () => resolveEvidenceMode(requestedEvidenceMode.value, editor.operation, current.value?.evidence),
+  set: (value: EvidenceMode) => { requestedEvidenceMode.value = value; },
+});
 const currentTitle = computed(() => current.value
   ? t('review.stepTitle', { index: selected.value + 1, operation: operationLabel(current.value.operation) })
   : t('review.noStep'));
@@ -220,11 +223,7 @@ function populateEditor(): void {
   advancedEditing.value = false;
   advancedFlowText.value = JSON.stringify(step.flow, null, 2);
   advancedInputText.value = JSON.stringify(inputPreview(step.id, step.input), null, 2);
-  const evidence = step.evidence;
-  evidenceMode.value = evidence?.crop
-    ? 'crop'
-    : evidence?.full ? 'full'
-      : (editor.operation === 'click' || editor.operation === 'doubleClick') ? 'reference' : 'placeholder';
+  evidenceMode.value = resolveEvidenceMode('crop', editor.operation, step.evidence);
   hydratingEditor = false;
 }
 
@@ -426,19 +425,13 @@ function syncSemanticDraft(): void {
 function changeOperation(value: string): void {
   const next = value as ReviewOperation;
   if (next === editor.operation) return;
-  pendingOperation.value = next;
-}
-
-function confirmOperation(): void {
-  const next = pendingOperation.value;
-  if (!next) return;
   const nextEditor = defaultStepEditor(next, editor.delayMs);
   hydratingEditor = true;
   delete editor.referenceCandidate;
   Object.assign(editor, nextEditor);
   hydratingEditor = false;
   syncSemanticDraft();
-  pendingOperation.value = undefined;
+  evidenceMode.value = resolveEvidenceMode('crop', next, current.value?.evidence);
 }
 
 function enableAdvancedEditing(): void {
@@ -490,9 +483,9 @@ async function insertStep(): Promise<void> {
   populateEditor();
 }
 
-async function removeStep(): Promise<void> {
-  await mutate({ type: 'remove', index: selected.value });
-  stepDeleteOpen.value = false;
+async function removeStep(index: number): Promise<void> {
+  selected.value = index;
+  await mutate({ type: 'remove', index });
 }
 
 async function dropStep(index: number): Promise<void> {
@@ -510,14 +503,6 @@ function startStepDrag(event: DragEvent, index: number): void {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', String(index));
   }
-}
-
-async function move(delta: number): Promise<void> {
-  const target = selected.value + delta;
-  if (target < 0 || target >= steps.value.length) return;
-  const from = selected.value;
-  await mutate({ type: 'move', from, to: target });
-  selected.value = target;
 }
 
 async function save(): Promise<boolean> {
@@ -729,18 +714,13 @@ onMounted(async () => {
             :class="{ active: selected === index, dragging: dragIndex === index }"
             :draggable="writable && !busy && !advancedEditing" @dragstart="startStepDrag($event, index)" @dragend="dragIndex = undefined" @dragover.prevent @drop.prevent="dropStep(index)">
             <span class="drag-handle" :title="t('review.dragStep')"><WorkbenchIcon name="grip" /></span>
-            <button class="step-select" :disabled="busy" @click="selected = index" @keydown.alt.up.prevent="move(-1)" @keydown.alt.down.prevent="move(1)">
+            <button class="step-select" :disabled="busy" @click="selected = index">
               <span class="step-index">{{ index + 1 }}</span><span class="step-label">{{ operationLabel(item.operation) }}</span>
               <span v-if="item.evidence" class="evidence-dot" :title="t('review.hasEvidence')"></span>
               <WorkbenchIcon v-if="item.referenceImages?.length" name="image" class="reference-mark" :title="t('review.referenceUsed')" />
             </button>
-            <button class="step-delete" :disabled="!writable || busy || steps.length <= 1" :aria-label="t('review.deleteStep', { index: index + 1 })" @click="selected = index; stepDeleteOpen = true"><WorkbenchIcon name="trash" /></button>
+            <button class="step-delete" :disabled="!writable || busy || steps.length <= 1" :aria-label="t('review.deleteStep', { index: index + 1 })" @click="removeStep(index)"><WorkbenchIcon name="trash" /></button>
           </div>
-        </div>
-        <div class="structure-actions">
-          <button :disabled="!writable || busy || selected === 0" :title="t('review.moveUp')" @click="move(-1)">↑</button>
-          <button :disabled="!writable || busy || selected === steps.length - 1" :title="t('review.moveDown')" @click="move(1)">↓</button>
-          <small>{{ t('review.reorderHelp') }}</small>
         </div>
       </section>
 
@@ -910,9 +890,6 @@ onMounted(async () => {
     <main v-else-if="mode === 'agent' && devMode" class="workspace agent-layout">
       <AgentWorkspace />
     </main>
-
-    <ConfirmDialog :open="stepDeleteOpen" :title="t('review.deleteStepTitle')" :message="t('review.confirmRemove', { name: currentTitle })" :target="currentTitle" :confirm-label="t('common.delete')" :cancel-label="t('common.cancel')" :busy="busy" @confirm="removeStep" @cancel="stepDeleteOpen = false" />
-    <ConfirmDialog :open="Boolean(pendingOperation)" variant="primary" :target="currentTitle" :title="t('review.operationTitle')" :message="t('review.confirmOperation', { from: operationLabel(editor.operation), to: pendingOperation ? operationLabel(pendingOperation) : '' })" :confirm-label="t('review.confirmChange')" :cancel-label="t('common.cancel')" :busy="busy" @confirm="confirmOperation" @cancel="pendingOperation = undefined" />
 
     <ConfirmDialog
       :open="draftDiscardOpen"
