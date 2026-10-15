@@ -49,10 +49,13 @@ function errorMessage(error: unknown): string {
 }
 
 function redactInputs(message: string, inputs: Record<string, string>): string {
+  const credentials = [process.env.MIDSCENE_MODEL_API_KEY, process.env.CUA_AGENT_MODEL_API_KEY]
+    .filter((value): value is string => Boolean(value));
+  const withoutCredentials = credentials.reduce((result, value) => result.replaceAll(value, '[访问凭据]'), message);
   return Object.values(inputs)
     .filter((value) => value.length > 0)
     .sort((left, right) => right.length - left.length)
-    .reduce((result, value) => result.replaceAll(value, '[运行时输入]'), message);
+    .reduce((result, value) => result.replaceAll(value, '[运行时输入]'), withoutCredentials);
 }
 
 function objectValue(value: unknown): JsonObject | undefined {
@@ -236,7 +239,7 @@ export class TaskExecutionManager implements TaskExecutionControl {
         try {
           await resolveExecutionReport(runsRoot, runId);
           reportUrl = `/api/execution/runs/${encodeURIComponent(runId)}/report`;
-        } catch { /* Report availability does not change the execution result. */ }
+        } catch { /* 报告是否可用不改变本次执行结果。 */ }
       }
     }
     if (generation !== this.generation) return;

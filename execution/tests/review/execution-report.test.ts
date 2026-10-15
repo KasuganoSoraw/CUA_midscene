@@ -23,6 +23,8 @@ test('执行报告仅从运行目录内读取，报告使用隔离的 HTML 上�
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-security-policy') ?? '', /sandbox/);
     assert.ok(!(response.headers.get('content-security-policy') ?? '').includes('allow-same-origin'));
+    assert.match(response.headers.get('content-security-policy') ?? '', /connect-src 'none'/);
+    assert.match(response.headers.get('content-security-policy') ?? '', /form-action 'none'/);
     assert.equal(await response.text(), '<html>execution report</html>');
     assert.equal((await fetch(new URL('/api/execution/runs/missing/report', server.url))).status, 404);
   } finally { await server.close(); }

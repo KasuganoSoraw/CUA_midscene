@@ -155,3 +155,22 @@ test('成功和失败结果均提供实际存在的本地报告入口，并脱�
     } finally { await manager.close(); }
   }
 });
+
+test('技术详情不公开模型访问凭据', async () => {
+  const { root, catalog } = await fixture();
+  const previous = process.env.MIDSCENE_MODEL_API_KEY;
+  process.env.MIDSCENE_MODEL_API_KEY = 'secret-key-for-test';
+  const manager = new TaskExecutionManager({
+    catalog, dataRoot: root, executionRoot: root, countdownMs: 0,
+    resolveLaunch: async () => ({ command: process.execPath, prefixArgs: ['-e', 'process.stderr.write("401 Unauthorized secret-key-for-test");process.exit(1)', '--'] }),
+  });
+  try {
+    await manager.start(request);
+    await waitFor(manager, 'failed');
+    assert.equal(manager.status().error, '401 Unauthorized [访问凭据]');
+  } finally {
+    await manager.close();
+    if (previous === undefined) delete process.env.MIDSCENE_MODEL_API_KEY;
+    else process.env.MIDSCENE_MODEL_API_KEY = previous;
+  }
+});

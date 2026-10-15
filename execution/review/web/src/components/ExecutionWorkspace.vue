@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/types';
 import { api } from '../api';
 import { useI18n } from '../i18n';
+import { executionFeedback } from '../execution-feedback';
 import ReviewSelect, { type ReviewSelectOption } from './ReviewSelect.vue';
 
 const { t } = useI18n();
@@ -31,6 +32,7 @@ const inputs = ref<Record<string, string>>({});
 const status = ref<TaskExecutionStatus>({ phase: 'idle' });
 const busy = ref(false);
 const error = ref('');
+const connectionError = ref('');
 const clock = ref(Date.now());
 let poll: ReturnType<typeof setInterval> | undefined;
 
@@ -67,7 +69,13 @@ const elapsed = computed(() => {
   const seconds = Math.max(0, Math.floor((end - new Date(status.value.startedAt).getTime()) / 1000));
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 });
-const phaseLabel = computed(() => ({
+const feedback = computed(() => executionFeedback(status.value));
+const requestDescriptionKey = computed(() => {
+  const feedback = executionFeedback({ phase: 'failed', error: error.value });
+  if (!feedback || feedback.titleKey === 'execution.failed') return 'execution.operationFailedHelp';
+  return feedback.descriptionKey;
+});
+const phaseLabel = computed(() => feedback.value ? t(feedback.value.titleKey, { elapsed: elapsed.value }) : ({
   idle: t('execution.idle'),
   preparing: t('execution.preparing', { seconds: countdown.value }),
   running: t('execution.running', { elapsed: elapsed.value }),
@@ -126,9 +134,9 @@ async function applyTarget(): Promise<void> {
 async function refreshStatus(): Promise<void> {
   try {
     status.value = await api.executionStatus();
-    error.value = '';
+    connectionError.value = '';
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : String(caught);
+    connectionError.value = caught instanceof Error ? caught.message : String(caught);
   }
 }
 
@@ -222,7 +230,11 @@ onUnmounted(() => { if (poll) clearInterval(poll); });
         <p>{{ t('execution.warning') }}</p>
       </div>
 
-      <div v-if="error" class="execution-error">{{ error }}</div>
+      <div v-if="error || connectionError" class="execution-error" role="alert">
+        <strong>{{ t(error ? 'execution.operationFailed' : 'execution.connectionLost') }}</strong>
+        <p>{{ t(error ? requestDescriptionKey : 'execution.connectionLostHelp') }}</p>
+        <details class="execution-diagnostics"><summary>{{ t('execution.technicalDetails') }}</summary><pre>{{ error || connectionError }}</pre></details>
+      </div>
       <div class="execution-actions">
         <span>{{ t('execution.inputsEphemeral') }}</span>
         <button v-if="active" class="danger execution-stop" :disabled="busy || status.phase === 'stopping'" @click="stop">
@@ -239,8 +251,12 @@ onUnmounted(() => { if (poll) clearInterval(poll); });
       <p v-if="status.scene">{{ status.scene }} / {{ status.task }}</p>
       <div v-if="status.phase === 'preparing'" class="countdown">{{ countdown }}</div>
       <p v-else-if="status.phase === 'running' || status.phase === 'stopping'" class="elapsed">{{ elapsed }}</p>
-      <p v-if="status.phase === 'succeeded'" class="execution-success">{{ t('execution.success') }}</p>
-      <p v-if="status.error" class="execution-error status-error">{{ status.error }}</p>
+      <div v-if="feedback" class="execution-feedback" role="status" aria-live="polite">
+        <p>{{ t(feedback.descriptionKey) }}</p>
+        <a v-if="status.result?.reportUrl" class="secondary execution-report-link" :href="status.result.reportUrl" target="_blank" rel="noopener noreferrer">{{ t('execution.viewReport') }}</a>
+        <p v-else class="execution-report-unavailable">{{ t('execution.reportUnavailable') }}</p>
+        <details v-if="status.error" class="execution-diagnostics"><summary>{{ t('execution.technicalDetails') }}</summary><pre>{{ status.error }}</pre></details>
+      </div>
       <div v-if="developerMode && status.result?.runDir" class="execution-result">
         <small>{{ t('execution.outputDirectory') }}</small>
         <code :title="status.result.runDir">{{ status.result.runDir }}</code>

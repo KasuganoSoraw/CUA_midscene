@@ -3,6 +3,7 @@ import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { cleanupRunHistorySafely, runStateFilename } from './run-history.js';
 
+// 保留原始异常对象，将运行目录作为进程内诊断上下文。
 const failedRuns = new WeakMap<Error, string>();
 
 export function failedRunDirectory(error: unknown): string | undefined {
