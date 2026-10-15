@@ -32,7 +32,7 @@ import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import TaskCatalog from './components/TaskCatalog.vue';
 import WorkbenchIcon from './components/WorkbenchIcon.vue';
-import uploadPlaceholder from './assets/ucd/upload-placeholder.svg';
+import uploadPlaceholder from './assets/ucd/IllHdEmptyNoRecord.svg';
 
 const { locale, t, setLocale } = useI18n();
 
@@ -760,7 +760,7 @@ onMounted(async () => {
           <div v-if="evidenceMode === 'reference'" class="reference-gallery">
             <article v-for="(image, imageIndex) in displayedReferenceImages" :key="`${image.name}:${image.url}`">
               <div class="reference-image-frame"><img :src="referenceImageUrl(image)" :alt="t('review.referenceImage')" />
-                <button v-if="imageIndex === 0" class="secondary reference-replace" :disabled="referenceUploadDisabled" @click="referenceFileInput?.click()"><WorkbenchIcon name="upload" />{{ referenceUploading ? t('review.referenceUploading') : t('review.replaceReference') }}</button>
+                <button v-if="imageIndex === 0" class="secondary reference-replace" :disabled="referenceUploadDisabled" @click="referenceFileInput?.click()"><WorkbenchIcon name="add" />{{ referenceUploading ? t('review.referenceUploading') : t('review.replaceReference') }}</button>
               </div>
               <div class="reference-card-content">
                 <label v-if="imageIndex === 0" class="reference-switch-label">{{ t('review.enableReference') }}

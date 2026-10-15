@@ -47,10 +47,10 @@
 .reference-switch > span { display: block; width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,.15); transition: transform .15s; }
 .reference-switch[aria-checked="true"] { background: #0067d1; }
 .reference-switch[aria-checked="true"] > span { transform: translateX(18px); }
-.reference-empty { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: var(--cua-color-text-tertiary); }
+.reference-empty { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; color: var(--cua-color-text-tertiary); }
 .reference-empty > span { font-size: 12px; }
 .reference-upload > span { color: var(--cua-color-primary); }
-.review-layout .reference-upload .upload-placeholder { width: 48px; height: 48px; object-fit: contain; opacity: .55; }
+.review-layout .reference-upload .upload-placeholder { width: 134px; height: 134px; object-fit: contain; }
 .reference-upload:hover:not(:disabled) { border-color: var(--cua-color-primary); background: #fcfcfd; }
 .reference-replace { position: absolute; z-index: 1; left: 50%; top: 50%; display: inline-flex; align-items: center; gap: 6px; transform: translate(-50%, -50%); white-space: nowrap; opacity: 0; }
 .reference-image-frame:has(.reference-replace)::after { position: absolute; inset: 0; background: rgba(0,0,0,.25); content: ''; pointer-events: none; opacity: 0; }
