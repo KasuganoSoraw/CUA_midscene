@@ -759,7 +759,7 @@ onMounted(async () => {
               <div class="reference-card-content"><label class="reference-switch-label">{{ t('review.enableReference') }}<button class="reference-switch" role="switch" :aria-label="t('review.enableReference')" :aria-checked="false" disabled><span></span></button></label><p>{{ t('review.referenceHelp') }}</p></div>
             </article>
           </div>
-          <div v-else class="recorded-image-frame">
+          <div v-else class="recorded-image-frame" :class="{ 'is-placeholder': !evidencePath(current) }">
             <img v-if="evidencePath(current)" :src="api.evidenceUrl(scene, task, evidencePath(current)!)" :alt="t('review.evidenceAlt', { name: current.name })" />
             <EvidencePlaceholder v-else />
           </div>

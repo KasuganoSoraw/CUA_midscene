@@ -9,6 +9,19 @@ import { translate } from '../../review/web/src/i18n.js';
 
 const webRoot = new URL('../../review/web/src/', import.meta.url);
 
+test('录制截图按比例显示，仅缺图占位使用固定底框', async () => {
+  const app = await readFile(new URL('App.vue', webRoot), 'utf8');
+  const css = await readFile(new URL('review.css', webRoot), 'utf8');
+  const frame = css.match(/\.review-layout \.recorded-image-frame\s*\{([^}]+)\}/)?.[1] ?? '';
+  const image = css.match(/\.recorded-image-frame > img\s*\{([^}]+)\}/)?.[1] ?? '';
+  assert.ok(/width:\s*fit-content/.test(frame));
+  assert.ok(!/(?:^|;)\s*(?:height|background|border):/.test(frame));
+  assert.ok(/height:\s*auto/.test(image));
+  assert.ok(/max-height:\s*228px/.test(image));
+  assert.ok(/\.recorded-image-frame\.is-placeholder\s*\{[^}]*height:\s*228px/.test(css));
+  assert.ok(/:class="\{ 'is-placeholder': !evidencePath\(current\) \}"/.test(app));
+});
+
 test('动作配置标题与图片区域保留独立的垂直间距', async () => {
   const css = await readFile(new URL('review.css', webRoot), 'utf8');
   const rule = css.match(/\.review-layout \.action-config-title\s*\{([^}]+)\}/)?.[1] ?? '';
