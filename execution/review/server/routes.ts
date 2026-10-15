@@ -20,6 +20,7 @@ import type {
 import { applyReviewMutation } from '../service/task-mutations.js';
 import { uploadReferenceImage } from '../service/reference-images.js';
 import { referenceImageMaxBytes, referenceImageMimeTypes } from '../shared/reference-upload.js';
+import { resolveExecutionReport } from '../service/execution-report.js';
 import { RecordingGenerationManager } from '../service/recording-generation.js';
 import {
   PythonAgentInvoker,
@@ -227,6 +228,15 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   if (agent) app.addHook('onClose', async () => agent.close());
 
   app.get('/api/execution/status', async () => execution.status());
+
+  app.get<{ Params: { runId: string } }>('/api/execution/runs/:runId/report', async (request, reply) => {
+    const report = await resolveExecutionReport(options.layout.data!.runsRoot, request.params.runId);
+    return reply.type('text/html; charset=utf-8')
+      .header('content-security-policy', "sandbox allow-scripts allow-downloads; connect-src 'none'; form-action 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'")
+      .header('x-content-type-options', 'nosniff')
+      .header('referrer-policy', 'no-referrer')
+      .send(await readFile(report));
+  });
 
   app.post<{ Body: JsonObject }>('/api/execution/start', {
     schema: { body: startTaskExecutionBodySchema },

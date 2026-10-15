@@ -198,7 +198,8 @@ export type TaskExecutionPhase =
   | 'running'
   | 'stopping'
   | 'succeeded'
-  | 'failed';
+  | 'failed'
+  | 'stopped';
 
 export interface StartTaskExecutionRequest {
   scene: string;
@@ -208,6 +209,7 @@ export interface StartTaskExecutionRequest {
 }
 
 export interface TaskExecutionResultSummary {
+  reportUrl?: string;
   runDir?: string;
   resolvedTaskPath?: string;
   executor?: JsonObject;
@@ -224,4 +226,5 @@ export interface TaskExecutionStatus {
   finishedAt?: string;
   result?: TaskExecutionResultSummary;
   error?: string;
+  failureKind?: 'launch';
 }

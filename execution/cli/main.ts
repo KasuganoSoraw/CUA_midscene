@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   CliUsageError,
+  failedRunOutput,
   helpText as cuaHelpText,
   runCliCommand as runCuaCliCommand,
 } from '../cua/cli/main.js';
@@ -66,6 +67,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   try {
     process.stdout.write(await runCliCommand(argv));
   } catch (error) {
+    const failure = await failedRunOutput(error);
+    if (failure) process.stdout.write(failure);
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = error instanceof CliUsageError ? error.exitCode : 1;
   } finally {
