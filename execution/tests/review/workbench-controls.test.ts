@@ -9,6 +9,13 @@ import { translate } from '../../review/web/src/i18n.js';
 
 const webRoot = new URL('../../review/web/src/', import.meta.url);
 
+test('工作台统一使用系统微软雅黑，不加载字体包', async () => {
+  const css = await readFile(new URL('style.css', webRoot), 'utf8');
+  assert.ok(/--cua-font-family:\s*"Microsoft YaHei", "微软雅黑", sans-serif/.test(css));
+  assert.ok(/font-family:\s*var\(--cua-font-family\)/.test(css));
+  assert.ok(!/ui-monospace|SFMono-Regular|Consolas|@font-face/.test(css));
+});
+
 test('录制截图按比例显示，仅缺图占位使用固定底框', async () => {
   const app = await readFile(new URL('App.vue', webRoot), 'utf8');
   const css = await readFile(new URL('review.css', webRoot), 'utf8');
