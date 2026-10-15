@@ -22,13 +22,21 @@ import {
 } from '../../shared/step-editor';
 import { ApiError, api } from './api';
 import { ReviewDraftStorage } from './draft-storage';
+import { resolveEvidenceMode, type EvidenceMode } from './evidence-mode';
+import { referenceImageMaxBytes, referenceImageMimeTypes } from '../../shared/reference-upload';
 import { useI18n, type MessageKey } from './i18n';
 import AgentWorkspace from './components/AgentWorkspace.vue';
 import EvidencePlaceholder from './components/EvidencePlaceholder.vue';
 import ExecutionWorkspace from './components/ExecutionWorkspace.vue';
 import RecordingWorkspace from './components/RecordingWorkspace.vue';
 import ReviewSelect, { type ReviewSelectOption } from './components/ReviewSelect.vue';
+import ReviewSwitch from './components/ReviewSwitch.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
+import TaskCatalog from './components/TaskCatalog.vue';
+import WorkbenchIcon from './components/WorkbenchIcon.vue';
+import uploadPlaceholder from './assets/ucd/IllHdEmptyNoRecord.svg';
+import actionInfoIcon from './assets/ucd/action-info.svg';
+import waitInfoIcon from './assets/ucd/wait-info.svg';
 
 const { locale, t, setLocale } = useI18n();
 
@@ -87,9 +95,12 @@ const busy = ref(false);
 const conflict = ref(false);
 const taskDeleteOpen = ref(false);
 const draftDiscardOpen = ref(false);
-const pendingOperation = ref<ReviewOperation>();
-const pendingStepRemoval = ref<{ index: number; name: string }>();
-const evidenceMode = ref<'full' | 'crop' | 'reference' | 'placeholder'>('full');
+const dragIndex = ref<number>();
+const catalogVersion = ref(0);
+const referenceFileInput = ref<HTMLInputElement>();
+const referenceUploading = ref(false);
+const referenceUploadError = ref('');
+const requestedEvidenceMode = ref<EvidenceMode>('full');
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
 let draftStorage: ReviewDraftStorage | undefined;
@@ -127,11 +138,16 @@ function clone<T>(value: T): T {
 }
 
 const current = computed(() => steps.value[selected.value]);
+const evidenceMode = computed({
+  get: () => resolveEvidenceMode(requestedEvidenceMode.value, editor.operation, current.value?.evidence),
+  set: (value: EvidenceMode) => { requestedEvidenceMode.value = value; },
+});
 const currentTitle = computed(() => current.value
   ? t('review.stepTitle', { index: selected.value + 1, operation: operationLabel(current.value.operation) })
   : t('review.noStep'));
 const writable = computed(() => Boolean(view.value?.writable));
 const referenceImageCandidate = computed<ReviewReferenceImage | undefined>(() => {
+  if (editor.referenceCandidate) return editor.referenceCandidate;
   const step = current.value;
   return step?.evidence?.reference
     ? { name: `${step.id}-reference`, url: step.evidence.reference }
@@ -163,6 +179,8 @@ const referenceBindingDisabledReason = computed<string | undefined>(() => {
   }
   return undefined;
 });
+const referenceUploadDisabled = computed(() => !writable.value || busy.value || conflict.value || advancedEditing.value
+  || editor.custom || multipleReferenceImages.value || (editor.operation !== 'click' && editor.operation !== 'doubleClick'));
 const dirty = computed(() => changes.value.length > 0);
 const builtContent = computed(() => buildStepContent(editor, current.value?.id ?? 'step-001'));
 const flowPreview = computed(() => JSON.stringify(builtContent.value.flow, null, 2));
@@ -200,16 +218,15 @@ function rebuildSteps(): void {
 function populateEditor(): void {
   const step = current.value;
   if (!step) return;
+  referenceUploadError.value = '';
   hydratingEditor = true;
+  delete editor.referenceCandidate;
   Object.assign(editor, parseStepEditor(step));
   if (editorDrafts[step.id]) Object.assign(editor, clone(editorDrafts[step.id]));
   advancedEditing.value = false;
   advancedFlowText.value = JSON.stringify(step.flow, null, 2);
   advancedInputText.value = JSON.stringify(inputPreview(step.id, step.input), null, 2);
-  const evidence = step.evidence;
-  evidenceMode.value = 'placeholder';
-  if (evidence?.crop) evidenceMode.value = 'crop';
-  else if (evidence?.full) evidenceMode.value = 'full';
+  evidenceMode.value = resolveEvidenceMode('crop', editor.operation, step.evidence);
   hydratingEditor = false;
 }
 
@@ -293,6 +310,13 @@ async function openTask(item: TaskCatalogItem): Promise<void> {
   await loadTask();
 }
 
+async function openCatalogTask(target: { scene: string; task: string }): Promise<void> {
+  if (busy.value) return;
+  scene.value = target.scene;
+  task.value = target.task;
+  await loadTasks();
+}
+
 async function loadTask(restoreDraft = true): Promise<void> {
   if (!scene.value || !task.value) return;
   busy.value = true;
@@ -350,6 +374,11 @@ async function loadTask(restoreDraft = true): Promise<void> {
 
 async function mutate(mutation: ReviewMutation): Promise<void> {
   if (!draft.value || !writable.value) return;
+  const candidates = steps.value.map(item => editorDrafts[item.id]?.referenceCandidate);
+  if (current.value) candidates[selected.value] = editor.referenceCandidate;
+  if (mutation.type === 'insert') candidates.splice(mutation.index, 0, undefined);
+  else if (mutation.type === 'remove') candidates.splice(mutation.index, 1);
+  else if (mutation.type === 'move') candidates.splice(mutation.to, 0, ...candidates.splice(mutation.from, 1));
   busy.value = true;
   try {
     const result = await api.mutate(scene.value, task.value, draft.value, mutation);
@@ -357,6 +386,9 @@ async function mutate(mutation: ReviewMutation): Promise<void> {
     draft.value = result.draft;
     changes.value.push(result.change);
     rebuildSteps();
+    steps.value.forEach((item, index) => {
+      if (candidates[index]) editorDrafts[item.id] = { ...parseStepEditor(item), referenceCandidate: clone(candidates[index]) };
+    });
     populateEditor();
     persistDraft();
     status.value = () => t('review.draftValidated');
@@ -396,18 +428,13 @@ function syncSemanticDraft(): void {
 function changeOperation(value: string): void {
   const next = value as ReviewOperation;
   if (next === editor.operation) return;
-  pendingOperation.value = next;
-}
-
-function confirmOperationChange(): void {
-  const next = pendingOperation.value;
-  pendingOperation.value = undefined;
-  if (!next) return;
   const nextEditor = defaultStepEditor(next, editor.delayMs);
   hydratingEditor = true;
+  delete editor.referenceCandidate;
   Object.assign(editor, nextEditor);
   hydratingEditor = false;
   syncSemanticDraft();
+  evidenceMode.value = resolveEvidenceMode('crop', next, current.value?.evidence);
 }
 
 function enableAdvancedEditing(): void {
@@ -459,33 +486,41 @@ async function insertStep(): Promise<void> {
   populateEditor();
 }
 
-async function removeStep(): Promise<void> {
-  pendingStepRemoval.value = { index: selected.value, name: current.value?.name ?? '' };
+async function removeStep(index: number): Promise<void> {
+  selected.value = index;
+  await mutate({ type: 'remove', index });
 }
 
-async function confirmStepRemoval(): Promise<void> {
-  const pending = pendingStepRemoval.value;
-  pendingStepRemoval.value = undefined;
-  if (pending) await mutate({ type: 'remove', index: pending.index });
+async function dropStep(index: number): Promise<void> {
+  const from = dragIndex.value;
+  dragIndex.value = undefined;
+  if (from === undefined || from === index || busy.value || !writable.value) return;
+  await mutate({ type: 'move', from, to: index });
+  selected.value = index;
 }
 
-async function move(delta: number): Promise<void> {
-  const target = selected.value + delta;
-  if (target < 0 || target >= steps.value.length) return;
-  const from = selected.value;
-  await mutate({ type: 'move', from, to: target });
-  selected.value = target;
+function startStepDrag(event: DragEvent, index: number): void {
+  if (busy.value || !writable.value || advancedEditing.value) { event.preventDefault(); return; }
+  dragIndex.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
+  }
 }
 
 async function save(): Promise<boolean> {
   if (!draft.value || !view.value) return false;
   if (!dirty.value) return true;
+  const selectedIndex = selected.value;
   busy.value = true;
   try {
     const result = await api.save(scene.value, task.value, baseRevision.value, clone(draft.value));
     try { draftStorage?.remove(view.value.scene, view.value.task); } catch { /* Saved task files remain authoritative. */ }
     changes.value = [];
+    catalogVersion.value += 1;
     await loadTask(false);
+    selected.value = Math.min(selectedIndex, steps.value.length - 1);
+    populateEditor();
     status.value = () => t('review.saved', { files: result.changed.join(', ') || t('review.noChanges') });
     return true;
   } catch (error) {
@@ -569,8 +604,52 @@ function unbindReferenceImage(): void {
     editor.referenceImages.length !== 1
     || referenceBindingDisabledReason.value
   ) return;
+  editor.referenceCandidate = clone(editor.referenceImages[0]);
   editor.referenceImages = [];
   editor.convertHttpImage2Base64 = false;
+}
+
+async function uploadReference(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  referenceUploadError.value = '';
+  if (!file || referenceUploadDisabled.value) return;
+  if (!referenceImageMimeTypes.includes(file.type as typeof referenceImageMimeTypes[number])) {
+    referenceUploadError.value = t('review.referenceFormatError');
+    return;
+  }
+  if (!file.size || file.size > referenceImageMaxBytes) {
+    referenceUploadError.value = t('review.referenceSizeError');
+    return;
+  }
+  const targetScene = scene.value;
+  const targetTask = task.value;
+  const targetStep = current.value?.id;
+  if (!targetStep) return;
+  busy.value = true;
+  referenceUploading.value = true;
+  try {
+    const result = await api.uploadReferenceImage(targetScene, targetTask, baseRevision.value, file);
+    if (scene.value !== targetScene || task.value !== targetTask || current.value?.id !== targetStep) {
+      throw new Error(t('review.referenceTargetChanged'));
+    }
+    hydratingEditor = true;
+    editor.referenceCandidate = clone(result.image);
+    editor.referenceImages = [clone(result.image)];
+    editor.convertHttpImage2Base64 = false;
+    hydratingEditor = false;
+    syncSemanticDraft();
+    evidenceMode.value = 'reference';
+    status.value = () => t('review.referenceUploaded');
+  } catch (error) {
+    conflict.value = error instanceof ApiError && error.status === 409;
+    referenceUploadError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    hydratingEditor = false;
+    referenceUploading.value = false;
+    busy.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -590,10 +669,13 @@ onMounted(async () => {
 <template>
   <div class="shell">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">{{ t('app.subtitle') }}</p>
-        <h1>{{ t('app.title') }}</h1>
-      </div>
+      <h1 class="sr-only">{{ t('app.title') }}</h1>
+    <nav class="mode-tabs" :aria-label="t('app.navLabel')">
+      <button :class="{ active: mode === 'recordings' }" @click="mode = 'recordings'">{{ t('app.mode.recordings') }}</button>
+      <button :class="{ active: mode === 'review' }" @click="mode = 'review'">{{ t('app.mode.review') }}</button>
+      <button :class="{ active: mode === 'execution' }" @click="mode = 'execution'">{{ t('app.mode.execution') }}</button>
+      <button v-if="devMode" :class="{ active: mode === 'agent' }" @click="mode = 'agent'">{{ t('app.mode.agent') }}</button>
+    </nav>
       <div class="topbar-right">
         <div class="language-switch" role="group" :aria-label="t('app.language')">
           <button :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">中文</button>
@@ -613,12 +695,6 @@ onMounted(async () => {
       </div>
     </header>
 
-    <nav class="mode-tabs" :aria-label="t('app.navLabel')">
-      <button :class="{ active: mode === 'review' }" @click="mode = 'review'">{{ t('app.mode.review') }}</button>
-      <button :class="{ active: mode === 'recordings' }" @click="mode = 'recordings'">{{ t('app.mode.recordings') }}</button>
-      <button :class="{ active: mode === 'execution' }" @click="mode = 'execution'">{{ t('app.mode.execution') }}</button>
-      <button v-if="devMode" :class="{ active: mode === 'agent' }" @click="mode = 'agent'">{{ t('app.mode.agent') }}</button>
-    </nav>
 
     <div v-if="mode === 'review' && conflict" class="conflict">
       {{ t('review.conflict') }}
@@ -631,161 +707,68 @@ onMounted(async () => {
       <button class="primary" @click="mode = 'recordings'">{{ t('review.createFromRecording') }}</button>
     </main>
 
-    <main v-else-if="mode === 'review'" class="workspace">
-      <aside class="catalog panel">
-        <label>{{ t('review.scene') }}</label>
-        <ReviewSelect
-          v-model="scene"
-          class="catalog-select"
-          :aria-label="t('review.scene')"
-          :options="sceneSelectOptions"
-          :disabled="busy"
-          @change="loadTasks"
-        />
-        <label>{{ t('review.task') }}</label>
-        <div v-if="!busy && !tasks.length" class="catalog-empty">
-          <p>{{ t('review.noTasks') }}</p>
-          <button class="secondary" @click="mode = 'recordings'">{{ t('review.createFromRecording') }}</button>
-        </div>
-        <button
-          v-for="item in tasks" :key="String(item.task)"
-          class="task-row"
-          :class="{ active: task === item.task, error: item.status === 'error' }"
-          :disabled="busy || item.status === 'error'"
-          @click="openTask(item)"
-        >
-          <strong>{{ item.title }}</strong>
-          <small v-if="devMode">{{ item.task }}</small>
-          <span v-if="item.status === 'error'" class="task-error">{{ item.error }}</span>
-        </button>
-      </aside>
-
+    <main v-else-if="mode === 'review'" class="workspace review-layout">
+      <TaskCatalog :scenes="scenes" :scene="scene" :task="task" :busy="busy" :version="catalogVersion" :current-step-count="steps.length" @select="openCatalogTask" @create="mode = 'recordings'" />
       <section class="steps panel">
-        <div class="panel-heading">
-          <div><p class="eyebrow">{{ t('review.workflow') }}</p><h2>{{ view?.title ?? t('review.selectTask') }}</h2></div>
-          <span>{{ t('common.steps', { count: steps.length }) }}</span>
-        </div>
+        <div class="review-steps-heading"><h2>{{ t('review.workflow') }}</h2><div><span>{{ view?.title ?? t('review.selectTask') }}</span><small>{{ t('common.steps', { count: steps.length }) }}</small></div></div>
+        <button class="secondary add-step" :disabled="!writable || busy" @click="insertStep"><WorkbenchIcon name="add" />{{ t('review.insert') }}</button>
         <div class="step-list">
-          <button
-            v-for="(item, index) in steps" :key="item.id"
-            class="step-row" :class="{ active: selected === index }" :disabled="busy" @click="selected = index"
-          >
-            <span class="step-index">{{ String(index + 1).padStart(2, '0') }}</span>
-            <span><strong>{{ operationLabel(item.operation) }}</strong><small v-if="devMode">{{ item.id }}</small></span>
-            <span class="step-markers">
+          <div v-for="(item, index) in steps" :key="item.id" class="step-row"
+            :class="{ active: selected === index, dragging: dragIndex === index }"
+            :draggable="writable && !busy && !advancedEditing" @dragstart="startStepDrag($event, index)" @dragend="dragIndex = undefined" @dragover.prevent @drop.prevent="dropStep(index)">
+            <span class="drag-handle" :title="t('review.dragStep')"><WorkbenchIcon name="grip" /></span>
+            <button class="step-select" :disabled="busy" @click="selected = index">
+              <span class="step-index">{{ index + 1 }}</span><span class="step-label">{{ operationLabel(item.operation) }}</span>
               <span v-if="item.evidence" class="evidence-dot" :title="t('review.hasEvidence')"></span>
-              <span
-                v-if="item.referenceImages?.length"
-                class="reference-mark"
-                :title="t('review.referenceUsed')"
-              >▣</span>
-              <span
-                v-else-if="item.evidence?.reference"
-                class="reference-mark available"
-                :title="t('review.referenceAvailable')"
-              >▢</span>
-            </span>
-          </button>
-        </div>
-        <div class="structure-actions">
-          <button :disabled="!writable || busy" @click="insertStep">{{ t('review.insert') }}</button>
-          <button :disabled="!writable || busy || selected === 0" :title="t('review.moveUp')" @click="move(-1)">↑</button>
-          <button :disabled="!writable || busy || selected === steps.length - 1" :title="t('review.moveDown')" @click="move(1)">↓</button>
-          <button class="danger" :disabled="!writable || busy || steps.length <= 1" @click="removeStep">{{ t('common.delete') }}</button>
+              <WorkbenchIcon v-if="item.referenceImages?.length" name="image" class="reference-mark" :title="t('review.referenceUsed')" />
+            </button>
+            <button class="step-delete" :disabled="!writable || busy || steps.length <= 1" :aria-label="t('review.deleteStep', { index: index + 1 })" @click="removeStep(index)"><WorkbenchIcon name="trash" /></button>
+          </div>
         </div>
       </section>
 
       <section class="editor panel">
-        <div class="panel-heading">
-          <div><p class="eyebrow">{{ t('review.stepConfig') }}</p><h2>{{ currentTitle }}</h2></div>
-        </div>
-
-        <div class="evidence-viewer" v-if="current?.evidence || displayedReferenceImages.length">
+        <header class="review-editor-heading">
+          <h2>{{ currentTitle }}</h2>
+          <div v-if="current" class="step-provenance"><span><i class="evidence-dot" :class="{ manual: !current.evidence }"></i>{{ current.evidence ? t('review.recordedStep') : t('review.manualStep') }}</span><span v-if="editor.operation === 'click' || editor.operation === 'doubleClick'"><WorkbenchIcon name="image" />{{ referenceImagesBound ? t('review.referenceEnabled') : t('review.referenceDisabled') }}</span></div>
+        </header>
+        <section v-if="current" class="step-evidence">
+          <input ref="referenceFileInput" hidden type="file" tabindex="-1" accept="image/png,image/jpeg,image/webp" :disabled="referenceUploadDisabled" @change="uploadReference" />
           <div class="evidence-tabs">
-            <button
-              v-if="current.evidence?.full"
-              :class="{ active: evidenceMode === 'full' }"
-              @click="evidenceMode = 'full'"
-            >{{ t('review.globalImage') }}</button>
-            <button
-              v-if="current.evidence?.crop"
-              :class="{ active: evidenceMode === 'crop' }"
-              @click="evidenceMode = 'crop'"
-            >{{ t('review.cropImage') }}</button>
-            <button
-              v-if="!current.evidence?.full && !current.evidence?.crop"
-              :class="{ active: evidenceMode === 'placeholder' }"
-              @click="evidenceMode = 'placeholder'"
-            >{{ t('review.noRecordedImage') }}</button>
-            <button
-              v-if="displayedReferenceImages.length"
-              :class="{ active: evidenceMode === 'reference' }"
-              @click="evidenceMode = 'reference'"
-            >{{ t('review.referenceImage') }}</button>
-            <small v-if="evidenceMode === 'reference'">{{ referenceBindingStatus }}</small>
-            <small v-else-if="current.evidence">{{ devMode ? t('review.sourceStep', { step: current.evidence.sourceStep }) : t('review.hasEvidence') }}</small>
-            <small v-else>{{ t('review.noIndependentEvidence') }}</small>
+            <button v-if="current.evidence?.full" :class="{ active: evidenceMode === 'full' }" @click="evidenceMode = 'full'">{{ t('review.globalImage') }}</button>
+            <button v-if="current.evidence?.crop" :class="{ active: evidenceMode === 'crop' }" @click="evidenceMode = 'crop'">{{ t('review.cropImage') }}</button>
+            <button v-if="editor.operation === 'click' || editor.operation === 'doubleClick'" :class="{ active: evidenceMode === 'reference' }" @click="evidenceMode = 'reference'">{{ t('review.referenceImage') }}</button>
+            <span>{{ evidenceMode === 'reference' ? t('review.referenceImage') : t('review.recordedImage') }}</span>
           </div>
           <div v-if="evidenceMode === 'reference'" class="reference-gallery">
-            <article
-              v-for="(image, imageIndex) in displayedReferenceImages"
-              :key="`${image.name}:${image.url}`"
-              :class="{ 'compatibility-item': multipleReferenceImages }"
-            >
-              <div class="reference-image-frame">
-                <img :src="referenceImageUrl(image)" :alt="t('review.referenceImage')" />
+            <article v-for="(image, imageIndex) in displayedReferenceImages" :key="`${image.name}:${image.url}`">
+              <div class="reference-image-frame"><img :src="referenceImageUrl(image)" :alt="t('review.referenceImage')" />
+                <button v-if="imageIndex === 0" class="secondary reference-replace" :disabled="referenceUploadDisabled" @click="referenceFileInput?.click()"><WorkbenchIcon name="add" />{{ referenceUploading ? t('review.referenceUploading') : t('review.replaceReference') }}</button>
               </div>
               <div class="reference-card-content">
-                <div class="reference-card-heading">
-                  <strong>{{ multipleReferenceImages ? t('review.referenceImageNumber', { index: imageIndex + 1 }) : t('review.referenceImage') }}</strong>
-                  <span class="reference-state" :class="{ bound: referenceImagesBound }">
-                    {{ referenceBindingStatus }}
-                  </span>
-                </div>
-                <template v-if="multipleReferenceImages && devMode">
-                  <code :title="image.name">{{ image.name }}</code>
-                  <code :title="image.url">{{ image.url }}</code>
-                </template>
-                <p v-if="imageIndex === 0">
-                  {{ t('review.referenceHelp') }}
-                </p>
-                <div v-if="imageIndex === 0" class="reference-actions">
-                  <button
-                    v-if="referenceImagesBound"
-                    class="reference-action secondary"
-                    :disabled="Boolean(referenceBindingDisabledReason)"
-                    :title="referenceBindingDisabledReason"
-                    @click="unbindReferenceImage"
-                  >{{ t('review.referenceUnbind') }}</button>
-                  <button
-                    v-else
-                    class="reference-action primary"
-                    :disabled="Boolean(referenceBindingDisabledReason)"
-                    :title="referenceBindingDisabledReason"
-                    @click="bindReferenceImage"
-                  >{{ t('review.referenceBind') }}</button>
-                </div>
-                <small v-if="imageIndex === 0 && referenceBindingDisabledReason" class="reference-disabled-reason">
-                  {{ referenceBindingDisabledReason }}
-                </small>
+                <label v-if="imageIndex === 0" class="reference-switch-label">{{ t('review.enableReference') }}
+                  <button type="button" class="reference-switch" role="switch" :aria-label="t('review.enableReference')" :aria-checked="referenceImagesBound" :disabled="Boolean(referenceBindingDisabledReason)" :title="referenceBindingDisabledReason" @click="referenceImagesBound ? unbindReferenceImage() : bindReferenceImage()"><span></span></button>
+                </label>
+                <p v-if="imageIndex === 0">{{ t('review.referenceHelp') }}</p>
+                <small v-if="imageIndex === 0 && referenceBindingDisabledReason" class="reference-disabled-reason">{{ referenceBindingDisabledReason }}</small>
+                <code v-if="multipleReferenceImages && devMode">{{ image.name }}</code>
               </div>
             </article>
+            <article v-if="!displayedReferenceImages.length">
+              <button class="reference-image-frame reference-empty reference-upload" :disabled="referenceUploadDisabled" @click="referenceFileInput?.click()"><img class="upload-placeholder" :src="uploadPlaceholder" alt="" aria-hidden="true" /><span>{{ referenceUploading ? t('review.referenceUploading') : t('review.uploadReference') }}</span></button>
+              <div class="reference-card-content"><label class="reference-switch-label">{{ t('review.enableReference') }}<button class="reference-switch" role="switch" :aria-label="t('review.enableReference')" :aria-checked="false" disabled><span></span></button></label><p>{{ t('review.referenceHelp') }}</p></div>
+            </article>
           </div>
-          <EvidencePlaceholder v-else-if="evidenceMode === 'placeholder'" />
-          <template v-else>
-            <img
-              v-if="evidencePath(current)"
-              :src="api.evidenceUrl(scene, task, evidencePath(current)!)"
-              :alt="t('review.evidenceAlt', { name: current.name })"
-            />
-          </template>
-        </div>
-        <div v-else class="evidence-viewer placeholder-only">
-          <EvidencePlaceholder />
-        </div>
+          <div v-else class="recorded-image-frame" :class="{ 'is-placeholder': !evidencePath(current) }">
+            <img v-if="evidencePath(current)" :src="api.evidenceUrl(scene, task, evidencePath(current)!)" :alt="t('review.evidenceAlt', { name: current.name })" />
+            <EvidencePlaceholder v-else />
+          </div>
+          <p v-if="referenceUploadError" class="inline-error" role="alert">{{ referenceUploadError }}</p>
+        </section>
+        <h3 v-if="current" class="action-config-title">{{ t('review.actionConfig') }}</h3>
 
         <div class="form-grid" v-if="current">
-          <label>{{ t('review.operation') }}
+          <label><span class="field-label">{{ t('review.operation') }}<img :src="actionInfoIcon" :title="t('review.operationHelp')" alt="" /></span>
             <ReviewSelect
               :model-value="editor.operation"
               :aria-label="t('review.operation')"
@@ -821,10 +804,14 @@ onMounted(async () => {
               />
             </label>
             <fieldset class="input-options wide">
-              <label class="checkbox">
-                <input v-model="editor.parameterized" type="checkbox" :disabled="busy || !writable || advancedEditing" />
+              <div class="runtime-input-toggle">
                 <span>{{ t('review.parameterized') }}</span>
-              </label>
+                <ReviewSwitch
+                  v-model="editor.parameterized"
+                  :label="t('review.parameterized')"
+                  :disabled="busy || !writable || advancedEditing"
+                />
+              </div>
               <div v-if="editor.parameterized" class="input-fields">
                 <label>{{ t('review.inputLabel') }}<input v-model="editor.inputLabel" :readonly="busy || !writable || advancedEditing" /></label>
                 <label>{{ t('review.inputDefault') }}<input v-model="editor.inputDefault" :readonly="busy || !writable || advancedEditing" /></label>
@@ -842,14 +829,14 @@ onMounted(async () => {
             </label>
           </template>
 
-          <template v-else-if="editor.operation === 'wait'">
-            <label class="wide">{{ t('review.waitCondition') }}
-              <textarea v-model="editor.waitCondition" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.waitPlaceholder')"></textarea>
+          <div v-else-if="editor.operation === 'wait'" class="wait-fields wide">
+            <label><span class="field-label">{{ t('review.waitCondition') }}<img :src="waitInfoIcon" :title="t('review.waitConditionHelp')" alt="" /></span>
+              <textarea v-model="editor.waitCondition" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.waitPlaceholder')" :aria-description="t('review.waitConditionHelp')"></textarea>
             </label>
-            <label>{{ t('review.timeout') }}
-              <input v-model.number="editor.timeoutMs" type="number" min="1" step="1000" :readonly="busy || !writable || advancedEditing" />
+            <label :title="t('review.timeoutHelp')">{{ t('review.timeout') }}
+              <input v-model.number="editor.timeoutMs" type="number" min="1" step="1000" :readonly="busy || !writable || advancedEditing" :aria-description="t('review.timeoutHelp')" />
             </label>
-          </template>
+          </div>
 
           <details v-if="devMode" class="advanced wide" :open="advancedEditing">
             <summary>
@@ -910,29 +897,6 @@ onMounted(async () => {
     <main v-else-if="mode === 'agent' && devMode" class="workspace agent-layout">
       <AgentWorkspace />
     </main>
-
-    <ConfirmDialog
-      :open="pendingOperation !== undefined"
-      :title="t('review.operation')"
-      :message="t('review.confirmOperation', { from: operationLabel(editor.operation), to: operationLabel(pendingOperation ?? editor.operation) })"
-      :target="current?.name ?? ''"
-      :confirm-label="t('common.continue')"
-      :cancel-label="t('common.cancel')"
-      @confirm="confirmOperationChange"
-      @cancel="pendingOperation = undefined"
-    />
-
-    <ConfirmDialog
-      :open="pendingStepRemoval !== undefined"
-      :title="t('common.delete')"
-      :message="t('review.confirmRemove', { name: pendingStepRemoval?.name ?? '' })"
-      :target="pendingStepRemoval?.name ?? ''"
-      :confirm-label="t('common.delete')"
-      :cancel-label="t('common.cancel')"
-      :busy="busy"
-      @confirm="confirmStepRemoval"
-      @cancel="pendingStepRemoval = undefined"
-    />
 
     <ConfirmDialog
       :open="draftDiscardOpen"

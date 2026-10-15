@@ -36,3 +36,19 @@ test('浏览器存储失败和损坏草稿向调用方报告，不宣称保存�
   assert.throws(() => store.read('scene', 'task'));
   assert.throws(() => store.write('scene', 'task', {} as StoredReviewDraft), /quota exceeded/);
 });
+
+test('停用的上传图候选保存在浏览器草稿中，不进入执行 flow', () => {
+  const values = new Map<string, string>();
+  const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
+  const editor = defaultStepEditor('click');
+  editor.referenceCandidate = { name: 'reference-image', url: 'source/reference-images/test.png' };
+  const value: StoredReviewDraft = { version: 1, revision: 'revision', selected: 0, editor,
+    draft: { manifest: { inputs: {} } as any, document: { tasks: [{ name: 'step-001 | click', flow: [{ aiTap: editor.target }] }] } },
+    changes: [{ kind: 'update', summary: '定位参考图', details: [] }], editors: { 'step-001': editor } };
+  const store = new ReviewDraftStorage(storage, 'project');
+  store.write('scene', 'task', value);
+  const restored = store.read('scene', 'task')!;
+  assert.deepEqual(restored.editor.referenceCandidate, editor.referenceCandidate);
+  assert.deepEqual(restored.editor.referenceImages, []);
+  assert.deepEqual(restored.draft.document, value.draft.document);
+});

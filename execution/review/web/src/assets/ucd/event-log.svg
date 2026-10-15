@@ -1,0 +1,18 @@
+<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="40.000000" height="40.000000" fill="none" customFrame="url(#clipPath_17)">
+	<defs>
+		<clipPath id="clipPath_17">
+			<rect width="40.000000" height="40.000000" x="0.000000" y="0.000000" rx="8.000000" fill="rgb(255,255,255)" />
+		</clipPath>
+	</defs>
+	<rect id="ic_txt" width="40.000000" height="40.000000" x="0.000000" y="0.000000" rx="8.000000" fill="rgb(32,112,243)" fill-opacity="0.100000001" />
+	<g id="组合 71663">
+		<path id="直线 101" d="M24.6063 18.0269L32.5014 18.0294" opacity="0" stroke="rgb(234,104,151)" stroke-linecap="round" stroke-width="2.000000" />
+		<path id="直线 104" d="M24.6063 14.8472L32.501 14.8472" stroke="rgb(32,112,243)" stroke-linecap="round" stroke-width="2.000000" />
+		<path id="直线 102" d="M7.5011 23.29L32.501 23.29" stroke="rgb(32,112,243)" stroke-linecap="round" stroke-width="2.000000" />
+		<path id="直线 103" d="M7.4989 32.4995L32.4988 32.4995" stroke="rgb(32,112,243)" stroke-linecap="round" stroke-width="2.000000" />
+		<g id="组合 225616">
+			<path id="直线 555" d="M7.5011 7.50061L21.251 7.50061" stroke="rgb(32,112,243)" stroke-linecap="round" stroke-width="2.000000" />
+			<path id="直线 556" d="M0 -1L10 -1C10.6667 -1 11 -0.666667 11 0C11 0.666667 10.6667 1 10 1L0 1L0 -1ZM9.98 -0.98L10 -1C10.56 -1 11 -0.56 11 0C11 0.56 10.56 1 10 1L9.98 0.98L9.98 -0.98Z" fill="rgb(32,112,243)" fill-rule="nonzero" transform="matrix(0,1,-1,0,14.3761,8.32336)" />
+		</g>
+	</g>
+</svg>

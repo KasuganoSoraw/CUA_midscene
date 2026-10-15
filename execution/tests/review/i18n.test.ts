@@ -55,6 +55,8 @@ test('ordinary workbench copy hides implementation names and gates developer ass
   assert.match(app, /setLocale\('zh-CN'\)/);
   assert.match(app, /setLocale\('en-US'\)/);
   assert.match(app, /<ConfirmDialog/);
+  assert.doesNotMatch(app, /stepDeleteOpen|pendingOperation|structure-actions|keydown\.alt/);
+  assert.match(app, /@click="removeStep\(index\)"/);
   assert.match(recording, /<ConfirmDialog/);
   assert.match(confirmDialog, /role="alertdialog"/);
   assert.doesNotMatch(confirmDialog, /window\.confirm|globalThis\.confirm|\bconfirm\(/);

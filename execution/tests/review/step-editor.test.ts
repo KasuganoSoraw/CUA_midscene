@@ -7,6 +7,32 @@ import {
   parseStepEditor,
 } from '../../review/shared/step-editor.js';
 
+test('等待触发条件与最长等待时间分别保留，动作前暂停独立存在', () => {
+  const editor = parseStepEditor({ id: 'step-005', operation: 'wait', flow: [
+    { sleep: 4010 }, { aiWaitFor: '加载完成', timeout: 12000 },
+  ] });
+  assert.equal(editor.custom, false);
+  assert.equal(editor.delayMs, 4010);
+  assert.equal(editor.timeoutMs, 12000);
+  editor.waitCondition = '列表出现';
+  editor.timeoutMs = 9000;
+  assert.deepEqual(buildStepContent(editor, 'step-005').flow, [
+    { sleep: 4010 }, { aiWaitFor: '列表出现', timeout: 9000 },
+  ]);
+});
+
+test('上传图的名称进入定位 prompt，语义编辑保留目标描述并支持停用', () => {
+  const editor = parseStepEditor({ id: 'step-001', operation: 'click', flow: [{ aiTap: '点击保存按钮' }] });
+  editor.referenceImages = [{ name: 'reference-image', url: 'source/reference-images/example.png' }];
+  const content = buildStepContent(editor, 'step-001');
+  assert.equal((content.flow[0].locate as any).prompt, '点击保存按钮\n参考定位图：reference-image');
+  const reopened = parseStepEditor({ id: 'step-001', operation: 'click', flow: content.flow });
+  assert.equal(reopened.target, '点击保存按钮');
+  reopened.referenceCandidate = reopened.referenceImages[0];
+  reopened.referenceImages = [];
+  assert.deepEqual(buildStepContent(reopened, 'step-001').flow, [{ aiTap: '点击保存按钮' }]);
+});
+
 test('input 语义表单与 Flow/参数定义双向转换', () => {
   const parsed = parseStepEditor({
     id: 'step-010',
@@ -57,6 +83,20 @@ test('高级参数 JSON 只接受当前步骤的单个 string 定义', () => {
   assert.throws(() => parseInputPreview({ other: { type: 'string', label: 'x', default: '' } }, 'step-003'));
 });
 
+test('运行时输入开关往返切换保留标签、默认值和说明', () => {
+  const editor = parseStepEditor({
+    id: 'step-002', operation: 'input',
+    flow: [{ KeyboardTypeText: { locate: '搜索框', value: '{{step-002-input}}', mode: 'append' } }],
+    input: { type: 'string', label: '关键词', default: 'demo', description: '搜索内容' },
+  });
+  const parameterized = buildStepContent(editor, 'step-002');
+  editor.parameterized = false;
+  editor.inputValue = 'fixed';
+  assert.equal(buildStepContent(editor, 'step-002').input, null);
+  editor.parameterized = true;
+  assert.deepEqual(buildStepContent(editor, 'step-002'), parameterized);
+});
+
 test('无法识别的 Flow 保留为自定义结构', () => {
   const flow = [{ sleep: 300 }, { aiTap: '按钮' }, { aiWaitFor: '完成' }];
   const parsed = parseStepEditor({ id: 'step-001', operation: 'click', flow });
@@ -93,7 +133,7 @@ test('带参考图的点击类 Flow 通过普通表单无损往返', () => {
     {
       aiTap: null,
       locate: {
-        prompt: '点击工具栏中的无文字图标',
+        prompt: '点击工具栏中的无文字图标\n参考定位图：step-012-target',
         images: [{ name: 'step-012-target', url: 'source/screenshots/target.reference.png' }],
         convertHttpImage2Base64: true,
       },
@@ -132,7 +172,7 @@ test('点击步骤绑定和解绑单张定位参考图时保留语义字段', ()
     {
       aiTap: null,
       locate: {
-        prompt: '点击右上角的个人头像',
+        prompt: '点击右上角的个人头像\n参考定位图：step-006-reference',
         images: [{
           name: 'step-006-reference',
           url: 'source/screenshots/step-006.reference.png',

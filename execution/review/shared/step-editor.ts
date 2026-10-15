@@ -17,6 +17,7 @@ export interface StepEditorModel {
   waitCondition: string;
   timeoutMs: number;
   referenceImages: ReviewReferenceImage[];
+  referenceCandidate?: ReviewReferenceImage;
   convertHttpImage2Base64: boolean;
   custom: boolean;
   customFlow: JsonObject[];
@@ -121,11 +122,16 @@ function parseClickAction(
   }
   const referenceImages = referenceImageList(locate.images);
   if (!referenceImages) return undefined;
+  const suffix = referencePromptSuffix(referenceImages);
   return {
-    target: locate.prompt,
+    target: locate.prompt.endsWith(suffix) ? locate.prompt.slice(0, -suffix.length) : locate.prompt,
     referenceImages,
     convertHttpImage2Base64: locate.convertHttpImage2Base64 === true,
   };
+}
+
+function referencePromptSuffix(images: ReviewReferenceImage[]): string {
+  return `\n参考定位图：${images.map(image => image.name).join('、')}`;
 }
 
 export function referenceImagesFromFlow(
@@ -228,7 +234,8 @@ export function buildStepContent(model: StepEditorModel, stepId: string): BuiltS
       flow.push({
         [key]: null,
         locate: {
-          prompt: model.target,
+          prompt: model.referenceImages.every(image => model.target.includes(image.name))
+            ? model.target : `${model.target}${referencePromptSuffix(model.referenceImages)}`,
           images: clone(model.referenceImages),
           ...(model.convertHttpImage2Base64 ? { convertHttpImage2Base64: true } : {}),
         },

@@ -13,7 +13,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 - `task.yaml` 是唯一长期执行流程，由维护型调用方、Review、TypeScript Runtime 和 Midscene 共同消费；Python Agent 只通过结构化 Tool 间接使用它。
 - `task.json` 保存任务元数据、输入 ID 和录制默认值，不保存执行步骤。
-- `source/` 是校准时的只读录制证据。
+- `source/` 保存录制证据；Review 上传的定位参考图独立存放于 `source/reference-images/`，不覆盖录制截图。
 - `source/screenshots/*.reference.png` 是可选的干净定位参考；带红叉 crop 只用于理解录制点击点，不能作为 Midscene reference patch。
 - 任务只从 `<CUA_DATA_ROOT>/projects/` 发现和维护；发布包不附带内置任务，空数据目录可直接从录制创建任务。
 - 运行产物只写入 `<CUA_DATA_ROOT>/runs/<run-id>/`。
@@ -54,7 +54,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 5. 确认后只修改 user task 的 `task.yaml`，再运行 `node dist/cli/main.js task validate --scene <scene> --task <task> --json`。
 6. 除非用户同时要求执行，否则校准完成后不得操作电脑。
 
-普通内容校准不得修改 `source/`、`task.json` 或运行报告，也不得启用 `continueOnError`。参数契约修改是唯一允许单独编辑 `task.json` 的情况。步骤插入、删除或移动只能通过复核页面完成；Agent 不得直接重编号 YAML 步骤。
+普通内容校准不得修改录制证据、`task.json` 或运行报告，也不得启用 `continueOnError`。参数契约修改是唯一允许单独编辑 `task.json` 的情况。步骤插入、删除或移动只能通过复核页面完成；Agent 不得直接重编号 YAML 步骤。
 
 难以用文字区分的图标可以经确认后在对应 `aiTap`/`aiDoubleClick` 中增加或调整 `locate.prompt` 与 `locate.images`，但只能引用任务包内已有的干净 reference patch。图片名必须被 prompt 明确引用；参考图中心表示录制目标外观，不是要求 Midscene 点击固定坐标。
 
