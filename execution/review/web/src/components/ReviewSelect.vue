@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import selectArrow from '../assets/ucd/select-arrow.svg';
 import { computed, nextTick, ref, useId } from 'vue';
 import { useI18n } from '../i18n';
 
@@ -133,7 +134,7 @@ function handleFocusout(event: FocusEvent): void {
       @keydown="handleKeydown"
     >
       <span :class="{ placeholder: !selected }">{{ selected?.label ?? resolvedPlaceholder }}</span>
-      <span class="review-select-arrow" :class="{ open }" aria-hidden="true"></span>
+      <img class="review-select-arrow" :class="{ open }" :src="selectArrow" alt="" aria-hidden="true" />
     </button>
     <div v-if="open" :id="listboxId" class="review-select-options" role="listbox">
       <button

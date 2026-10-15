@@ -34,6 +34,8 @@ import ConfirmDialog from './components/ConfirmDialog.vue';
 import TaskCatalog from './components/TaskCatalog.vue';
 import WorkbenchIcon from './components/WorkbenchIcon.vue';
 import uploadPlaceholder from './assets/ucd/IllHdEmptyNoRecord.svg';
+import actionInfoIcon from './assets/ucd/action-info.svg';
+import waitInfoIcon from './assets/ucd/wait-info.svg';
 
 const { locale, t, setLocale } = useI18n();
 
@@ -765,7 +767,7 @@ onMounted(async () => {
         <h3 v-if="current" class="action-config-title">{{ t('review.actionConfig') }}</h3>
 
         <div class="form-grid" v-if="current">
-          <label>{{ t('review.operation') }}
+          <label><span class="field-label">{{ t('review.operation') }}<img :src="actionInfoIcon" :title="t('review.operationHelp')" alt="" /></span>
             <ReviewSelect
               :model-value="editor.operation"
               :aria-label="t('review.operation')"
@@ -822,14 +824,14 @@ onMounted(async () => {
             </label>
           </template>
 
-          <template v-else-if="editor.operation === 'wait'">
-            <label class="wide">{{ t('review.waitCondition') }}
-              <textarea v-model="editor.waitCondition" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.waitPlaceholder')"></textarea>
+          <div v-else-if="editor.operation === 'wait'" class="wait-fields wide">
+            <label><span class="field-label">{{ t('review.waitCondition') }}<img :src="waitInfoIcon" :title="t('review.waitConditionHelp')" alt="" /></span>
+              <textarea v-model="editor.waitCondition" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.waitPlaceholder')" :aria-description="t('review.waitConditionHelp')"></textarea>
             </label>
-            <label>{{ t('review.timeout') }}
-              <input v-model.number="editor.timeoutMs" type="number" min="1" step="1000" :readonly="busy || !writable || advancedEditing" />
+            <label :title="t('review.timeoutHelp')">{{ t('review.timeout') }}
+              <input v-model.number="editor.timeoutMs" type="number" min="1" step="1000" :readonly="busy || !writable || advancedEditing" :aria-description="t('review.timeoutHelp')" />
             </label>
-          </template>
+          </div>
 
           <details v-if="devMode" class="advanced wide" :open="advancedEditing">
             <summary>

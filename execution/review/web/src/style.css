@@ -102,11 +102,8 @@ h3 { color: var(--cua-color-text-primary); font-size: 16px; font-weight: 600; }
 .review-select-control .placeholder { color: var(--cua-color-text-tertiary); }
 .review-select-arrow {
   flex: 0 0 auto;
-  width: 0;
-  height: 0;
-  border-right: 4px solid transparent;
-  border-left: 4px solid transparent;
-  border-top: 5px solid var(--cua-color-text-secondary);
+  width: 14px;
+  height: 14px;
   transition: transform .16s ease;
 }
 .review-select-arrow.open { transform: rotate(180deg); }

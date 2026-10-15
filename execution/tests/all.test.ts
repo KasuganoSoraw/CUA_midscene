@@ -30,5 +30,6 @@ import './review/python-agent.test.js';
 import './review/agent-progress.test.js';
 import './review/i18n.test.js';
 import './review/evidence-mode.test.js';
+import './review/workbench-controls.test.js';
 import './review/windows-recorder.test.js';
 import './review/task-execution.test.js';

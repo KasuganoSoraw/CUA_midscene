@@ -7,6 +7,20 @@ import {
   parseStepEditor,
 } from '../../review/shared/step-editor.js';
 
+test('等待触发条件与最长等待时间分别保留，动作前暂停独立存在', () => {
+  const editor = parseStepEditor({ id: 'step-005', operation: 'wait', flow: [
+    { sleep: 4010 }, { aiWaitFor: '加载完成', timeout: 12000 },
+  ] });
+  assert.equal(editor.custom, false);
+  assert.equal(editor.delayMs, 4010);
+  assert.equal(editor.timeoutMs, 12000);
+  editor.waitCondition = '列表出现';
+  editor.timeoutMs = 9000;
+  assert.deepEqual(buildStepContent(editor, 'step-005').flow, [
+    { sleep: 4010 }, { aiWaitFor: '列表出现', timeout: 9000 },
+  ]);
+});
+
 test('上传图的名称进入定位 prompt，语义编辑保留目标描述并支持停用', () => {
   const editor = parseStepEditor({ id: 'step-001', operation: 'click', flow: [{ aiTap: '点击保存按钮' }] });
   editor.referenceImages = [{ name: 'reference-image', url: 'source/reference-images/example.png' }];
