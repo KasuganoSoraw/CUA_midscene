@@ -30,8 +30,12 @@ export async function openExecutionReportFile(
   reportPath: string,
   spawnProcess: typeof spawn = spawn,
 ): Promise<void> {
-  const command = process.platform === 'win32' ? 'explorer.exe'
-    : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  let command = 'xdg-open';
+  if (process.platform === 'win32') {
+    command = 'explorer.exe';
+  } else if (process.platform === 'darwin') {
+    command = 'open';
+  }
   await new Promise<void>((resolve, reject) => {
     const child = spawnProcess(command, [reportPath], {
       detached: true, shell: false, stdio: 'ignore', windowsHide: true,
