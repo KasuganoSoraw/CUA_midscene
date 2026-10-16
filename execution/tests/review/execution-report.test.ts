@@ -64,8 +64,9 @@ test('执行报告仅从运行目录内读取，报告使用隔离的 HTML 上�
 test('本地报告以单个文件路径参数交给系统打开，不使用 shell，并传播启动错误', async () => {
   const report = path.resolve(os.tmpdir(), '报告 & 100% 示例.html');
   let unref = false;
+  const platformCommands: Record<string, string> = { win32: 'explorer.exe', darwin: 'open' };
   const launch = ((command: string, args: string[], options: Record<string, unknown>) => {
-    assert.equal(command, process.platform === 'win32' ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open');
+    assert.equal(command, platformCommands[process.platform] ?? 'xdg-open');
     assert.deepEqual(args, [report]);
     assert.equal(options.shell, false);
     assert.equal(options.windowsHide, true);
