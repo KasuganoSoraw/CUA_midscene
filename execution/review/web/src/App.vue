@@ -164,6 +164,7 @@ const referenceBindingStatus = computed(() => {
   return referenceImagesBound.value ? t('review.referenceBound') : t('review.referenceAvailableStatus');
 });
 const referenceBindingDisabledReason = computed<string | undefined>(() => {
+  if (conflict.value) return t('review.referenceConflict');
   if (!writable.value) return t('review.referenceReadonly');
   if (busy.value) return t('review.referenceBusy');
   if (advancedEditing.value) return t('review.referenceAdvanced');
@@ -372,8 +373,8 @@ async function loadTask(restoreDraft = true): Promise<void> {
   } finally { loadingDraft = false; busy.value = false; }
 }
 
-async function mutate(mutation: ReviewMutation): Promise<void> {
-  if (!draft.value || !writable.value) return;
+async function mutate(mutation: ReviewMutation): Promise<boolean> {
+  if (!draft.value || !writable.value || busy.value) return false;
   const candidates = steps.value.map(item => editorDrafts[item.id]?.referenceCandidate);
   if (current.value) candidates[selected.value] = editor.referenceCandidate;
   if (mutation.type === 'insert') candidates.splice(mutation.index, 0, undefined);
@@ -392,9 +393,11 @@ async function mutate(mutation: ReviewMutation): Promise<void> {
     populateEditor();
     persistDraft();
     status.value = () => t('review.draftValidated');
+    return true;
   } catch (error) {
     const text = error instanceof Error ? error.message : String(error);
     status.value = () => text;
+    return false;
   } finally { busy.value = false; }
 }
 
@@ -481,22 +484,21 @@ function applyAdvancedEditor(): void {
 
 async function insertStep(): Promise<void> {
   const index = selected.value + 1;
-  await mutate({ type: 'insert', index, step: { operation: 'click', flow: [{ aiTap: t('review.defaultClickTarget') }] } });
-  selected.value = index;
-  populateEditor();
+  if (await mutate({ type: 'insert', index, step: { operation: 'click', flow: [{ aiTap: t('review.defaultClickTarget') }] } })) {
+    selected.value = index;
+    populateEditor();
+  }
 }
 
 async function removeStep(index: number): Promise<void> {
-  selected.value = index;
-  await mutate({ type: 'remove', index });
+  if (await mutate({ type: 'remove', index })) selected.value = Math.min(index, steps.value.length - 1);
 }
 
 async function dropStep(index: number): Promise<void> {
   const from = dragIndex.value;
   dragIndex.value = undefined;
   if (from === undefined || from === index || busy.value || !writable.value) return;
-  await mutate({ type: 'move', from, to: index });
-  selected.value = index;
+  if (await mutate({ type: 'move', from, to: index })) selected.value = index;
 }
 
 function startStepDrag(event: DragEvent, index: number): void {
@@ -750,7 +752,7 @@ onMounted(async () => {
                   <button type="button" class="reference-switch" role="switch" :aria-label="t('review.enableReference')" :aria-checked="referenceImagesBound" :disabled="Boolean(referenceBindingDisabledReason)" :title="referenceBindingDisabledReason" @click="referenceImagesBound ? unbindReferenceImage() : bindReferenceImage()"><span></span></button>
                 </label>
                 <p v-if="imageIndex === 0">{{ t('review.referenceHelp') }}</p>
-                <small v-if="imageIndex === 0 && referenceBindingDisabledReason" class="reference-disabled-reason">{{ referenceBindingDisabledReason }}</small>
+                <small v-if="imageIndex === 0 && referenceBindingDisabledReason && !conflict" class="reference-disabled-reason">{{ referenceBindingDisabledReason }}</small>
                 <code v-if="multipleReferenceImages && devMode">{{ image.name }}</code>
               </div>
             </article>
@@ -764,6 +766,10 @@ onMounted(async () => {
             <EvidencePlaceholder v-else />
           </div>
           <p v-if="referenceUploadError" class="inline-error" role="alert">{{ referenceUploadError }}</p>
+          <p v-if="conflict && (editor.operation === 'click' || editor.operation === 'doubleClick')" class="inline-error" role="alert">
+            {{ t('review.referenceConflict') }}
+            <button type="button" class="text-button" @click="draftDiscardOpen = true">{{ t('review.reload') }}</button>
+          </p>
         </section>
         <h3 v-if="current" class="action-config-title">{{ t('review.actionConfig') }}</h3>
 
