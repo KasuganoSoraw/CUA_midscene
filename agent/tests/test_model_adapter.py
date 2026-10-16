@@ -73,6 +73,37 @@ def test_model_config_verifies_tls_by_default() -> None:
     assert _tls_context(True) is None
 
 
+def test_model_config_accepts_empty_key_and_custom_headers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CUA_AGENT_MODEL_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("CUA_AGENT_MODEL_NAME", "test-model")
+    monkeypatch.setenv("CUA_AGENT_MODEL_API_KEY", "")
+    monkeypatch.setenv("MIDSCENE_MODEL_API_KEY", "fallback-secret")
+    monkeypatch.setenv("CUA_AGENT_MODEL_HEADERS", '{"X-Gateway-Token":"header-secret"}')
+
+    config = OpenAICompatibleConfig.from_env()
+
+    assert config.api_key == ""
+    assert config.custom_headers == {"X-Gateway-Token": "header-secret"}
+    assert "header-secret" not in repr(config)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    ['[]', '{"X-Test":42}', '{"Bad Header":"value"}', '{"X-Test":"bad\\nvalue"}'],
+)
+def test_model_config_rejects_invalid_custom_headers(
+    monkeypatch: pytest.MonkeyPatch, headers: str
+) -> None:
+    monkeypatch.setenv("CUA_AGENT_MODEL_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("CUA_AGENT_MODEL_NAME", "test-model")
+    monkeypatch.setenv("CUA_AGENT_MODEL_HEADERS", headers)
+
+    with pytest.raises(ModelConfigurationError, match="CUA_AGENT_MODEL_HEADERS"):
+        OpenAICompatibleConfig.from_env()
+
+
 def test_adapter_maps_assistant_tool_calls_and_tool_results() -> None:
     response = _model_response_from(
         {
@@ -221,6 +252,55 @@ def test_stream_omits_tool_fields_when_no_tools_are_available(
     asyncio.run(scenario())
     assert "tools" not in captured
     assert "tool_choice" not in captured
+
+
+def test_stream_uses_custom_headers_without_empty_bearer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = _sse({"choices": [{"delta": {"content": "完成"}}]}) + b"data: [DONE]\n\n"
+    captured: dict[str, str] = {}
+
+    def urlopen(request: Request, *args: object, **kwargs: object) -> io.BytesIO:
+        captured.update({name.lower(): value for name, value in request.header_items()})
+        return io.BytesIO(body)
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    client = OpenAICompatibleModelClient(
+        OpenAICompatibleConfig(
+            "https://example.test/v1", "model", "",
+            custom_headers={"X-Gateway-Token": "header-secret"},
+        )
+    )
+
+    asyncio.run(client.complete((ModelMessage("user", "任务"),), ()))
+
+    assert "authorization" not in captured
+    assert captured["x-gateway-token"] == "header-secret"
+    assert captured["content-type"] == "application/json"
+    assert captured["accept"] == "text/event-stream"
+
+
+def test_stream_custom_authorization_overrides_bearer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = _sse({"choices": [{"delta": {"content": "完成"}}]}) + b"data: [DONE]\n\n"
+    captured: dict[str, str] = {}
+
+    def urlopen(request: Request, *args: object, **kwargs: object) -> io.BytesIO:
+        captured.update({name.lower(): value for name, value in request.header_items()})
+        return io.BytesIO(body)
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    client = OpenAICompatibleModelClient(
+        OpenAICompatibleConfig(
+            "https://example.test/v1", "model", "secret",
+            custom_headers={"authorization": "Gateway custom-token"},
+        )
+    )
+
+    asyncio.run(client.complete((ModelMessage("user", "任务"),), ()))
+
+    assert captured["authorization"] == "Gateway custom-token"
 
 
 def test_stream_rejects_incomplete_tool_arguments(monkeypatch: pytest.MonkeyPatch) -> None:

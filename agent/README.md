@@ -41,7 +41,7 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 '{"task":"打开 Chrome","invocationId":"dev-1"}' | uv run --locked --env-file ..\.env.local cua-agent invoke
 ```
 
-需要配置 `CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY`；未设置专用变量时读取相应 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_TIMEOUT_SECONDS` 默认 120 秒，`CUA_AGENT_MAX_TURNS` 默认 8，Runtime 单请求超时为 1800 秒。真实密钥只能存在于被忽略的本地环境或进程环境中。
+需要配置模型 URL 和名称：`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`；未设置专用变量时读取相应 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_API_KEY` 可为空；未设置时读取 `MIDSCENE_MODEL_API_KEY`，显式设为空值时不发送 Bearer Authorization。`CUA_AGENT_MODEL_HEADERS` 接受 JSON object 格式的自定义 HTTP 请求头，可覆盖同名默认头。`CUA_AGENT_MODEL_TIMEOUT_SECONDS` 默认 120 秒，`CUA_AGENT_MAX_TURNS` 默认 8，Runtime 单请求超时为 1800 秒。真实密钥只能存在于被忽略的本地环境或进程环境中。
 
 完整变量契约位于仓库根 `.env.example`。Python CLI 本身不查找环境文件；源码直接调用使用 `uv --env-file` 注入根 `.env.local`，`review --dev` 继承 Review Server 已加载的根环境配置，产品调用由 Host 注入进程环境。
 
@@ -51,7 +51,7 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 - assistant 事件按轮次发送可见文本增量；Tool 事件关联轮次与调用 ID，并携带完整参数及结果或错误。最终响应协议 JSON 只通过终态回复公开。
 - `cua-agent invoke` 逐帧输出事件 JSONL；stdin 协议只提交一次请求，不提供运行中的 cancel frame。
 - Review `--dev` 使用 NDJSON 流实时展示事件和最终结果；页面不提供 Agent 中途取消按钮。完成后返回 JSON 的调用入口也可使用。
-- Review 的“Python Agent 可用 / model configured”只表示路径存在且模型变量齐全；端点连通性、TLS 和模型响应格式在实际 invocation 时验证。
+- Review 的“Python Agent 可用 / model configured”只表示路径存在且模型 URL 与名称已配置；端点连通性、TLS 和模型响应格式在实际 invocation 时验证。
 
 ## 集成与依赖
 

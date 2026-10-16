@@ -77,7 +77,8 @@ MIDSCENE_MODEL_NAME=minimax-m3
 MIDSCENE_MODEL_FAMILY=doubao-vision
 CUA_AGENT_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
 CUA_AGENT_MODEL_NAME=minimax-m3
-CUA_AGENT_MODEL_API_KEY=replace-me
+# CUA_AGENT_MODEL_API_KEY=replace-me
+# CUA_AGENT_MODEL_HEADERS={"X-Custom-Header":"value"}
 CUA_AGENT_MODEL_TIMEOUT_SECONDS=120
 CUA_AGENT_MAX_TURNS=8
 CUA_DATA_ROOT=C:\path\to\cua-data
@@ -86,7 +87,7 @@ CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
 
 TypeScript Runtime 的配置优先级为进程环境、仓库根 `.env.local`、仓库根 `.env`；子工程目录不保存或读取环境文件。`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。组件宿主通过 `CUA_PYTHON_EXECUTABLE` 提供已经安装 `cua_record` 与 `cua_recorder` 的统一 Python；源码开发不设置该变量时，两个 Worker 分别使用相邻工程的 `.venv`。Python Worker 继承 Runtime 已加载的进程环境。
 
-`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME`、`CUA_AGENT_MODEL_API_KEY` 配置 Python Agent 的任务级推理模型；未设置时读取对应 `MIDSCENE_MODEL_*`。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8，Runtime 单请求超时为 1800 秒。`review --dev` 在源码环境使用顶层 `agent/.venv`、服务进程 JavaScript executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_JS_RUNTIME_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径由安装流程准备。
+`CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME` 配置 Python Agent 的任务级推理模型；未设置时读取对应 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_API_KEY` 可为空；未设置时读取 `MIDSCENE_MODEL_API_KEY`，显式设为空值时不发送 Bearer Authorization。`CUA_AGENT_MODEL_HEADERS` 接受 JSON object 格式的自定义 HTTP 请求头。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8，Runtime 单请求超时为 1800 秒。`review --dev` 在源码环境使用顶层 `agent/.venv`、服务进程 JavaScript executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_JS_RUNTIME_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径由安装流程准备。
 
 ## CLI
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import ssl
 import urllib.error
 import urllib.request
@@ -37,19 +38,19 @@ class ModelRequestError(RuntimeError):
 class OpenAICompatibleConfig:
     base_url: str
     model: str
-    api_key: str = field(repr=False)
+    api_key: str = field(default="", repr=False)
     timeout_seconds: float = 120.0
     verify_tls: bool = True
+    custom_headers: dict[str, str] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         if not self.base_url.strip():
             raise ModelConfigurationError("Agent model base URL 不能为空")
         if not self.model.strip():
             raise ModelConfigurationError("Agent model name 不能为空")
-        if not self.api_key.strip():
-            raise ModelConfigurationError("Agent model API key 不能为空")
         if self.timeout_seconds <= 0:
             raise ModelConfigurationError("Agent model timeout 必须大于 0")
+        _validate_headers(self.custom_headers)
 
     @classmethod
     def from_env(cls) -> OpenAICompatibleConfig:
@@ -69,9 +70,13 @@ class OpenAICompatibleConfig:
         return cls(
             base_url=required("CUA_AGENT_MODEL_BASE_URL", "MIDSCENE_MODEL_BASE_URL"),
             model=required("CUA_AGENT_MODEL_NAME", "MIDSCENE_MODEL_NAME"),
-            api_key=required("CUA_AGENT_MODEL_API_KEY", "MIDSCENE_MODEL_API_KEY"),
+            api_key=os.environ.get(
+                "CUA_AGENT_MODEL_API_KEY",
+                os.environ.get("MIDSCENE_MODEL_API_KEY", ""),
+            ).strip(),
             timeout_seconds=timeout,
             verify_tls=_boolean_env("CUA_AGENT_MODEL_TLS_VERIFY", default=True),
+            custom_headers=_headers_from_env(),
         )
 
     @property
@@ -111,14 +116,21 @@ class OpenAICompatibleModelClient(ModelClient):
             payload["tools"] = [_tool_payload(tool) for tool in tools]
             payload["tool_choice"] = "auto"
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        }
+        if self._config.api_key.strip():
+            headers["Authorization"] = f"Bearer {self._config.api_key.strip()}"
+        for name, value in self._config.custom_headers.items():
+            existing = next((key for key in headers if key.lower() == name.lower()), None)
+            if existing is not None:
+                del headers[existing]
+            headers[name] = value
         request = urllib.request.Request(
             self._config.chat_completions_url,
             data=body,
-            headers={
-                "Authorization": f"Bearer {self._config.api_key}",
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream",
-            },
+            headers=headers,
             method="POST",
         )
         response: object | None = None
@@ -249,6 +261,33 @@ def _boolean_env(name: str, *, default: bool) -> bool:
     if normalized in {"0", "false", "no", "off"}:
         return False
     raise ModelConfigurationError(f"{name} 必须是 true 或 false：{raw_value}")
+
+
+def _headers_from_env() -> dict[str, str]:
+    raw = os.environ.get("CUA_AGENT_MODEL_HEADERS", "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed: object = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ModelConfigurationError("CUA_AGENT_MODEL_HEADERS 必须是 JSON object") from error
+    _validate_headers(parsed)
+    return cast(dict[str, str], parsed)
+
+
+def _validate_headers(headers: object) -> None:
+    if not isinstance(headers, dict):
+        raise ModelConfigurationError("CUA_AGENT_MODEL_HEADERS 必须是 JSON object")
+    seen: set[str] = set()
+    for name, value in headers.items():
+        if not isinstance(name, str) or not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", name):
+            raise ModelConfigurationError("CUA_AGENT_MODEL_HEADERS 包含无效 header 名称")
+        if not isinstance(value, str) or any(ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ModelConfigurationError("CUA_AGENT_MODEL_HEADERS 包含无效 header 值")
+        normalized = name.lower()
+        if normalized in seen:
+            raise ModelConfigurationError("CUA_AGENT_MODEL_HEADERS 包含重复 header 名称")
+        seen.add(normalized)
 
 
 def _tls_context(verify_tls: bool) -> ssl.SSLContext | None:

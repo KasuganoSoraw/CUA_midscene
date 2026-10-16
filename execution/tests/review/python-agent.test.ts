@@ -71,3 +71,33 @@ test('Python Agent 子进程在退出前逐帧转发事件', async () => {
     });
   }
 });
+
+test('Python Agent 可用状态不要求 API Key', async () => {
+  const names = [
+    'CUA_AGENT_MODEL_BASE_URL',
+    'CUA_AGENT_MODEL_NAME',
+    'CUA_AGENT_MODEL_API_KEY',
+  ] as const;
+  const previous = names.map((name) => process.env[name]);
+  process.env.CUA_AGENT_MODEL_BASE_URL = 'https://example.test/v1';
+  process.env.CUA_AGENT_MODEL_NAME = 'test-model';
+  process.env.CUA_AGENT_MODEL_API_KEY = '';
+  try {
+    const invoker = new PythonAgentInvoker({
+      executionRoot: path.resolve('.'),
+      dataRoot: path.resolve('.'),
+      agentRoot: path.resolve('../agent'),
+      pythonExecutable: process.execPath,
+      javascriptRuntimeExecutable: process.execPath,
+      runtimeBridge: path.resolve('package.json'),
+    });
+    const status = await invoker.status();
+    assert.equal(status.modelConfigured, true);
+    assert.equal(status.available, true);
+  } finally {
+    names.forEach((name, index) => {
+      if (previous[index] === undefined) delete process.env[name];
+      else process.env[name] = previous[index];
+    });
+  }
+});
