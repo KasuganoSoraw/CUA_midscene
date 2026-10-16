@@ -891,6 +891,7 @@ onMounted(async () => {
         :initial-task="executionTask || task"
         :target-version="executionTargetVersion"
         :developer-mode="devMode"
+        @create="mode = 'recordings'"
       />
     </main>
 
