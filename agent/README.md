@@ -7,3 +7,5 @@
 内部 `cua_catalog`、`cua_execute`、`cua_workbench` 通过 TypeScript Runtime bridge 实现，不由宿主注册。GUI 执行交给 Runtime，本包不保存跨调用 Session 或长期记忆。执行期间支持通过 Python API 的取消检查关闭当前 Runtime worker。
 
 模型及 Runtime executable 路径由宿主注入。依赖只在安装或构建阶段准备，不在 invocation 中安装或重新解析。组件构建、调用环境和交付边界见 [集成说明](../README.md)。
+
+模型 URL 和名称可通过 `CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME` 指定；未设置时读取相应 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_API_KEY` 可为空，显式设为空值时不发送 Bearer Authorization。`CUA_AGENT_MODEL_HEADERS` 接受 JSON object 格式的自定义 HTTP 请求头，可覆盖同名默认头。

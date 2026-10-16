@@ -136,8 +136,7 @@ function modelConfigured(): boolean {
   const configured = (primary: string, fallback: string) =>
     Boolean(process.env[primary]?.trim() || process.env[fallback]?.trim());
   return configured('CUA_AGENT_MODEL_BASE_URL', 'MIDSCENE_MODEL_BASE_URL')
-    && configured('CUA_AGENT_MODEL_NAME', 'MIDSCENE_MODEL_NAME')
-    && configured('CUA_AGENT_MODEL_API_KEY', 'MIDSCENE_MODEL_API_KEY');
+    && configured('CUA_AGENT_MODEL_NAME', 'MIDSCENE_MODEL_NAME');
 }
 
 export function pythonAgentPaths(options: PythonAgentInvokerOptions): PythonAgentLaunch {
@@ -187,7 +186,7 @@ export class PythonAgentInvoker implements PythonAgentControl {
         ? [`找不到 JavaScript Runtime executable：${launch.javascriptRuntimeExecutable}`]
         : []),
       ...(!bridgeReady ? [`找不到已构建 Runtime bridge：${launch.runtimeBridge}`] : []),
-      ...(!hasModel ? ['未配置 CUA_AGENT_MODEL_* 或兼容的 MIDSCENE_MODEL_*'] : []),
+      ...(!hasModel ? ['未配置 Agent model base URL 或 model name'] : []),
     ];
     return {
       available: reasons.length === 0,
