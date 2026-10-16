@@ -5,6 +5,7 @@ import type { JsonObject, TaskCatalogRoots } from '../../cua/contracts/types.js'
 import { resolveTask } from '../../cua/task/tasks.js';
 import type {
   StartTaskExecutionRequest,
+  TaskExecutionResultSummary,
   TaskExecutionStatus,
 } from '../shared/types.js';
 import { resolveExecutionReport } from './execution-report.js';
@@ -74,6 +75,34 @@ function safeExecutorSummary(
       ? [['error', redactInputs(executor.error, inputs)]]
       : [],
   ));
+}
+
+function executionResultSummary(
+  payload: JsonObject | undefined,
+  executor: JsonObject | undefined,
+  reportUrl: string | undefined,
+): TaskExecutionResultSummary {
+  return {
+    ...(reportUrl ? { reportUrl } : {}),
+    ...(typeof payload?.runDir === 'string' ? { runDir: payload.runDir } : {}),
+    ...(typeof payload?.resolvedTaskPath === 'string' ? { resolvedTaskPath: payload.resolvedTaskPath } : {}),
+    ...(executor ? { executor } : {}),
+  };
+}
+
+async function availableReportUrl(dataRoot: string, runDirectory: unknown): Promise<string | undefined> {
+  if (typeof runDirectory !== 'string') return undefined;
+  const runsRoot = path.resolve(dataRoot, 'runs');
+  const runDir = path.resolve(runDirectory);
+  if (path.dirname(runDir) !== runsRoot) return undefined;
+  const runId = path.basename(runDir);
+  try {
+    await resolveExecutionReport(runsRoot, runId);
+    return `/api/execution/runs/${encodeURIComponent(runId)}/report`;
+  } catch {
+    // 报告是否可用不改变本次执行结果。
+    return undefined;
+  }
 }
 
 export async function resolveTaskCliLaunch(executionRoot: string): Promise<CliLaunch> {
@@ -226,32 +255,17 @@ export class TaskExecutionManager implements TaskExecutionControl {
     try {
       payload = objectValue(JSON.parse(stdout.trim()));
     } catch {
-      // The diagnostic below includes the process result without echoing runtime inputs.
+      // 技术错误仅包含脱敏后的进程结果。
     }
     const executor = objectValue(payload?.executor);
     const executorSummary = safeExecutorSummary(executor, request.inputs);
-    let reportUrl: string | undefined;
-    if (typeof payload?.runDir === 'string') {
-      const runsRoot = path.resolve(this.options.dataRoot, 'runs');
-      const runDir = path.resolve(payload.runDir);
-      if (path.dirname(runDir) === runsRoot) {
-        const runId = path.basename(runDir);
-        try {
-          await resolveExecutionReport(runsRoot, runId);
-          reportUrl = `/api/execution/runs/${encodeURIComponent(runId)}/report`;
-        } catch { /* 报告是否可用不改变本次执行结果。 */ }
-      }
-    }
+    const reportUrl = await availableReportUrl(this.options.dataRoot, payload?.runDir);
     if (generation !== this.generation) return;
+    const result = executionResultSummary(payload, executorSummary, reportUrl);
     if (code === 0 && executor?.status === 'succeeded') {
       this.current = {
         ...this.current, phase: 'succeeded', finishedAt,
-        result: {
-          ...(reportUrl ? { reportUrl } : {}),
-          ...(typeof payload?.runDir === 'string' ? { runDir: payload.runDir } : {}),
-          ...(typeof payload?.resolvedTaskPath === 'string' ? { resolvedTaskPath: payload.resolvedTaskPath } : {}),
-          ...(executorSummary ? { executor: executorSummary } : {}),
-        },
+        result,
       };
       return;
     }
@@ -262,14 +276,7 @@ export class TaskExecutionManager implements TaskExecutionControl {
     this.current = {
       ...this.current, phase: 'failed', finishedAt,
       error: executorError || detail || `任务执行失败：exit=${String(code)} signal=${signal ?? '-'}`,
-      ...(payload ? {
-        result: {
-          ...(reportUrl ? { reportUrl } : {}),
-          ...(typeof payload.runDir === 'string' ? { runDir: payload.runDir } : {}),
-          ...(typeof payload.resolvedTaskPath === 'string' ? { resolvedTaskPath: payload.resolvedTaskPath } : {}),
-          ...(executorSummary ? { executor: executorSummary } : {}),
-        },
-      } : {}),
+      ...(payload ? { result } : {}),
     };
   }
 

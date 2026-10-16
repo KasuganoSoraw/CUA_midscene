@@ -9,6 +9,7 @@ import {
   TaskExecutionManager,
 } from '../../review/service/task-execution.js';
 import { createTaskFixture } from '../helpers/task-fixture.js';
+import type { TaskExecutionResultSummary } from '../../review/shared/types.js';
 
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-task-execution-'));
@@ -172,5 +173,68 @@ test('技术详情不公开模型访问凭据', async () => {
     await manager.close();
     if (previous === undefined) delete process.env.MIDSCENE_MODEL_API_KEY;
     else process.env.MIDSCENE_MODEL_API_KEY = previous;
+  }
+});
+
+test('执行完成时保留输出边界、结果摘要和错误优先级', async () => {
+  const { root, catalog } = await fixture();
+  const missingRun = path.join(root, 'runs', 'missing-report');
+  const cases: Array<{
+    name: string; stdout: string; code: number; diagnostics: string;
+    phase: 'succeeded' | 'failed'; result?: TaskExecutionResultSummary; error?: string;
+  }> = [
+    {
+      name: '成功但报告尚未生成',
+      stdout: JSON.stringify({ runDir: missingRun, resolvedTaskPath: 'snapshot.yaml', executor: { status: 'succeeded', dryRun: false, inputs: request.inputs, sourceYamlPath: 'private.yaml' } }),
+      code: 0, diagnostics: '', phase: 'succeeded',
+      result: { runDir: missingRun, resolvedTaskPath: 'snapshot.yaml', executor: { status: 'succeeded', dryRun: false } },
+    },
+    {
+      name: '非法路径字段不进入摘要',
+      stdout: JSON.stringify({ runDir: 123, resolvedTaskPath: [], executor: { status: 'succeeded' } }),
+      code: 0, diagnostics: '', phase: 'succeeded', result: { executor: { status: 'succeeded' } },
+    },
+    {
+      name: '非零退出码不能被成功载荷覆盖',
+      stdout: JSON.stringify({ executor: { status: 'succeeded' } }),
+      code: 2, diagnostics: '', phase: 'failed', result: { executor: { status: 'succeeded' } },
+      error: '任务执行失败：exit=2 signal=-',
+    },
+    {
+      name: '执行器错误优先于stderr并脱敏',
+      stdout: JSON.stringify({ executor: { status: 'failed', error: '失败 测试输入' } }),
+      code: 1, diagnostics: '其他诊断', phase: 'failed',
+      result: { executor: { status: 'failed', error: '失败 [运行时输入]' } }, error: '失败 [运行时输入]',
+    },
+    {
+      name: '执行器失败不能被零退出码覆盖',
+      stdout: JSON.stringify({ executor: { status: 'failed', error: '' } }),
+      code: 0, diagnostics: '  诊断 测试输入  ', phase: 'failed',
+      result: { executor: { status: 'failed', error: '' } }, error: '诊断 [运行时输入]',
+    },
+    {
+      name: '空对象保留空摘要', stdout: '{}', code: 1, diagnostics: '',
+      phase: 'failed', result: {}, error: '任务执行失败：exit=1 signal=-',
+    },
+    ...['invalid-json', 'null', '[]', '42'].map(stdout => ({
+      name: `非对象输出 ${stdout}`, stdout, code: 1, diagnostics: '诊断 测试输入',
+      phase: 'failed' as const, error: '诊断 [运行时输入]',
+    })),
+  ];
+  for (const item of cases) {
+    const manager = new TaskExecutionManager({
+      catalog, dataRoot: root, executionRoot: root, countdownMs: 0,
+      resolveLaunch: async () => ({ command: process.execPath, prefixArgs: ['-e',
+        `process.stdout.write(${JSON.stringify(item.stdout)});process.stderr.write(${JSON.stringify(item.diagnostics)});process.exit(${item.code})`, '--'],
+      }),
+    });
+    try {
+      await manager.start(request);
+      await waitFor(manager, item.phase);
+      const status = manager.status();
+      assert.deepEqual(status.result, item.result, item.name);
+      assert.equal(Object.hasOwn(status, 'result'), item.result !== undefined, item.name);
+      assert.equal(status.error, item.error, item.name);
+    } finally { await manager.close(); }
   }
 });
