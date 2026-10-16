@@ -118,6 +118,9 @@ export const api = {
   ),
   stopRecorder: () => request<RecorderStatus>('/api/recorder/stop', { method: 'POST' }),
   executionStatus: () => request<TaskExecutionStatus>('/api/execution/status'),
+  openExecutionReport: (reportUrl: string) => request<{ opened: true; reportPath: string }>(
+    `${reportUrl}/open`, { method: 'POST' },
+  ),
   startExecution: (body: StartTaskExecutionRequest) => request<TaskExecutionStatus>(
     '/api/execution/start', { method: 'POST', body: JSON.stringify(body) },
   ),
