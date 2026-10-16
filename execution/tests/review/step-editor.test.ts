@@ -2,10 +2,47 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildStepContent,
+  defaultStepEditor,
   inputPreview,
   parseInputPreview,
   parseStepEditor,
 } from '../../review/shared/step-editor.js';
+
+test('动作构建保留双击、按键、等待边界和自定义参数语义', () => {
+  const doubleClick = defaultStepEditor('doubleClick', 10.6);
+  doubleClick.target = '双击 target';
+  doubleClick.referenceImages = [{ name: 'target', url: 'source/target.png' }];
+  const clicked = buildStepContent(doubleClick, 'step-001');
+  assert.deepEqual(clicked, { flow: [{ sleep: 11 }, { aiDoubleClick: null, locate: { prompt: '双击 target', images: doubleClick.referenceImages } }], input: null });
+  (clicked.flow[1].locate as any).images[0].name = 'changed';
+  assert.equal(doubleClick.referenceImages[0].name, 'target');
+
+  const keyboard = defaultStepEditor('keyboard', -20);
+  keyboard.keyName = 'Control+A';
+  assert.deepEqual(buildStepContent(keyboard, 'step-001'), { flow: [{ KeyboardPress: { keyName: 'Control+A' } }], input: null });
+  const wait = defaultStepEditor('wait');
+  wait.waitCondition = '结果出现';
+  for (const [timeoutMs, expected] of [[0, 15000], [-10, 1], [3500.7, 3501]]) {
+    wait.timeoutMs = timeoutMs;
+    assert.deepEqual(buildStepContent(wait, 'step-001').flow, [{ aiWaitFor: '结果出现', timeout: expected }]);
+  }
+
+  const custom = defaultStepEditor('input', 999);
+  custom.custom = true;
+  custom.customFlow = [{ sleep: 20 }, { aiTap: '保留动作' }];
+  custom.inputLabel = '   ';
+  custom.inputDescription = '  参数说明  ';
+  custom.inputDefault = 'demo';
+  const built = buildStepContent(custom, 'step-002');
+  assert.deepEqual(built, { flow: custom.customFlow, input: { type: 'string', label: '输入值', description: '参数说明', default: 'demo' } });
+  built.flow[1].aiTap = 'changed';
+  assert.equal(custom.customFlow[1].aiTap, '保留动作');
+  custom.parameterized = false;
+  assert.equal(buildStepContent(custom, 'step-002').input, null);
+  custom.parameterized = true;
+  custom.inputDescription = '  ';
+  assert.deepEqual(buildStepContent(custom, 'step-002').input, { type: 'string', label: '输入值', default: 'demo' });
+});
 
 test('等待触发条件与最长等待时间分别保留，动作前暂停独立存在', () => {
   const editor = parseStepEditor({ id: 'step-005', operation: 'wait', flow: [

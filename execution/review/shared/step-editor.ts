@@ -209,66 +209,53 @@ function parseKeyboardEditor(result: StepEditorModel, action: JsonObject, flow: 
   return result;
 }
 
-export function buildStepContent(model: StepEditorModel, stepId: string): BuiltStepContent {
-  if (model.custom) {
+function buildStepInput(model: StepEditorModel): TaskInputDefinition | null {
+  if (model.operation !== 'input' || !model.parameterized) return null;
+  return {
+    type: 'string',
+    label: model.inputLabel.trim() || '输入值',
+    ...(model.inputDescription.trim() ? { description: model.inputDescription.trim() } : {}),
+    default: model.inputDefault,
+  };
+}
+
+function buildClickAction(model: StepEditorModel): JsonObject {
+  const key = model.operation === 'click' ? 'aiTap' : 'aiDoubleClick';
+  if (!model.referenceImages.length) return { [key]: model.target };
+  return {
+    [key]: null,
+    locate: {
+      prompt: model.referenceImages.every(image => model.target.includes(image.name))
+        ? model.target : `${model.target}${referencePromptSuffix(model.referenceImages)}`,
+      images: clone(model.referenceImages),
+      ...(model.convertHttpImage2Base64 ? { convertHttpImage2Base64: true } : {}),
+    },
+  };
+}
+
+function buildStepAction(model: StepEditorModel, stepId: string): JsonObject {
+  if (model.operation === 'click' || model.operation === 'doubleClick') return buildClickAction(model);
+  if (model.operation === 'input') {
     return {
-      flow: clone(model.customFlow),
-      ...(model.operation === 'input' && model.parameterized
-        ? {
-            input: {
-              type: 'string' as const,
-              label: model.inputLabel.trim() || '输入值',
-              ...(model.inputDescription.trim() ? { description: model.inputDescription.trim() } : {}),
-              default: model.inputDefault,
-            },
-          }
-        : { input: null }),
-    };
-  }
-  const flow: JsonObject[] = [];
-  const delayMs = Math.max(0, Math.round(model.delayMs || 0));
-  if (delayMs) flow.push({ sleep: delayMs });
-  if (model.operation === 'click' || model.operation === 'doubleClick') {
-    const key = model.operation === 'click' ? 'aiTap' : 'aiDoubleClick';
-    if (model.referenceImages.length) {
-      flow.push({
-        [key]: null,
-        locate: {
-          prompt: model.referenceImages.every(image => model.target.includes(image.name))
-            ? model.target : `${model.target}${referencePromptSuffix(model.referenceImages)}`,
-          images: clone(model.referenceImages),
-          ...(model.convertHttpImage2Base64 ? { convertHttpImage2Base64: true } : {}),
-        },
-      });
-    } else {
-      flow.push({ [key]: model.target });
-    }
-  }
-  else if (model.operation === 'input') {
-    flow.push({
       KeyboardTypeText: {
         locate: model.target,
         value: model.parameterized ? `{{${stepId}-input}}` : model.inputValue,
         mode: model.inputMode,
       },
-    });
-  } else if (model.operation === 'keyboard') {
-    flow.push({ KeyboardPress: { keyName: model.keyName } });
-  } else {
-    flow.push({ aiWaitFor: model.waitCondition, timeout: Math.max(1, Math.round(model.timeoutMs || 15_000)) });
-  }
-  if (model.operation === 'input' && model.parameterized) {
-    return {
-      flow,
-      input: {
-        type: 'string',
-        label: model.inputLabel.trim() || '输入值',
-        ...(model.inputDescription.trim() ? { description: model.inputDescription.trim() } : {}),
-        default: model.inputDefault,
-      },
     };
   }
-  return { flow, input: null };
+  if (model.operation === 'keyboard') return { KeyboardPress: { keyName: model.keyName } };
+  return { aiWaitFor: model.waitCondition, timeout: Math.max(1, Math.round(model.timeoutMs || 15_000)) };
+}
+
+export function buildStepContent(model: StepEditorModel, stepId: string): BuiltStepContent {
+  const input = buildStepInput(model);
+  if (model.custom) return { flow: clone(model.customFlow), input };
+  const flow: JsonObject[] = [];
+  const delayMs = Math.max(0, Math.round(model.delayMs || 0));
+  if (delayMs) flow.push({ sleep: delayMs });
+  flow.push(buildStepAction(model, stepId));
+  return { flow, input };
 }
 
 export function inputPreview(stepId: string, input: TaskInputDefinition | null | undefined): JsonObject {
