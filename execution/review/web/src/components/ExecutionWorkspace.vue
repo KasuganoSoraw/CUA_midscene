@@ -32,6 +32,8 @@ const status = ref<TaskExecutionStatus>({ phase: 'idle' });
 const busy = ref(false);
 const error = ref('');
 const connectionError = ref('');
+const reportOpening = ref(false);
+const reportOpenError = ref('');
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle');
 const copying = ref(false);
 const instructionField = ref<HTMLInputElement>();
@@ -160,7 +162,21 @@ async function stop(): Promise<void> {
   finally { busy.value = false; }
 }
 
+async function openReport(): Promise<void> {
+  const reportUrl = status.value.result?.reportUrl;
+  if (!reportUrl || reportOpening.value) return;
+  reportOpening.value = true;
+  reportOpenError.value = '';
+  try { await api.openExecutionReport(reportUrl); }
+  catch (caught) {
+    if (!disposed && status.value.result?.reportUrl === reportUrl) {
+      reportOpenError.value = caught instanceof Error ? caught.message : String(caught);
+    }
+  } finally { reportOpening.value = false; }
+}
+
 watch(instruction, () => { copyState.value = 'idle'; });
+watch(() => status.value.result?.reportUrl, () => { reportOpenError.value = ''; });
 watch(() => props.targetVersion, () => { void applyTarget(); });
 onMounted(async () => {
   await refreshStatus();
@@ -232,8 +248,12 @@ onUnmounted(() => { disposed = true; selectionVersion += 1; if (poll) clearInter
       </dl>
       <div v-if="feedback" class="execution-feedback" role="status">
         <h3>{{ t('execution.resultExplanation') }}</h3><p>{{ t(feedback.descriptionKey) }}</p>
-        <a v-if="status.result?.reportUrl" class="execution-report-link" :href="status.result.reportUrl" target="_blank" rel="noopener noreferrer">{{ t('execution.viewReport') }} ↗</a>
+        <button v-if="status.result?.reportUrl" type="button" class="execution-report-link" :disabled="reportOpening" @click="openReport">{{ t(reportOpening ? 'execution.openingReport' : 'execution.viewReport') }} ↗</button>
         <p v-else class="execution-report-unavailable">{{ t('execution.reportUnavailable') }}</p>
+        <div v-if="reportOpenError" role="alert">
+          <p>{{ t('execution.openReportFailed') }}</p>
+          <details class="execution-diagnostics"><summary>{{ t('execution.technicalDetails') }}</summary><pre>{{ reportOpenError }}</pre></details>
+        </div>
         <details v-if="status.error" class="execution-diagnostics"><summary>{{ t('execution.technicalDetails') }}</summary><pre>{{ status.error }}</pre></details>
       </div>
       <div v-if="developerMode && status.result?.runDir" class="execution-result"><small>{{ t('execution.outputDirectory') }}</small><code :title="status.result.runDir">{{ status.result.runDir }}</code></div>

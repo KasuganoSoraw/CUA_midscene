@@ -20,7 +20,7 @@ import type {
 import { applyReviewMutation } from '../service/task-mutations.js';
 import { uploadReferenceImage } from '../service/reference-images.js';
 import { referenceImageMaxBytes, referenceImageMimeTypes } from '../shared/reference-upload.js';
-import { resolveExecutionReport } from '../service/execution-report.js';
+import { openExecutionReportFile, resolveExecutionReport } from '../service/execution-report.js';
 import { RecordingGenerationManager } from '../service/recording-generation.js';
 import {
   PythonAgentInvoker,
@@ -50,6 +50,7 @@ interface ReviewRouteOptions {
 export interface ReviewRouteDependencies {
   createFromRecording?: typeof createTaskFromRecording;
   openDirectory?: typeof openRecordingDirectory;
+  openReport?: typeof openExecutionReportFile;
   recorder?: RecorderControl;
   execution?: TaskExecutionControl;
   agent?: PythonAgentControl;
@@ -236,6 +237,17 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
       .header('x-content-type-options', 'nosniff')
       .header('referrer-policy', 'no-referrer')
       .send(await readFile(report));
+  });
+
+  app.post<{ Params: { runId: string } }>('/api/execution/runs/:runId/report/open', async (request) => {
+    const origin = request.headers.origin;
+    if (request.headers['sec-fetch-site'] === 'cross-site'
+      || (origin !== undefined && origin !== `http://${request.headers.host}`)) {
+      throw Object.assign(new Error('不允许从其他站点打开本地报告'), { statusCode: 403 });
+    }
+    const reportPath = await resolveExecutionReport(options.layout.data!.runsRoot, request.params.runId);
+    await (options.dependencies?.openReport ?? openExecutionReportFile)(reportPath);
+    return { opened: true, reportPath };
   });
 
   app.post<{ Body: JsonObject }>('/api/execution/start', {

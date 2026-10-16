@@ -59,7 +59,7 @@ function nodes(root: HostNode): HostNode[] { return [root, ...root.children.flat
 function text(root: HostNode): string { return nodes(root).map(item => item.text).join(' '); }
 async function settle(): Promise<void> { for (let i = 0; i < 12; i++) { await Promise.resolve(); await nextTick(); } }
 
-async function mountWorkspace(options: { withInputs?: boolean; status?: TaskExecutionStatus; rejectCopy?: boolean; failTask?: boolean; failStatus?: boolean } = {}) {
+async function mountWorkspace(options: { withInputs?: boolean; status?: TaskExecutionStatus; rejectCopy?: boolean; failTask?: boolean; failStatus?: boolean; failReport?: boolean } = {}) {
   const view = fixture(options.withInputs);
   const task: TaskCatalogReadyItem = { ...view.manifest, status: 'ready', origin: 'user', writable: true, taskRoot: '', taskYamlPath: '', taskCount: 2, actionCount: 2 };
   let currentStatus: TaskExecutionStatus = options.status ?? { phase: 'idle' };
@@ -72,6 +72,11 @@ async function mountWorkspace(options: { withInputs?: boolean; status?: TaskExec
     executionStatus: async () => { if (options.failStatus) throw new Error('connection lost'); return structuredClone(currentStatus); },
     startExecution: async (request: unknown) => { starts.push(request); currentStatus = { phase: 'preparing', scene: 'orders', task: 'query', mode: 'task', startsAt: new Date(Date.now() + 5000).toISOString() }; return currentStatus; },
     stopExecution: async () => { currentStatus = { phase: 'idle' }; return currentStatus; },
+    openExecutionReport: async (url: string) => {
+      calls.push(`openReport:${url}`);
+      if (options.failReport) throw new Error('report unavailable');
+      return { opened: true, reportPath: '/runs/run-id/report.html' };
+    },
   };
   const file = new URL('../../review/web/src/components/ExecutionWorkspace.vue', import.meta.url);
   const { descriptor } = parse(await readFile(file, 'utf8'));
@@ -152,15 +157,35 @@ test('无参数页面使用插画，允许直接准备，复制失败显示手�
   } finally { mounted.unmount(); }
 });
 
-test('失败结果使用真实提示和报告链接，不展示 Agent 思考或自动创建定时任务', async () => {
+test('失败结果通过本地服务打开报告，不展示 Agent 思考或自动创建定时任务', async () => {
   const mounted = await mountWorkspace({ status: { phase: 'failed', scene: 'orders', task: 'query', mode: 'task', error: 'TimeoutError', result: { reportUrl: '/api/execution/runs/run-id/report' } } });
   try {
     assert.match(text(mounted.root), /运行等待超时/);
-    assert.ok(nodes(mounted.root).some(item => item.tag === 'a' && item.props.href === '/api/execution/runs/run-id/report'));
+    const reportButton = nodes(mounted.root).find(item => item.tag === 'button' && item.props.class === 'execution-report-link')!;
+    assert.ok(reportButton);
+    assert.ok(!nodes(mounted.root).some(item => item.tag === 'a' && item.props.href));
+    await reportButton.props.onClick();
+    assert.ok(mounted.calls.includes('openReport:/api/execution/runs/run-id/report'));
     assert.ok(nodes(mounted.root).filter(item => item.tag === 'details').every(item => !item.props.open));
     assert.doesNotMatch(text(mounted.root), /思考完成|创建定时任务/);
     assert.equal(mounted.starts.length, 0);
   } finally { mounted.unmount(); }
+});
+
+test('成功和失败结果均可打开报告，打开失败时保留运行结果并显示友好提示', async () => {
+  for (const phase of ['succeeded', 'failed'] as const) {
+    const mounted = await mountWorkspace({ failReport: true, status: {
+      phase, result: { reportUrl: '/api/execution/runs/run-id/report' },
+    } });
+    try {
+      const button = nodes(mounted.root).find(item => item.props.class === 'execution-report-link')!;
+      await button.props.onClick();
+      await settle();
+      assert.match(text(mounted.root), /无法打开本地执行报告/);
+      assert.equal(nodes(mounted.root).find(item => item.props.class === 'execution-report-link')!.props.disabled, false);
+      assert.equal(mounted.starts.length, 0);
+    } finally { mounted.unmount(); }
+  }
 });
 
 test('运行中恢复任务身份和模式，不接受切换任务', async () => {

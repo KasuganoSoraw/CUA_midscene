@@ -1,4 +1,5 @@
 import { realpath, stat } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { readExecutorResult } from '../../cua/contracts/validation.js';
 
@@ -23,4 +24,19 @@ export async function resolveExecutionReport(runsRoot: string, runId: string): P
   } catch {
     throw Object.assign(new Error('本次运行没有可用的执行报告'), { statusCode: 404 });
   }
+}
+
+export async function openExecutionReportFile(
+  reportPath: string,
+  spawnProcess: typeof spawn = spawn,
+): Promise<void> {
+  const command = process.platform === 'win32' ? 'explorer.exe'
+    : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  await new Promise<void>((resolve, reject) => {
+    const child = spawnProcess(command, [reportPath], {
+      detached: true, shell: false, stdio: 'ignore', windowsHide: true,
+    });
+    child.once('error', reject);
+    child.once('spawn', () => { child.unref(); resolve(); });
+  });
 }

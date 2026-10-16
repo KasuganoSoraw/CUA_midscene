@@ -274,7 +274,7 @@ footer code { color: var(--cua-color-text-tertiary); }
 .execution-feedback { display: flex; flex-direction: column; gap: 12px; font-size: 13px; line-height: 1.65; }
 .execution-feedback h3 { font-size: 14px; font-weight: 500; }
 .execution-feedback > p { color: var(--cua-color-text-secondary); }
-.execution-report-link { align-self: flex-start; color: var(--cua-color-primary); text-decoration: none; }
+.execution-report-link { align-self: flex-start; color: var(--cua-color-primary); text-decoration: none; background: transparent; border: 0; padding: 0; }
 .execution-report-link:hover { text-decoration: underline; }
 .execution-feedback .execution-report-unavailable { color: var(--cua-color-text-tertiary); font-size: 12px; }
 .execution-diagnostics { width: 100%; border-top: 1px solid var(--cua-color-border); padding-top: 10px; text-align: left; }

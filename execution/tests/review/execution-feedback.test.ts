@@ -21,7 +21,7 @@ test('结果卡片提供报告入口，原始错误仅在默认折叠的技术�
   const component = await readFile(new URL('../../review/web/src/components/ExecutionWorkspace.vue', import.meta.url), 'utf8');
   assert.ok(/<details[^>]*class="execution-diagnostics"/.test(component));
   assert.ok(!/<details[^>]*\bopen\b/.test(component));
-  assert.ok(/:href="status.result.reportUrl"/.test(component));
-  assert.ok(/rel="noopener noreferrer"/.test(component));
+  assert.ok(/<button[^>]*class="execution-report-link"[^>]*@click="openReport"/.test(component));
+  assert.ok(/await api.openExecutionReport\(reportUrl\)/.test(component));
   assert.ok(!/<p v-if="status.error"/.test(component));
 });
