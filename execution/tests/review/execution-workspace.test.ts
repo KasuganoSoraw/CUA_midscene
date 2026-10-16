@@ -59,7 +59,7 @@ function nodes(root: HostNode): HostNode[] { return [root, ...root.children.flat
 function text(root: HostNode): string { return nodes(root).map(item => item.text).join(' '); }
 async function settle(): Promise<void> { for (let i = 0; i < 12; i++) { await Promise.resolve(); await nextTick(); } }
 
-async function mountWorkspace(options: { withInputs?: boolean; status?: TaskExecutionStatus; rejectCopy?: boolean } = {}) {
+async function mountWorkspace(options: { withInputs?: boolean; status?: TaskExecutionStatus; rejectCopy?: boolean; failTask?: boolean; failStatus?: boolean } = {}) {
   const view = fixture(options.withInputs);
   const task: TaskCatalogReadyItem = { ...view.manifest, status: 'ready', origin: 'user', writable: true, taskRoot: '', taskYamlPath: '', taskCount: 2, actionCount: 2 };
   let currentStatus: TaskExecutionStatus = options.status ?? { phase: 'idle' };
@@ -68,8 +68,8 @@ async function mountWorkspace(options: { withInputs?: boolean; status?: TaskExec
   const calls: string[] = [];
   const api = {
     tasks: async () => { calls.push('tasks'); return { tasks: [task] }; },
-    task: async () => { calls.push('task'); return structuredClone(view); },
-    executionStatus: async () => structuredClone(currentStatus),
+    task: async () => { calls.push('task'); if (options.failTask) throw new Error('task unavailable'); return structuredClone(view); },
+    executionStatus: async () => { if (options.failStatus) throw new Error('connection lost'); return structuredClone(currentStatus); },
     startExecution: async (request: unknown) => { starts.push(request); currentStatus = { phase: 'preparing', scene: 'orders', task: 'query', mode: 'task', startsAt: new Date(Date.now() + 5000).toISOString() }; return currentStatus; },
     stopExecution: async () => { currentStatus = { phase: 'idle' }; return currentStatus; },
   };
@@ -174,4 +174,24 @@ test('运行中恢复任务身份和模式，不接受切换任务', async () =>
     assert.equal(catalog.props.busy, true);
     assert.match(text(mounted.root), /停止任务/);
   } finally { mounted.unmount(); }
+});
+
+test('任务详情不可读时仍能停止活动运行，状态连接异常时禁止新运行', async () => {
+  const running = await mountWorkspace({ failTask: true, status: { phase: 'running', scene: 'orders', task: 'query', mode: 'task' } });
+  try {
+    const stop = nodes(running.root).find(item => String(item.props.class).includes('execution-stop'))!;
+    assert.ok(stop);
+    assert.equal(stop.props.disabled, false);
+    await stop.props.onClick();
+    await settle();
+    assert.match(text(running.root), /等待运行/);
+  } finally { running.unmount(); }
+  const disconnected = await mountWorkspace({ failStatus: true });
+  try {
+    const start = nodes(disconnected.root).find(item => String(item.props.class).includes('execution-start'))!;
+    assert.equal(start.props.disabled, true);
+    await start.props.onClick();
+    assert.equal(disconnected.starts.length, 0);
+    assert.match(text(disconnected.root), /暂时无法获取运行状态/);
+  } finally { disconnected.unmount(); }
 });

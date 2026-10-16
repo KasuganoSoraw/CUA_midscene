@@ -48,7 +48,7 @@ const modeOptions = computed<ReviewSelectOption[]>(() => [
 const parameters = computed(() => taskView.value ? executionParameters(taskView.value) : []);
 const instruction = computed(() => selectedTask.value ? executionInstruction(task.value, mode.value) : '');
 const active = computed(() => ['preparing', 'running', 'stopping'].includes(status.value.phase));
-const canStart = computed(() => Boolean(selectedTask.value && taskView.value && !active.value && !busy.value));
+const canStart = computed(() => Boolean(selectedTask.value && taskView.value && !active.value && !busy.value && !connectionError.value));
 const countdown = computed(() => {
   if (status.value.phase !== 'preparing' || !status.value.startsAt) return 0;
   return Math.max(0, Math.ceil((new Date(status.value.startsAt).getTime() - clock.value) / 1000));
@@ -207,13 +207,13 @@ onUnmounted(() => { disposed = true; selectionVersion += 1; if (poll) clearInter
           </div>
           <div v-else class="execution-empty"><img :src="emptyParameters" alt="" /><p>{{ t('execution.noInputs') }}</p></div>
         </section>
-        <div class="execution-actions">
-          <button v-if="active" class="execution-stop" :disabled="busy || status.phase === 'stopping'" @click="stop">{{ status.phase === 'preparing' ? t('execution.cancelPrepare') : status.phase === 'stopping' ? t('execution.stopping') : t('execution.stop') }}</button>
-          <button v-else class="primary execution-start" :disabled="!canStart" @click="start"><img :src="runIcon" alt="" />{{ t('execution.debugTask') }}</button>
-          <p>{{ t('execution.warning') }}</p>
-        </div>
       </template>
       <div v-else class="execution-selection-empty"><h2>{{ t(busy ? 'review.loading' : 'execution.choose') }}</h2><p>{{ t('execution.selectFirst') }}</p></div>
+      <div v-if="selectedTask || active" class="execution-actions">
+        <button v-if="active" class="execution-stop" :disabled="busy || status.phase === 'stopping'" @click="stop">{{ status.phase === 'preparing' ? t('execution.cancelPrepare') : status.phase === 'stopping' ? t('execution.stopping') : t('execution.stop') }}</button>
+        <button v-else class="primary execution-start" :disabled="!canStart" @click="start"><img :src="runIcon" alt="" />{{ t('execution.debugTask') }}</button>
+        <p>{{ t('execution.warning') }}</p>
+      </div>
       <div v-if="error || connectionError" class="execution-error" role="alert">
         <strong>{{ t(error ? 'execution.operationFailed' : 'execution.connectionLost') }}</strong>
         <p>{{ t(error ? requestDescriptionKey : 'execution.connectionLostHelp') }}</p>
