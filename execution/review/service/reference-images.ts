@@ -27,6 +27,41 @@ async function assertRevision(taskRoot: string, expectedRevision: string): Promi
   if (reviewRevision(manifest, yaml) !== expectedRevision) throw new ReviewConflictError('任务已被外部修改，请重新加载后上传');
 }
 
+async function normalizeReferenceImage(
+  data: Buffer, contentType: string, format: ReturnType<typeof imageFormat>,
+): Promise<Buffer> {
+  if (contentType !== `image/${format}`) throw new Error('图片内容与声明格式不一致');
+  let normalized: Buffer;
+  try {
+    const image = sharp(data, { failOn: 'warning', limitInputPixels: referenceImageMaxPixels });
+    const metadata = await image.metadata();
+    if (metadata.format !== format || (metadata.pages ?? 1) !== 1) throw new Error('只支持单帧图片');
+    if (!metadata.width || !metadata.height || metadata.width > 6000 || metadata.height > 6000) {
+      throw new Error('图片边长不能超过 6000 像素');
+    }
+    normalized = await image.rotate().toFormat(format).toBuffer();
+  } catch (error) {
+    throw new Error(`定位参考图无法读取，最多支持 1600 万像素的单帧图片：${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (normalized.length > referenceImageMaxBytes) throw new Error('处理后的定位参考图不能超过 5 MB');
+  return normalized;
+}
+
+async function storeImmutableReferenceImage(
+  directory: string, normalized: Buffer, format: ReturnType<typeof imageFormat>,
+): Promise<string> {
+  const hash = createHash('sha256').update(normalized).digest('hex');
+  const filename = `${hash}.${format === 'jpeg' ? 'jpg' : format}`;
+  try { await writeFile(path.join(directory, filename), normalized, { flag: 'wx' }); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    if (!inside(await realpath(directory), await realpath(path.join(directory, filename)))) throw new Error('定位参考图资产越出目录');
+    const existing = await readFile(path.join(directory, filename));
+    if (!existing.equals(normalized)) throw new Error('定位参考图资产内容冲突');
+  }
+  return filename;
+}
+
 export async function uploadReferenceImage(options: {
   scene: string;
   task: string;
@@ -47,20 +82,7 @@ export async function uploadReferenceImage(options: {
   }
   await assertRevision(taskRoot, options.expectedRevision);
   const format = imageFormat(options.data);
-  if (options.contentType !== `image/${format}`) throw new Error('图片内容与声明格式不一致');
-  let normalized: Buffer;
-  try {
-    const image = sharp(options.data, { failOn: 'warning', limitInputPixels: referenceImageMaxPixels });
-    const metadata = await image.metadata();
-    if (metadata.format !== format || (metadata.pages ?? 1) !== 1) throw new Error('只支持单帧图片');
-    if (!metadata.width || !metadata.height || metadata.width > 6000 || metadata.height > 6000) {
-      throw new Error('图片边长不能超过 6000 像素');
-    }
-    normalized = await image.rotate().toFormat(format).toBuffer();
-  } catch (error) {
-    throw new Error(`定位参考图无法读取，最多支持 1600 万像素的单帧图片：${error instanceof Error ? error.message : String(error)}`);
-  }
-  if (normalized.length > referenceImageMaxBytes) throw new Error('处理后的定位参考图不能超过 5 MB');
+  const normalized = await normalizeReferenceImage(options.data, options.contentType, format);
   const sourceRoot = path.join(taskRoot, 'source');
   await mkdir(sourceRoot, { recursive: true });
   if (!inside(taskRoot, await realpath(sourceRoot))) throw new Error('source 目录越出任务目录');
@@ -68,14 +90,6 @@ export async function uploadReferenceImage(options: {
   await mkdir(directory, { recursive: true });
   if (!inside(await realpath(sourceRoot), await realpath(directory))) throw new Error('定位参考图目录越出 source 目录');
   await assertRevision(taskRoot, options.expectedRevision);
-  const hash = createHash('sha256').update(normalized).digest('hex');
-  const filename = `${hash}.${format === 'jpeg' ? 'jpg' : format}`;
-  try { await writeFile(path.join(directory, filename), normalized, { flag: 'wx' }); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    if (!inside(await realpath(directory), await realpath(path.join(directory, filename)))) throw new Error('定位参考图资产越出目录');
-    const existing = await readFile(path.join(directory, filename));
-    if (!existing.equals(normalized)) throw new Error('定位参考图资产内容冲突');
-  }
+  const filename = await storeImmutableReferenceImage(directory, normalized, format);
   return { image: { name: 'reference-image', url: `source/reference-images/${filename}` } };
 }
