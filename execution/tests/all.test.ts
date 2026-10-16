@@ -36,3 +36,4 @@ import './review/task-execution.test.js';
 import './review/execution-report.test.js';
 import './review/execution-feedback.test.js';
 import './review/execution-workspace.test.js';
+import './review/app-safety.test.js';

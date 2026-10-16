@@ -53,6 +53,30 @@ test('更换图创建不同资产，已上传和已绑定的图片保持可读',
   await Promise.all([readFile(path.join(setup.taskRoot, first.image.url)), readFile(path.join(setup.taskRoot, second.image.url))]);
 });
 
+test('WebP 规范化后使用内容哈希命名，同名不同内容不覆盖', async () => {
+  const setup = await fixture();
+  const data = await sharp(setup.request.data).webp().toBuffer();
+  const first = await uploadReferenceImage({ ...setup.request, data, contentType: 'image/webp' });
+  assert.match(first.image.url, /^source\/reference-images\/[a-f0-9]{64}\.webp$/);
+  const stored = path.join(setup.taskRoot, first.image.url);
+  const metadata = await sharp(await readFile(stored)).metadata();
+  assert.equal(metadata.format, 'webp');
+  await writeFile(stored, 'different content');
+  await assert.rejects(uploadReferenceImage({ ...setup.request, data, contentType: 'image/webp' }), /资产内容冲突/);
+  assert.equal(await readFile(stored, 'utf8'), 'different content');
+});
+
+test('定位参考图目录链接越界时拒绝写入', async () => {
+  const setup = await fixture();
+  const source = path.join(setup.taskRoot, 'source');
+  const outside = path.join(setup.root, 'outside');
+  await mkdir(source, { recursive: true });
+  await mkdir(outside);
+  await symlink(outside, path.join(source, 'reference-images'), process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(uploadReferenceImage(setup.request), /定位参考图目录越出 source 目录/);
+  assert.deepEqual(await readdir(outside), []);
+});
+
 test('上传拒绝空图、超限、伪装格式、损坏数据及过大边长', async () => {
   const setup = await fixture();
   for (const data of [Buffer.alloc(0), Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])]) {
