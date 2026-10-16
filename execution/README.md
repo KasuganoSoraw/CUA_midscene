@@ -2,6 +2,8 @@
 
 该目录是可独立构建的 TypeScript Computer-Use Runtime 与 `cua-midscene` 底层 Skill。TypeScript 核心负责调用外部 record 后处理器、把 trace 初始化为 Midscene YAML 任务、发现任务、解析本次输入、生成运行投影并直接调用 Midscene computer use；Review 通过独立 Windows recorder Worker 采集新录制。面向 GDEClaw 的 canonical Subagent 位于仓库顶层 Python `agent/`；本目录不发布 Agent definition 或模型 loop。
 
+普通用户的录制、任务检查和调试操作见 [CUA 工作台操作指南](../docs/workbench-end-user-guide.md)；源码环境的准备、配置与维护参考 [CUA 工作台使用指南](../docs/workbench-user-guide.md)。
+
 ## 模块职责
 
 ```text

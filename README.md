@@ -63,6 +63,8 @@ Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现
 
 ## 快速开始
 
+从 GDEClaw 使用工作台，见 [CUA 工作台操作指南](./docs/workbench-end-user-guide.md)；源码环境的准备、配置与维护参考 [CUA 工作台使用指南](./docs/workbench-user-guide.md)。
+
 完整源码开发需要分别准备三个 Python 工程和 TypeScript Runtime：
 
 ```powershell
