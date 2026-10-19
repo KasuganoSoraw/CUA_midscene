@@ -304,7 +304,7 @@ class RecorderOverlay:
                 "CUA 录制控制",
                 WS_POPUP,
                 self._display.left + (self._display.width - width) // 2,
-                self._display.top + self._px(20),
+                self._display.top + self._display.height * 4 // 5 - height // 2,
                 width,
                 height,
                 None,

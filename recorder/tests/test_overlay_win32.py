@@ -60,6 +60,7 @@ class NativeOverlayTest(unittest.TestCase):
         before = ctypes.windll.user32.GetForegroundWindow()
         try:
             background.start()
+            self.assertEqual(before, ctypes.windll.user32.GetForegroundWindow())
             self.assertTrue(
                 background._user.SetWindowDisplayAffinity(background._hwnd, 0)
             )
@@ -67,12 +68,18 @@ class NativeOverlayTest(unittest.TestCase):
             width = round(WIDTH * display.scale_factor)
             height = round(HEIGHT * display.scale_factor)
             left = display.left + (display.width - width) // 2 + 10
-            top = display.top + round(20 * display.scale_factor) + 10
+            top = display.top + display.height * 4 // 5 - height // 2 + 10
             baseline = capture_patch(left, top, width - 20, height - 20)
+            before = ctypes.windll.user32.GetForegroundWindow()
             toolbar.start()
+            self.assertEqual(before, ctypes.windll.user32.GetForegroundWindow())
             toolbar.update("armed")
             time.sleep(0.2)
             toolbar.check()
+            rect = ctypes.wintypes.RECT()
+            self.assertTrue(toolbar._user.GetWindowRect(toolbar._hwnd, ctypes.byref(rect)))
+            self.assertEqual(left - 10, rect.left)
+            self.assertEqual(top - 10, rect.top)
             excluded = capture_patch(left, top, width - 20, height - 20)
             self.assertLess(average_difference(baseline, excluded), 1.0)
             self.assertTrue(toolbar._user.SetWindowDisplayAffinity(toolbar._hwnd, 0))
@@ -83,7 +90,6 @@ class NativeOverlayTest(unittest.TestCase):
             time.sleep(0.2)
             restored = capture_patch(left, top, width - 20, height - 20)
             self.assertLess(average_difference(baseline, restored), 1.0)
-            self.assertEqual(before, ctypes.windll.user32.GetForegroundWindow())
         finally:
             toolbar.stop()
             background.stop()
