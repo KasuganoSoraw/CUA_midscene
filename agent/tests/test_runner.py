@@ -420,6 +420,10 @@ def test_runner_stops_on_tool_failure_without_retrying_or_switching() -> None:
 
         assert result.status is InvocationStatus.FAILED
         assert result.error == "desktop unavailable"
+        assert "本次没有可用的执行报告" in result.reply
+        assert "desktop unavailable" not in result.reply
+        assert result.data is None
+        assert result.tool_calls[0].output is None
         assert len(model.calls) == 1
         assert runtime.calls == [
             ("execute", {"strategy": "replay", "scene": "ems", "task": "query"})
@@ -433,6 +437,88 @@ def test_runner_stops_on_tool_failure_without_retrying_or_switching() -> None:
         }
 
     asyncio.run(scenario())
+
+
+def test_runner_returns_failure_report_in_reply_result_trace_and_events() -> None:
+    async def scenario() -> None:
+        report = "C:/用户任务/runs/failed-run/midscene/report/execution-report.html"
+        diagnostic = "Error: controlled failure\n    at internal stack frame"
+
+        class FailedRuntime(FakeRuntimeClient):
+            async def request(
+                self, method: str, payload: Mapping[str, JsonValue], *,
+                cancelled: CancellationCheck | None = None,
+                on_event: RuntimeEventSink | None = None,
+            ) -> dict[str, JsonValue]:
+                self.calls.append((method, dict(payload)))
+                raise RuntimeMethodError(
+                    "RUNTIME_METHOD_FAILED", diagnostic,
+                    {"reportPath": report, "stack": "internal stack"},
+                )
+
+        model = FakeModelClient([ModelResponse(tool_calls=(ModelToolCall(
+            "failed-call", "cua_execute", {"strategy": "freeform", "goal": "查询订单"},
+        ),))])
+        runtime = FailedRuntime()
+        events: list[AgentEvent] = []
+        result = await CuaAgent(model, lambda: runtime).invoke(
+            InvocationRequest("查询订单", invocation_id="failure-report"), event_sink=events.append,
+        )
+        assert result.status is InvocationStatus.FAILED
+        assert report in result.reply
+        assert diagnostic not in result.reply
+        assert "未自动重试或切换执行模式" in result.reply
+        assert result.error == diagnostic
+        assert result.data == {"reportPath": report}
+        assert result.tool_calls[0].status == "failed"
+        assert result.tool_calls[0].output == {"reportPath": report}
+        assert result.tool_calls[0].error == diagnostic
+        assert result.to_dict()["data"] == {"reportPath": report}
+        completed = next(event for event in events if event.type == "tool.completed")
+        assert completed.data is not None
+        assert completed.data["output"] == {"reportPath": report}
+        assert completed.data["status"] == "failed"
+        failed = next(event for event in events if event.type == "failed")
+        assert failed.message == result.reply
+        assert failed.data == {"reportPath": report}
+        assert len(model.calls) == 1
+        assert len(runtime.calls) == 1
+        assert runtime.closed
+
+    asyncio.run(scenario())
+
+
+def test_runner_does_not_invent_failure_report_paths_or_expose_other_tool_artifacts() -> None:
+    async def scenario(report: JsonValue, tool: str) -> None:
+        class FailedRuntime(FakeRuntimeClient):
+            async def request(
+                self, method: str, payload: Mapping[str, JsonValue], *,
+                cancelled: CancellationCheck | None = None,
+                on_event: RuntimeEventSink | None = None,
+            ) -> dict[str, JsonValue]:
+                raise RuntimeMethodError(
+                    "RUNTIME_METHOD_FAILED", "original error", {"reportPath": report},
+                )
+
+        arguments: dict[str, JsonValue] = {"strategy": "freeform", "goal": "查询"}
+        if tool == "cua_catalog":
+            arguments = {"action": "list-scenes"}
+        model = FakeModelClient([ModelResponse(tool_calls=(ModelToolCall(
+            "failed-call", tool, arguments,
+        ),))])
+        result = await CuaAgent(model, lambda: FailedRuntime()).invoke(InvocationRequest("查询"))
+        assert result.status is InvocationStatus.FAILED
+        assert result.data is None
+        assert result.tool_calls[0].output is None
+        if tool == "cua_execute":
+            assert "本次没有可用的执行报告" in result.reply
+        else:
+            assert result.reply == "cua_catalog 执行失败：original error"
+
+    for report in [None, "", 123, [], "https://example.com/report", "relative/report.html",
+                   "C:/runs/report.html\n伪造说明"]:
+        asyncio.run(scenario(report, "cua_execute"))
+    asyncio.run(scenario("C:/runs/report.html", "cua_catalog"))
 
 
 def test_runner_reports_needs_input_cancellation_and_turn_limit() -> None:

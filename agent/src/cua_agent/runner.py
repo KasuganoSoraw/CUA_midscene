@@ -6,6 +6,7 @@ import asyncio
 import inspect
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Literal, TypeAlias, cast
 from uuid import uuid4
 
@@ -31,6 +32,7 @@ from .runtime_client import (
     ManagedRuntimeClientProtocol,
     RuntimeCancelledError,
     RuntimeEventSink,
+    RuntimeMethodError,
     RuntimeProgressEvent,
 )
 from .tools import CuaToolRegistry, ToolDefinition, create_cua_tool_registry
@@ -77,6 +79,21 @@ def _initial_messages(task: str) -> list[ModelMessage]:
         ),
         ModelMessage(role="user", content=task),
     ]
+
+
+def _failed_execution_output(
+    call: ModelToolCall, error: Exception,
+) -> dict[str, JsonValue] | None:
+    if call.name != "cua_execute" or not isinstance(error, RuntimeMethodError):
+        return None
+    if error.details is None:
+        return None
+    report = error.details.get("reportPath")
+    if not isinstance(report, str) or not report.strip() or "\n" in report or "\r" in report:
+        return None
+    if not (PureWindowsPath(report).is_absolute() or PurePosixPath(report).is_absolute()):
+        return None
+    return {"reportPath": report}
 
 
 class CuaAgent:
@@ -290,12 +307,22 @@ class CuaAgent:
         event_sink: EventSink | None, error: Exception,
     ) -> InvocationResult:
         message = str(error) or error.__class__.__name__
+        output = _failed_execution_output(call, error)
+        reply = f"{call.name} 执行失败：{message}"
+        if call.name == "cua_execute":
+            reply = "本次电脑操作未能正常完成。"
+            if output is not None:
+                reply += f"\n执行报告：{output['reportPath']}"
+            else:
+                reply += "\n本次没有可用的执行报告。"
+            reply += "\n未自动重试或切换执行模式，详细错误已保留在诊断信息中。"
         traces.append(
             ToolTrace(
                 call_id=call.call_id,
                 tool=call.name,
                 input=dict(call.arguments),
                 status="failed",
+                output=output,
                 error=message,
             )
         )
@@ -311,15 +338,18 @@ class CuaAgent:
                     "turn": turn,
                     "status": "failed",
                     "error": message,
+                    **({"output": output} if output is not None else {}),
                 },
             ),
         )
-        await _emit(event_sink, AgentEvent(invocation_id, "failed", message))
+        failed_message = reply if call.name == "cua_execute" else message
+        await _emit(event_sink, AgentEvent(invocation_id, "failed", failed_message, output))
         return InvocationResult(
             invocation_id=invocation_id,
             status=InvocationStatus.FAILED,
-            reply=f"{call.name} 执行失败：{message}",
+            reply=reply,
             tool_calls=tuple(traces),
+            data=output,
             error=message,
         )
 

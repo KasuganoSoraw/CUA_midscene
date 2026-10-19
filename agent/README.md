@@ -49,6 +49,7 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 - `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 在模型与 Tool 执行期间发送调用级事件，并支持调用级取消检查。`cua_execute` 的 `execution.progress` 事件包含调用关联信息、执行 ID、任务 ID、动作名称、可选描述及状态。描述可能包含输入文本；Host 应按事件数据策略管理访问与留存。完整 Midscene 报告保存在本次 run 的 `midscene/` 目录。
 - assistant 事件按轮次发送可见文本增量；Tool 事件关联轮次与调用 ID，并携带完整参数及结果或错误。最终响应协议 JSON 只通过终态回复公开。
+- `cua_execute` 失败时，`reply` 提供简明结果说明，原始错误保存在最终结果和 Tool Trace 的 `error` 中。有可用报告时，本地 HTML 文件绝对路径同时出现在 `reply`、`data.reportPath`、失败 Tool Trace 的 `output.reportPath`、`tool.completed.data.output.reportPath` 和 `failed.data.reportPath` 中；没有可用报告时不返回路径。Runtime Bridge 使用 `error.details.reportPath` 传递经文件存在性和运行目录边界校验的报告路径。失败不会触发自动重试、策略切换或额外模型总结。
 - `cua-agent invoke` 逐帧输出事件 JSONL；stdin 协议只提交一次请求，不提供运行中的 cancel frame。
 - Review `--dev` 使用 NDJSON 流实时展示事件和最终结果；页面不提供 Agent 中途取消按钮。完成后返回 JSON 的调用入口也可使用。
 - Review 的“Python Agent 可用 / model configured”只表示路径存在且模型 URL 与名称已配置；端点连通性、TLS 和模型响应格式在实际 invocation 时验证。
