@@ -50,13 +50,13 @@ export async function executeMidsceneAiAct(
 ): Promise<NativeAiActExecutorResult> {
   const sourcePromptPath = path.resolve(options.sourcePromptPath);
   const resultPath = path.resolve(options.resultPath);
+  let reportPath: string | undefined;
 
   try {
     const prompt = TUserPromptSchema.parse(options.prompt);
     const promptText = typeof prompt === 'string' ? prompt : prompt.prompt;
     if (!promptText.trim()) throw new Error('Midscene aiAct prompt 不能为空');
     let midsceneResult: string | undefined;
-    let reportPath: string | undefined;
     let finalScreenshotPath: string | undefined;
 
     if (!options.dryRun) {
@@ -92,8 +92,8 @@ export async function executeMidsceneAiAct(
         } finally {
           try {
             if (agent) {
-              await agent.destroy();
-              reportPath = await existingMidsceneHtmlReport(agent.reportFile);
+              try { await agent.destroy(); }
+              finally { reportPath = await existingMidsceneHtmlReport(agent.reportFile); }
             }
           } finally {
             if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
@@ -124,6 +124,7 @@ export async function executeMidsceneAiAct(
       dryRun: options.dryRun,
       finishedAt: new Date().toISOString(),
       error: message,
+      ...(reportPath === undefined ? {} : { reportPath }),
     });
     throw error;
   }
