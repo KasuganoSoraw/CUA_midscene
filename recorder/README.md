@@ -18,7 +18,7 @@ uv run cua-recorder displays --preview-dir .local/previews
 
 ## 运行要求
 
-- Windows 10/11、Python 3.11+、`uv`。
+- Windows 10/11、Python 3.11+、`uv`；桌面悬浮条需要 Windows 10 2004 或更高版本。
 - 经过公司审批的 `av==18.1.0` Windows wheel；其捆绑库必须包含 `gdigrab`、`h264_mf` 和 MP4 muxer。
 - 可通过 `uv run cua-recorder doctor` 在部署前验证 PyAV 与捆绑库版本和能力；诊断信息写入 stderr，机器协议始终写入 stdout JSONL。
 
@@ -33,7 +33,11 @@ Worker 在实际录制开始后收到 stdin 的一行 `stop` 或 EOF，会正常
 `<output-root>/Recording_YYYYMMDD_HHMMSS/inputs/<same-name>.mp4` 和同 basename 的 `.txt`。
 写入期间只存在 `.partial` 文件，失败产物不会被 catalog 识别为可处理录制。
 
-Worker 启动后先进入 `armed`，不会立即创建录制目录。用户切换到目标应用并按 `Ctrl+Shift+F9` 开始，再按一次正常停止；准备阶段收到 `stop`/EOF 会取消且不产生录制。输入日志不会包含这组控制快捷键。
+Worker 启动后先进入 `armed`，不会立即创建录制目录。所选屏幕顶部显示深色圆角悬浮条，提供“开始录制”和“取消”；录制中显示计时与“停止录制”，保存期间禁用重复操作。右侧拖动区域可以移动悬浮条。用户也可以通过 `Ctrl+Shift+F9` 开始和正常停止；准备阶段收到 `stop`/EOF 会取消且不产生录制。
+
+悬浮条与快捷键共用录制会话，计时以视频首帧时钟为原点。工具窗不主动激活，使用 Windows 捕获排除能力，不进入录制视频；其点击、滚轮和完整拖动手势不会进入键鼠日志。画面排除设置失败时明确报错，不继续录制。独立 CLI 可指定 `--no-overlay` 使用纯快捷键与 stdin 控制。输入日志不会包含录制控制快捷键。
+
+`CUA_TEST_DESKTOP_OVERLAY=1` 可启用 `tests/test_overlay_win32.py` 中的桌面集成测试，验证当前 gdigrab 环境中的画面排除、背景完整性和启动焦点；该测试会短暂显示测试窗口。
 
 输入日志使用 Aloha 的物理按键 press/release、鼠标按下/释放、双击、滚轮与拖拽消息格式。英文字母会在录制时结合 Shift 与 CapsLock 状态写入真实大小写；数字行和 OEM 标点键按照标准美式键盘布局结合 Shift 写入对应字符。该静态映射不还原其他键盘布局或中文输入法最终提交文本。
 鼠标坐标会换算为所选显示器视频的局部坐标；所选屏幕之外的新鼠标动作不会写入日志。
