@@ -32,7 +32,7 @@ class FailedVideo(SuccessfulVideo):
 
 
 class FakeHook:
-    def __init__(self, _sink: object) -> None:
+    def __init__(self, _sink: object, **_options: object) -> None:
         self.started = False
 
     def start(self) -> None:
@@ -58,6 +58,36 @@ class WaitingHotkey(ToggleHotkey):
         pass
 
 
+class FakeOverlay:
+    def __init__(self, _display: object, command: object) -> None:
+        self.command = command
+        self.stopped = False
+        self.events: list[str] = []
+        self.origin: int | None = None
+        self.failure = False
+
+    def start(self) -> None:
+        pass
+
+    def update(self, phase: str, started_ns: int | None = None) -> None:
+        self.events.append(phase)
+        self.origin = started_ns
+        if phase == "armed":
+            self.command("toggle")  # type: ignore[operator]
+        if phase == "recording":
+            self.command("stop")  # type: ignore[operator]
+
+    def contains_point(self, _x: int, _y: int) -> bool:
+        return False
+
+    def check(self) -> None:
+        if self.failure:
+            raise RecorderError("悬浮条异常")
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
 def capabilities() -> MediaCapabilities:
     return MediaCapabilities("test", {"libavcodec": (1, 2, 3)}, True, True, True)
 
@@ -67,6 +97,112 @@ def display() -> DisplayInfo:
 
 
 class RecordingSessionTest(unittest.TestCase):
+    def test_toolbar_startup_failure_closes_window_without_creating_assets(self) -> None:
+        overlays: list[FakeOverlay] = []
+
+        class FailedStartOverlay(FakeOverlay):
+            def start(self) -> None:
+                raise RecorderError("无法将录制悬浮条排除出画面")
+
+        def factory(display: object, command: object) -> FailedStartOverlay:
+            overlay = FailedStartOverlay(display, command)
+            overlays.append(overlay)
+            return overlay
+
+        with tempfile.TemporaryDirectory() as temporary:
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=Path(temporary),
+                video_factory=SuccessfulVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=factory,
+            )
+            with self.assertRaisesRegex(RecorderError, "排除出画面"):
+                session.run(io.StringIO(""), lambda *_args, **_payload: None)
+            self.assertTrue(overlays[0].stopped)
+            self.assertEqual([], list(Path(temporary).iterdir()))
+
+    def test_cancel_from_toolbar_closes_window_without_creating_assets(self) -> None:
+        overlays: list[FakeOverlay] = []
+
+        class CancelOverlay(FakeOverlay):
+            def update(self, phase: str, started_ns: int | None = None) -> None:
+                self.events.append(phase)
+                if phase == "armed":
+                    self.command("stop")  # type: ignore[operator]
+
+        def factory(display: object, command: object) -> CancelOverlay:
+            overlay = CancelOverlay(display, command)
+            overlays.append(overlay)
+            return overlay
+
+        with tempfile.TemporaryDirectory() as temporary:
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=Path(temporary),
+                hotkey_factory=WaitingHotkey, overlay_factory=factory,
+            )
+            result = session.run(io.StringIO(""), lambda *_args, **_payload: None)
+            self.assertEqual({"cancelled": True}, result)
+            self.assertEqual(["armed", "cancelled"], overlays[0].events)
+            self.assertTrue(overlays[0].stopped)
+            self.assertEqual([], list(Path(temporary).iterdir()))
+
+    def test_hotkey_cleanup_error_still_closes_toolbar(self) -> None:
+        overlays: list[FakeOverlay] = []
+
+        class FailedStopHotkey(WaitingHotkey):
+            def stop(self) -> None:
+                raise RecorderError("快捷键清理失败")
+
+        def factory(display: object, command: object) -> FakeOverlay:
+            overlay = FakeOverlay(display, command)
+            overlays.append(overlay)
+            return overlay
+
+        with tempfile.TemporaryDirectory() as temporary:
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=Path(temporary),
+                video_factory=SuccessfulVideo, hook_factory=FakeHook,
+                hotkey_factory=FailedStopHotkey, overlay_factory=factory,
+            )
+            with self.assertRaisesRegex(RecorderError, "快捷键清理失败"):
+                session.run(io.StringIO("stop\n"), lambda *_args, **_payload: None)
+            self.assertTrue(overlays[0].stopped)
+
+    def test_toolbar_uses_same_session_states_and_is_closed_after_publish(self) -> None:
+        overlays: list[FakeOverlay] = []
+        def factory(display: object, command: object) -> FakeOverlay:
+            overlay = FakeOverlay(display, command)
+            overlays.append(overlay)
+            return overlay
+
+        with tempfile.TemporaryDirectory() as temporary:
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=Path(temporary),
+                video_factory=SuccessfulVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=factory,
+            )
+            result = session.run(io.StringIO("stop\n"), lambda *_args, **_payload: None)
+            self.assertTrue(Path(str(result["video"])).is_file())
+            self.assertEqual(["armed", "starting", "recording", "stopping", "completed"], overlays[0].events)
+            self.assertIsNotNone(overlays[0].origin)
+            self.assertTrue(overlays[0].stopped)
+
+    def test_toolbar_error_stops_without_publishing_assets(self) -> None:
+        class FailedOverlay(FakeOverlay):
+            def update(self, phase: str, started_ns: int | None = None) -> None:
+                super().update(phase, started_ns)
+                if phase == "recording":
+                    self.failure = True
+        with tempfile.TemporaryDirectory() as temporary:
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=Path(temporary),
+                video_factory=SuccessfulVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=FailedOverlay,
+            )
+            with self.assertRaisesRegex(RecorderError, "悬浮条异常"):
+                session.run(io.StringIO("stop\n"), lambda *_args, **_payload: None)
+            self.assertEqual([], list(Path(temporary).rglob("*.mp4")))
+            self.assertEqual([], list(Path(temporary).rglob("*.txt")))
+
     def test_success_atomically_exposes_final_pair(self) -> None:
         events: list[str] = []
         with tempfile.TemporaryDirectory() as temporary:

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from .media import capture_preview, inspect_media, require_recording_capabilities
+from .overlay_win32 import RecorderOverlay
 from .protocol import RecorderError, write_diagnostic, write_event
 from .session import RecordingSession
 from .windows import list_displays, require_output_root
@@ -23,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--output-root", required=True, type=Path, help="录制一级目录的输出根")
     record.add_argument("--framerate", type=int, default=30, choices=range(1, 61), metavar="1..60")
     record.add_argument("--exclude-injected", action="store_true", help="过滤被 Windows 标记为 injected 的事件")
+    record.add_argument("--no-overlay", action="store_true", help="不显示桌面悬浮条，仅通过快捷键和 stdin 控制")
     return parser
 
 
@@ -76,6 +78,7 @@ def _record(args: argparse.Namespace) -> int:
         output_root=require_output_root(args.output_root),
         framerate=args.framerate,
         include_injected=not args.exclude_injected,
+        overlay_factory=None if args.no_overlay else RecorderOverlay,
     )
     try:
         session.run(sys.stdin, write_event)
