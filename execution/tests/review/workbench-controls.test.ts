@@ -16,6 +16,15 @@ test('工作台统一使用系统微软雅黑，不加载字体包', async () =>
   assert.ok(!/ui-monospace|SFMono-Regular|Consolas|@font-face/.test(css));
 });
 
+test('录制列表超出最大高度时滚动，卡片不压缩标题', async () => {
+  const css = await readFile(new URL('recording.css', webRoot), 'utf8');
+  const list = css.match(/\.recording-list\s*\{([^}]+)\}/)?.[1] ?? '';
+  const row = css.match(/\.recording-layout \.recording-row\s*\{([^}]+)\}/)?.[1] ?? '';
+  assert.match(list, /max-height:\s*660px/);
+  assert.match(list, /overflow-y:\s*auto/);
+  assert.match(row, /flex:\s*0 0 auto/);
+});
+
 test('录制截图按比例显示，仅缺图占位使用固定底框', async () => {
   const app = await readFile(new URL('App.vue', webRoot), 'utf8');
   const css = await readFile(new URL('review.css', webRoot), 'utf8');
