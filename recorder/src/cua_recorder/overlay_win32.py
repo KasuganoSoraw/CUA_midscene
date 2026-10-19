@@ -4,6 +4,7 @@ import ctypes
 import os
 import sys
 import threading
+import time
 from collections.abc import Callable
 from ctypes import wintypes as wt
 from typing import Any
@@ -30,7 +31,7 @@ WS_EX_TOPMOST = 0x00000008
 WS_POPUP = 0x80000000
 WDA_EXCLUDEFROMCAPTURE = 0x00000011
 MA_NOACTIVATE = 3
-WIDTH = 308
+WIDTH = 208
 HEIGHT = 48
 
 
@@ -141,6 +142,8 @@ def _configure_api(user: Any, gdi: Any, kernel: Any) -> None:
         (gdi, "RoundRect", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 6),
         (gdi, "Ellipse", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 4),
         (gdi, "Rectangle", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 4),
+        (gdi, "Polygon", wt.BOOL, [wt.HDC, ctypes.POINTER(wt.POINT), ctypes.c_int]),
+        (gdi, "Polyline", wt.BOOL, [wt.HDC, ctypes.POINTER(wt.POINT), ctypes.c_int]),
         (
             gdi,
             "MoveToEx",
@@ -369,15 +372,15 @@ class RecorderOverlay:
     def _hit(self, x: int, y: int) -> str:
         if not (0 <= x < WIDTH and 0 <= y < HEIGHT):
             return ""
-        if x >= 278:
+        if x >= 184:
             return "drag"
         phase = self._state.snapshot().phase
         if phase == "armed":
-            if 132 <= x < 232:
+            if 104 <= x < 140:
                 return "start"
-            if 236 <= x < 274:
+            if 144 <= x < 180:
                 return "cancel"
-        if phase == "recording" and 150 <= x < 274:
+        if phase == "recording" and 104 <= x < 140:
             return "stop"
         return ""
 
@@ -508,14 +511,40 @@ class RecorderOverlay:
             self._gdi.DeleteObject(pen)
             self._gdi.DeleteObject(brush)
 
-    def _text(
-        self, dc: int, value: str, left: int, right: int, *, muted: bool = False
-    ) -> None:
-        self._gdi.SetTextColor(
-            dc, _rgb(170, 170, 176) if muted else _rgb(242, 242, 245)
-        )
+    def _text(self, dc: int, value: str, left: int, right: int) -> None:
+        self._gdi.SetTextColor(dc, _rgb(242, 242, 245))
         rect = wt.RECT(self._px(left), 0, self._px(right), self._px(HEIGHT))
         self._user.DrawTextW(dc, value, -1, ctypes.byref(rect), 0x0024 | 0x0800)
+
+    def _icon(self, dc: int, action: str, center: int, color: int) -> None:
+        pen = self._gdi.CreatePen(0, max(1, self._px(1)), color)
+        brush = self._gdi.CreateSolidBrush(color)
+        old_pen = self._gdi.SelectObject(dc, pen)
+        old_brush = self._gdi.SelectObject(dc, brush)
+        try:
+            if action == "start":
+                paths = [[(-4, -7), (-4, 7), (7, 0)]]
+            elif action == "stop":
+                paths = [[(-6, -6), (6, -6), (6, 6), (-6, 6)]]
+            else:
+                paths = [
+                    [(-7, -5), (7, -5)],
+                    [(-3, -5), (-3, -8), (3, -8), (3, -5)],
+                    [(-5, -3), (-4, 7), (4, 7), (5, -3)],
+                    [(-2, -1), (-2, 4)],
+                    [(2, -1), (2, 4)],
+                ]
+            draw = self._gdi.Polyline if action == "cancel" else self._gdi.Polygon
+            for path in paths:
+                points = (wt.POINT * len(path))(
+                    *(wt.POINT(self._px(center + x), self._px(24 + y)) for x, y in path)
+                )
+                draw(dc, points, len(path))
+        finally:
+            self._gdi.SelectObject(dc, old_brush)
+            self._gdi.SelectObject(dc, old_pen)
+            self._gdi.DeleteObject(brush)
+            self._gdi.DeleteObject(pen)
 
     def _paint(self, hwnd: int) -> None:
         paint = PaintStruct()
@@ -531,24 +560,30 @@ class RecorderOverlay:
             state = self._state.snapshot()
             self._shape(buffer, _rgb(92, 54, 56), (12, 14, 32, 34), circle=True)
             self._shape(buffer, _rgb(240, 92, 94), (17, 19, 27, 29), circle=True)
-            label = {
-                "arming": "准备中…",
-                "armed": "准备录制",
-                "starting": "正在启动…",
-                "stopping": "正在保存…",
-            }.get(state.phase, state.elapsed)
-            self._text(buffer, label, 44, 144)
+            self._text(buffer, state.elapsed, 40, 98)
             if state.phase == "armed":
                 color = _rgb(94, 62, 64) if self._hover == "start" else _rgb(75, 51, 54)
-                self._shape(buffer, color, (132, 8, 232, 40))
-                self._text(buffer, "开始录制", 150, 230)
-                self._text(buffer, "取消", 239, 276, muted=True)
+                self._shape(buffer, color, (104, 8, 140, 40))
+                self._icon(buffer, "start", 122, _rgb(240, 92, 94))
+                if self._hover == "cancel":
+                    self._shape(buffer, _rgb(67, 67, 72), (144, 8, 180, 40))
+                self._icon(buffer, "cancel", 162, _rgb(190, 190, 196))
             elif state.phase == "recording":
                 color = _rgb(90, 60, 63) if self._hover == "stop" else _rgb(69, 47, 51)
-                self._shape(buffer, color, (150, 8, 274, 40))
-                self._shape(buffer, _rgb(240, 92, 94), (164, 19, 174, 29))
-                self._text(buffer, "停止录制", 184, 270)
-            for column in (286, 291):
+                self._shape(buffer, color, (104, 8, 140, 40))
+                self._icon(buffer, "stop", 122, _rgb(240, 92, 94))
+            else:
+                active = int(time.monotonic() * 4) % 3
+                for index in range(3):
+                    shade = 220 if index == active else 112
+                    x = 113 + index * 7
+                    self._shape(
+                        buffer,
+                        _rgb(shade, shade, shade),
+                        (x, 22, x + 3, 25),
+                        circle=True,
+                    )
+            for column in (192, 197):
                 for row in (19, 24, 29):
                     self._shape(
                         buffer,
