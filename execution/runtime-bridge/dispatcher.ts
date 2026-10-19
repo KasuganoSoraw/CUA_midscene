@@ -11,6 +11,7 @@ import {
   type RuntimeBridgeResponse,
 } from './contracts.js';
 import { cuaCatalog, cuaExecute, cuaWorkbench } from './tools/index.js';
+import { failedExecutionReport } from './failure-report.js';
 
 export interface RuntimeBridgeHandlers {
   catalog(payload: CuaCatalogRequest): Promise<unknown>;
@@ -80,6 +81,14 @@ function errorDetails(error: unknown): JsonObject {
   };
 }
 
+async function runtimeMethodErrorDetails(request: RuntimeBridgeRequest, error: unknown): Promise<JsonObject> {
+  const details = errorDetails(error);
+  if (request.method !== 'execute') return details;
+  const reportPath = await failedExecutionReport(error, request.payload.strategy);
+  if (reportPath !== undefined) details.reportPath = reportPath;
+  return details;
+}
+
 export async function dispatchRuntimeBridgeRequest(
   value: unknown,
   handlers: RuntimeBridgeHandlers = defaultHandlers,
@@ -132,7 +141,7 @@ export async function dispatchRuntimeBridgeRequest(
       error: {
         code: 'RUNTIME_METHOD_FAILED',
         message: error instanceof Error ? error.message : String(error),
-        details: errorDetails(error),
+        details: await runtimeMethodErrorDetails(request, error),
       },
     };
   }

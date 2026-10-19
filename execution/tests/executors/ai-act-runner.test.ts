@@ -206,3 +206,42 @@ test('原生 aiAct 拒绝空 prompt 并写入失败结果', async () => {
   assert.equal(result.status, 'failed');
   assert.match(result.error, /prompt 不能为空/);
 });
+
+test('原生 aiAct 执行或销毁失败时保留已生成的 HTML 报告和原始错误', async () => {
+  const required = [
+    'MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_API_KEY', 'MIDSCENE_MODEL_FAMILY',
+  ];
+  const previous = Object.fromEntries(required.map(key => [key, process.env[key]]));
+  for (const key of required) process.env[key] = 'test';
+  try {
+    for (const failure of ['execute', 'destroy']) {
+      const fixture = await executionFixture();
+      const reportPath = path.join(fixture.runDirectory, 'midscene', 'report', 'execution-report.html');
+      const original = new Error(`${failure} failed`);
+      await assert.rejects(executeMidsceneAiAct({
+        ...fixture, prompt: '测试任务', dryRun: false,
+        agentFactory: async () => ({
+          reportFile: reportPath,
+          aiAct: async () => {
+            if (failure === 'execute') throw original;
+            return '操作完成';
+          },
+          destroy: async () => {
+            await mkdir(path.dirname(reportPath), { recursive: true });
+            await writeFile(reportPath, '<html>execution report</html>');
+            if (failure === 'destroy') throw original;
+          },
+        }),
+      }), error => error === original);
+      const persisted = JSON.parse(await readFile(fixture.resultPath, 'utf8'));
+      assert.equal(persisted.status, 'failed');
+      assert.equal(persisted.reportPath, reportPath);
+      assert.equal(persisted.error, original.message);
+    }
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
