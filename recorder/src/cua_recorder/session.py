@@ -4,18 +4,24 @@ import os
 import queue
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, TextIO
+from typing import TextIO
 
 from .events import AlohaEventFormatter, write_log_header
 from .hooks import Win32HookRecorder
 from .hotkey import HOTKEY_LABEL, GlobalHotkeyToggle, HotkeyInputFilter
 from .media import MediaCapabilities, PyAVVideoRecorder
 from .models import DisplayInfo
+from .overlay_win32 import RecorderOverlay
 from .protocol import RecorderError
-from .windows import caps_lock_enabled, foreground_window_label, input_thresholds, require_output_root
-
+from .windows import (
+    caps_lock_enabled,
+    foreground_window_label,
+    input_thresholds,
+    require_output_root,
+)
 
 StatusSink = Callable[[str, object], None]
 
@@ -45,6 +51,7 @@ class RecordingSession:
         video_factory: Callable[..., PyAVVideoRecorder] = PyAVVideoRecorder,
         hook_factory: Callable[..., Win32HookRecorder] = Win32HookRecorder,
         hotkey_factory: Callable[..., GlobalHotkeyToggle] = GlobalHotkeyToggle,
+        overlay_factory: Callable[..., RecorderOverlay] | None = None,
     ) -> None:
         self._capabilities = capabilities
         self._display = display
@@ -54,6 +61,9 @@ class RecordingSession:
         self._video_factory = video_factory
         self._hook_factory = hook_factory
         self._hotkey_factory = hotkey_factory
+        self._overlay_factory = overlay_factory
+        self._overlay: RecorderOverlay | None = None
+        self._started_ns: int | None = None
         self._video: PyAVVideoRecorder | None = None
         self._hook: Win32HookRecorder | None = None
         self._hotkey: GlobalHotkeyToggle | None = None
@@ -63,23 +73,42 @@ class RecordingSession:
         signals: queue.Queue[str] = queue.Queue()
         self._hotkey = self._hotkey_factory(lambda: signals.put("toggle"))
         try:
+            if self._overlay_factory:
+                self._overlay = self._overlay_factory(self._display, signals.put)
+                self._overlay.start()
             self._hotkey.start()
-            status("armed", hotkey=HOTKEY_LABEL)
+            self._emit(status, "armed", hotkey=HOTKEY_LABEL)
             threading.Thread(
                 target=_read_control,
                 args=(control_stream, signals),
                 name="cua-recorder-control",
                 daemon=True,
             ).start()
-            if signals.get() != "toggle":
-                status("cancelled")
+            if self._next_signal(signals) != "toggle":
+                self._emit(status, "cancelled")
                 return {"cancelled": True}
 
             return self._record(signals, status)
         finally:
-            if self._hotkey:
-                self._hotkey.stop()
-                self._hotkey = None
+            try:
+                if self._hotkey:
+                    self._hotkey.stop()
+                    self._hotkey = None
+            finally:
+                if self._overlay:
+                    self._overlay.stop()
+                    self._overlay = None
+
+    def _emit(self, status: Callable[..., None], event: str, **payload: object) -> None:
+        if self._overlay:
+            self._overlay.update(event, self._started_ns)
+        status(event, **payload)
+
+    def _next_signal(self, signals: queue.Queue[str]) -> str:
+        signal = signals.get()
+        if self._overlay:
+            self._overlay.check()
+        return signal
 
     def _record(self, signals: queue.Queue[str], status: Callable[..., None]) -> dict[str, object]:
         now = datetime.now()
@@ -90,7 +119,7 @@ class RecordingSession:
         final_log = inputs / f"{recording_id}.txt"
         temporary_video = inputs / f"{recording_id}.mp4.partial"
         temporary_log = inputs / f"{recording_id}.txt.partial"
-        status("starting", recording_id=recording_id)
+        self._emit(status, "starting", recording_id=recording_id)
         self._video = self._video_factory(
             self._capabilities,
             self._display,
@@ -99,6 +128,7 @@ class RecordingSession:
         )
         try:
             started_ns = self._video.start()
+            self._started_ns = started_ns
         except BaseException:
             self._stop_video_after_failure()
             raise
@@ -112,13 +142,13 @@ class RecordingSession:
                 signals, status,
             )
 
-            status("stopping", recording_id=recording_id)
+            self._emit(status, "stopping", recording_id=recording_id)
             self._finish_video()
             result = self._publish_recording(
                 recording_id, recording_root, temporary_video, temporary_log,
                 final_video, final_log, started_ns,
             )
-            status("completed", **result)
+            self._emit(status, "completed", **result)
             return result
         except BaseException:
             if self._hook:
@@ -165,15 +195,18 @@ class RecordingSession:
                 **thresholds,
             )
             hotkey_filter = HotkeyInputFilter(formatter.handle)
-            self._hook = self._hook_factory(hotkey_filter.handle)
+            hook_options: dict[str, object] = {}
+            if self._overlay:
+                hook_options["exclude_point"] = self._overlay.contains_point
+            self._hook = self._hook_factory(hotkey_filter.handle, **hook_options)
             self._hook.start()
-            status(
-                "recording", recording_id=recording_id,
+            self._emit(
+                status, "recording", recording_id=recording_id,
                 video=str(final_video), log=str(final_log),
                 started_at=started_at.isoformat(timespec="milliseconds"),
             )
             try:
-                signals.get()
+                self._next_signal(signals)
             finally:
                 self._hook.stop()
                 self._hook = None

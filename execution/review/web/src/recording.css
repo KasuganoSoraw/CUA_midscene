@@ -25,7 +25,7 @@
 .recording-layout .icon-button { display: grid; place-items: center; border: 0; width: 28px; height: 28px; padding: 6px; background: transparent; }
 .icon-button img { width: 16px; height: 16px; }
 .recording-list { display: flex; flex-direction: column; gap: 8px; max-height: 660px; overflow-y: auto; }
-.recording-layout .recording-row { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid var(--cua-color-border); border-radius: 12px; }
+.recording-layout .recording-row { display: flex; flex: 0 0 auto; flex-direction: column; align-items: stretch; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid var(--cua-color-border); border-radius: 12px; }
 .recording-layout .recording-row.active { border-color: transparent; background: #e9e9e9; }
 .recording-row > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; font-size: 14px; }
 .recording-row-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

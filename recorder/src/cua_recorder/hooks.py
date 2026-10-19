@@ -5,12 +5,13 @@ import queue
 import sys
 import threading
 import time
+from collections.abc import Callable
 from ctypes import wintypes
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
+from .overlay import MouseGestureExclusion
 from .protocol import RecorderError
-
 
 WH_KEYBOARD_LL = 13
 WH_MOUSE_LL = 14
@@ -80,10 +81,14 @@ EventSink = Callable[[RawInputEvent], None]
 
 
 class Win32HookRecorder:
-    """在专用消息线程中安装低级 Hook，回调仅执行非阻塞入队。"""
+    """在专用消息线程中安装低级 Hook，过滤控制手势后非阻塞入队。"""
 
-    def __init__(self, sink: EventSink, *, queue_size: int = 16_384) -> None:
+    def __init__(
+        self, sink: EventSink, *, queue_size: int = 16_384,
+        exclude_point: Callable[[int, int], bool] | None = None,
+    ) -> None:
         self._sink = sink
+        self._mouse_exclusion = MouseGestureExclusion(exclude_point or (lambda _x, _y: False))
         self._events: queue.Queue[RawInputEvent | None] = queue.Queue(maxsize=queue_size)
         self._hook_thread: threading.Thread | None = None
         self._consumer_thread: threading.Thread | None = None
@@ -237,15 +242,15 @@ class Win32HookRecorder:
                     wheel_delta = ctypes.c_short((int(data.mouseData) >> 16) & 0xFFFF).value
                 if message in (WM_XBUTTONDOWN, WM_XBUTTONUP):
                     button = "x1" if ((int(data.mouseData) >> 16) & 0xFFFF) == 1 else "x2"
-                self._enqueue(
-                    RawInputEvent(
-                        kind=kind,
-                        time_ns=time.perf_counter_ns(),
-                        x=int(data.pt.x), y=int(data.pt.y), button=button,
-                        wheel_delta=wheel_delta,
-                        injected=bool(data.flags & LLMHF_INJECTED),
-                    )
+                event = RawInputEvent(
+                    kind=kind,
+                    time_ns=time.perf_counter_ns(),
+                    x=int(data.pt.x), y=int(data.pt.y), button=button,
+                    wheel_delta=wheel_delta,
+                    injected=bool(data.flags & LLMHF_INJECTED),
                 )
+                if not self._mouse_exclusion.excludes(event):
+                    self._enqueue(event)
             return int(user32.CallNextHookEx(self._mouse_hook, code, message, data_pointer))
 
         return mouse_callback
