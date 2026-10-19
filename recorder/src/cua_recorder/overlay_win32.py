@@ -33,6 +33,11 @@ WDA_EXCLUDEFROMCAPTURE = 0x00000011
 MA_NOACTIVATE = 3
 WIDTH = 208
 HEIGHT = 48
+SRCCOPY = 0x00CC0020
+COLORONCOLOR = 3
+HALFTONE = 4
+NULL_PEN = 8
+CIRCLE_SAMPLES = 4
 
 
 class PaintStruct(ctypes.Structure):
@@ -161,6 +166,14 @@ def _configure_api(user: Any, gdi: Any, kernel: Any) -> None:
             [wt.HDC, ctypes.c_int, ctypes.c_int],
         ),
         (gdi, "DeleteDC", wt.BOOL, [wt.HDC]),
+        (gdi, "GetStockObject", wt.HANDLE, [ctypes.c_int]),
+        (gdi, "SetStretchBltMode", ctypes.c_int, [wt.HDC, ctypes.c_int]),
+        (
+            gdi,
+            "SetBrushOrgEx",
+            wt.BOOL,
+            [wt.HDC, ctypes.c_int, ctypes.c_int, ctypes.POINTER(wt.POINT)],
+        ),
         (
             gdi,
             "BitBlt",
@@ -176,6 +189,12 @@ def _configure_api(user: Any, gdi: Any, kernel: Any) -> None:
                 ctypes.c_int,
                 wt.DWORD,
             ],
+        ),
+        (
+            gdi,
+            "StretchBlt",
+            wt.BOOL,
+            [wt.HDC] + [ctypes.c_int] * 4 + [wt.HDC] + [ctypes.c_int] * 4 + [wt.DWORD],
         ),
         (
             gdi,
@@ -250,7 +269,7 @@ class RecorderOverlay:
             if self._thread.is_alive():
                 raise RecorderError("等待桌面录制悬浮条关闭超时")
 
-    def _px(self, value: int) -> int:
+    def _px(self, value: float) -> int:
         return round(value * self._scale)
 
     def _run(self) -> None:
@@ -489,10 +508,13 @@ class RecorderOverlay:
         self,
         dc: int,
         color: int,
-        rect: tuple[int, int, int, int],
+        rect: tuple[float, float, float, float],
         *,
         circle: bool = False,
     ) -> None:
+        if circle:
+            self._circle(dc, color, rect)
+            return
         brush = self._gdi.CreateSolidBrush(color)
         pen = self._gdi.CreatePen(0, 1, color)
         old_brush, old_pen = (
@@ -501,15 +523,82 @@ class RecorderOverlay:
         )
         coordinates = tuple(self._px(value) for value in rect)
         try:
-            if circle:
-                self._gdi.Ellipse(dc, *coordinates)
-            else:
-                self._gdi.RoundRect(dc, *coordinates, self._px(10), self._px(10))
+            self._gdi.RoundRect(dc, *coordinates, self._px(10), self._px(10))
         finally:
             self._gdi.SelectObject(dc, old_pen)
             self._gdi.SelectObject(dc, old_brush)
             self._gdi.DeleteObject(pen)
             self._gdi.DeleteObject(brush)
+
+    def _circle(
+        self, dc: int, color: int, rect: tuple[float, float, float, float]
+    ) -> None:
+        """小圆形按四倍尺寸绘制，再缩小合成平滑边缘。"""
+        left, top, right, bottom = (self._px(value) for value in rect)
+        width, height = right - left, bottom - top
+        if width <= 0 or height <= 0:
+            return
+        large_width, large_height = width * CIRCLE_SAMPLES, height * CIRCLE_SAMPLES
+        gdi = self._gdi
+        buffer = gdi.CreateCompatibleDC(dc)
+        bitmap = gdi.CreateCompatibleBitmap(dc, large_width, large_height)
+        brush = gdi.CreateSolidBrush(color)
+        old_bitmap = old_brush = old_pen = None
+        old_mode = 0
+        origin = wt.POINT()
+        try:
+            if not buffer or not bitmap or not brush:
+                raise RecorderError("无法创建悬浮条圆形绘制缓冲区")
+            old_bitmap = gdi.SelectObject(buffer, bitmap)
+            gdi.SetStretchBltMode(buffer, COLORONCOLOR)
+            if not gdi.StretchBlt(
+                buffer,
+                0,
+                0,
+                large_width,
+                large_height,
+                dc,
+                left,
+                top,
+                width,
+                height,
+                SRCCOPY,
+            ):
+                raise RecorderError("无法复制悬浮条圆形背景")
+            old_brush = gdi.SelectObject(buffer, brush)
+            old_pen = gdi.SelectObject(buffer, gdi.GetStockObject(NULL_PEN))
+            gdi.Ellipse(buffer, 0, 0, large_width, large_height)
+            old_mode = gdi.SetStretchBltMode(dc, HALFTONE)
+            if not old_mode:
+                raise RecorderError("无法设置悬浮条圆形抗锯齿模式")
+            gdi.SetBrushOrgEx(dc, 0, 0, ctypes.byref(origin))
+            if not gdi.StretchBlt(
+                dc,
+                left,
+                top,
+                width,
+                height,
+                buffer,
+                0,
+                0,
+                large_width,
+                large_height,
+                SRCCOPY,
+            ):
+                raise RecorderError("无法合成悬浮条圆形边缘")
+        finally:
+            if old_mode:
+                gdi.SetStretchBltMode(dc, old_mode)
+                gdi.SetBrushOrgEx(dc, origin.x, origin.y, None)
+            for old in (old_pen, old_brush, old_bitmap):
+                if old:
+                    gdi.SelectObject(buffer, old)
+            if brush:
+                gdi.DeleteObject(brush)
+            if bitmap:
+                gdi.DeleteObject(bitmap)
+            if buffer:
+                gdi.DeleteDC(buffer)
 
     def _text(self, dc: int, value: str, left: int, right: int) -> None:
         self._gdi.SetTextColor(dc, _rgb(242, 242, 245))
@@ -558,8 +647,8 @@ class RecorderOverlay:
             self._shape(buffer, _rgb(82, 82, 86), (0, 0, WIDTH, HEIGHT))
             self._shape(buffer, _rgb(49, 49, 53), (1, 1, WIDTH - 1, HEIGHT - 1))
             state = self._state.snapshot()
-            self._shape(buffer, _rgb(92, 54, 56), (12, 14, 32, 34), circle=True)
-            self._shape(buffer, _rgb(240, 92, 94), (17, 19, 27, 29), circle=True)
+            self._shape(buffer, _rgb(73, 50, 55), (14, 16, 30, 32), circle=True)
+            self._shape(buffer, _rgb(240, 82, 90), (18, 20, 26, 28), circle=True)
             self._text(buffer, state.elapsed, 40, 98)
             if state.phase == "armed":
                 color = _rgb(94, 62, 64) if self._hover == "start" else _rgb(75, 51, 54)
@@ -583,12 +672,15 @@ class RecorderOverlay:
                         (x, 22, x + 3, 25),
                         circle=True,
                     )
-            for column in (192, 197):
-                for row in (19, 24, 29):
+            grip_color = (
+                _rgb(184, 184, 192) if self._hover == "drag" else _rgb(138, 138, 148)
+            )
+            for column in (190, 196):
+                for row in (17, 23, 29):
                     self._shape(
                         buffer,
-                        _rgb(146, 146, 152),
-                        (column, row, column + 2, row + 2),
+                        grip_color,
+                        (column, row, column + 2.5, row + 2.5),
                         circle=True,
                     )
             self._gdi.BitBlt(

@@ -140,7 +140,19 @@ class ToolbarButtonTest(unittest.TestCase):
         )
         texts: list[str] = []
         icons: list[str] = []
-        toolbar._shape = lambda *_args, **_options: None
+        circles: list[tuple[float, float, float, float]] = []
+
+        def shape(
+            _dc: int,
+            _color: int,
+            rect: tuple[float, float, float, float],
+            *,
+            circle: bool = False,
+        ) -> None:
+            if circle:
+                circles.append(rect)
+
+        toolbar._shape = shape
         toolbar._text = lambda _dc, text, *_args: texts.append(text)
         toolbar._icon = lambda _dc, action, *_args: icons.append(action)
         for phase, expected in [
@@ -153,10 +165,16 @@ class ToolbarButtonTest(unittest.TestCase):
             with self.subTest(phase=phase):
                 texts.clear()
                 icons.clear()
+                circles.clear()
                 toolbar._state.update(phase)
                 toolbar._paint(1)
                 self.assertEqual(["00:00"], texts)
                 self.assertEqual(expected, icons)
+                grip = [rect for rect in circles if rect[0] >= 184]
+                self.assertEqual(6, len(grip))
+                self.assertEqual(2, len({rect[0] for rect in grip}))
+                self.assertEqual(3, len({rect[1] for rect in grip}))
+                self.assertIn((18, 20, 26, 28), circles)
 
 
 if __name__ == "__main__":
