@@ -45,3 +45,13 @@ def test_loading_definition_does_not_share_mutable_invocation_state() -> None:
     assert first is not second
     assert not hasattr(first, "messages")
     assert not hasattr(first, "session")
+
+
+def test_freeform_only_definition_describes_available_capabilities() -> None:
+    definition = load_agent_definition(freeform_only=True)
+    assert "自然语言" in definition.description
+    assert "仅提供 `cua_execute`" in definition.instructions
+    assert "不提供录制" in definition.instructions
+    assert "最终回复必须原样包含该执行报告路径" in definition.instructions
+    assert "发现并判断是否使用 Recorded Skill" not in definition.description
+    assert load_agent_definition() == CUA_AGENT_DEFINITION

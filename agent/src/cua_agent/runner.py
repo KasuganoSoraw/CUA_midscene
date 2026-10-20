@@ -17,7 +17,7 @@ from .contracts import (
     JsonValue,
     ToolTrace,
 )
-from .definition import CUA_AGENT_DEFINITION
+from .definition import CUA_AGENT_DEFINITION, load_agent_definition
 from .events import AgentEvent, AgentEventType
 from .model import (
     ModelClient,
@@ -71,11 +71,13 @@ FINALIZATION_PROTOCOL = """
 """.strip()
 
 
-def _initial_messages(task: str) -> list[ModelMessage]:
+def _initial_messages(
+    task: str, instructions: str = CUA_AGENT_DEFINITION.instructions,
+) -> list[ModelMessage]:
     return [
         ModelMessage(
             role="system",
-            content=f"{CUA_AGENT_DEFINITION.instructions}\n\n{FINAL_RESPONSE_PROTOCOL}",
+            content=f"{instructions}\n\n{FINAL_RESPONSE_PROTOCOL}",
         ),
         ModelMessage(role="user", content=task),
     ]
@@ -107,12 +109,15 @@ class CuaAgent:
         data_root: str | None = None,
         max_turns: int = 8,
         create_invocation_id: Callable[[], str] | None = None,
+        freeform_only: bool = False,
     ) -> None:
         if max_turns <= 0:
             raise ValueError("max_turns 必须大于 0")
         self._model_client = model_client
         self._runtime_client_factory = runtime_client_factory
         self._data_root = data_root
+        self._freeform_only = freeform_only
+        self._instructions = load_agent_definition(freeform_only=freeform_only).instructions
         self._max_turns = max_turns
         self._create_invocation_id = create_invocation_id or (lambda: str(uuid4()))
 
@@ -128,7 +133,9 @@ class CuaAgent:
         try:
             _check_cancelled(cancelled)
             async with self._runtime_client_factory() as runtime_client:
-                tools = create_cua_tool_registry(runtime_client, data_root=self._data_root)
+                tools = create_cua_tool_registry(
+                    runtime_client, data_root=self._data_root, freeform_only=self._freeform_only,
+                )
                 return await self._run_loop(
                     invocation_id,
                     request.task,
@@ -163,7 +170,7 @@ class CuaAgent:
         event_sink: EventSink | None,
         cancelled: CancellationCheck | None,
     ) -> InvocationResult:
-        messages = _initial_messages(task)
+        messages = _initial_messages(task, self._instructions)
         traces: list[ToolTrace] = []
 
         for turn in range(1, self._max_turns + 1):
@@ -393,7 +400,7 @@ class CuaAgent:
         cancelled: CancellationCheck | None,
     ) -> InvocationResult:
         _check_cancelled(cancelled)
-        finalization_messages = _build_finalization_messages(messages)
+        finalization_messages = _build_finalization_messages(messages, self._instructions)
         response = _normalize_final_response(
             await _await_model_response(
                 self._model_client.complete(finalization_messages, ()),
@@ -433,6 +440,7 @@ def _is_terminal_tool_success(
 
 def _build_finalization_messages(
     messages: list[ModelMessage],
+    instructions: str = CUA_AGENT_DEFINITION.instructions,
 ) -> tuple[ModelMessage, ...]:
     if not messages or messages[0].role != "system" or messages[0].content is None:
         raise ValueError("Agent messages 必须以包含内容的 system message 开头")
@@ -441,7 +449,7 @@ def _build_finalization_messages(
     return (
         ModelMessage(
             role="system",
-            content=f"{CUA_AGENT_DEFINITION.instructions}\n\n{FINALIZATION_PROTOCOL}",
+            content=f"{instructions}\n\n{FINALIZATION_PROTOCOL}",
         ),
         *messages[1:],
     )

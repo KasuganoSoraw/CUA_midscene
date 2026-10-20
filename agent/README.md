@@ -45,6 +45,10 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 完整变量契约位于仓库根 `.env.example`。Python CLI 本身不查找环境文件；源码直接调用使用 `uv --env-file` 注入根 `.env.local`，`review --dev` 继承 Review Server 已加载的根环境配置，产品调用由 Host 注入进程环境。
 
+设置 `CUA_AGENT_FREEFORM_ONLY=true` 后，Agent 仅提供 `cua_execute` 的 `freeform` 策略，接收完整自然语言目标和可选屏幕标识；录制任务发现、`replay`、`guided` 和工作台 Tool 不可用，调用入口也会拒绝这些操作。自然语言执行仍保留运行结果和执行报告。未设置或设为 `false` 时提供完整能力。
+
+Python API 使用 `CuaAgent(..., freeform_only=True)`，读取对应能力说明使用 `load_agent_definition(freeform_only=True)`。GDEClaw 应向 Agent 进程注入该变量，并隐藏产品侧的录制工作台入口。本开关不禁用独立启动的 Review/CLI，也不删除已有任务资产。
+
 ## 调用结果与取消
 
 - `CuaAgent.invoke(..., event_sink=..., cancelled=...)` 在模型与 Tool 执行期间发送调用级事件，并支持调用级取消检查。`cua_execute` 的 `execution.progress` 事件包含调用关联信息、执行 ID、任务 ID、动作名称、可选描述及状态。描述可能包含输入文本；Host 应按事件数据策略管理访问与留存。完整 Midscene 报告保存在本次 run 的 `midscene/` 目录。

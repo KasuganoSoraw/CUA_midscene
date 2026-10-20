@@ -6,6 +6,8 @@ import io
 import json
 from collections.abc import AsyncIterator, Mapping
 
+import pytest
+
 from cua_agent import (
     CuaAgent,
     InvocationStatus,
@@ -15,7 +17,7 @@ from cua_agent import (
     ModelStreamItem,
     ModelToolCall,
 )
-from cua_agent.cli import invoke_from_stream
+from cua_agent.cli import _freeform_only_from_env, build_agent_from_env, invoke_from_stream
 from cua_agent.contracts import JsonValue
 from cua_agent.model import ModelMessage
 from cua_agent.runtime_client import (
@@ -23,6 +25,42 @@ from cua_agent.runtime_client import (
     RuntimeEventSink,
     RuntimeProgressEvent,
 )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [("true", True), ("false", False), (" TRUE ", True)],
+)
+def test_freeform_only_environment_flag(
+    monkeypatch: pytest.MonkeyPatch, value: str, expected: bool,
+) -> None:
+    monkeypatch.setenv("CUA_AGENT_FREEFORM_ONLY", value)
+    assert _freeform_only_from_env() is expected
+
+
+def test_freeform_only_environment_default_and_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CUA_AGENT_FREEFORM_ONLY", raising=False)
+    assert _freeform_only_from_env() is False
+    monkeypatch.setenv("CUA_AGENT_FREEFORM_ONLY", "invalid")
+    with pytest.raises(RuntimeError, match="必须为 true 或 false"):
+        _freeform_only_from_env()
+
+
+def test_cli_passes_freeform_only_flag_to_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    options: dict[str, object] = {}
+    monkeypatch.setenv("CUA_AGENT_FREEFORM_ONLY", "true")
+    monkeypatch.setenv("CUA_AGENT_JS_RUNTIME_EXECUTABLE", sys.executable)
+    monkeypatch.setenv("CUA_AGENT_RUNTIME_BRIDGE", __file__)
+    monkeypatch.setenv("CUA_AGENT_MODEL_BASE_URL", "https://example.invalid/v1")
+    monkeypatch.setenv("CUA_AGENT_MODEL_NAME", "test-model")
+
+    def capture(*args: object, **kwargs: object) -> None:
+        options.update(kwargs)
+
+    monkeypatch.setattr("cua_agent.cli.CuaAgent", capture)
+    build_agent_from_env()
+    assert options["freeform_only"] is True
 
 
 class FakeRuntimeClient:

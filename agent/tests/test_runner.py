@@ -94,6 +94,45 @@ class FakeRuntimeClient:
         return {"method": method, "ok": True}
 
 
+def test_freeform_only_runner_keeps_instructions_and_execution_reports() -> None:
+    async def scenario() -> None:
+        model = FakeModelClient([
+            ModelResponse(tool_calls=(ModelToolCall(
+                "execute-1", "cua_execute", {"strategy": "freeform", "goal": "打开 Chrome"},
+            ),)),
+            ModelResponse(content="已完成。C:/runs/execution-report.html"),
+        ])
+        runtime = FakeRuntimeClient()
+        agent = CuaAgent(model, lambda: runtime, freeform_only=True)  # type: ignore[arg-type]
+        result = await agent.invoke(InvocationRequest("打开 Chrome"))
+        assert result.status is InvocationStatus.COMPLETED
+        assert "C:/runs/execution-report.html" in result.reply
+        assert runtime.calls == [("execute", {"strategy": "freeform", "goal": "打开 Chrome"})]
+        tools = model.tool_sets[0]
+        assert [tool.name for tool in tools] == ["cua_execute"]  # type: ignore[union-attr]
+        for messages in model.calls:
+            assert "仅提供 `cua_execute`" in (messages[0].content or "")
+            assert "先用 `cua_catalog`" not in (messages[0].content or "")
+        assert model.tool_sets[1] == ()
+
+    asyncio.run(scenario())
+
+
+def test_freeform_only_runner_blocks_model_attempt_to_replay() -> None:
+    async def scenario() -> None:
+        model = FakeModelClient([ModelResponse(tool_calls=(ModelToolCall(
+            "replay-1", "cua_execute", {"strategy": "replay", "scene": "s", "task": "t"},
+        ),))])
+        runtime = FakeRuntimeClient()
+        agent = CuaAgent(model, lambda: runtime, freeform_only=True)  # type: ignore[arg-type]
+        result = await agent.invoke(InvocationRequest("打开 Chrome"))
+        assert result.status is InvocationStatus.FAILED
+        assert runtime.calls == []
+        assert "仅支持 freeform" in (result.error or "")
+
+    asyncio.run(scenario())
+
+
 def test_runner_handles_multiple_tool_rounds_and_emits_domain_events() -> None:
     async def scenario() -> None:
         model = FakeModelClient(
