@@ -365,7 +365,7 @@ onUnmounted(() => {
         <small>{{ t('recording.restart') }}</small><small>{{ t('recording.reviewUnaffected') }}</small>
       </div>
       <div v-else-if="!catalog.recordings.length" class="recording-config-empty">
-        <strong>{{ t('recording.none') }}</strong><p>{{ t('recording.noneHelp') }}</p>
+        <strong>{{ t('recording.none') }}</strong>
       </div>
       <div v-else class="recording-list">
         <button v-for="item in catalog.recordings" :key="item.id" class="task-row recording-row"
@@ -392,8 +392,15 @@ onUnmounted(() => {
       <div class="recording-columns">
         <div class="recording-create-column">
           <div v-if="!selected" class="recording-detail-empty">
-            <h3>{{ catalog.configured ? t('recording.select') : t('recording.configure', { name: catalog.envName }) }}</h3>
-            <p>{{ catalog.configured ? t('recording.selectHelp') : t('recording.configureHelp') }}</p>
+            <template v-if="!catalog.configured">
+              <h3>{{ t('recording.configure', { name: catalog.envName }) }}</h3>
+              <p>{{ t('recording.configureHelp') }}</p>
+            </template>
+            <h3 v-else-if="!catalog.recordings.length">{{ t('recording.firstStart') }}</h3>
+            <template v-else>
+              <h3>{{ t('recording.select') }}</h3>
+              <p>{{ t('recording.selectHelp') }}</p>
+            </template>
           </div>
           <template v-else>
             <div class="asset-grid">
