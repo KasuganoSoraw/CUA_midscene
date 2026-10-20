@@ -28,6 +28,8 @@ test('workbench locale catalogs stay aligned and interpolate parameters', () => 
   assert.equal(translate('en-US', 'recording.created', { scene: 'mail', task: 'send' }), 'Created task mail/send');
   assert.equal(translate('zh-CN', 'review.taskDeleted', { scene: 'mail', task: 'send' }), '任务 mail/send 已删除');
   assert.equal(translate('en-US', 'recording.deleted', { recording: 'Recording_1' }), 'Deleted recording Recording_1');
+  assert.equal(translate('zh-CN', 'recording.firstStart'), '点击准备录制开始第一次录制');
+  assert.equal(translate('en-US', 'recording.firstStart'), 'Select Prepare recording to start your first recording');
 });
 
 test('recording workflow detects displays only while the recorder is inactive', () => {
@@ -58,6 +60,8 @@ test('ordinary workbench copy hides implementation names and gates developer ass
   assert.doesNotMatch(app, /stepDeleteOpen|pendingOperation|structure-actions|keydown\.alt/);
   assert.match(app, /@click="removeStep\(index\)"/);
   assert.match(recording, /<ConfirmDialog/);
+  assert.match(recording, /v-else-if="!catalog\.recordings\.length">\{\{ t\('recording\.firstStart'\) \}\}/);
+  assert.doesNotMatch(recording, /recording\.noneHelp/);
   assert.match(confirmDialog, /role="alertdialog"/);
   assert.doesNotMatch(confirmDialog, /window\.confirm|globalThis\.confirm|\bconfirm\(/);
 });
