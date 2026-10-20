@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass
+from typing import cast
 
 from ..contracts import JsonValue
 from ..runtime_client import (
@@ -175,14 +177,27 @@ class CuaToolRegistry:
         client: RuntimeClientProtocol,
         *,
         data_root: str | None = None,
+        freeform_only: bool = False,
     ) -> None:
         self._client = client
         self._data_root = data_root
+        self._freeform_only = freeform_only
         self._tools: dict[str, tuple[ToolDefinition, RuntimeMethod]] = {
             CATALOG_TOOL.name: (CATALOG_TOOL, "catalog"),
             EXECUTE_TOOL.name: (EXECUTE_TOOL, "execute"),
             WORKBENCH_TOOL.name: (WORKBENCH_TOOL, "workbench"),
         }
+        if freeform_only:
+            branches = cast(list[dict[str, JsonValue]], EXECUTE_TOOL.input_schema["oneOf"])
+            execute = ToolDefinition(
+                name=EXECUTE_TOOL.name,
+                description=EXECUTE_TOOL.description,
+                input_schema=deepcopy(branches[2]),
+            )
+            execute.input_schema["type"] = "object"
+            properties = cast(dict[str, JsonValue], execute.input_schema["properties"])
+            properties["strategy"] = {"const": "freeform"}
+            self._tools = {execute.name: (execute, "execute")}
 
     @property
     def definitions(self) -> tuple[ToolDefinition, ...]:
@@ -199,6 +214,8 @@ class CuaToolRegistry:
         entry = self._tools.get(name)
         if entry is None:
             raise ValueError(f"无法识别 CUA Agent Tool：{name}")
+        if self._freeform_only:
+            _validate_freeform_arguments(arguments)
         _definition, method = entry
         payload = _normalize_tool_arguments(name, arguments)
         if self._data_root is not None and "dataRoot" not in payload:
@@ -208,6 +225,19 @@ class CuaToolRegistry:
                 method, payload, cancelled=cancelled, on_event=on_event
             )
         return await self._client.request(method, payload, cancelled=cancelled)
+
+
+def _validate_freeform_arguments(arguments: Mapping[str, JsonValue]) -> None:
+    if arguments.get("strategy") != "freeform":
+        raise ValueError("当前 CUA Agent 仅支持 freeform 自然语言执行")
+    if set(arguments) - {"strategy", "goal", "displayId"}:
+        raise ValueError("freeform 仅接受 strategy、goal 和可选 displayId")
+    for name in ("goal", "displayId"):
+        if name == "displayId" and name not in arguments:
+            continue
+        value = arguments.get(name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{name} 必须是非空字符串")
 
 
 def _normalize_tool_arguments(
@@ -243,5 +273,6 @@ def create_cua_tool_registry(
     client: RuntimeClientProtocol,
     *,
     data_root: str | None = None,
+    freeform_only: bool = False,
 ) -> CuaToolRegistry:
-    return CuaToolRegistry(client, data_root=data_root)
+    return CuaToolRegistry(client, data_root=data_root, freeform_only=freeform_only)

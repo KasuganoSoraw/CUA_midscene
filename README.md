@@ -48,6 +48,7 @@ python scripts/smoke_component.py dist/computer-use-component --python "C:\path\
 - `CUA_PYTHON_EXECUTABLE`：安装了三个组件包的 Python 绝对路径。
 - `CUA_AGENT_JS_RUNTIME_EXECUTABLE`：宿主提供的兼容 JavaScript executable。
 - `CUA_AGENT_RUNTIME_BRIDGE`：组件 `runtime/dist/runtime-bridge/worker.js` 的绝对路径。
+- `CUA_AGENT_FREEFORM_ONLY=true`：仅开放自然语言执行，禁用 Agent 的录制任务发现、回放和工作台工具；未设置或为 `false` 时提供完整能力。Python API 使用 `CuaAgent(..., freeform_only=True)`，能力说明通过 `load_agent_definition(freeform_only=True)` 获取。宿主需同步隐藏产品侧的录制工作台入口；独立 Review/CLI 不受此开关限制。
 
 真实桌面操作须由宿主串行调用。用户任务写入 `CUA_DATA_ROOT/projects`，运行产物写入 `CUA_DATA_ROOT/runs`。运行历史默认超过 5 GiB 后清理至 4 GiB，保护当前、活动和最近 24 小时的记录；可通过 `CUA_RUNS_MAX_MB`、`CUA_RUNS_TARGET_MB` 和 `CUA_RUNS_MIN_AGE_HOURS` 调整，`CUA_RUNS_MAX_MB=0` 禁用清理。
 
