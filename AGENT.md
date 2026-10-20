@@ -18,7 +18,7 @@
 8. 每个 trace step 对应一个 `step-NNN | <operation-type>` Midscene task；输入 ID 为 `step-NNN-input`。不得重编号、复用编号、打乱顺序或启用 `continueOnError`。
 9. GDEClaw Main Agent 只向 Python CUA Subagent 提交完整任务；CUA Subagent 必须在私有 Tool 中显式选择执行模式：稳定录制任务使用 replay，需要统一规划时使用 guided，无录制使用 freeform。失败后不得自动切换、修改任务或重试。
 10. Runtime 不提供跨进程 computer use 并发锁。上层调用方必须保证真实桌面操作串行执行，不得把执行器描述为并发安全。
-11. TypeScript 主流程应保持可顺读。单次使用且只做参数转发的函数默认不抽取；只有复用、隔离 I/O/第三方边界、承载独立业务规则或显著降低复杂度时才抽象。函数通常不超过约 200 行，但不得为满足行数机械拆出无意义调用层。
+11. 单个函数或方法不得超过 50 行，应按职责组织代码，不通过压缩语句或机械转发规避限制。TypeScript 主流程应保持可顺读；抽象应服务于复用、隔离 I/O/第三方边界、独立业务规则或复杂度控制。
 12. Agent 到 Runtime 的依赖方向固定为 `agent (Python) -> execution/runtime-bridge (TypeScript) -> Midscene`。`execution` 不得导入 Python Agent、模型 SDK、Agent prompt 或 GDEClaw；GDEClaw 不得注册 CUA 内部 Tool。Agent invocation 不保存跨调用 Session，依赖只在安装/部署阶段准备。
 13. 仓库提供 Python 包、单次进程 invocation、Review `--dev` 调试入口和 Runtime bridge。GDEClaw 注册与生命周期 Adapter、网络服务和长期 Agent daemon 位于仓库边界之外。
 14. `execution/SKILL.md` 与任务目录中的 `SKILL.md` 是 CLI 操作、维护和打包说明；Python Agent 不读取这些 Markdown，而是通过 `cua_catalog` 获取结构化 task/scene 数据。不得把这些文件描述为 GDEClaw 需要注册的公共 Tool 或 Python Agent 的运行时 prompt。
