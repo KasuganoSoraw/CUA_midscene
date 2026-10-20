@@ -55,159 +55,180 @@ def _rgb(red: int, green: int, blue: int) -> int:
     return red | (green << 8) | (blue << 16)
 
 
-def _configure_api(user: Any, gdi: Any, kernel: Any) -> None:
-    declarations = [
-        (
-            user,
-            "CreateWindowExW",
+API_SIGNATURES = [
+    (
+        "user",
+        "CreateWindowExW",
+        wt.HWND,
+        [
+            wt.DWORD,
+            wt.LPCWSTR,
+            wt.LPCWSTR,
+            wt.DWORD,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
             wt.HWND,
-            [
-                wt.DWORD,
-                wt.LPCWSTR,
-                wt.LPCWSTR,
-                wt.DWORD,
-                ctypes.c_int,
-                ctypes.c_int,
-                ctypes.c_int,
-                ctypes.c_int,
-                wt.HWND,
-                wt.HMENU,
-                wt.HINSTANCE,
-                wt.LPVOID,
-            ],
-        ),
-        (
-            user,
-            "DefWindowProcW",
-            ctypes.c_ssize_t,
-            [wt.HWND, wt.UINT, ctypes.c_size_t, ctypes.c_ssize_t],
-        ),
-        (
-            user,
-            "PostMessageW",
-            wt.BOOL,
-            [wt.HWND, wt.UINT, ctypes.c_size_t, ctypes.c_ssize_t],
-        ),
-        (
-            user,
-            "SetWindowPos",
-            wt.BOOL,
-            [
-                wt.HWND,
-                wt.HWND,
-                ctypes.c_int,
-                ctypes.c_int,
-                ctypes.c_int,
-                ctypes.c_int,
-                wt.UINT,
-            ],
-        ),
-        (user, "SetWindowDisplayAffinity", wt.BOOL, [wt.HWND, wt.DWORD]),
-        (user, "SetWindowRgn", ctypes.c_int, [wt.HWND, wt.HANDLE, wt.BOOL]),
-        (user, "WindowFromPoint", wt.HWND, [wt.POINT]),
-        (user, "GetAncestor", wt.HWND, [wt.HWND, wt.UINT]),
-        (user, "GetWindowRect", wt.BOOL, [wt.HWND, ctypes.POINTER(wt.RECT)]),
-        (user, "GetCursorPos", wt.BOOL, [ctypes.POINTER(wt.POINT)]),
-        (user, "GetAsyncKeyState", ctypes.c_short, [ctypes.c_int]),
-        (user, "SetCapture", wt.HWND, [wt.HWND]),
-        (user, "ReleaseCapture", wt.BOOL, []),
-        (user, "DestroyWindow", wt.BOOL, [wt.HWND]),
-        (user, "InvalidateRect", wt.BOOL, [wt.HWND, ctypes.POINTER(wt.RECT), wt.BOOL]),
-        (user, "BeginPaint", wt.HDC, [wt.HWND, ctypes.POINTER(PaintStruct)]),
-        (user, "EndPaint", wt.BOOL, [wt.HWND, ctypes.POINTER(PaintStruct)]),
-        (
-            user,
-            "DrawTextW",
+            wt.HMENU,
+            wt.HINSTANCE,
+            wt.LPVOID,
+        ],
+    ),
+    (
+        "user",
+        "DefWindowProcW",
+        ctypes.c_ssize_t,
+        [wt.HWND, wt.UINT, ctypes.c_size_t, ctypes.c_ssize_t],
+    ),
+    (
+        "user",
+        "PostMessageW",
+        wt.BOOL,
+        [wt.HWND, wt.UINT, ctypes.c_size_t, ctypes.c_ssize_t],
+    ),
+    (
+        "user",
+        "SetWindowPos",
+        wt.BOOL,
+        [
+            wt.HWND,
+            wt.HWND,
             ctypes.c_int,
-            [wt.HDC, wt.LPCWSTR, ctypes.c_int, ctypes.POINTER(wt.RECT), wt.UINT],
-        ),
-        (
-            user,
-            "SetTimer",
-            ctypes.c_size_t,
-            [wt.HWND, ctypes.c_size_t, wt.UINT, wt.LPVOID],
-        ),
-        (user, "KillTimer", wt.BOOL, [wt.HWND, ctypes.c_size_t]),
-        (user, "LoadCursorW", wt.HANDLE, [wt.HINSTANCE, wt.LPVOID]),
-        (
-            user,
-            "GetMessageW",
             ctypes.c_int,
-            [ctypes.POINTER(wt.MSG), wt.HWND, wt.UINT, wt.UINT],
-        ),
-        (user, "DispatchMessageW", ctypes.c_ssize_t, [ctypes.POINTER(wt.MSG)]),
-        (user, "TranslateMessage", wt.BOOL, [ctypes.POINTER(wt.MSG)]),
-        (user, "PostQuitMessage", None, [ctypes.c_int]),
-        (user, "UnregisterClassW", wt.BOOL, [wt.LPCWSTR, wt.HINSTANCE]),
-        (gdi, "CreateSolidBrush", wt.HBRUSH, [wt.DWORD]),
-        (gdi, "CreatePen", wt.HANDLE, [ctypes.c_int, ctypes.c_int, wt.DWORD]),
-        (gdi, "CreateRoundRectRgn", wt.HANDLE, [ctypes.c_int] * 6),
-        (gdi, "SelectObject", wt.HANDLE, [wt.HDC, wt.HANDLE]),
-        (gdi, "DeleteObject", wt.BOOL, [wt.HANDLE]),
-        (gdi, "RoundRect", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 6),
-        (gdi, "Ellipse", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 4),
-        (gdi, "Rectangle", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 4),
-        (gdi, "Polygon", wt.BOOL, [wt.HDC, ctypes.POINTER(wt.POINT), ctypes.c_int]),
-        (gdi, "Polyline", wt.BOOL, [wt.HDC, ctypes.POINTER(wt.POINT), ctypes.c_int]),
-        (
-            gdi,
-            "MoveToEx",
-            wt.BOOL,
-            [wt.HDC, ctypes.c_int, ctypes.c_int, ctypes.POINTER(wt.POINT)],
-        ),
-        (gdi, "LineTo", wt.BOOL, [wt.HDC, ctypes.c_int, ctypes.c_int]),
-        (gdi, "SetTextColor", wt.DWORD, [wt.HDC, wt.DWORD]),
-        (gdi, "SetBkMode", ctypes.c_int, [wt.HDC, ctypes.c_int]),
-        (gdi, "CreateCompatibleDC", wt.HDC, [wt.HDC]),
-        (
-            gdi,
-            "CreateCompatibleBitmap",
-            wt.HBITMAP,
-            [wt.HDC, ctypes.c_int, ctypes.c_int],
-        ),
-        (gdi, "DeleteDC", wt.BOOL, [wt.HDC]),
-        (gdi, "GetStockObject", wt.HANDLE, [ctypes.c_int]),
-        (gdi, "SetStretchBltMode", ctypes.c_int, [wt.HDC, ctypes.c_int]),
-        (
-            gdi,
-            "SetBrushOrgEx",
-            wt.BOOL,
-            [wt.HDC, ctypes.c_int, ctypes.c_int, ctypes.POINTER(wt.POINT)],
-        ),
-        (
-            gdi,
-            "BitBlt",
-            wt.BOOL,
-            [
-                wt.HDC,
-                ctypes.c_int,
-                ctypes.c_int,
-                ctypes.c_int,
-                ctypes.c_int,
-                wt.HDC,
-                ctypes.c_int,
-                ctypes.c_int,
-                wt.DWORD,
-            ],
-        ),
-        (
-            gdi,
-            "StretchBlt",
-            wt.BOOL,
-            [wt.HDC] + [ctypes.c_int] * 4 + [wt.HDC] + [ctypes.c_int] * 4 + [wt.DWORD],
-        ),
-        (
-            gdi,
-            "CreateFontW",
-            wt.HANDLE,
-            [ctypes.c_int] * 5 + [wt.DWORD] * 8 + [wt.LPCWSTR],
-        ),
-        (kernel, "GetModuleHandleW", wt.HMODULE, [wt.LPCWSTR]),
-    ]
-    for library, name, result, arguments in declarations:
-        function = getattr(library, name)
+            ctypes.c_int,
+            ctypes.c_int,
+            wt.UINT,
+        ],
+    ),
+    ("user", "SetWindowDisplayAffinity", wt.BOOL, [wt.HWND, wt.DWORD]),
+    ("user", "SetWindowRgn", ctypes.c_int, [wt.HWND, wt.HANDLE, wt.BOOL]),
+    ("user", "WindowFromPoint", wt.HWND, [wt.POINT]),
+    ("user", "GetAncestor", wt.HWND, [wt.HWND, wt.UINT]),
+    ("user", "GetWindowRect", wt.BOOL, [wt.HWND, ctypes.POINTER(wt.RECT)]),
+    ("user", "GetCursorPos", wt.BOOL, [ctypes.POINTER(wt.POINT)]),
+    ("user", "GetAsyncKeyState", ctypes.c_short, [ctypes.c_int]),
+    ("user", "SetCapture", wt.HWND, [wt.HWND]),
+    ("user", "ReleaseCapture", wt.BOOL, []),
+    ("user", "DestroyWindow", wt.BOOL, [wt.HWND]),
+    ("user", "InvalidateRect", wt.BOOL, [wt.HWND, ctypes.POINTER(wt.RECT), wt.BOOL]),
+    ("user", "BeginPaint", wt.HDC, [wt.HWND, ctypes.POINTER(PaintStruct)]),
+    ("user", "EndPaint", wt.BOOL, [wt.HWND, ctypes.POINTER(PaintStruct)]),
+    (
+        "user",
+        "DrawTextW",
+        ctypes.c_int,
+        [wt.HDC, wt.LPCWSTR, ctypes.c_int, ctypes.POINTER(wt.RECT), wt.UINT],
+    ),
+    (
+        "user",
+        "SetTimer",
+        ctypes.c_size_t,
+        [wt.HWND, ctypes.c_size_t, wt.UINT, wt.LPVOID],
+    ),
+    ("user", "KillTimer", wt.BOOL, [wt.HWND, ctypes.c_size_t]),
+    ("user", "LoadCursorW", wt.HANDLE, [wt.HINSTANCE, wt.LPVOID]),
+    (
+        "user",
+        "GetMessageW",
+        ctypes.c_int,
+        [ctypes.POINTER(wt.MSG), wt.HWND, wt.UINT, wt.UINT],
+    ),
+    ("user", "DispatchMessageW", ctypes.c_ssize_t, [ctypes.POINTER(wt.MSG)]),
+    ("user", "TranslateMessage", wt.BOOL, [ctypes.POINTER(wt.MSG)]),
+    ("user", "PostQuitMessage", None, [ctypes.c_int]),
+    ("user", "UnregisterClassW", wt.BOOL, [wt.LPCWSTR, wt.HINSTANCE]),
+    ("gdi", "CreateSolidBrush", wt.HBRUSH, [wt.DWORD]),
+    ("gdi", "CreatePen", wt.HANDLE, [ctypes.c_int, ctypes.c_int, wt.DWORD]),
+    ("gdi", "CreateRoundRectRgn", wt.HANDLE, [ctypes.c_int] * 6),
+    ("gdi", "SelectObject", wt.HANDLE, [wt.HDC, wt.HANDLE]),
+    ("gdi", "DeleteObject", wt.BOOL, [wt.HANDLE]),
+    ("gdi", "RoundRect", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 6),
+    ("gdi", "Ellipse", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 4),
+    ("gdi", "Rectangle", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 4),
+    ("gdi", "Polygon", wt.BOOL, [wt.HDC, ctypes.POINTER(wt.POINT), ctypes.c_int]),
+    ("gdi", "Polyline", wt.BOOL, [wt.HDC, ctypes.POINTER(wt.POINT), ctypes.c_int]),
+    (
+        "gdi",
+        "MoveToEx",
+        wt.BOOL,
+        [wt.HDC, ctypes.c_int, ctypes.c_int, ctypes.POINTER(wt.POINT)],
+    ),
+    ("gdi", "LineTo", wt.BOOL, [wt.HDC, ctypes.c_int, ctypes.c_int]),
+    ("gdi", "SetTextColor", wt.DWORD, [wt.HDC, wt.DWORD]),
+    ("gdi", "SetBkMode", ctypes.c_int, [wt.HDC, ctypes.c_int]),
+    ("gdi", "CreateCompatibleDC", wt.HDC, [wt.HDC]),
+    (
+        "gdi",
+        "CreateCompatibleBitmap",
+        wt.HBITMAP,
+        [wt.HDC, ctypes.c_int, ctypes.c_int],
+    ),
+    ("gdi", "DeleteDC", wt.BOOL, [wt.HDC]),
+    ("gdi", "GetStockObject", wt.HANDLE, [ctypes.c_int]),
+    ("gdi", "SetStretchBltMode", ctypes.c_int, [wt.HDC, ctypes.c_int]),
+    (
+        "gdi",
+        "SetBrushOrgEx",
+        wt.BOOL,
+        [wt.HDC, ctypes.c_int, ctypes.c_int, ctypes.POINTER(wt.POINT)],
+    ),
+    (
+        "gdi",
+        "BitBlt",
+        wt.BOOL,
+        [
+            wt.HDC,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            wt.HDC,
+            ctypes.c_int,
+            ctypes.c_int,
+            wt.DWORD,
+        ],
+    ),
+    (
+        "gdi",
+        "StretchBlt",
+        wt.BOOL,
+        [wt.HDC] + [ctypes.c_int] * 4 + [wt.HDC] + [ctypes.c_int] * 4 + [wt.DWORD],
+    ),
+    (
+        "gdi",
+        "CreateFontW",
+        wt.HANDLE,
+        [ctypes.c_int] * 5 + [wt.DWORD] * 8 + [wt.LPCWSTR],
+    ),
+    ("kernel", "GetModuleHandleW", wt.HMODULE, [wt.LPCWSTR]),
+]
+
+
+def _configure_api(user: Any, gdi: Any, kernel: Any) -> None:
+    libraries = {"user": user, "gdi": gdi, "kernel": kernel}
+    for library, name, result, arguments in API_SIGNATURES:
+        function = getattr(libraries[library], name)
         function.restype = result
         function.argtypes = arguments
+
+
+def _window_class_type(procedure_type: Any) -> type[ctypes.Structure]:
+    class WindowClass(ctypes.Structure):
+        _fields_ = [
+            ("style", wt.UINT),
+            ("procedure", procedure_type),
+            ("class_extra", ctypes.c_int),
+            ("window_extra", ctypes.c_int),
+            ("instance", wt.HINSTANCE),
+            ("icon", wt.HICON),
+            ("cursor", wt.HANDLE),
+            ("background", wt.HBRUSH),
+            ("menu", wt.LPCWSTR),
+            ("name", wt.LPCWSTR),
+        ]
+
+    return WindowClass
 
 
 class RecorderOverlay:
@@ -229,6 +250,7 @@ class RecorderOverlay:
         self._drag: tuple[int, int, int, int] | None = None
         self._user: Any = None
         self._gdi: Any = None
+        self._procedure: Any = None
 
     def start(self, timeout: float = 5.0) -> None:
         if sys.platform != "win32" or sys.getwindowsversion().build < 19041:
@@ -282,96 +304,99 @@ class RecorderOverlay:
         registered = False
         try:
             _configure_api(user, gdi, kernel)
-            procedure_type = ctypes.WINFUNCTYPE(
-                ctypes.c_ssize_t, wt.HWND, wt.UINT, ctypes.c_size_t, ctypes.c_ssize_t
-            )
-
-            class WindowClass(ctypes.Structure):
-                _fields_ = [
-                    ("style", wt.UINT),
-                    ("procedure", procedure_type),
-                    ("class_extra", ctypes.c_int),
-                    ("window_extra", ctypes.c_int),
-                    ("instance", wt.HINSTANCE),
-                    ("icon", wt.HICON),
-                    ("cursor", wt.HANDLE),
-                    ("background", wt.HBRUSH),
-                    ("menu", wt.LPCWSTR),
-                    ("name", wt.LPCWSTR),
-                ]
-
-            procedure = procedure_type(self._window_proc)
-            instance = kernel.GetModuleHandleW(None)
-            window_class = WindowClass(
-                0x0003,
-                procedure,
-                0,
-                0,
-                instance,
-                None,
-                user.LoadCursorW(None, 32512),
-                None,
-                None,
-                class_name,
-            )
-            user.RegisterClassW.argtypes = [ctypes.POINTER(WindowClass)]
-            user.RegisterClassW.restype = wt.ATOM
-            if not user.RegisterClassW(ctypes.byref(window_class)):
-                raise ctypes.WinError(ctypes.get_last_error())
+            instance = self._register_window_class(class_name, kernel)
             registered = True
-            width, height = self._px(WIDTH), self._px(HEIGHT)
-            self._hwnd = user.CreateWindowExW(
-                WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-                class_name,
-                "CUA 录制控制",
-                WS_POPUP,
-                self._display.left + (self._display.width - width) // 2,
-                self._display.top + self._display.height * 4 // 5 - height // 2,
-                width,
-                height,
-                None,
-                None,
-                instance,
-                None,
-            )
-            if not self._hwnd:
-                raise ctypes.WinError(ctypes.get_last_error())
-            if not user.SetWindowDisplayAffinity(self._hwnd, WDA_EXCLUDEFROMCAPTURE):
-                raise RecorderError(
-                    f"无法将录制悬浮条排除出画面：{ctypes.WinError(ctypes.get_last_error())}"
-                )
-            self._resize()
-            if not user.SetTimer(self._hwnd, 1, 250, None):
-                raise ctypes.WinError(ctypes.get_last_error())
-            if not self._closing.is_set():
-                if not user.SetWindowPos(
-                    self._hwnd, ctypes.c_void_p(-1), 0, 0, 0, 0, 0x0013 | 0x0040
-                ):
-                    raise ctypes.WinError(ctypes.get_last_error())
-            self._ready.set()
-            if self._closing.is_set():
-                user.DestroyWindow(self._hwnd)
-            message = wt.MSG()
-            while True:
-                result = user.GetMessageW(ctypes.byref(message), None, 0, 0)
-                if result == 0:
-                    break
-                if result == -1:
-                    raise ctypes.WinError(ctypes.get_last_error())
-                user.TranslateMessage(ctypes.byref(message))
-                user.DispatchMessageW(ctypes.byref(message))
+            self._create_window(class_name, instance)
+            self._show_window()
+            self._message_loop()
         except Exception as error:
             self._error = error
             self._command("overlay-error")
         finally:
-            if self._hwnd:
-                user.DestroyWindow(self._hwnd)
-            if self._font:
-                gdi.DeleteObject(self._font)
-                self._font = 0
-            if registered:
-                user.UnregisterClassW(class_name, instance)
-            self._ready.set()
+            self._release_window(class_name, instance, registered)
+
+    def _register_window_class(self, class_name: str, kernel: Any) -> int:
+        procedure_type = ctypes.WINFUNCTYPE(
+            ctypes.c_ssize_t, wt.HWND, wt.UINT, ctypes.c_size_t, ctypes.c_ssize_t
+        )
+        window_type = _window_class_type(procedure_type)
+        self._procedure = procedure_type(self._window_proc)
+        instance = kernel.GetModuleHandleW(None)
+        window_class = window_type(
+            0x0003,
+            self._procedure,
+            0,
+            0,
+            instance,
+            None,
+            self._user.LoadCursorW(None, 32512),
+            None,
+            None,
+            class_name,
+        )
+        self._user.RegisterClassW.argtypes = [ctypes.POINTER(window_type)]
+        self._user.RegisterClassW.restype = wt.ATOM
+        if not self._user.RegisterClassW(ctypes.byref(window_class)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return instance
+
+    def _create_window(self, class_name: str, instance: int) -> None:
+        width, height = self._px(WIDTH), self._px(HEIGHT)
+        self._hwnd = self._user.CreateWindowExW(
+            WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+            class_name,
+            "CUA 录制控制",
+            WS_POPUP,
+            self._display.left + (self._display.width - width) // 2,
+            self._display.top + self._display.height * 4 // 5 - height // 2,
+            width,
+            height,
+            None,
+            None,
+            instance,
+            None,
+        )
+        if not self._hwnd:
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not self._user.SetWindowDisplayAffinity(self._hwnd, WDA_EXCLUDEFROMCAPTURE):
+            raise RecorderError(
+                f"无法将录制悬浮条排除出画面：{ctypes.WinError(ctypes.get_last_error())}"
+            )
+        self._resize()
+
+    def _show_window(self) -> None:
+        if not self._user.SetTimer(self._hwnd, 1, 250, None):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not self._closing.is_set():
+            if not self._user.SetWindowPos(
+                self._hwnd, ctypes.c_void_p(-1), 0, 0, 0, 0, 0x0013 | 0x0040
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+        self._ready.set()
+        if self._closing.is_set():
+            self._user.DestroyWindow(self._hwnd)
+
+    def _message_loop(self) -> None:
+        message = wt.MSG()
+        while True:
+            result = self._user.GetMessageW(ctypes.byref(message), None, 0, 0)
+            if result == 0:
+                break
+            if result == -1:
+                raise ctypes.WinError(ctypes.get_last_error())
+            self._user.TranslateMessage(ctypes.byref(message))
+            self._user.DispatchMessageW(ctypes.byref(message))
+
+    def _release_window(self, class_name: str, instance: int, registered: bool) -> None:
+        if self._hwnd:
+            self._user.DestroyWindow(self._hwnd)
+        if self._font:
+            self._gdi.DeleteObject(self._font)
+            self._font = 0
+        if registered:
+            self._user.UnregisterClassW(class_name, instance)
+        self._procedure = None
+        self._ready.set()
 
     def _resize(self) -> None:
         if self._font:
@@ -438,18 +463,7 @@ class RecorderOverlay:
             self._user.SetTimer(hwnd, 1, 250, None)
             return 0
         if message == WM_DPICHANGED:
-            self._scale = (wparam & 0xFFFF) / 96.0
-            rect = ctypes.cast(lparam, ctypes.POINTER(wt.RECT)).contents
-            self._user.SetWindowPos(
-                hwnd,
-                None,
-                rect.left,
-                rect.top,
-                self._px(WIDTH),
-                self._px(HEIGHT),
-                0x0014,
-            )
-            self._resize()
+            self._apply_dpi(hwnd, wparam, lparam)
             return 0
         if message == WM_CLOSE:
             self._command("stop")
@@ -463,6 +477,20 @@ class RecorderOverlay:
             self._user.PostQuitMessage(0)
             return 0
         return int(self._user.DefWindowProcW(hwnd, message, wparam, lparam))
+
+    def _apply_dpi(self, hwnd: int, wparam: int, lparam: int) -> None:
+        self._scale = (wparam & 0xFFFF) / 96.0
+        rect = ctypes.cast(lparam, ctypes.POINTER(wt.RECT)).contents
+        self._user.SetWindowPos(
+            hwnd,
+            None,
+            rect.left,
+            rect.top,
+            self._px(WIDTH),
+            self._px(HEIGHT),
+            0x0014,
+        )
+        self._resize()
 
     def _mouse(self, hwnd: int, message: int, lparam: int) -> None:
         x = ctypes.c_short(lparam & 0xFFFF).value / self._scale
@@ -538,58 +566,23 @@ class RecorderOverlay:
         width, height = right - left, bottom - top
         if width <= 0 or height <= 0:
             return
-        large_width, large_height = width * CIRCLE_SAMPLES, height * CIRCLE_SAMPLES
+        target = (left, top, width, height)
+        size = (width * CIRCLE_SAMPLES, height * CIRCLE_SAMPLES)
         gdi = self._gdi
         buffer = gdi.CreateCompatibleDC(dc)
-        bitmap = gdi.CreateCompatibleBitmap(dc, large_width, large_height)
+        bitmap = gdi.CreateCompatibleBitmap(dc, *size)
         brush = gdi.CreateSolidBrush(color)
         old_bitmap = old_brush = old_pen = None
-        old_mode = 0
-        origin = wt.POINT()
         try:
             if not buffer or not bitmap or not brush:
                 raise RecorderError("无法创建悬浮条圆形绘制缓冲区")
             old_bitmap = gdi.SelectObject(buffer, bitmap)
-            gdi.SetStretchBltMode(buffer, COLORONCOLOR)
-            if not gdi.StretchBlt(
-                buffer,
-                0,
-                0,
-                large_width,
-                large_height,
-                dc,
-                left,
-                top,
-                width,
-                height,
-                SRCCOPY,
-            ):
-                raise RecorderError("无法复制悬浮条圆形背景")
+            self._copy_circle_background(dc, buffer, target, size)
             old_brush = gdi.SelectObject(buffer, brush)
             old_pen = gdi.SelectObject(buffer, gdi.GetStockObject(NULL_PEN))
-            gdi.Ellipse(buffer, 0, 0, large_width, large_height)
-            old_mode = gdi.SetStretchBltMode(dc, HALFTONE)
-            if not old_mode:
-                raise RecorderError("无法设置悬浮条圆形抗锯齿模式")
-            gdi.SetBrushOrgEx(dc, 0, 0, ctypes.byref(origin))
-            if not gdi.StretchBlt(
-                dc,
-                left,
-                top,
-                width,
-                height,
-                buffer,
-                0,
-                0,
-                large_width,
-                large_height,
-                SRCCOPY,
-            ):
-                raise RecorderError("无法合成悬浮条圆形边缘")
+            gdi.Ellipse(buffer, 0, 0, *size)
+            self._composite_circle(dc, buffer, target, size)
         finally:
-            if old_mode:
-                gdi.SetStretchBltMode(dc, old_mode)
-                gdi.SetBrushOrgEx(dc, origin.x, origin.y, None)
             for old in (old_pen, old_brush, old_bitmap):
                 if old:
                     gdi.SelectObject(buffer, old)
@@ -599,6 +592,36 @@ class RecorderOverlay:
                 gdi.DeleteObject(bitmap)
             if buffer:
                 gdi.DeleteDC(buffer)
+
+    def _copy_circle_background(
+        self,
+        dc: int,
+        buffer: int,
+        target: tuple[int, int, int, int],
+        size: tuple[int, int],
+    ) -> None:
+        self._gdi.SetStretchBltMode(buffer, COLORONCOLOR)
+        if not self._gdi.StretchBlt(buffer, 0, 0, *size, dc, *target, SRCCOPY):
+            raise RecorderError("无法复制悬浮条圆形背景")
+
+    def _composite_circle(
+        self,
+        dc: int,
+        buffer: int,
+        target: tuple[int, int, int, int],
+        size: tuple[int, int],
+    ) -> None:
+        old_mode = self._gdi.SetStretchBltMode(dc, HALFTONE)
+        if not old_mode:
+            raise RecorderError("无法设置悬浮条圆形抗锯齿模式")
+        origin = wt.POINT()
+        try:
+            self._gdi.SetBrushOrgEx(dc, 0, 0, ctypes.byref(origin))
+            if not self._gdi.StretchBlt(dc, *target, buffer, 0, 0, *size, SRCCOPY):
+                raise RecorderError("无法合成悬浮条圆形边缘")
+        finally:
+            self._gdi.SetStretchBltMode(dc, old_mode)
+            self._gdi.SetBrushOrgEx(dc, origin.x, origin.y, None)
 
     def _text(self, dc: int, value: str, left: int, right: int) -> None:
         self._gdi.SetTextColor(dc, _rgb(242, 242, 245))
@@ -643,46 +666,7 @@ class RecorderOverlay:
         old_bitmap = self._gdi.SelectObject(buffer, bitmap)
         old_font = self._gdi.SelectObject(buffer, self._font)
         try:
-            self._gdi.SetBkMode(buffer, 1)
-            self._shape(buffer, _rgb(82, 82, 86), (0, 0, WIDTH, HEIGHT))
-            self._shape(buffer, _rgb(49, 49, 53), (1, 1, WIDTH - 1, HEIGHT - 1))
-            state = self._state.snapshot()
-            self._shape(buffer, _rgb(73, 50, 55), (14, 16, 30, 32), circle=True)
-            self._shape(buffer, _rgb(240, 82, 90), (18, 20, 26, 28), circle=True)
-            self._text(buffer, state.elapsed, 40, 98)
-            if state.phase == "armed":
-                color = _rgb(94, 62, 64) if self._hover == "start" else _rgb(75, 51, 54)
-                self._shape(buffer, color, (104, 8, 140, 40))
-                self._icon(buffer, "start", 122, _rgb(240, 92, 94))
-                if self._hover == "cancel":
-                    self._shape(buffer, _rgb(67, 67, 72), (144, 8, 180, 40))
-                self._icon(buffer, "cancel", 162, _rgb(190, 190, 196))
-            elif state.phase == "recording":
-                color = _rgb(90, 60, 63) if self._hover == "stop" else _rgb(69, 47, 51)
-                self._shape(buffer, color, (104, 8, 140, 40))
-                self._icon(buffer, "stop", 122, _rgb(240, 92, 94))
-            else:
-                active = int(time.monotonic() * 4) % 3
-                for index in range(3):
-                    shade = 220 if index == active else 112
-                    x = 113 + index * 7
-                    self._shape(
-                        buffer,
-                        _rgb(shade, shade, shade),
-                        (x, 22, x + 3, 25),
-                        circle=True,
-                    )
-            grip_color = (
-                _rgb(184, 184, 192) if self._hover == "drag" else _rgb(138, 138, 148)
-            )
-            for column in (190, 196):
-                for row in (17, 23, 29):
-                    self._shape(
-                        buffer,
-                        grip_color,
-                        (column, row, column + 2.5, row + 2.5),
-                        circle=True,
-                    )
+            self._paint_contents(buffer)
             self._gdi.BitBlt(
                 dc, 0, 0, self._px(WIDTH), self._px(HEIGHT), buffer, 0, 0, 0x00CC0020
             )
@@ -692,3 +676,43 @@ class RecorderOverlay:
             self._gdi.DeleteObject(bitmap)
             self._gdi.DeleteDC(buffer)
             self._user.EndPaint(hwnd, ctypes.byref(paint))
+
+    def _paint_contents(self, dc: int) -> None:
+        self._gdi.SetBkMode(dc, 1)
+        self._shape(dc, _rgb(82, 82, 86), (0, 0, WIDTH, HEIGHT))
+        self._shape(dc, _rgb(49, 49, 53), (1, 1, WIDTH - 1, HEIGHT - 1))
+        state = self._state.snapshot()
+        self._shape(dc, _rgb(73, 50, 55), (14, 16, 30, 32), circle=True)
+        self._shape(dc, _rgb(240, 82, 90), (18, 20, 26, 28), circle=True)
+        self._text(dc, state.elapsed, 40, 98)
+        self._paint_controls(dc, state.phase)
+        self._paint_grip(dc)
+
+    def _paint_controls(self, dc: int, phase: str) -> None:
+        if phase == "armed":
+            color = _rgb(94, 62, 64) if self._hover == "start" else _rgb(75, 51, 54)
+            self._shape(dc, color, (104, 8, 140, 40))
+            self._icon(dc, "start", 122, _rgb(240, 92, 94))
+            if self._hover == "cancel":
+                self._shape(dc, _rgb(67, 67, 72), (144, 8, 180, 40))
+            self._icon(dc, "cancel", 162, _rgb(190, 190, 196))
+        elif phase == "recording":
+            color = _rgb(90, 60, 63) if self._hover == "stop" else _rgb(69, 47, 51)
+            self._shape(dc, color, (104, 8, 140, 40))
+            self._icon(dc, "stop", 122, _rgb(240, 92, 94))
+        else:
+            active = int(time.monotonic() * 4) % 3
+            for index in range(3):
+                shade = 220 if index == active else 112
+                x = 113 + index * 7
+                self._shape(
+                    dc, _rgb(shade, shade, shade), (x, 22, x + 3, 25), circle=True
+                )
+
+    def _paint_grip(self, dc: int) -> None:
+        color = _rgb(184, 184, 192) if self._hover == "drag" else _rgb(138, 138, 148)
+        for column in (190, 196):
+            for row in (17, 23, 29):
+                self._shape(
+                    dc, color, (column, row, column + 2.5, row + 2.5), circle=True
+                )
