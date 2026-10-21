@@ -25,9 +25,7 @@ class TraceGenerator:
                  claude_model: str = "claude-sonnet-4-20250514",
                  api_keys_path: str | None = None):
         """Load default prompt and API settings from config file or env vars."""
-        prompt_path = default_prompt_path or str(packaged_default_prompt_path())
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            self.default_prompt = json.load(f)
+        self._load_default_prompt(default_prompt_path)
 
         self.api_provider = api_provider.lower()
         self.openai_model = (
@@ -48,7 +46,22 @@ class TraceGenerator:
 
         self.openai_key = ""
         self.claude_key = ""
+        self._load_api_keys(api_keys_path)
 
+        # 网关鉴权自定义请求头 + 企业网关代理（与 Midscene 同一份配置）
+        self._load_gateway_config()
+
+        if not self.openai_key and not self.claude_key:
+            raise RuntimeError("No API keys found. Please fill config/api_keys.json or set env vars.")
+
+    def _load_default_prompt(self, default_prompt_path: str | None) -> None:
+        """加载默认 prompt JSON（记录生成时使用）。"""
+        prompt_path = default_prompt_path or str(packaged_default_prompt_path())
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            self.default_prompt = json.load(f)
+
+    def _load_api_keys(self, api_keys_path: str | None) -> None:
+        """从 config 文件或环境变量加载 API keys。"""
         cfg: Dict[str, Any] = {}
         if api_keys_path is not None:
             try:
@@ -65,8 +78,36 @@ class TraceGenerator:
             cfg.get("CLAUDE_API_KEY", "") or os.environ.get("ANTHROPIC_API_KEY", "")
         )
 
-        if not self.openai_key and not self.claude_key:
-            raise RuntimeError("No API keys found. Please fill config/api_keys.json or set env vars.")
+    def _load_gateway_config(self) -> None:
+        """加载网关鉴权自定义请求头与代理配置。
+
+        请求头优先读专用 JSON 环境变量 ALOHA_TRACE_CUSTOM_HEADERS，
+        回退到 MIDSCENE_MODEL_INIT_CONFIG_JSON 的 defaultHeaders
+        （与 Midscene 侧同一份配置，见 gdeclaw runtime_env.build_runtime_env）。
+        代理优先 MIDSCENE_MODEL_HTTP_PROXY，回退到 http_proxy/https_proxy。
+        """
+        self.custom_headers: Dict[str, str] = {}
+        headers_json = (
+            os.environ.get("ALOHA_TRACE_CUSTOM_HEADERS", "").strip()
+            or os.environ.get("MIDSCENE_MODEL_INIT_CONFIG_JSON", "").strip()
+        )
+        if headers_json:
+            try:
+                parsed = json.loads(headers_json)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, dict):
+                headers = parsed.get("defaultHeaders", {})
+                if isinstance(headers, dict):
+                    self.custom_headers = {
+                        str(k): str(v) for k, v in headers.items()
+                    }
+
+        self.proxy_url = (
+            os.environ.get("MIDSCENE_MODEL_HTTP_PROXY", "").strip()
+            or os.environ.get("https_proxy", "").strip()
+            or os.environ.get("http_proxy", "").strip()
+        )
 
     def _val(self, d: Dict[str, Any], *keys, default=""):
         """Get dictionary value by key (case-insensitive)."""
@@ -293,19 +334,25 @@ Overall Task: {overall_task}
             raise RuntimeError("OPENAI_API_KEY missing in config/api_keys.json or environment.")
         url = f"{self.openai_base_url}/chat/completions"
         headers = {"Authorization": f"Bearer {self.openai_key}", "Content-Type": "application/json"}
+        # 网关鉴权自定义头（X-HW-ID / X-HW-APPKEY 等），用户配置头可覆盖默认头
+        if self.custom_headers:
+            headers.update(self.custom_headers)
         content = [{"type": "text", "text": prompt}]
         if crop_b64: content.append({"type": "image_url", "image_url": {"url": crop_b64}})
         if full_b64: content.append({"type": "image_url", "image_url": {"url": full_b64}})
         data = {"model": self.openai_model,
                 "messages": [{"role": "user", "content": content}],
                 "temperature": self.openai_temperature}
-        r = requests.post(
-            url,
-            headers=headers,
-            json=data,
-            timeout=120,
-            verify=self.openai_verify_ssl,
-        )
+        request_kwargs: Dict[str, Any] = {
+            "headers": headers,
+            "json": data,
+            "timeout": 120,
+            "verify": self.openai_verify_ssl,
+        }
+        # 企业网关代理：requests 默认不读 MIDSCENE_MODEL_HTTP_PROXY，显式应用
+        if self.proxy_url:
+            request_kwargs["proxies"] = {"http": self.proxy_url, "https": self.proxy_url}
+        r = requests.post(url, **request_kwargs)
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
@@ -333,7 +380,14 @@ Overall Task: {overall_task}
         data = {"model": self.claude_model,
                 "max_tokens": 1200,
                 "messages": [{"role": "user", "content": content}]}
-        r = requests.post(url, headers=headers, json=data, timeout=120)
+        request_kwargs: Dict[str, Any] = {
+            "headers": headers,
+            "json": data,
+            "timeout": 120,
+        }
+        if self.proxy_url:
+            request_kwargs["proxies"] = {"http": self.proxy_url, "https": self.proxy_url}
+        r = requests.post(url, **request_kwargs)
         r.raise_for_status()
         return r.json()["content"][0]["text"]
 

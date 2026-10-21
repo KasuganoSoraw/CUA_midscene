@@ -116,17 +116,14 @@ class OpenAICompatibleModelClient(ModelClient):
             payload["tools"] = [_tool_payload(tool) for tool in tools]
             payload["tool_choice"] = "auto"
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        headers = {
+        headers: dict[str, str] = {
+            "Authorization": f"Bearer {self._config.api_key}",
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
         }
-        if self._config.api_key.strip():
-            headers["Authorization"] = f"Bearer {self._config.api_key.strip()}"
-        for name, value in self._config.custom_headers.items():
-            existing = next((key for key in headers if key.lower() == name.lower()), None)
-            if existing is not None:
-                del headers[existing]
-            headers[name] = value
+        # custom_headers 覆盖默认头（如网关鉴权 X-HW-ID / X-HW-APPKEY）
+        if self._config.custom_headers:
+            headers.update(self._config.custom_headers)
         request = urllib.request.Request(
             self._config.chat_completions_url,
             data=body,
