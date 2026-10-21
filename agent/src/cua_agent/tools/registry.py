@@ -245,6 +245,23 @@ def _normalize_tool_arguments(
     arguments: Mapping[str, JsonValue],
 ) -> dict[str, JsonValue]:
     payload = dict(arguments)
+    if name == "cua_catalog":
+        # 模型（如 GTSLLM-Pro-Moe）有时把 const 枚举值输出为数组
+        # （["list-tasks"]）、带引号的字符串（"list-tasks"）或带噪声字符
+        # （list-tasks>），导致 Node 侧 includes 严格匹配失败。
+        # 从原始值中提取已知 action 关键字。
+        raw_action = payload.get("action")
+        text: str
+        if isinstance(raw_action, list) and raw_action:
+            text = str(raw_action[0])
+        elif isinstance(raw_action, str):
+            text = raw_action
+        else:
+            text = str(raw_action or "")
+        normalized = _extract_catalog_action(text)
+        if normalized is not None:
+            payload["action"] = normalized
+        return payload
     if name != "cua_execute" or "inputs" not in payload:
         return payload
 
@@ -267,6 +284,28 @@ def _normalize_tool_arguments(
         normalized[key] = value
     payload["inputs"] = normalized
     return payload
+
+
+_CATALOG_ACTIONS: tuple[str, ...] = (
+    "list-scenes",
+    "list-tasks",
+    "find-task",
+    "describe-task",
+)
+
+
+def _extract_catalog_action(text: str) -> str | None:
+    """从可能带噪声的文本中提取已知的 catalog action 关键字。
+
+    模型（如 GTSLLM-Pro-Moe）可能把 const 枚举值输出为带引号、带空白、
+    带噪声字符（如 `list-scenes>`）甚至数组形式。这里用子串匹配提取
+    已知 action，避免严格 includes 误报"无法识别"。
+    """
+    lowered = text.lower()
+    for action in _CATALOG_ACTIONS:
+        if action in lowered:
+            return action
+    return None
 
 
 def create_cua_tool_registry(

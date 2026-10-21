@@ -41,11 +41,20 @@ async function runMidsceneScript(
   warnIfNodeVersionIsOld();
   checkRequiredModelEnv();
   const previousRunDirectory = process.env.MIDSCENE_RUN_DIR;
+  const previousCacheDirectory = process.env.MIDSCENE_CACHE_DIR;
   let agent: AgentLike | undefined;
   let removeDumpListener: (() => void) | undefined;
   const observer = createMidsceneExecutionObserver(options.onProgress);
   try {
     process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(options.runDirectory), 'midscene');
+    // 缓存目录固定到 runsRoot 同级（dataRoot/midscene-cache），避免随每次
+    // 运行的随机 run 目录漂移，保证跨运行 plan 缓存可命中。
+    process.env.MIDSCENE_CACHE_DIR = path.join(
+      path.resolve(options.runDirectory),
+      '..',
+      '..',
+      'midscene-cache',
+    );
     const agentOptions: ComputerAgentOptions = {
       ...(script.agent ?? {}),
       ...(script.computer?.displayId ? { displayId: script.computer.displayId } : {}),
@@ -74,6 +83,8 @@ async function runMidsceneScript(
       } finally {
         if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
         else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
+        if (previousCacheDirectory === undefined) delete process.env.MIDSCENE_CACHE_DIR;
+        else process.env.MIDSCENE_CACHE_DIR = previousCacheDirectory;
       }
     }
   }
