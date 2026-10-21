@@ -47,6 +47,37 @@ class ScreenshotProcessorReferenceImageTest(unittest.TestCase):
             self.assertTrue(np.array_equal(reference[48, 48], self.frame[500, 500]))
             self.assertFalse(np.array_equal(marked[128, 128], self.frame[500, 500]))
 
+    def test_click_marker_is_small_and_translucent(self):
+        actions = [
+            {
+                "timestamp": 1.0,
+                "action": "LClick at",
+                "coords": [{"x": 500, "y": 500}],
+            }
+        ]
+        saved_crops = {}
+
+        def capture_jpg(path, image):
+            if path.endswith(".crop.jpg"):
+                saved_crops[Path(path).name] = image.copy()
+            return True
+
+        with (
+            patch.object(self.extractor, "_get_frame_at", return_value=self.frame.copy()),
+            patch.object(self.extractor, "_save_jpg", side_effect=capture_jpg),
+            patch.object(self.extractor, "_save_png", return_value=True),
+        ):
+            self.extractor.process_actions(
+                actions, "recording.mp4", Path("screenshots"), False, 1.0, 1.0,
+            )
+
+        marked = saved_crops["0.900s.crop.jpg"]
+        center = self.frame[500, 500].astype(np.int16)
+        center_change = np.abs(marked[128, 128].astype(np.int16) - center)
+        self.assertGreater(int(center_change.max()), 40)
+        self.assertLess(int(center_change.max()), 75)
+        self.assertTrue(np.array_equal(marked[142, 142], center))
+
     def test_click_uses_press_evidence_timestamp_and_clamps_at_zero(self):
         actions = [
             {

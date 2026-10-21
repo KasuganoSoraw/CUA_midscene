@@ -15,7 +15,7 @@ class VideoScreenshotExtractor:
         jpeg_quality=95,
         crop_size=256,
         reference_crop_size=96,
-        x_size=30,
+        x_size=18,
         x_thick=6,
     ):
         self.target_width = target_width
@@ -221,15 +221,16 @@ class VideoScreenshotExtractor:
             if reference_ok:
                 ua['screenshot_reference'] = f"screenshots/{reference_fn}"
         cx = cy = self.crop_size // 2
-        outline = self.x_thick + 2
+        cross_thick = max(1, self.x_thick // 2)
+        outline = cross_thick + 1
         max_half = (self.crop_size // 2) - 1 - outline
         half_x = max(1, min(self.x_size // 2, max_half))
         overlay = crop_img.copy()
         cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (255, 255, 255), outline)
         cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (255, 255, 255), outline)
-        cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (0, 0, 255), self.x_thick)
-        cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (0, 0, 255), self.x_thick)
-        crop_img = cv2.addWeighted(overlay, 0.5, crop_img, 0.5, 0)
+        cv2.line(overlay, (cx - half_x, cy - half_x), (cx + half_x, cy + half_x), (0, 0, 255), cross_thick)
+        cv2.line(overlay, (cx - half_x, cy + half_x), (cx + half_x, cy - half_x), (0, 0, 255), cross_thick)
+        crop_img = cv2.addWeighted(overlay, 0.3, crop_img, 0.7, 0)
         full_ok = self._save_jpg(str(full_path), frame)
         crop_ok = self._save_jpg(str(crop_path), crop_img)
         return full_ok, crop_ok, reference_ok
