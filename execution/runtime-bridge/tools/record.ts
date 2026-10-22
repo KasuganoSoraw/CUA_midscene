@@ -70,6 +70,9 @@ async function readRecordingResult(
 export async function cuaRecord(
   request: CuaRecordRequest, onProgress?: (event: RecordingProgress) => void, signal?: AbortSignal,
 ): Promise<RecordingResult> {
+  if (Object.keys(request).some((key) => !['goal', 'dataRoot'].includes(key))) {
+    throw new Error('录制仅接受 goal 和内部 dataRoot');
+  }
   if (typeof request.goal !== 'string' || !request.goal.trim()) throw new Error('录制目标不能为空');
   const layout = await resolveRuntimeLayout(request.dataRoot);
   const data = await requireDataPaths(layout);

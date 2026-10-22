@@ -24,5 +24,10 @@ def run_pipeline(project_name: str) -> Path:
         output_trace_path=str(out_trace),
         overall_task="",
     )
-    print(f"Trace: {out_trace}")
+    print("=== Pipeline Complete ===")
+    print(f"Project: {root.name}")
+    print(f"Processed log: {root.name}_processed_log.json")
+    print(f"Screenshots dir: {Path(str(prepared['screenshotsDir'])).name}")
+    print(f"Processed log (+screens): {Path(str(prepared['processedLogPath'])).name}")
+    print(f"Trace: {out_trace.name}")
     return out_trace

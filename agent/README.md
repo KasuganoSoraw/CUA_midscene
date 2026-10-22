@@ -15,7 +15,8 @@ GDEClaw Main Agent
   -> invoke({ task })
   -> Python CUA Agent
        -> model Tool Calling
-       -> private cua_catalog / cua_execute / cua_workbench
+       -> 普通模式：private cua_execute/freeform / cua_record
+       -> 专业模式：private cua_catalog / cua_execute
   -> TypeScript JSONL Runtime bridge
   -> Midscene
 ```
@@ -45,9 +46,9 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 完整变量契约位于仓库根 `.env.example`。Python CLI 本身不查找环境文件；源码直接调用使用 `uv --env-file` 注入根 `.env.local`，`review --dev` 继承 Review Server 已加载的根环境配置，产品调用由 Host 注入进程环境。
 
-设置 `CUA_AGENT_FREEFORM_ONLY=true` 后，Agent 仅提供 `cua_execute` 的 `freeform` 策略，接收完整自然语言目标和可选屏幕标识；录制任务发现、`replay`、`guided` 和工作台 Tool 不可用，调用入口也会拒绝这些操作。自然语言执行仍保留运行结果和执行报告。未设置或设为 `false` 时提供完整能力。
+`CUA_AGENT_TOOL_MODE=normal` 提供 `cua_execute/freeform` 和 `cua_record`，不检索专业任务；`professional` 提供 `cua_catalog` 与 `cua_execute/replay/guided/freeform`，用于专业工作台生成的任务。未配置时默认 professional。两种模式均不提供 `cua_workbench` 模型工具，底层 Workbench Service 和 Runtime bridge 内部方法保留。
 
-Python API 使用 `CuaAgent(..., freeform_only=True)`，读取对应能力说明使用 `load_agent_definition(freeform_only=True)`。GDEClaw 应向 Agent 进程注入该变量，并隐藏产品侧的录制工作台入口。本开关不禁用独立启动的 Review/CLI，也不删除已有任务资产。
+Python API 使用 `CuaAgent(..., tool_mode="normal")`，能力说明使用 `load_agent_definition(tool_mode="normal")`。API 和 CLI 共用环境配置，显式参数优先。兼容 `freeform_only=True` 或 `CUA_AGENT_FREEFORM_ONLY=true`，两者等价于 normal；显式 tool_mode/TOOL_MODE 优先。宿主从设置页打开专业工作台，并在录制 invocation 前确保 Keeper 服务存在；独立 Review/CLI 不受模型工具模式限制。普通录制协议、事件与取消适配见 [普通录制集成](../docs/normal-recording-integration.md)。
 
 ## 调用结果与取消
 

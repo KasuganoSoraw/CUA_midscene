@@ -1,0 +1,34 @@
+# 普通录制验证记录
+
+## 自动化覆盖
+
+- Python record：38 项通过，含真实编码 MP4 和原始事件的 prepare CLI 测试。验证截图及相对引用、操作窗口及坐标信息、空资产/越界拒绝、prepare 不构造 TraceGenerator、process 继续生成完整 Trace。
+- Python recorder：51 项测试，50 项通过，1 项显式启用的真实桌面录屏排除测试未运行。覆盖录制前取消、录制中放弃、文件清理、悬浮条图标和完成行为。
+- Python Agent：84 项通过，1 项模型鉴权基线测试失败。新增覆盖普通/专业工具边界、API 环境配置、录制三种终态及资产直传、无额外模型调用、进度事件、Host 取消，以及录制请求不采用 GUI 执行超时。
+- TypeScript：201 项通过，含录制 HTTP 和 Runtime Worker 联动、主屏幕选择、重复请求拒绝、晚到终态、旧会话取消隔离、异常退出、prepare 失败和专业 Workbench 回归。
+- Agent Ruff、Mypy 和 TypeScript/Vue typecheck 通过；TypeScript/前端 build 通过。相关 Python 和 TypeScript 新增方法、录制方法均检查为不超过 50 行。
+
+模型鉴权失败用例为 `test_stream_uses_custom_headers_without_empty_bearer`。当前模型适配器在空 API Key 时发送 `Authorization: Bearer `，测试要求不发送该头。该适配器在开发起点已包含此行为，本次没有修改鉴权代码，也没有移除或降低该测试。
+
+## 轻量处理实测
+
+测试在 Windows 本机运行，不调用模型，不设置固定速度断言。
+
+| 样本 | 整理后步骤 | 日志处理 | 截图提取 | prepare 总耗时 |
+| --- | ---: | ---: | ---: | ---: |
+| 自动编码视频与原始事件 fixture | 13 | 14.9 ms | 544.4 ms | 663.3 ms |
+| 已有录制 `Recording_20261019_150622` 的临时副本 | 13 | 18.7 ms | 2170.5 ms | 2296.3 ms |
+
+已有录制包含 71 条原始事件；只复制 inputs 到临时目录，原始数据未改动。总耗时包含 Python prepare 内部资产校验，不包含 Python 进程启动及模块导入。Tool 另返回从录制完成事件到发起 prepare 调用的 `receivedToPrepare` 耗时。
+
+一个仅含结束操作的短样本经整理后没有可执行步骤，prepare 显式拒绝返回成功资产。该样本不用于有效步骤性能统计。
+
+完整 process 的 TraceGenerator 模型阶段没有运行真实模型，因此不提供完整模型耗时或加速倍数。专业完整流程通过隔离模型的测试验证，确认共用前两步后继续调用 TraceGenerator；不能据此声称真实模型集成已验收。
+
+## 组件与实机验收边界
+
+组件构建、manifest 校验和源码仓外冒烟使用三个 Python wheels 与生产 JavaScript Runtime，不调用真实模型。包内 normal instructions、录制桥接入口、prepare 命令必须一并交付。
+
+真实 GDEClaw 私有仓不在本次修改范围，仍需宿主侧验收：普通模式路由、Keeper 服务生命周期、进度 Adapter、本地文件及图片访问、主 Agent 创建 Skill、停止 SubAgent 后的清理。
+
+Windows 人工验收应覆盖：录制前取消、录制中放弃、正常完成、热键完成、拖动悬浮条、录屏排除、专业工作台录制及完整任务生成。自动化使用模拟输入和事件控制，不代表上述交互已全部人工执行。
