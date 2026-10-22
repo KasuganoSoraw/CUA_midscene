@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import cv2
 import numpy as np
-
 from cua_record.prepare import prepare_recording
 
 
@@ -70,7 +69,7 @@ class PrepareIntegrationTest(unittest.TestCase):
             self.assertFalse((root / "task.yaml").exists())
             completed = subprocess.run(
                 [sys.executable, "-m", "cua_record", "prepare", str(root)],
-                capture_output=True, text=True, encoding="utf-8", check=True,
+                capture_output=True, text=True, encoding="utf-8", check=True, timeout=30,
             )
             frame = json.loads(completed.stdout)
             self.assertEqual("prepared", frame["event"])

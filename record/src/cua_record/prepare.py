@@ -10,12 +10,12 @@ from .screenshot_processor import VideoScreenshotExtractor
 
 
 def resolve_recording(raw: str) -> Path:
-    target = Path(raw)
+    target = Path(raw).resolve()
     if not target.exists():
-        target = Path.cwd() / "projects" / raw
+        target = (Path.cwd() / "projects" / raw).resolve()
     if not target.is_dir() or not (target / "inputs").is_dir():
         raise FileNotFoundError(f"录制 inputs 目录不存在：{target}")
-    return target.resolve()
+    return target
 
 
 def find_log(inputs: Path) -> Path:

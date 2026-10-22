@@ -162,12 +162,18 @@ class RecordingSession:
             raise
 
     def _discard_recording(self, root: Path, status: Callable[..., None]) -> dict[str, object]:
+        root = root.resolve()
+        if root.parent != self._output_root.resolve():
+            raise RecorderError("录制清理目录越界")
         try:
             self._finish_video()
-        finally:
-            if root.parent.resolve() != self._output_root.resolve():
-                raise RecorderError("录制清理目录越界")
-            shutil.rmtree(root)
+        except BaseException as error:
+            try:
+                shutil.rmtree(root)
+            except OSError as cleanup_error:
+                error.add_note(f"录制资产清理失败：{cleanup_error}")
+            raise
+        shutil.rmtree(root)
         self._emit(status, "cancelled", reason="user_aborted")
         return {"cancelled": True}
 

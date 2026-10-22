@@ -18,14 +18,21 @@ class ScreenshotProcessorReferenceImageTest(unittest.TestCase):
     def test_encoded_writer_preserves_jpeg_and_png_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for extension, options in (
-                (".jpg", [cv2.IMWRITE_JPEG_QUALITY, self.extractor.jpeg_quality]),
-                (".png", [cv2.IMWRITE_PNG_COMPRESSION, 3]),
+            with patch.object(self.extractor, "_get_frame_at", return_value=self.frame.copy()):
+                actions = self.extractor.process_actions(
+                    [{"timestamp": 1.0, "action": "LClick at",
+                      "coords": [{"x": 500, "y": 500}]}],
+                    "recording.mp4", root, False, 1.0, 1.0,
+                )
+            for field, extension, frame, options in (
+                ("screenshot_full", ".jpg", self.frame,
+                 [cv2.IMWRITE_JPEG_QUALITY, self.extractor.jpeg_quality]),
+                ("screenshot_reference", ".png", self.frame[452:548, 452:548],
+                 [cv2.IMWRITE_PNG_COMPRESSION, 3]),
             ):
                 expected = root / f"expected{extension}"
-                actual = root / f"actual{extension}"
-                self.assertTrue(cv2.imwrite(str(expected), self.frame, options))
-                self.assertTrue(self.extractor._save_encoded(str(actual), self.frame, extension, options))
+                actual = root / Path(actions[0][field]).name
+                self.assertTrue(cv2.imwrite(str(expected), frame, options))
                 self.assertEqual(expected.read_bytes(), actual.read_bytes())
 
     def test_click_keeps_marked_crop_and_adds_clean_reference_png(self):

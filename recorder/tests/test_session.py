@@ -4,8 +4,8 @@ import io
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
 
 from cua_recorder.media import MediaCapabilities
 from cua_recorder.models import DisplayInfo
@@ -97,15 +97,16 @@ def display() -> DisplayInfo:
     return DisplayInfo("display-0", "DISPLAY0", 0, 0, 0, 1920, 1080, 1.0, True)
 
 
+class AbortOverlay(FakeOverlay):
+    def update(self, phase: str, started_ns: int | None = None) -> None:
+        if phase == "armed":
+            self.command("toggle")
+        if phase == "recording":
+            self.command("abort")
+
+
 class RecordingSessionTest(unittest.TestCase):
     def test_aborting_recording_discards_directory_and_releases_resources(self) -> None:
-        class AbortOverlay(FakeOverlay):
-            def update(self, phase: str, started_ns: int | None = None) -> None:
-                if phase == "armed":
-                    self.command("toggle")
-                if phase == "recording":
-                    self.command("abort")
-
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             events = []
@@ -119,6 +120,44 @@ class RecordingSessionTest(unittest.TestCase):
             self.assertTrue(result["cancelled"])
             self.assertEqual("cancelled", events[-1])
             self.assertNotIn("completed", events)
+            self.assertEqual([], list(root.iterdir()))
+
+    def test_abort_preserves_video_failure_when_cleanup_also_fails(self) -> None:
+        class FailedStopVideo(SuccessfulVideo):
+            def stop(self, timeout: float = 15.0) -> None:
+                raise RecorderError("视频关闭失败")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=Path(temporary),
+                video_factory=FailedStopVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=AbortOverlay,
+            )
+            with (
+                patch("cua_recorder.session._read_control"),
+                patch("cua_recorder.session.shutil.rmtree", side_effect=OSError("目录被占用")),
+                self.assertRaisesRegex(RecorderError, "视频关闭失败") as caught,
+            ):
+                session.run(io.StringIO(""), lambda *_args, **_payload: None)
+            self.assertIn("目录被占用", caught.exception.__notes__[0])
+
+    def test_abort_cleans_assets_when_video_shutdown_fails(self) -> None:
+        class FailedStopVideo(SuccessfulVideo):
+            def stop(self, timeout: float = 15.0) -> None:
+                raise RecorderError("视频关闭失败")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=root,
+                video_factory=FailedStopVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=AbortOverlay,
+            )
+            with (
+                patch("cua_recorder.session._read_control"),
+                self.assertRaisesRegex(RecorderError, "视频关闭失败"),
+            ):
+                session.run(io.StringIO(""), lambda *_args, **_payload: None)
             self.assertEqual([], list(root.iterdir()))
 
     def test_toolbar_startup_failure_closes_window_without_creating_assets(self) -> None:
