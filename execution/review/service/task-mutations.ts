@@ -7,7 +7,7 @@ import type {
   ReviewTaskDraft,
 } from '../shared/types.js';
 
-const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|input|keyboard|wait)$/;
+const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait)$/;
 
 interface Entry {
   task: JsonObject;
@@ -47,8 +47,13 @@ function setInputPlaceholder(flow: JsonObject[], inputId: string): JsonObject[] 
       found = true;
       break;
     }
+    if (Object.hasOwn(action, 'aiInput')) {
+      action.value = `{{${inputId}}}`;
+      found = true;
+      break;
+    }
   }
-  if (!found) throw new Error('参数化 input 步骤必须包含 KeyboardTypeText action');
+  if (!found) throw new Error('参数化 input 步骤必须包含输入动作');
   return result;
 }
 

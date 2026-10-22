@@ -106,7 +106,7 @@ export interface NativeAiActExecutorResult {
   error?: string | null;
 }
 
-export type TraceOperationType = 'click' | 'doubleClick' | 'input' | 'keyboard' | 'wait';
+export type TraceOperationType = 'click' | 'doubleClick' | 'rightClick' | 'input' | 'keyboard' | 'wait';
 
 export interface ShowuiTraceOperation {
   type: TraceOperationType;
@@ -134,6 +134,8 @@ export interface ShowuiTrace {
 
 export interface ProcessedLogStep {
   timestamp: number;
+  action?: string;
+  clipboard_text?: string;
   screenshot_reference?: string;
   [key: string]: unknown;
 }

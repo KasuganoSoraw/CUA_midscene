@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TextIO
 
+from .clipboard import read_clipboard_text
 from .events import AlohaEventFormatter, write_log_header
 from .hooks import Win32HookRecorder
 from .hotkey import HOTKEY_LABEL, GlobalHotkeyToggle, HotkeyInputFilter
@@ -192,6 +193,7 @@ class RecordingSession:
                 coordinate_origin=(self._display.left, self._display.top),
                 coordinate_size=(self._display.width, self._display.height),
                 caps_lock_on=caps_lock_enabled(),
+                clipboard_provider=read_clipboard_text,
                 **thresholds,
             )
             hotkey_filter = HotkeyInputFilter(formatter.handle)

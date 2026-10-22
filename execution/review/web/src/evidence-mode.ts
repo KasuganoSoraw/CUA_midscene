@@ -7,7 +7,7 @@ export function resolveEvidenceMode(
   operation: ReviewOperation,
   evidence?: ReviewEvidence,
 ): EvidenceMode {
-  const supportsReference = operation === 'click' || operation === 'doubleClick';
+  const supportsReference = operation === 'click' || operation === 'doubleClick' || operation === 'rightClick';
   if (requested === 'reference' && supportsReference) return 'reference';
   if (requested === 'crop' && evidence?.crop) return 'crop';
   if (requested === 'full' && evidence?.full) return 'full';

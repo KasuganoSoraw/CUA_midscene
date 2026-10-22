@@ -5,7 +5,7 @@ import { parse, stringify } from 'yaml';
 import type { JsonObject, TaskManifest } from '../contracts/types.js';
 
 const placeholderPattern = /\{\{([a-z][a-z0-9-]*)\}\}/g;
-const recordedTaskNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|input|keyboard|wait)$/;
+const recordedTaskNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait)$/;
 const recordedInputIdPattern = /^(step-(\d{3,}))-input$/;
 
 function isRecord(value: unknown): value is JsonObject {

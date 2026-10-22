@@ -79,7 +79,7 @@ function renderAction(action: JsonObject, context: string): RecordedTaskAiActPro
   const name = validatedActionName(action, context);
   if (name === 'sleep') return undefined;
   const value = action[name];
-  if (name === 'aiTap' || name === 'aiDoubleClick') {
+  if (name === 'aiTap' || name === 'aiDoubleClick' || name === 'aiRightClick') {
     const hasLocate = Object.hasOwn(action, 'locate');
     if (hasLocate && value !== null && value !== undefined) {
       throw new Error(`${context} 使用 locate 时 ${name} 的值必须为空`);
@@ -89,16 +89,23 @@ function renderAction(action: JsonObject, context: string): RecordedTaskAiActPro
       ...locatedPrompt,
       prompt: name === 'aiTap'
         ? locatedPrompt.prompt
-        : `双击以下描述对应的目标：${JSON.stringify(locatedPrompt.prompt)}`,
+        : `${name === 'aiRightClick' ? '右键点击' : '双击'}以下描述对应的目标：${JSON.stringify(locatedPrompt.prompt)}`,
     };
   }
   if (name === 'ai') return readUserPrompt(value, name, context);
   if (name === 'aiWaitFor') return { prompt: requiredString(value, name, context), images: [] };
+  if (name === 'aiInput') return renderInput(action, context);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${context} 的 ${name} 必须是对象`);
   const parameters = value as JsonObject;
   if (name === 'KeyboardPress') {
+    const locate = parameters.locate;
+    const target = locate === undefined ? ''
+      : `在 ${JSON.stringify(requiredString(
+        locate && typeof locate === 'object' && !Array.isArray(locate) ? (locate as JsonObject).prompt : locate,
+        'KeyboardPress.locate', context,
+      ))} 中`;
     return {
-      prompt: `按下 ${JSON.stringify(requiredString(parameters.keyName, 'KeyboardPress.keyName', context))} 键`,
+      prompt: `${target}按下 ${JSON.stringify(requiredString(parameters.keyName, 'KeyboardPress.keyName', context))} 键`,
       images: [],
     };
   }
@@ -111,7 +118,7 @@ function validatedActionName(action: JsonObject, context: string): string {
     if (!Number.isInteger(action.sleep)) throw new Error(`${context} 的 sleep 必须是整数`);
     return 'sleep';
   }
-  const supported = ['ai', 'aiDoubleClick', 'aiTap', 'aiWaitFor', 'KeyboardPress', 'KeyboardTypeText'];
+  const supported = ['ai', 'aiDoubleClick', 'aiRightClick', 'aiTap', 'aiInput', 'aiWaitFor', 'KeyboardPress', 'KeyboardTypeText'];
   const names = supported.filter((name) => Object.hasOwn(action, name));
   if (names.length !== 1) {
     throw new Error(`${context} 必须且只能包含一个受支持动作，当前字段：${Object.keys(action).sort().join(', ') || '空动作'}`);
@@ -120,9 +127,25 @@ function validatedActionName(action: JsonObject, context: string): string {
   const allowed = new Set([name]);
   if (name === 'aiWaitFor') allowed.add('timeout');
   if (name === 'aiTap' || name === 'aiDoubleClick') allowed.add('locate');
+  if (name === 'aiRightClick') allowed.add('locate');
+  if (name === 'aiInput') for (const field of ['locate', 'value', 'mode']) allowed.add(field);
   const unexpected = Object.keys(action).filter((key) => !allowed.has(key));
   if (unexpected.length) throw new Error(`${context} 包含无法解释的字段：${unexpected.sort().join(', ')}`);
   return name;
+}
+
+function renderInput(parameters: JsonObject, context: string): RecordedTaskAiActPrompt {
+  const locate = parameters.locate === undefined
+    ? '当前焦点输入框' : requiredString(parameters.locate, 'aiInput.locate', context);
+  if (typeof parameters.value !== 'string' || !parameters.value.length) {
+    throw new Error(`${context} 的 aiInput.value 必须是非空字符串`);
+  }
+  const value = parameters.value;
+  if (!['replace', 'typeOnly', 'append'].includes(String(parameters.mode))) {
+    throw new Error(`${context} 的 aiInput.mode 不受支持`);
+  }
+  const verb = parameters.mode === 'replace' ? '替换输入' : '追加输入';
+  return { prompt: `在 ${JSON.stringify(locate)} 中${verb} ${JSON.stringify(value)}`, images: [] };
 }
 
 function renderKeyboardTypeText(parameters: JsonObject, context: string): RecordedTaskAiActPrompt {
