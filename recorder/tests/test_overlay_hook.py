@@ -91,7 +91,7 @@ class ToolbarButtonTest(unittest.TestCase):
             MA_NOACTIVATE, toolbar._handle_message(1, WM_MOUSEACTIVATE, 0, 0)
         )
 
-    def test_cancel_icon_only_applies_before_recording(self) -> None:
+    def test_cancel_icon_uses_phase_specific_control(self) -> None:
         commands: list[str] = []
         toolbar = RecorderOverlay(
             DisplayInfo("display-0", "DISPLAY0", 0, 0, 0, 1920, 1080, 1.5, True),
@@ -108,7 +108,7 @@ class ToolbarButtonTest(unittest.TestCase):
             toolbar._mouse(1, message, 243 | (36 << 16))
         self.assertEqual(["stop"], commands)
         toolbar._state.update("recording")
-        self.assertEqual("", toolbar._hit(162, 24))
+        self.assertEqual("cancel", toolbar._hit(162, 24))
         self.assertEqual("stop", toolbar._hit(122, 24))
         self.assertEqual("drag", toolbar._hit(194, 24))
         self.assertEqual("", toolbar._hit(208, 24))
@@ -159,7 +159,7 @@ class ToolbarButtonTest(unittest.TestCase):
             ("arming", []),
             ("armed", ["start", "cancel"]),
             ("starting", []),
-            ("recording", ["stop"]),
+            ("recording", ["stop", "cancel"]),
             ("stopping", []),
         ]:
             with self.subTest(phase=phase):

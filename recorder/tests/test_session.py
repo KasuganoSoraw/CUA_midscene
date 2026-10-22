@@ -4,6 +4,7 @@ import io
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from cua_recorder.media import MediaCapabilities
@@ -97,6 +98,29 @@ def display() -> DisplayInfo:
 
 
 class RecordingSessionTest(unittest.TestCase):
+    def test_aborting_recording_discards_directory_and_releases_resources(self) -> None:
+        class AbortOverlay(FakeOverlay):
+            def update(self, phase: str, started_ns: int | None = None) -> None:
+                if phase == "armed":
+                    self.command("toggle")
+                if phase == "recording":
+                    self.command("abort")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            events = []
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=root,
+                video_factory=SuccessfulVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=AbortOverlay,
+            )
+            with patch("cua_recorder.session._read_control"):
+                result = session.run(io.StringIO(""), lambda event, **_payload: events.append(event))
+            self.assertTrue(result["cancelled"])
+            self.assertEqual("cancelled", events[-1])
+            self.assertNotIn("completed", events)
+            self.assertEqual([], list(root.iterdir()))
+
     def test_toolbar_startup_failure_closes_window_without_creating_assets(self) -> None:
         overlays: list[FakeOverlay] = []
 

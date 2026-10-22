@@ -32,7 +32,7 @@ class ToolbarState:
             if started_ns is not None:
                 self._started_ns = started_ns
             if (
-                phase in ("stopping", "completed", "failed")
+                phase in ("stopping", "completed", "cancelled", "failed")
                 and self._finished_ns is None
             ):
                 self._finished_ns = self._clock()
@@ -49,6 +49,10 @@ class ToolbarState:
             if action == "cancel" and self._phase == "armed":
                 self._phase = "stopping"
                 return "stop"
+            if action == "cancel" and self._phase == "recording":
+                self._phase = "stopping"
+                self._finished_ns = self._clock()
+                return "abort"
             return None
 
     def snapshot(self) -> ToolbarSnapshot:
