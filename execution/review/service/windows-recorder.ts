@@ -344,11 +344,11 @@ export class WindowsRecorderManager implements RecorderControl {
   }
 
   private async control(command: 'stop' | 'abort'): Promise<RecorderStatus> {
-    if (!this.child || !isActive(this.currentStatus.phase) || this.currentStatus.phase === 'stopping') {
-      return this.status();
+    if (!this.child) return this.status();
+    if (isActive(this.currentStatus.phase) && this.currentStatus.phase !== 'stopping') {
+      this.currentStatus = { ...this.currentStatus, phase: 'stopping' };
+      this.child.stdin.write(`${command}\n`);
     }
-    this.currentStatus = { ...this.currentStatus, phase: 'stopping' };
-    this.child.stdin.write(`${command}\n`);
     const timeoutMs = this.options.stopTimeoutMs ?? 20_000;
     let timer: NodeJS.Timeout | undefined;
     try {

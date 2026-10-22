@@ -73,7 +73,7 @@ def test_professional_registry_preserves_catalog_and_execute_without_workbench()
     asyncio.run(scenario())
 
 
-def test_freeform_only_registry_exposes_one_tool_without_changing_full_schema() -> None:
+def test_normal_registry_exposes_execute_and_record_without_changing_professional_schema() -> None:
     client = FakeRuntimeClient()
     registry = create_cua_tool_registry(client, freeform_only=True)  # type: ignore[arg-type]
     assert [tool.name for tool in registry.definitions] == ["cua_execute", "cua_record"]

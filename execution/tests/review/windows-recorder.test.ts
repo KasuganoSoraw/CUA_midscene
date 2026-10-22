@@ -273,3 +273,24 @@ test('异常退出释放按会话等待者并返回失败终态', async () => {
   assert.equal(result.status, 'failed');
   if (result.status === 'failed') assert.match(result.error, /encoder failed/);
 });
+
+test('完成与放弃竞态只发送首个命令，所有等待者均等待 Worker 释放', async () => {
+  const { manager, children } = await sessionManager();
+  await manager.start('display-0', 'race');
+  const commands: string[] = [];
+  children[0].stdin.on('data', (chunk) => commands.push(String(chunk)));
+  const stopped = manager.stop();
+  let aborted = false;
+  const abort = manager.abort('race').then(() => { aborted = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(aborted, false);
+  children[0].stdout.write(JSON.stringify({ event: 'completed', recording_id: 'Recording_race' }) + '\n');
+  let closed = false;
+  const terminalAbort = manager.abort('race').then(() => { closed = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(closed, false);
+  children[0].emit('close', 0, null);
+  await Promise.all([stopped, abort, terminalAbort]);
+  assert.deepEqual(commands, ['stop\n']);
+  assert.equal((await manager.waitForResult('race')).status, 'completed');
+});

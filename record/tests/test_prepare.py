@@ -39,8 +39,10 @@ class PrepareTest(unittest.TestCase):
             root = Path(temporary)
             shots = root / "screenshots"
             shots.mkdir()
+            (shots / "empty.jpg").touch()
             log = root / "log.json"
-            for value in ("../outside.jpg", "screenshots/missing.jpg", str(root / "absolute.jpg")):
+            for value in ("../outside.jpg", "screenshots/missing.jpg", "screenshots/empty.jpg",
+                          str(root / "absolute.jpg")):
                 log.write_text(json.dumps([{"screenshot_full": value}]))
                 with self.assertRaises(ValueError):
                     validate_assets(root, log, shots)

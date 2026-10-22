@@ -30,6 +30,8 @@ CUA_PYTHON_EXECUTABLE=C:\path\to\component-python.exe
 Python API：
 
 ```python
+from cua_agent import CuaAgent, InvocationRequest, load_agent_definition
+
 definition = load_agent_definition(tool_mode="normal")
 agent = CuaAgent(model_client, runtime_client_factory, tool_mode="normal")
 result = await agent.invoke(
@@ -158,6 +160,19 @@ Host 主动取消的 invocation 状态为 `cancelled`，与用户在悬浮条放
 ```
 
 phase 可为 `armed`、`recording`、`received`、`processing`、`extracting`、`completed`、`cancelled`、`failed`。阶段消息来自录制器和处理器，不调用模型。保留现有 execution.progress；录制终态以最终 InvocationResult 为准，不仅依靠进度文案。
+
+## 源码职责
+
+| 模块 | 职责 |
+| --- | --- |
+| `record/src/cua_record/prepare.py`、`pipeline.py`、`cli.py` | 共用日志整理和截图提取，分别提供 prepare 与完整 process |
+| `recorder/src/cua_recorder/session.py`、`overlay.py`、`overlay_win32.py` | 完成/放弃信号、临时文件清理、录制中放弃图标 |
+| `execution/review/service/windows-recorder.ts` | 共享 Recorder、按会话保存终态、等待进程资源释放 |
+| `execution/review/service/conversation-recording.ts`、`prepare-recording.ts` | 普通录制编排、预处理进程、资产校验 |
+| `execution/review/server/recording-routes.ts`、`runtime-bridge/tools/record.ts` | 本地流式等待、心跳及本次录制取消确认 |
+| `agent/src/cua_agent/capabilities.py`、`tools/registry.py`、`definition/` | 普通/专业权限和模型说明，不暴露工作台工具 |
+| `agent/src/cua_agent/runtime_client.py`、`execution/runtime-bridge/worker-service.ts` | 录制等待策略、事件解析和 stdin 关闭的取消传递 |
+| `agent/src/cua_agent/runner.py` | 录制终态直接返回 InvocationResult.data，不额外调用模型 |
 
 ## 集成验收
 

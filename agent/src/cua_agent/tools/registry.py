@@ -35,7 +35,8 @@ class ToolDefinition:
 CATALOG_TOOL = ToolDefinition(
     name="cua_catalog",
     description=(
-        "发现 Recorded Skill。调用方明确提供 task 标识但未提供 scene 时，优先使用 "
+        "发现专业工作台生成的 CUA 任务（Recorded Skill）。"
+        "调用方明确提供 task 标识但未提供 scene 时，优先使用 "
         "find-task；只有自然语言目标、尚不知道 task 时，使用 list-scenes 和 list-tasks "
         "浏览；已知 scene 和 task 时，使用 describe-task 获取详情。未发现匹配任务时，"
         "直接改用 cua_execute 的 freeform 策略继续完成原始目标，不向调用方请求策略确认。"

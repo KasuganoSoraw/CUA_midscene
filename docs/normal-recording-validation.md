@@ -5,10 +5,10 @@
 - Python record：38 项通过，含真实编码 MP4 和原始事件的 prepare CLI 测试。验证截图及相对引用、操作窗口及坐标信息、空资产/越界拒绝、prepare 不构造 TraceGenerator、process 继续生成完整 Trace。
 - Python recorder：51 项测试，50 项通过，1 项显式启用的真实桌面录屏排除测试未运行。覆盖录制前取消、录制中放弃、文件清理、悬浮条图标和完成行为。
 - Python Agent：84 项通过，1 项模型鉴权基线测试失败。新增覆盖普通/专业工具边界、API 环境配置、录制三种终态及资产直传、无额外模型调用、进度事件、Host 取消，以及录制请求不采用 GUI 执行超时。
-- TypeScript：201 项通过，含录制 HTTP 和 Runtime Worker 联动、主屏幕选择、重复请求拒绝、晚到终态、旧会话取消隔离、异常退出、prepare 失败和专业 Workbench 回归。
+- TypeScript：202 项通过，含录制 HTTP 和 Runtime Worker 联动、主屏幕选择、重复请求拒绝、晚到终态、旧会话取消隔离、完成/放弃竞态等待、异常退出、prepare 失败和专业 Workbench 回归。
 - Agent Ruff、Mypy 和 TypeScript/Vue typecheck 通过；TypeScript/前端 build 通过。相关 Python 和 TypeScript 新增方法、录制方法均检查为不超过 50 行。
 
-模型鉴权失败用例为 `test_stream_uses_custom_headers_without_empty_bearer`。当前模型适配器在空 API Key 时发送 `Authorization: Bearer `，测试要求不发送该头。该适配器在开发起点已包含此行为，本次没有修改鉴权代码，也没有移除或降低该测试。
+模型鉴权失败用例为 `test_stream_uses_custom_headers_without_empty_bearer`。当前模型适配器在空 API Key 时发送 `Authorization: Bearer `，测试要求不发送该头。此失败项属于模型鉴权；录制能力不改变该鉴权行为，验收记录保留该测试及其失败结果。
 
 ## 轻量处理实测
 
