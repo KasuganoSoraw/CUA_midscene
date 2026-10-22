@@ -45,6 +45,8 @@ API 与 CLI 共用能力配置：显式 `tool_mode` 优先，其次显式兼容�
 
 Main Agent 将录制意图路由到普通 computer-use SubAgent；执行已有普通 Skill 时，把完整自然语言流程作为 task 派发，而不是只传 Skill 名称。主 Agent 使用自身的文件和图片读取工具访问返回资产，并交给自身 SkillService 保存。不要注册 CUA 私有工具到 Main Agent。
 
+宿主适配层必须把 `InvocationResult.data` 完整转交 Main Agent，而不仅返回 reply 或工具历史。文件与图片工具的授权范围应覆盖录制根目录及其中的相对截图引用，不只覆盖专业 projects。
+
 ## `cua_record` 契约
 
 唯一模型参数：
@@ -135,6 +137,8 @@ Recording_xxx/
 ```
 
 Review Service 拥有录制和预处理进程。Tool 仅持有 HTTP 等待连接，不创建 Recorder Manager。Recorder Manager 按本次内部会话标识保存终态；晚到的等待者不会拿到其他录制的结果，旧标识取消不会停止新录制。最近 16 次终态暂存在服务内存，不构成持久任务调度系统。已有专业录制或普通录制时不抢占。
+
+Agent 的 Runtime factory 应创建 invocation 级 Worker，不能复用应用级 Keeper 的 RuntimeClient，以保持 Keeper 的串行 JSONL 控制通道可用。录制期间其他 GUI 执行仍由宿主串行协调；CUA 不提供跨进程桌面并发锁。
 
 录制 Runtime 请求不受默认 GUI 执行的 1800 秒绝对超时限制；其他请求仍保持超时。HTTP 每 15 秒发送传输心跳，不触发 Agent 事件或模型调用。Review 开发入口观察到录制 Tool 启动后停止其普通 invocation 绝对计时。GDEClaw 适配层也须允许录制期间长时间等待，不要用常规 GUI 时限终止示教。
 

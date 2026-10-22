@@ -27,7 +27,7 @@
 
 ## 组件与实机验收边界
 
-组件构建、manifest 校验和源码仓外冒烟使用三个 Python wheels 与生产 JavaScript Runtime，不调用真实模型。包内 normal instructions、录制桥接入口、prepare 命令必须一并交付。
+组件构建、manifest 校验和源码仓外冒烟通过，使用三个 Python wheels 与生产 JavaScript Runtime，不调用真实模型。额外通过 wheel 隔离导入检查普通/专业工具列表、normal instructions、prepare CLI 和中文截图写入，确认录制桥接入口包含在生产 Runtime 中。
 
 真实 GDEClaw 私有仓不在本次修改范围，仍需宿主侧验收：普通模式路由、Keeper 服务生命周期、进度 Adapter、本地文件及图片访问、主 Agent 创建 Skill、停止 SubAgent 后的清理。
 
