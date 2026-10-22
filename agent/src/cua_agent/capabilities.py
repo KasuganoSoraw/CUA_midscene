@@ -1,4 +1,4 @@
-"""Python API、进程入口和模型定义共享的工具能力配置。"""
+"""Python API 与进程入口的兼容配置标签校验，工具能力保持统一。"""
 
 import os
 from typing import Literal, TypeAlias

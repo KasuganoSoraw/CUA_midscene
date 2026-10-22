@@ -35,7 +35,9 @@ python scripts/smoke_component.py dist/computer-use-component --python "C:\path\
 
 ## 调用与配置
 
-宿主向 Python `CuaAgent` 提交完整任务，接收通用事件和最终结果，并传入取消检查。普通模式直接以 freeform 执行完整自然语言流程，或调用录制工具；专业模式检索并执行专业工作台生成的任务。宿主不注册 CUA 私有工具。不保存跨 invocation 的对话上下文。两种模式均不提供对话唤起工作台的工具，内部 Runtime `workbench` 方法保留给宿主设置及 Keeper 使用。
+普通和专业入口共享 Python `CuaAgent`。宿主提交完整任务，接收通用事件和最终结果，并传入取消检查。完整操作流程和业务目标直接 freeform；只有明确要求执行一个任务名或提供 task 标识时，才检索专业工作台生成的任务并选择 replay/guided。录制示教使用 `cua_record`。宿主不注册 CUA 私有工具，不保存跨 invocation 的对话上下文。不提供对话唤起工作台的工具，内部 Runtime `workbench` 方法保留给宿主设置及 Keeper 使用。
+
+“帮我导出本月销售报表”或完整的逐步导出流程都直接执行；“执行任务『每日库存核对』”才触发专业任务检索，不从业务描述中自行发明任务名。若只有任务名且没有匹配任务，应请求补充目标或流程，不猜测操作。普通 Skill 应由 Main Agent 加载并展开流程后提交，不能只传名称。
 
 进程入口 `python -m cua_agent invoke` 从 stdin 读取一次 JSON 请求，例如 `{"task":"打开指定应用","invocationId":"task-1"}`，stdout 返回事件及最终结果 JSONL，stderr 保存诊断。Python API 支持执行期间取消；该单次 stdin 请求协议不接收取消 frame。
 
@@ -48,12 +50,12 @@ python scripts/smoke_component.py dist/computer-use-component --python "C:\path\
 - `CUA_PYTHON_EXECUTABLE`：安装了三个组件包的 Python 绝对路径。
 - `CUA_AGENT_JS_RUNTIME_EXECUTABLE`：宿主提供的兼容 JavaScript executable。
 - `CUA_AGENT_RUNTIME_BRIDGE`：组件 `runtime/dist/runtime-bridge/worker.js` 的绝对路径。
-- `CUA_AGENT_TOOL_MODE=normal`：提供 `cua_execute/freeform` 和 `cua_record`，不检索专业任务；`professional` 提供 `cua_catalog` 和 `cua_execute/replay/guided/freeform`。未配置时默认 professional。Python API 使用 `CuaAgent(..., tool_mode="normal")`，能力说明使用 `load_agent_definition(tool_mode="normal")`。兼容 `freeform_only=True` 或 `CUA_AGENT_FREEFORM_ONLY=true`，均表示 normal；显式 tool_mode 优先于显式兼容参数，随后读取 TOOL_MODE 环境变量及兼容环境变量。独立 Review/CLI 不受模式限制。
+- Python API 使用 `CuaAgent(...)` 和 `load_agent_definition()`，无需配置模式。`tool_mode`、`freeform_only`、`CUA_AGENT_TOOL_MODE` 和 `CUA_AGENT_FREEFORM_ONLY` 接受兼容配置并校验有效值，按上述顺序取值；normal/professional 均使用同一提示词和 `cua_catalog`、`cua_execute`、`cua_record` 工具集，不限制执行策略。
 - `CUA_REVIEW_URL`：Keeper 持有的 Review Service 根地址，默认 `http://127.0.0.1:47831/`。普通录制要求服务已启动、Review 协议为 4，且双方 `CUA_DATA_ROOT` 一致；工具不自动启动第二套服务。
 
 ## 普通录制适配
 
-Main Agent 将录制意图交给普通 computer-use SubAgent。模型只传入 `cua_record({"goal":"完整录制目标"})`，默认主屏幕；用户通过悬浮条开始、结束或放弃。一次工具调用等待录制终态，不需要模型轮询。结束后执行 `cua_record prepare`，只整理日志及提取截图，不生成 Trace、YAML Task 或 Skill。专业完整处理继续使用 `process`。
+Main Agent 将录制意图和电脑操作交给同一个 computer-use SubAgent。模型只传入 `cua_record({"goal":"完整录制目标"})`，默认主屏幕；用户通过悬浮条开始、结束或放弃。一次工具调用等待录制终态，不需要模型轮询。结束后执行 `cua_record prepare`，只整理日志及提取截图，不生成 Trace、YAML Task 或 Skill。专业完整处理继续使用 `process`。
 
 宿主完整转交 `InvocationResult.data`：成功时包含 `status=completed`、`recordingId`、`assets.recordingRoot/processedLogPath/screenshotsDir/stepCount/timingsMs`；用户放弃时为 `status=cancelled`，不生成操作资产；失败时为 `status=failed`，保留结构化诊断。文件和图片工具应有权读取录制目录。主 Agent 负责读取资产并创建正式 Skill，执行 Skill 时向 CUA 派发完整自然语言流程，而不是只传 Skill 名称。
 
