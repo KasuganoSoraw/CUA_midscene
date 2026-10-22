@@ -2,7 +2,7 @@
 
 ## 自动化覆盖
 
-- Python record：38 项通过，含真实编码 MP4 和原始事件的 prepare CLI 测试。验证截图及相对引用、操作窗口及坐标信息、空资产/越界拒绝、prepare 不构造 TraceGenerator、process 继续生成完整 Trace。
+- Python record：40 项通过，含真实编码 MP4 和原始事件的 prepare CLI 测试。验证中文目录、JPEG/PNG 编码字节一致、截图及相对引用、操作窗口及坐标信息、空资产/越界拒绝、prepare 不构造 TraceGenerator、process 继续生成完整 Trace。
 - Python recorder：51 项测试，50 项通过，1 项显式启用的真实桌面录屏排除测试未运行。覆盖录制前取消、录制中放弃、文件清理、悬浮条图标和完成行为。
 - Python Agent：84 项通过，1 项模型鉴权基线测试失败。新增覆盖普通/专业工具边界、API 环境配置、录制三种终态及资产直传、无额外模型调用、进度事件、Host 取消，以及录制请求不采用 GUI 执行超时。
 - TypeScript：202 项通过，含录制 HTTP 和 Runtime Worker 联动、主屏幕选择、重复请求拒绝、晚到终态、旧会话取消隔离、完成/放弃竞态等待、异常退出、prepare 失败和专业 Workbench 回归。

@@ -54,6 +54,8 @@ export async function prepareRecording(
   });
   signal.throwIfAborted();
   const child = spawnPythonWorker({ pythonExecutable, module: 'cua_record', args: ['prepare', root] }, spawn);
+  child.stdout!.setEncoding('utf8');
+  child.stderr!.setEncoding('utf8');
   let stdout = '';
   let stderr = '';
   let rest = '';
