@@ -32,7 +32,7 @@ def test_recording_terminal_preserves_data_without_extra_model_or_tool_calls(sta
             ModelToolCall("record-1", "cua_record", {"goal": "示教查询"}),
             ModelToolCall("execute-1", "cua_execute", {"strategy": "freeform", "goal": "不得执行"}),
         ))])
-        agent = CuaAgent(model, lambda: runtime, tool_mode="normal")
+        agent = CuaAgent(model, lambda: runtime)
         invocation = await agent.invoke(InvocationRequest("录制查询流程"))
         expected = InvocationStatus.FAILED if status == "failed" else InvocationStatus.COMPLETED
         assert invocation.status is expected
@@ -61,9 +61,9 @@ def test_shared_environment_mode_and_explicit_api_override(monkeypatch: pytest.M
     monkeypatch.setenv("CUA_AGENT_TOOL_MODE", "normal")
     assert resolve_tool_mode() == "normal"
     tools = create_cua_tool_registry(None).definitions
-    assert [tool.name for tool in tools] == ["cua_execute", "cua_record"]
+    assert [tool.name for tool in tools] == ["cua_catalog", "cua_execute", "cua_record"]
     professional = create_cua_tool_registry(None, tool_mode="professional").definitions
-    assert [tool.name for tool in professional] == ["cua_catalog", "cua_execute"]
+    assert tools == professional
     monkeypatch.setenv("CUA_AGENT_TOOL_MODE", "invalid")
     with pytest.raises(ValueError):
         resolve_tool_mode()
@@ -76,7 +76,9 @@ def test_python_agent_api_reads_normal_mode_from_environment(
     model = FakeModelClient([ModelResponse(content="请补充操作目标", final_status="needs-input")])
     agent = CuaAgent(model, lambda: FakeRuntimeClient())
     asyncio.run(agent.invoke(InvocationRequest("操作桌面")))
-    assert [tool.name for tool in model.tool_sets[0]] == ["cua_execute", "cua_record"]
+    assert [tool.name for tool in model.tool_sets[0]] == [
+        "cua_catalog", "cua_execute", "cua_record",
+    ]
 
 
 def test_record_transport_failure_is_returned_in_structured_data() -> None:

@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from copy import deepcopy
 from dataclasses import dataclass
-from typing import cast
 
 from ..capabilities import ToolMode, resolve_tool_mode
 from ..contracts import JsonValue
@@ -35,11 +33,13 @@ class ToolDefinition:
 CATALOG_TOOL = ToolDefinition(
     name="cua_catalog",
     description=(
-        "发现专业工作台生成的 CUA 任务（Recorded Skill）。"
-        "调用方明确提供 task 标识但未提供 scene 时，优先使用 "
-        "find-task；只有自然语言目标、尚不知道 task 时，使用 list-scenes 和 list-tasks "
-        "浏览；已知 scene 和 task 时，使用 describe-task 获取详情。未发现匹配任务时，"
-        "直接改用 cua_execute 的 freeform 策略继续完成原始目标，不向调用方请求策略确认。"
+        "查找专业工作台生成的 CUA 任务（Recorded Skill）。"
+        "仅当调用方明确要求执行一个任务名或提供 task 标识时使用。"
+        "完整操作流程或纯业务目标直接 freeform，不主动检索，不自行发明任务名。"
+        "调用方明确提供 task 标识但未提供 scene 时优先 find-task；"
+        "只有任务名称时，使用 list-scenes/list-tasks 定位该具名任务，不将名称猜成 ID；"
+        "已知 scene/task 时使用 describe-task。名称存在歧义时请求明确任务。"
+        "未命中且只有任务名时请求补充目标或流程，不猜测操作，不向调用方请求策略确认。"
     ),
     input_schema={
         "type": "object",
@@ -48,7 +48,7 @@ CATALOG_TOOL = ToolDefinition(
                 "properties": {
                     "action": {
                         "const": "list-scenes",
-                        "description": "尚不知道明确 scene 或 task 时，从场景开始浏览。",
+                        "description": "为定位请求中明确要求执行的具名任务，列出可用场景。",
                     }
                 },
                 "required": ["action"],
@@ -58,7 +58,7 @@ CATALOG_TOOL = ToolDefinition(
                 "properties": {
                     "action": {
                         "const": "list-tasks",
-                        "description": "已知 scene、尚不知道明确 task 时，列出该场景的任务。",
+                        "description": "在明确场景中定位调用方要求执行的具名任务。",
                     },
                     "scene": {"type": "string", "minLength": 1},
                 },
@@ -130,7 +130,7 @@ EXECUTE_TOOL = ToolDefinition(
                     "strategy": {
                         "const": "freeform",
                         "description": (
-                            "没有合适 Recorded Skill 时直接执行完整目标；"
+                            "完整自然语言操作流程或业务目标直接执行，无需先检索；"
                             "不需要调用方再次确认此策略。"
                         ),
                     },
@@ -174,24 +174,12 @@ class CuaToolRegistry:
     ) -> None:
         self._client = client
         self._data_root = data_root
-        self._tool_mode = resolve_tool_mode(tool_mode, freeform_only)
+        resolve_tool_mode(tool_mode, freeform_only)
         self._tools: dict[str, tuple[ToolDefinition, RuntimeMethod]] = {
             CATALOG_TOOL.name: (CATALOG_TOOL, "catalog"),
             EXECUTE_TOOL.name: (EXECUTE_TOOL, "execute"),
+            RECORD_TOOL.name: (RECORD_TOOL, "record"),
         }
-        if self._tool_mode == "normal":
-            branches = cast(list[dict[str, JsonValue]], EXECUTE_TOOL.input_schema["oneOf"])
-            execute = ToolDefinition(
-                name=EXECUTE_TOOL.name,
-                description=EXECUTE_TOOL.description,
-                input_schema=deepcopy(branches[2]),
-            )
-            execute.input_schema["type"] = "object"
-            properties = cast(dict[str, JsonValue], execute.input_schema["properties"])
-            properties["strategy"] = {"const": "freeform"}
-            self._tools = {
-                execute.name: (execute, "execute"), RECORD_TOOL.name: (RECORD_TOOL, "record"),
-            }
 
     @property
     def definitions(self) -> tuple[ToolDefinition, ...]:
@@ -208,8 +196,11 @@ class CuaToolRegistry:
         entry = self._tools.get(name)
         if entry is None:
             raise ValueError(f"无法识别 CUA Agent Tool：{name}")
-        if self._tool_mode == "normal" and name == "cua_execute":
-            _validate_freeform_arguments(arguments)
+        if name == "cua_execute":
+            if arguments.get("strategy") not in ("replay", "guided", "freeform"):
+                raise ValueError("执行策略必须为 replay、guided 或 freeform")
+            if arguments.get("strategy") == "freeform":
+                _validate_freeform_arguments(arguments)
         if name == "cua_record":
             goal = arguments.get("goal")
             if set(arguments) != {"goal"} or not isinstance(goal, str) or not goal.strip():
@@ -228,7 +219,7 @@ class CuaToolRegistry:
 def _validate_freeform_arguments(arguments: Mapping[str, JsonValue]) -> None:
     if arguments.get("strategy") != "freeform":
         raise ValueError("当前 CUA Agent 仅支持 freeform 自然语言执行")
-    if set(arguments) - {"strategy", "goal", "displayId"}:
+    if set(arguments) - {"strategy", "goal", "displayId", "dataRoot"}:
         raise ValueError("freeform 仅接受 strategy、goal 和可选 displayId")
     for name in ("goal", "displayId"):
         if name == "displayId" and name not in arguments:

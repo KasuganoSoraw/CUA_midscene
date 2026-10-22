@@ -24,7 +24,7 @@ class FakeRuntimeClient:
         return {"ok": True, "method": method}
 
 
-def test_professional_registry_preserves_catalog_and_execute_without_workbench() -> None:
+def test_shared_registry_exposes_catalog_execute_record_without_workbench() -> None:
     async def scenario() -> None:
         client = FakeRuntimeClient()
         registry = create_cua_tool_registry(client, data_root="C:/cua-data")  # type: ignore[arg-type]
@@ -32,9 +32,10 @@ def test_professional_registry_preserves_catalog_and_execute_without_workbench()
         assert [tool.name for tool in registry.definitions] == [
             "cua_catalog",
             "cua_execute",
+            "cua_record",
         ]
         assert all(tool.input_schema["type"] == "object" for tool in registry.definitions)
-        catalog, execute = registry.definitions
+        catalog, execute, record = registry.definitions
         catalog_actions = {
             branch["properties"]["action"]["const"]: branch  # type: ignore[index]
             for branch in catalog.input_schema["oneOf"]  # type: ignore[union-attr]
@@ -49,6 +50,8 @@ def test_professional_registry_preserves_catalog_and_execute_without_workbench()
         find_action = catalog_actions["find-task"]["properties"]["action"]  # type: ignore[index]
         assert "跨场景精确查找" in find_action["description"]  # type: ignore[index]
         assert "不向调用方请求策略确认" in catalog.description
+        assert "完整操作流程或纯业务目标直接 freeform，不主动检索" in catalog.description
+        assert record.input_schema["required"] == ["goal"]
         assert "真实桌面副作用" in execute.description
         assert "成功后不得再次" in execute.description
         freeform_schema = execute.input_schema["oneOf"][2]["properties"]["strategy"]  # type: ignore[index]
@@ -73,18 +76,17 @@ def test_professional_registry_preserves_catalog_and_execute_without_workbench()
     asyncio.run(scenario())
 
 
-def test_normal_registry_exposes_execute_and_record_without_changing_professional_schema() -> None:
+@pytest.mark.parametrize("mode", ["normal", "professional"])
+def test_compatibility_modes_expose_the_same_tools_and_execution_schema(mode) -> None:
     client = FakeRuntimeClient()
-    registry = create_cua_tool_registry(client, freeform_only=True)  # type: ignore[arg-type]
-    assert [tool.name for tool in registry.definitions] == ["cua_execute", "cua_record"]
-    schema = registry.definitions[0].input_schema
-    assert "oneOf" not in schema
-    assert schema["required"] == ["strategy", "goal"]
-    assert schema["additionalProperties"] is False
-    assert set(schema["properties"]) == {"strategy", "goal", "displayId"}  # type: ignore[arg-type]
-    full = create_cua_tool_registry(client)  # type: ignore[arg-type]
-    assert len(full.definitions) == 2
-    assert len(full.definitions[1].input_schema["oneOf"]) == 3  # type: ignore[arg-type]
+    registry = create_cua_tool_registry(client, tool_mode=mode)  # type: ignore[arg-type]
+    assert [tool.name for tool in registry.definitions] == [
+        "cua_catalog", "cua_execute", "cua_record",
+    ]
+    assert len(registry.definitions[1].input_schema["oneOf"]) == 3  # type: ignore[arg-type]
+    assert registry.definitions == create_cua_tool_registry(
+        client, freeform_only=True,  # type: ignore[arg-type]
+    ).definitions
 
 
 def test_freeform_only_registry_executes_goal_with_data_root_and_display() -> None:
@@ -105,17 +107,16 @@ def test_freeform_only_registry_executes_goal_with_data_root_and_display() -> No
 
 
 @pytest.mark.parametrize(("name", "arguments"), [
-    ("cua_catalog", {"action": "list-scenes"}),
     ("cua_workbench", {"mode": "recording"}),
-    ("cua_execute", {"strategy": "replay", "scene": "s", "task": "t"}),
-    ("cua_execute", {"strategy": "guided", "scene": "s", "task": "t"}),
+    ("cua_record", {"goal": " "}),
+    ("cua_record", {"goal": "录制", "scene": "s"}),
     ("cua_execute", {"strategy": "freeform", "goal": "打开 Chrome", "inputs": {}}),
     ("cua_execute", {"strategy": "freeform", "goal": "打开 Chrome", "scene": "s"}),
     ("cua_execute", {"goal": "打开 Chrome"}),
     ("cua_execute", {"strategy": "freeform", "goal": " "}),
     ("cua_execute", {"strategy": "freeform", "goal": "打开 Chrome", "displayId": 1}),
 ])
-def test_freeform_only_registry_rejects_calls_before_runtime(
+def test_shared_registry_rejects_unsupported_calls_before_runtime(
     name: str, arguments: dict[str, JsonValue],
 ) -> None:
     client = FakeRuntimeClient()
