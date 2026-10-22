@@ -12,17 +12,21 @@ import {
 } from './contracts.js';
 import { cuaCatalog, cuaExecute, cuaWorkbench } from './tools/index.js';
 import { failedExecutionReport } from './failure-report.js';
+import { cuaRecord, type CuaRecordRequest } from './tools/record.js';
+import type { RecordingProgress } from '../review/shared/recording.js';
 
 export interface RuntimeBridgeHandlers {
   catalog(payload: CuaCatalogRequest): Promise<unknown>;
   execute(payload: CuaExecuteRequest, onProgress?: ExecutionProgressSink): Promise<unknown>;
   workbench(payload: CuaWorkbenchRequest): Promise<unknown>;
+  record?(payload: CuaRecordRequest, onProgress?: (event: RecordingProgress) => void, signal?: AbortSignal): Promise<unknown>;
 }
 
 const defaultHandlers: RuntimeBridgeHandlers = {
   catalog: cuaCatalog,
   execute: (payload, onProgress) => cuaExecute(payload, {}, onProgress),
   workbench: cuaWorkbench,
+  record: cuaRecord,
 };
 
 class InvalidRuntimeRequestError extends Error {}
@@ -39,7 +43,7 @@ function requireString(value: unknown, name: string): string {
 }
 
 function requireMethod(value: unknown): RuntimeBridgeMethod {
-  if (!['catalog', 'execute', 'workbench'].includes(String(value))) {
+  if (!['catalog', 'execute', 'workbench', 'record'].includes(String(value))) {
     throw new InvalidRuntimeRequestError(`无法识别 Runtime method：${String(value)}`);
   }
   return value as RuntimeBridgeMethod;
@@ -89,10 +93,32 @@ async function runtimeMethodErrorDetails(request: RuntimeBridgeRequest, error: u
   return details;
 }
 
+async function invokeHandler(
+  request: RuntimeBridgeRequest, handlers: RuntimeBridgeHandlers,
+  onEvent?: (frame: RuntimeBridgeEventFrame) => void, signal?: AbortSignal,
+): Promise<unknown> {
+  const progress = (event: RuntimeBridgeEventFrame['event']) => onEvent?.({
+    schemaVersion: runtimeBridgeSchemaVersion, requestId: request.requestId, type: 'event', event,
+  });
+  if (request.method === 'catalog') {
+    return handlers.catalog(request.payload as unknown as CuaCatalogRequest);
+  }
+  if (request.method === 'execute') {
+    return handlers.execute(request.payload as unknown as CuaExecuteRequest,
+      onEvent === undefined ? undefined : progress);
+  }
+  if (request.method === 'record') {
+    if (!handlers.record) throw new Error('Runtime handler 不支持录制');
+    return handlers.record(request.payload as unknown as CuaRecordRequest, progress, signal);
+  }
+  return handlers.workbench(request.payload as unknown as CuaWorkbenchRequest);
+}
+
 export async function dispatchRuntimeBridgeRequest(
   value: unknown,
   handlers: RuntimeBridgeHandlers = defaultHandlers,
   onEvent?: (frame: RuntimeBridgeEventFrame) => void,
+  signal?: AbortSignal,
 ): Promise<RuntimeBridgeResponse> {
   let request: RuntimeBridgeRequest;
   try {
@@ -111,22 +137,7 @@ export async function dispatchRuntimeBridgeRequest(
   }
 
   try {
-    let result;
-    if (request.method === 'catalog') {
-      result = await handlers.catalog(request.payload as unknown as CuaCatalogRequest);
-    } else if (request.method === 'execute') {
-      result = await handlers.execute(
-          request.payload as unknown as CuaExecuteRequest,
-          onEvent === undefined ? undefined : (event) => onEvent({
-            schemaVersion: runtimeBridgeSchemaVersion,
-            requestId: request.requestId,
-            type: 'event',
-            event,
-          }),
-        );
-    } else {
-      result = await handlers.workbench(request.payload as unknown as CuaWorkbenchRequest);
-    }
+    const result = await invokeHandler(request, handlers, onEvent, signal);
     return {
       schemaVersion: runtimeBridgeSchemaVersion,
       requestId: request.requestId,
@@ -151,6 +162,7 @@ export async function dispatchRuntimeBridgeLine(
   line: string,
   handlers: RuntimeBridgeHandlers = defaultHandlers,
   onEvent?: (frame: RuntimeBridgeEventFrame) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   let value: unknown;
   try {
@@ -158,5 +170,5 @@ export async function dispatchRuntimeBridgeLine(
   } catch (error) {
     value = { parseError: error instanceof Error ? error.message : String(error) };
   }
-  return JSON.stringify(await dispatchRuntimeBridgeRequest(value, handlers, onEvent));
+  return JSON.stringify(await dispatchRuntimeBridgeRequest(value, handlers, onEvent, signal));
 }

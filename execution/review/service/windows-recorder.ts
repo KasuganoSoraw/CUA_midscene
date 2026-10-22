@@ -1,9 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { access, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { constants as fsConstants } from 'node:fs';
 import { resolvePythonExecutable, spawnPythonWorker } from '../../cua/python-worker.js';
+import type { RecorderCompletion } from '../shared/recording.js';
 
 export type RecorderPhase = 'idle' | 'arming' | 'armed' | 'starting' | 'recording' | 'stopping' | 'failed';
 
@@ -57,9 +59,26 @@ export interface RecorderControl {
   status(): RecorderStatus;
   refreshDisplays(): Promise<{ displays: RecorderDisplay[]; revision: string }>;
   preview(index: number): Promise<string>;
-  start(displayId: string): Promise<RecorderStatus>;
+  start(displayId: string, sessionId?: string): Promise<RecorderStatus>;
   stop(): Promise<RecorderStatus>;
   close(): Promise<void>;
+  primaryDisplay?(): Promise<string>;
+  waitForResult?(sessionId: string): Promise<RecorderCompletion>;
+  abort?(sessionId: string): Promise<void>;
+  subscribe?(listener: (status: RecorderStatus) => void): () => void;
+}
+
+interface RecorderTicket {
+  id: string;
+  done: Promise<void>;
+  resolve(): void;
+  result?: RecorderCompletion;
+}
+
+function newTicket(id: string): RecorderTicket {
+  let resolve!: () => void;
+  const done = new Promise<void>((complete) => { resolve = complete; });
+  return { id, done, resolve };
 }
 
 function errorMessage(error: unknown): string {
@@ -107,6 +126,10 @@ export class WindowsRecorderManager implements RecorderControl {
   private resolveCompletion?: () => void;
   private diagnostics: string[] = [];
   private resolvedPythonExecutable?: string;
+  private ticket?: RecorderTicket;
+  private readonly tickets = new Map<string, RecorderTicket>();
+  private readonly listeners = new Set<(status: RecorderStatus) => void>();
+  private startReady?: { resolve(status: RecorderStatus): void; reject(error: Error): void };
 
   constructor(private readonly options: {
     executionRoot: string;
@@ -171,80 +194,106 @@ export class WindowsRecorderManager implements RecorderControl {
     return previewPath;
   }
 
-  async start(displayId: string): Promise<RecorderStatus> {
-    if (isActive(this.currentStatus.phase)) {
+  async start(displayId: string, sessionId: string = randomUUID()): Promise<RecorderStatus> {
+    if (this.child || isActive(this.currentStatus.phase)) {
       throw Object.assign(new Error(`已有录制会话正在运行：${this.currentStatus.phase}`), { statusCode: 409 });
     }
-    const outputRoot = await requireWritableDirectory(this.currentStatus.outputRoot || '');
-    this.currentStatus = { phase: 'arming', outputRoot };
+    if (this.tickets.has(sessionId)) throw new Error('录制会话标识已使用');
+    this.currentStatus = { ...this.currentStatus, phase: 'arming' };
+    this.ticket = newTicket(sessionId);
+    this.tickets.set(sessionId, this.ticket);
+    if (this.tickets.size > 16) this.tickets.delete(this.tickets.keys().next().value!);
+    this.completion = this.ticket.done;
+    this.resolveCompletion = this.ticket.resolve;
     this.diagnostics = [];
-    const pythonExecutable = await this.pythonExecutable();
-    const spawnProcess = this.options.spawnProcess ?? spawn;
-    const child = spawnPythonWorker({
-      pythonExecutable,
-      module: 'cua_recorder',
-      args: ['record', '--display-id', displayId, '--output-root', outputRoot],
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }, spawnProcess) as ChildProcessWithoutNullStreams;
-    this.child = child;
-    this.completion = new Promise<void>((resolve) => {
-      this.resolveCompletion = resolve;
-    });
-    let stdoutBuffer = '';
-    let settledStart = false;
+    try {
+      const outputRoot = await requireWritableDirectory(this.currentStatus.outputRoot || '');
+      const pythonExecutable = await this.pythonExecutable();
+      this.child = spawnPythonWorker({
+        pythonExecutable, module: 'cua_recorder',
+        args: ['record', '--display-id', displayId, '--output-root', outputRoot],
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }, this.options.spawnProcess ?? spawn) as ChildProcessWithoutNullStreams;
+      return await this.watchWorker(this.child, outputRoot);
+    } catch (error) {
+      this.fail(error instanceof Error ? error : new Error(String(error)));
+      this.resolveCompletion?.();
+      throw error;
+    }
+  }
 
-    const started = new Promise<RecorderStatus>((resolve, reject) => {
+  private watchWorker(child: ChildProcessWithoutNullStreams, outputRoot: string): Promise<RecorderStatus> {
+    return new Promise((resolve, reject) => {
+      this.startReady = { resolve, reject };
+      let buffer = '';
       child.stdout.on('data', (chunk) => {
-        stdoutBuffer += chunk.toString('utf8');
-        const split = splitLines(stdoutBuffer);
-        stdoutBuffer = split.rest;
-        for (const line of split.lines.filter(Boolean)) {
-          try {
-            const event = parseWorkerEvent(line);
-            if (this.applyWorkerEvent(event, outputRoot) && !settledStart) {
-              settledStart = true;
-              resolve(this.status());
-            }
-          } catch (error) {
-            const resolved = error instanceof Error ? error : new Error(String(error));
-            this.fail(resolved);
-            child.kill();
-            if (!settledStart) {
-              settledStart = true;
-              reject(resolved);
-            }
-          }
-        }
+        const split = splitLines(buffer + chunk.toString('utf8'));
+        buffer = split.rest;
+        for (const line of split.lines.filter(Boolean)) this.workerLine(line, outputRoot);
       });
       child.stderr.on('data', (chunk) => {
         this.diagnostics.push(chunk.toString('utf8'));
         this.diagnostics = this.diagnostics.join('').slice(-16_384).split(/(?<=\n)/);
       });
-      child.once('error', (error) => {
-        this.fail(error);
-        if (!settledStart) {
-          settledStart = true;
-          reject(error);
-        }
-      });
-      child.once('close', (code, signal) => {
-        this.child = undefined;
-        const completed = code === 0 && this.currentStatus.phase === 'idle';
-        if (completed) {
-          this.resolveCompletion?.();
-        } else {
-          const detail = this.diagnostics.join('').trim();
-          const error = new Error(`录制 Worker 异常退出：exit=${String(code)} signal=${signal ?? '-'}${detail ? `\n${detail}` : ''}`);
-          this.fail(error);
-          this.resolveCompletion?.();
-          if (!settledStart) {
-            settledStart = true;
-            reject(error);
-          }
-        }
-      });
+      child.once('error', (error) => this.workerError(error));
+      child.once('close', (code, signal) => this.workerClosed(code, signal));
     });
-    return started;
+  }
+
+  private workerLine(line: string, outputRoot: string): void {
+    try {
+      if (this.applyWorkerEvent(parseWorkerEvent(line), outputRoot)) {
+        this.startReady?.resolve(this.status());
+        this.startReady = undefined;
+      }
+      for (const listener of this.listeners) listener(this.status());
+    } catch (error) {
+      this.workerError(error instanceof Error ? error : new Error(String(error)));
+      this.child?.kill();
+    }
+  }
+
+  private workerError(error: Error): void {
+    this.fail(error);
+    this.startReady?.reject(error);
+    this.startReady = undefined;
+    this.resolveCompletion?.();
+  }
+
+  private workerClosed(code: number | null, signal: NodeJS.Signals | null): void {
+    this.child = undefined;
+    if (code !== 0 || !this.ticket?.result) {
+      const detail = this.diagnostics.join('').trim();
+      this.workerError(new Error(`录制 Worker 异常退出：exit=${String(code)} signal=${signal ?? '-'}\n${detail}`));
+    } else {
+      this.startReady?.resolve(this.status());
+      this.startReady = undefined;
+      this.resolveCompletion?.();
+    }
+  }
+
+  async primaryDisplay(): Promise<string> {
+    const event = await this.runOnce(['displays']);
+    const display = event.displays?.find((item) => item.primary);
+    if (!display) throw new Error('未找到主屏幕');
+    return display.id;
+  }
+
+  async waitForResult(sessionId: string): Promise<RecorderCompletion> {
+    const ticket = this.tickets.get(sessionId);
+    if (!ticket) throw new Error('录制会话已失效');
+    await ticket.done;
+    return ticket.result ?? { status: 'failed', error: '录制未返回终态' };
+  }
+
+  subscribe(listener: (status: RecorderStatus) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  async abort(sessionId: string): Promise<void> {
+    if (this.ticket?.id !== sessionId) return;
+    await this.control('abort');
   }
 
   private applyWorkerEvent(event: ReturnType<typeof parseWorkerEvent>, outputRoot: string): boolean {
@@ -270,6 +319,9 @@ export class WindowsRecorderManager implements RecorderControl {
     } else if (event.event === 'stopping') {
       this.currentStatus = { ...this.currentStatus, phase: 'stopping' };
     } else if (event.event === 'completed' || event.event === 'cancelled') {
+      if (this.ticket && !this.ticket.result) {
+        this.ticket.result = this.recordingResult(event, outputRoot);
+      }
       this.currentStatus = { phase: 'idle', outputRoot };
     } else if (event.event === 'error') {
       throw new Error(event.message || '录制 Worker 报告未知错误');
@@ -278,11 +330,25 @@ export class WindowsRecorderManager implements RecorderControl {
   }
 
   async stop(): Promise<RecorderStatus> {
-    if (!this.child || !isActive(this.currentStatus.phase) || this.currentStatus.phase === 'stopping') {
-      return this.status();
+    return this.control('stop');
+  }
+
+  private recordingResult(event: WorkerEvent, outputRoot: string): RecorderCompletion {
+    if (event.event === 'cancelled') {
+      return { status: 'cancelled', reason: String(event.reason ?? 'user_cancelled') };
     }
-    this.currentStatus = { ...this.currentStatus, phase: 'stopping' };
-    this.child.stdin.write('stop\n');
+    const id = String(event.recording_id ?? '');
+    if (!id || /[\\/]|^\.{1,2}$/u.test(id)) throw new Error('录制 Worker 返回了无效录制标识');
+    return { status: 'completed', recordingId: id, recordingPath: path.join(outputRoot, id),
+      completedAt: Date.now() };
+  }
+
+  private async control(command: 'stop' | 'abort'): Promise<RecorderStatus> {
+    if (!this.child) return this.status();
+    if (isActive(this.currentStatus.phase) && this.currentStatus.phase !== 'stopping') {
+      this.currentStatus = { ...this.currentStatus, phase: 'stopping' };
+      this.child.stdin.write(`${command}\n`);
+    }
     const timeoutMs = this.options.stopTimeoutMs ?? 20_000;
     let timer: NodeJS.Timeout | undefined;
     try {
@@ -298,6 +364,7 @@ export class WindowsRecorderManager implements RecorderControl {
     } catch (error) {
       this.child?.kill();
       this.fail(error instanceof Error ? error : new Error(String(error)));
+      this.resolveCompletion?.();
       throw error;
     } finally {
       if (timer) clearTimeout(timer);
@@ -360,6 +427,7 @@ export class WindowsRecorderManager implements RecorderControl {
   }
 
   private fail(error: Error): void {
+    if (this.ticket) this.ticket.result = { status: 'failed', error: error.message };
     this.currentStatus = {
       ...this.currentStatus,
       phase: 'failed',

@@ -17,7 +17,7 @@ export interface StartedReviewServer {
 
 export const defaultReviewPort = 47831;
 export const reviewServiceName = 'cua-midscene-review';
-export const reviewProtocolVersion = 3;
+export const reviewProtocolVersion = 4;
 
 export function reviewDataRootKey(root: string): string {
   const normalized = path.normalize(path.resolve(root));

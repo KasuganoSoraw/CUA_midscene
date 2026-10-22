@@ -15,7 +15,7 @@ from uuid import uuid4
 
 from .contracts import JsonValue
 
-RuntimeMethod: TypeAlias = Literal["catalog", "execute", "workbench"]
+RuntimeMethod: TypeAlias = Literal["catalog", "execute", "workbench", "record"]
 CancellationCheck: TypeAlias = Callable[[], bool]
 
 
@@ -23,6 +23,7 @@ CancellationCheck: TypeAlias = Callable[[], bool]
 class RuntimeProgressEvent:
     message: str
     data: dict[str, JsonValue]
+    event_type: Literal["execution.progress", "recording.progress"] = "execution.progress"
 
 
 RuntimeEventSink: TypeAlias = Callable[[RuntimeProgressEvent], Awaitable[None] | None]
@@ -148,6 +149,7 @@ class JsonlRuntimeClient:
         self._stderr_task: asyncio.Task[None] | None = None
         self._stderr_lines: deque[str] = deque(maxlen=30)
         self._request_lock = asyncio.Lock()
+        self._recording_request = False
 
     @property
     def running(self) -> bool:
@@ -206,7 +208,8 @@ class JsonlRuntimeClient:
                     pass
             try:
                 await asyncio.wait_for(
-                    process.wait(), timeout=self._config.shutdown_timeout_seconds
+                    process.wait(), timeout=(30.0 if self._recording_request
+                                             else self._config.shutdown_timeout_seconds)
                 )
             except TimeoutError:
                 process.terminate()
@@ -249,24 +252,36 @@ class JsonlRuntimeClient:
             except (BrokenPipeError, ConnectionResetError) as error:
                 raise RuntimeProcessError(self._process_exit_message()) from error
 
-            deadline = asyncio.get_running_loop().time() + self._config.request_timeout_seconds
+            self._recording_request = method == "record"
+            deadline = None if method == "record" else (
+                asyncio.get_running_loop().time() + self._config.request_timeout_seconds
+            )
             try:
-                while True:
-                    raw_line = await self._read_response_line(cancelled, deadline)
-                    response = self._parse_response(raw_line, request_id)
-                    if response.get("type") == "event":
-                        event = self._parse_event(response)
-                        if on_event is not None:
-                            delivered = on_event(event)
-                            if inspect.isawaitable(delivered):
-                                await delivered
-                        continue
-                    if response.get("type") not in (None, "response"):
-                        raise RuntimeProtocolError("Runtime frame type 不受支持")
-                    break
+                return await self._await_response(request_id, cancelled, deadline, on_event)
+            except RuntimeMethodError:
+                raise
             except BaseException:
                 await self.close()
                 raise
+            finally:
+                self._recording_request = False
+
+    async def _await_response(
+        self, request_id: str, cancelled: CancellationCheck | None,
+        deadline: float | None, on_event: RuntimeEventSink | None,
+    ) -> dict[str, JsonValue]:
+        while True:
+            raw_line = await self._read_response_line(cancelled, deadline)
+            response = self._parse_response(raw_line, request_id)
+            if response.get("type") == "event":
+                event = self._parse_event(response)
+                if on_event is not None:
+                    delivered = on_event(event)
+                    if inspect.isawaitable(delivered):
+                        await delivered
+                continue
+            if response.get("type") not in (None, "response"):
+                raise RuntimeProtocolError("Runtime frame type 不受支持")
             return self._response_result(response)
 
     def _response_result(self, response: dict[str, JsonValue]) -> dict[str, JsonValue]:
@@ -295,7 +310,7 @@ class JsonlRuntimeClient:
         return self._process
 
     async def _read_response_line(
-        self, cancelled: CancellationCheck | None, deadline: float
+        self, cancelled: CancellationCheck | None, deadline: float | None
     ) -> bytes:
         process = self._require_process()
         if process.stdout is None:
@@ -306,7 +321,9 @@ class JsonlRuntimeClient:
                 if cancelled is not None and cancelled():
                     await self.close()
                     raise RuntimeCancelledError("Runtime request 已取消")
-                remaining = deadline - asyncio.get_running_loop().time()
+                remaining = (
+                    0.1 if deadline is None else deadline - asyncio.get_running_loop().time()
+                )
                 if remaining <= 0:
                     await self.close()
                     raise RuntimeTimeoutError(
@@ -359,6 +376,8 @@ class JsonlRuntimeClient:
         event = frame.get("event")
         if not isinstance(event, dict) or set(event) != {"type", "message", "data"}:
             raise RuntimeProtocolError("Runtime event 缺少受控结构")
+        if event.get("type") == "recording.progress":
+            return self._parse_recording_event(event)
         if event.get("type") != "execution.progress":
             raise RuntimeProtocolError("Runtime event type 不受支持")
         message = event.get("message")
@@ -380,6 +399,20 @@ class JsonlRuntimeClient:
         self._validate_event_task(data)
         self._validate_event_details(data)
         return RuntimeProgressEvent(message, dict(data))
+
+    def _parse_recording_event(self, event: dict[str, JsonValue]) -> RuntimeProgressEvent:
+        message = event.get("message")
+        data = event.get("data")
+        if not isinstance(message, str) or not message.strip() or len(message) > 500:
+            raise RuntimeProtocolError("录制进度消息无效")
+        if not isinstance(data, dict) or set(data) != {"source", "phase"}:
+            raise RuntimeProtocolError("录制进度字段无效")
+        if data.get("source") != "recorder" or data.get("phase") not in (
+            "armed", "recording", "received", "processing", "extracting",
+            "completed", "cancelled", "failed",
+        ):
+            raise RuntimeProtocolError("录制进度阶段无效")
+        return RuntimeProgressEvent(message, dict(data), "recording.progress")
 
     def _validate_event_task(self, data: dict[str, JsonValue]) -> None:
         task_index = data.get("taskIndex")

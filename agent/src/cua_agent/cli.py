@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
+from .capabilities import resolve_tool_mode
 from .contracts import InvocationRequest, JsonValue
 from .events import AgentEvent
 from .openai_compatible import OpenAICompatibleConfig, OpenAICompatibleModelClient
@@ -35,13 +36,6 @@ def _positive_int_env(name: str, default: int) -> int:
     return value
 
 
-def _freeform_only_from_env() -> bool:
-    value = os.environ.get("CUA_AGENT_FREEFORM_ONLY", "false").strip().lower()
-    if value not in {"true", "false"}:
-        raise RuntimeError("CUA_AGENT_FREEFORM_ONLY 必须为 true 或 false")
-    return value == "true"
-
-
 def build_agent_from_env() -> CuaAgent:
     runtime_config = RuntimeProcessConfig.from_runtime(
         Path(_required_env("CUA_AGENT_JS_RUNTIME_EXECUTABLE")),
@@ -54,7 +48,7 @@ def build_agent_from_env() -> CuaAgent:
         lambda: JsonlRuntimeClient(runtime_config),
         data_root=os.environ.get("CUA_DATA_ROOT"),
         max_turns=_positive_int_env("CUA_AGENT_MAX_TURNS", 8),
-        freeform_only=_freeform_only_from_env(),
+        tool_mode=resolve_tool_mode(),
     )
 
 

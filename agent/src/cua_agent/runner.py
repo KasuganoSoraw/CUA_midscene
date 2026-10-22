@@ -10,6 +10,7 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Literal, TypeAlias, cast
 from uuid import uuid4
 
+from .capabilities import ToolMode, resolve_tool_mode
 from .contracts import (
     InvocationRequest,
     InvocationResult,
@@ -64,8 +65,6 @@ FINALIZATION_PROTOCOL = """
   执行报告路径是最终自然语言回复中唯一允许出现的执行产物路径。
   只总结已完成的电脑操作和 Tool 直接返回的结果。不要为了理解最终页面中的
   业务内容而读取截图、执行报告或尝试新的 GUI 操作；这些执行产物由调用方处理。
-- `cua_workbench`：必须原样返回 Tool Result 中的 `url`，
-  并说明它用于录制、复核或已录制任务回放中的哪一种用途。
 - 使用调用方任务所使用的语言；调用方明确指定其他语言时遵循其要求。
 - 不要输出 JSON、`status`/`reply` envelope 或 Markdown code fence。
 """.strip()
@@ -98,6 +97,21 @@ def _failed_execution_output(
     return {"reportPath": report}
 
 
+def _failed_tool_reply(
+    name: str, error: str, output: dict[str, JsonValue] | None,
+) -> str:
+    if name == "cua_record":
+        return "录制处理失败，未生成完整操作资产。具体原因见结构化诊断信息。"
+    if name != "cua_execute":
+        return f"{name} 执行失败：{error}"
+    reply = "本次电脑操作未能正常完成。"
+    if output is not None:
+        reply += f"\n执行报告：{output['reportPath']}"
+    else:
+        reply += "\n本次没有可用的执行报告。"
+    return reply + "\n未自动重试或切换执行模式，详细错误已保留在诊断信息中。"
+
+
 class CuaAgent:
     """供 Host Adapter 或 Review 调试入口调用的高层无状态 Agent。"""
 
@@ -109,15 +123,16 @@ class CuaAgent:
         data_root: str | None = None,
         max_turns: int = 8,
         create_invocation_id: Callable[[], str] | None = None,
-        freeform_only: bool = False,
+        freeform_only: bool | None = None,
+        tool_mode: ToolMode | None = None,
     ) -> None:
         if max_turns <= 0:
             raise ValueError("max_turns 必须大于 0")
         self._model_client = model_client
         self._runtime_client_factory = runtime_client_factory
         self._data_root = data_root
-        self._freeform_only = freeform_only
-        self._instructions = load_agent_definition(freeform_only=freeform_only).instructions
+        self._tool_mode = resolve_tool_mode(tool_mode, freeform_only)
+        self._instructions = load_agent_definition(tool_mode=self._tool_mode).instructions
         self._max_turns = max_turns
         self._create_invocation_id = create_invocation_id or (lambda: str(uuid4()))
 
@@ -134,7 +149,7 @@ class CuaAgent:
             _check_cancelled(cancelled)
             async with self._runtime_client_factory() as runtime_client:
                 tools = create_cua_tool_registry(
-                    runtime_client, data_root=self._data_root, freeform_only=self._freeform_only,
+                    runtime_client, data_root=self._data_root, tool_mode=self._tool_mode,
                 )
                 return await self._run_loop(
                     invocation_id,
@@ -175,15 +190,7 @@ class CuaAgent:
 
         for turn in range(1, self._max_turns + 1):
             _check_cancelled(cancelled)
-            await _emit(
-                event_sink,
-                AgentEvent(
-                    invocation_id,
-                    "progress",
-                    f"正在进行第 {turn} 轮任务判断",
-                    {"turn": turn},
-                ),
-            )
+            await _emit_turn(event_sink, invocation_id, turn)
             response = await _stream_model_turn(
                 self._model_client,
                 tuple(messages),
@@ -278,10 +285,11 @@ class CuaAgent:
                 cancelled=cancelled,
                 on_event=(
                     _runtime_progress_sink(event_sink, invocation_id, turn, call)
-                    if call.name == "cua_execute" and event_sink is not None
+                    if call.name in ("cua_execute", "cua_record") and event_sink is not None
                     else None
                 ),
             )
+            _check_cancelled(cancelled)
         except RuntimeCancelledError:
             raise
         except Exception as error:
@@ -289,7 +297,17 @@ class CuaAgent:
                 invocation_id, turn, call, traces, event_sink, error
             )
         await self._record_tool_result(invocation_id, turn, call, traces, event_sink, result)
+        if call.name == "cua_record":
+            return await self._recording_terminal(invocation_id, result, traces, event_sink)
+        return await self._after_tool_result(
+            invocation_id, turn, call, result, messages, traces, event_sink, cancelled,
+        )
 
+    async def _after_tool_result(
+        self, invocation_id: str, turn: int, call: ModelToolCall, result: dict[str, JsonValue],
+        messages: list[ModelMessage], traces: list[ToolTrace], event_sink: EventSink | None,
+        cancelled: CancellationCheck | None,
+    ) -> InvocationResult | None:
         messages.append(
             ModelMessage(
                 role="tool",
@@ -309,20 +327,40 @@ class CuaAgent:
 
         return None
 
+    async def _recording_terminal(
+        self, invocation_id: str, result: dict[str, JsonValue], traces: list[ToolTrace],
+        event_sink: EventSink | None,
+    ) -> InvocationResult:
+        status = result.get("status")
+        if status not in ("completed", "cancelled", "failed"):
+            raise ValueError("录制 Tool 未返回有效终态")
+        if status == "completed":
+            reply = "用户已完成录制，操作记录和截图已准备好。请主 Agent 根据返回的资产生成 Skill。"
+        elif status == "cancelled":
+            reply = "用户取消了录制，本次未生成操作资产。"
+        else:
+            reply = "录制处理失败，未生成完整操作资产。具体原因见结构化诊断信息。"
+        failed = status == "failed"
+        await _emit(event_sink, AgentEvent(
+            invocation_id, "failed" if failed else "agent.completed", reply, result,
+        ))
+        return InvocationResult(
+            invocation_id=invocation_id,
+            status=InvocationStatus.FAILED if failed else InvocationStatus.COMPLETED,
+            reply=reply, tool_calls=tuple(traces), data=result,
+            error=str(result.get("error", "录制失败")) if failed else None,
+        )
+
     async def _failed_tool_call(
         self, invocation_id: str, turn: int, call: ModelToolCall, traces: list[ToolTrace],
         event_sink: EventSink | None, error: Exception,
     ) -> InvocationResult:
         message = str(error) or error.__class__.__name__
         output = _failed_execution_output(call, error)
-        reply = f"{call.name} 执行失败：{message}"
-        if call.name == "cua_execute":
-            reply = "本次电脑操作未能正常完成。"
-            if output is not None:
-                reply += f"\n执行报告：{output['reportPath']}"
-            else:
-                reply += "\n本次没有可用的执行报告。"
-            reply += "\n未自动重试或切换执行模式，详细错误已保留在诊断信息中。"
+        if call.name == "cua_record":
+            output = {"status": "failed", "assets": None, "error": message,
+                      "message": "录制处理失败，未生成完整操作资产"}
+        reply = _failed_tool_reply(call.name, message, output)
         traces.append(
             ToolTrace(
                 call_id=call.call_id,
@@ -369,7 +407,7 @@ class CuaAgent:
                 call_id=call.call_id,
                 tool=call.name,
                 input=dict(call.arguments),
-                status="succeeded",
+                status="failed" if result.get("status") == "failed" else "succeeded",
                 output=result,
             )
         )
@@ -383,7 +421,7 @@ class CuaAgent:
                     "callId": call.call_id,
                     "tool": call.name,
                     "turn": turn,
-                    "status": "succeeded",
+                    "status": "failed" if result.get("status") == "failed" else "succeeded",
                     "output": result,
                 },
             ),
@@ -429,12 +467,16 @@ class CuaAgent:
         )
 
 
+async def _emit_turn(event_sink: EventSink | None, invocation_id: str, turn: int) -> None:
+    await _emit(event_sink, AgentEvent(
+        invocation_id, "progress", f"正在进行第 {turn} 轮任务判断", {"turn": turn},
+    ))
+
+
 def _is_terminal_tool_success(
     call: ModelToolCall,
     result: Mapping[str, object],
 ) -> bool:
-    if call.name == "cua_workbench":
-        return True
     return call.name == "cua_execute" and result.get("status") == "succeeded"
 
 
@@ -488,7 +530,7 @@ def _runtime_progress_sink(
             event_sink,
             AgentEvent(
                 invocation_id,
-                "execution.progress",
+                event.event_type,
                 event.message,
                 {
                     "callId": call.call_id,
