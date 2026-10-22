@@ -2,14 +2,19 @@
 
 ## 能力边界
 
-普通模式从聊天接收完整自然语言任务。执行请求直接交给 Midscene freeform，不检索 CUA 专业任务；示教请求调用 `cua_record`，返回整理好的日志和截图。主 Agent 读取资产、生成并保存正式 Skill。CUA 不生成 SkillDraft、SKILL.md、普通 Skill 管理目录或 YAML Task。
+普通和专业入口共享一个 CUA 子 Agent，以及 `cua_catalog`、`cua_execute`、`cua_record` 三个私有工具。普通录制示教调用 `cua_record`，返回整理好的日志和截图；主 Agent 读取资产、生成并保存正式 Skill。CUA 不生成 SkillDraft、SKILL.md、普通 Skill 管理目录或 YAML Task。
 
-专业模式保留专业项目检索、replay、guided、freeform 以及完整的 Trace/YAML 生成流程。工作台由设置页打开，模型工具列表中不存在 `cua_workbench`；内部 Runtime bridge 的 `workbench` 方法仍供 Keeper 使用。
+执行策略由本次请求确定，不由普通/专业配置标签决定。专业工作台保留完整的 Trace/YAML 生成流程，由设置页打开；模型工具列表中不存在 `cua_workbench`，内部 Runtime bridge 的 `workbench` 方法仍供 Keeper 使用。
 
-| 模式 | 模型可见工具 |
+| 请求内容 | 处理方式 |
 | --- | --- |
-| `normal` | `cua_execute`（仅 freeform）、`cua_record` |
-| `professional` | `cua_catalog`、`cua_execute`（replay/guided/freeform） |
+| 要求录制或示教 | `cua_record` |
+| 完整操作流程或纯业务目标 | 直接 `cua_execute/freeform`，不检索 |
+| 明确要求执行任务名或提供 task 标识 | `cua_catalog` 定位后选择 replay/guided |
+
+“打开系统，进入报表页，选择本月并导出”是完整流程，“帮我导出本月销售报表”是业务目标，均不触发检索；“执行任务『每日库存核对』”才是具名专业任务请求。不能从业务描述中自行发明任务名。仅有普通 Skill 名称时，宿主应先加载 Skill 并展开流程，不让 CUA 将普通 Skill 名称当作专业任务名。
+
+具名专业任务无匹配时，若请求还提供独立可执行的目标或流程，可以 freeform；若只有任务名，应返回未找到任务并请求补充目标或流程。多个候选不明确时请求明确任务，不随意选择。
 
 ## 宿主配置与调用
 
@@ -18,7 +23,6 @@
 进程入口注入：
 
 ```text
-CUA_AGENT_TOOL_MODE=normal
 CUA_REVIEW_URL=http://127.0.0.1:47831/
 CUA_RECORDINGS_ROOT=C:\Users\user\.gdeclaw\computer_use\recordings
 CUA_DATA_ROOT=C:\Users\user\.gdeclaw\computer_use\data
@@ -32,8 +36,8 @@ Python API：
 ```python
 from cua_agent import CuaAgent, InvocationRequest, load_agent_definition
 
-definition = load_agent_definition(tool_mode="normal")
-agent = CuaAgent(model_client, runtime_client_factory, tool_mode="normal")
+definition = load_agent_definition()
+agent = CuaAgent(model_client, runtime_client_factory)
 result = await agent.invoke(
     InvocationRequest(task="录制一个查询配置的流程"),
     event_sink=forward_event,
@@ -41,9 +45,9 @@ result = await agent.invoke(
 )
 ```
 
-API 与 CLI 共用能力配置：显式 `tool_mode` 优先，其次显式兼容参数 `freeform_only`，再读取 `CUA_AGENT_TOOL_MODE`，最后读取 `CUA_AGENT_FREEFORM_ONLY`。兼容值 `true` 表示 normal、`false` 表示 professional；全部省略时为 professional。显式参数不被环境变量覆盖。专业任务调用使用 `tool_mode="professional"`。
+API 与 CLI 使用统一提示词和工具集，无需指定模式。兼容参数 `tool_mode`、`freeform_only` 和环境变量 `CUA_AGENT_TOOL_MODE`、`CUA_AGENT_FREEFORM_ONLY` 按显式 tool_mode、显式 freeform_only、TOOL_MODE、FREEFORM_ONLY 的顺序校验配置；normal/professional 标签和布尔兼容值均不限制工具能力。
 
-Main Agent 将录制意图路由到普通 computer-use SubAgent；执行已有普通 Skill 时，把完整自然语言流程作为 task 派发，而不是只传 Skill 名称。主 Agent 使用自身的文件和图片读取工具访问返回资产，并交给自身 SkillService 保存。不要注册 CUA 私有工具到 Main Agent。
+Main Agent 将录制意图和电脑操作交给同一个 computer-use SubAgent；执行已有普通 Skill 时，把完整自然语言流程作为 task 派发，而不是只传 Skill 名称。主 Agent 使用自身的文件和图片读取工具访问返回资产，并交给自身 SkillService 保存。不要注册 CUA 私有工具到 Main Agent。
 
 宿主适配层必须把 `InvocationResult.data` 完整转交 Main Agent，而不仅返回 reply 或工具历史。文件与图片工具的授权范围应覆盖录制根目录及其中的相对截图引用，不只覆盖专业 projects。
 
@@ -174,7 +178,7 @@ phase 可为 `armed`、`recording`、`received`、`processing`、`extracting`、
 | `execution/review/service/windows-recorder.ts` | 共享 Recorder、按会话保存终态、等待进程资源释放 |
 | `execution/review/service/conversation-recording.ts`、`prepare-recording.ts` | 普通录制编排、预处理进程、资产校验 |
 | `execution/review/server/recording-routes.ts`、`runtime-bridge/tools/record.ts` | 本地流式等待、心跳及本次录制取消确认 |
-| `agent/src/cua_agent/capabilities.py`、`tools/registry.py`、`definition/` | 普通/专业权限和模型说明，不暴露工作台工具 |
+| `agent/src/cua_agent/capabilities.py`、`tools/registry.py`、`definition/` | 兼容配置校验、共享工具集及任务名触发检索的模型说明，不暴露工作台工具 |
 | `agent/src/cua_agent/runtime_client.py`、`execution/runtime-bridge/worker-service.ts` | 录制等待策略、事件解析和 stdin 关闭的取消传递 |
 | `agent/src/cua_agent/runner.py` | 录制终态直接返回 InvocationResult.data，不额外调用模型 |
 

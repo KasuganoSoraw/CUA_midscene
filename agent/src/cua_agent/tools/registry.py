@@ -217,10 +217,8 @@ class CuaToolRegistry:
 
 
 def _validate_freeform_arguments(arguments: Mapping[str, JsonValue]) -> None:
-    if arguments.get("strategy") != "freeform":
-        raise ValueError("当前 CUA Agent 仅支持 freeform 自然语言执行")
     if set(arguments) - {"strategy", "goal", "displayId", "dataRoot"}:
-        raise ValueError("freeform 仅接受 strategy、goal 和可选 displayId")
+        raise ValueError("freeform 仅接受 strategy、goal、displayId 和内部 dataRoot")
     for name in ("goal", "displayId"):
         if name == "displayId" and name not in arguments:
             continue

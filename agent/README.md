@@ -15,8 +15,7 @@ GDEClaw Main Agent
   -> invoke({ task })
   -> Python CUA Agent
        -> model Tool Calling
-       -> 普通模式：private cua_execute/freeform / cua_record
-       -> 专业模式：private cua_catalog / cua_execute
+       -> private cua_catalog / cua_execute / cua_record
   -> TypeScript JSONL Runtime bridge
   -> Midscene
 ```
@@ -46,9 +45,9 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 完整变量契约位于仓库根 `.env.example`。Python CLI 本身不查找环境文件；源码直接调用使用 `uv --env-file` 注入根 `.env.local`，`review --dev` 继承 Review Server 已加载的根环境配置，产品调用由 Host 注入进程环境。
 
-`CUA_AGENT_TOOL_MODE=normal` 提供 `cua_execute/freeform` 和 `cua_record`，不检索专业任务；`professional` 提供 `cua_catalog` 与 `cua_execute/replay/guided/freeform`，用于专业工作台生成的任务。未配置时默认 professional。两种模式均不提供 `cua_workbench` 模型工具，底层 Workbench Service 和 Runtime bridge 内部方法保留。
+共享子 Agent 统一提供 `cua_catalog`、`cua_execute/replay/guided/freeform` 和 `cua_record`。只有明确要求执行一个任务名或提供 task 标识时才检索专业任务；完整操作流程和业务目标直接 freeform。普通 Skill 应由主 Agent 展开成完整操作流程后提交，不能仅传 Skill 名称。若专业任务未找到且请求只有任务名，返回未找到任务并要求补充目标或流程，不猜测操作。模型工具中没有 `cua_workbench`，底层 Workbench Service 和 Runtime bridge 内部方法保留。
 
-Python API 使用 `CuaAgent(..., tool_mode="normal")`，能力说明使用 `load_agent_definition(tool_mode="normal")`。API 和 CLI 共用环境配置，显式参数优先。兼容 `freeform_only=True` 或 `CUA_AGENT_FREEFORM_ONLY=true`，两者等价于 normal；显式 tool_mode/TOOL_MODE 优先。宿主从设置页打开专业工作台，并在录制 invocation 前确保 Keeper 服务存在；独立 Review/CLI 不受模型工具模式限制。普通录制协议、事件与取消适配见 [普通录制集成](../docs/normal-recording-integration.md)。
+Python API 使用 `CuaAgent(...)`，能力说明使用 `load_agent_definition()`。`tool_mode`、`freeform_only`、`CUA_AGENT_TOOL_MODE` 与 `CUA_AGENT_FREEFORM_ONLY` 接受兼容配置并校验有效值，但不选择不同提示词或工具集；normal/professional 均使用同一能力。宿主从设置页打开专业工作台，并在录制 invocation 前确保 Keeper 服务存在。普通录制协议、事件与取消适配见 [普通录制集成](../docs/normal-recording-integration.md)。
 
 ## 调用结果与取消
 

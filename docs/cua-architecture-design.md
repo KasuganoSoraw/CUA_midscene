@@ -71,7 +71,7 @@ Recorded Skill 是以场景和任务组织的可复用录制任务资产包。Ru
 
 CUA Agent 每次接收一项完整 GUI 任务，在一次调用内执行模型 Tool Calling。内部工具包括：
 
-- `cua_catalog`：发现场景、任务及其输入要求。
+- `cua_catalog`：仅在明确执行任务名或 task 标识时定位专业任务，读取场景、任务及输入要求；完整操作流程和业务目标直接 freeform。
 - `cua_execute`：按明确选定的策略执行完整目标。
 - `cua_record`：普通模式录制并准备日志与截图资产，交由宿主生成正式 Skill。专业工作台通过宿主设置入口调用内部 Service，不暴露为模型工具。
 

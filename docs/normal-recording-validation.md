@@ -4,7 +4,7 @@
 
 - Python record：40 项通过，含真实编码 MP4 和原始事件的 prepare CLI 测试。验证中文目录、JPEG/PNG 编码字节一致、截图及相对引用、操作窗口及坐标信息、空资产/越界拒绝、prepare 不构造 TraceGenerator、process 继续生成完整 Trace。
 - Python recorder：53 项测试，52 项通过，1 项显式启用的真实桌面录屏排除测试未运行。覆盖录制前取消、录制中放弃、文件清理、关闭失败与清理失败的异常保留、悬浮条图标和完成行为。
-- Python Agent：84 项通过，1 项模型鉴权基线测试失败。新增覆盖普通/专业工具边界、API 环境配置、录制三种终态及资产直传、无额外模型调用、进度事件、Host 取消，以及录制请求不采用 GUI 执行超时。
+- Python Agent：86 项通过，1 项模型鉴权基线测试失败。覆盖共享工具集、API 兼容配置、具名专业任务及直接 freeform 调用链、录制三种终态及资产直传、无额外模型调用、进度事件、Host 取消，以及录制请求不采用 GUI 执行超时。
 - TypeScript：202 项通过，含录制 HTTP 和 Runtime Worker 联动、主屏幕选择、重复请求拒绝、晚到终态、旧会话取消隔离、完成/放弃竞态等待、异常退出、prepare 失败和专业 Workbench 回归。
 - Agent Ruff、Mypy 和 TypeScript/Vue typecheck 通过；TypeScript/前端 build 通过。相关 Python 和 TypeScript 新增方法、录制方法均检查为不超过 50 行。
 
@@ -12,7 +12,7 @@
 
 ## Python 增量静态检查
 
-检查范围为普通录制分支相对 `10722e4` 的 27 个 Python 文件中的新增代码及相关方法，包含测试代码。规则依据为本地提供的 Python 规则集，共 80 条。
+检查范围为普通录制和共享 Agent 路由涉及的 Python 增量代码及相关方法，包含测试代码。规则依据为本地提供的 Python 规则集，共 80 条。共享路由增量检查覆盖 7 个 Python 文件。
 
 - 运行规则集中可由开源 Pylint 支持的对应检查项，并将诊断限定在新增代码行；没有未处理的对应诊断。
 - 运行 Ruff 的语法、导入、常见错误、安全及复杂度检查；新增和相关方法不超过 50 行，圈复杂度不超过 20。
@@ -38,7 +38,9 @@
 
 ## 组件与实机验收边界
 
-组件构建、manifest 校验和源码仓外冒烟通过，使用三个 Python wheels 与生产 JavaScript Runtime，不调用真实模型。额外通过 wheel 隔离导入检查普通/专业工具列表、normal instructions、prepare CLI 和中文截图写入，确认录制桥接入口包含在生产 Runtime 中。
+组件构建、manifest 校验和源码仓外冒烟通过，使用三个 Python wheels 与生产 JavaScript Runtime，不调用真实模型。wheel 隔离导入检查覆盖共享工具集和统一 instructions、prepare CLI 和中文截图写入，确认录制桥接入口包含在生产 Runtime 中。共享 Agent wheel 不包含独立的 normal/freeform instructions 资源。
+
+共享路由相关测试 43 项通过。完整流程与纯业务目标直接执行、具名任务检索后执行的调用链使用脚本化模型响应验证；提示词与工具说明断言覆盖“只在明确任务名或 task 标识时检索”的边界。自然语言意图由模型判断，本地单元测试不代表真实模型对所有表达均能正确分类；没有引入关键词正则分类或协议字段。
 
 真实 GDEClaw 私有仓不在本次修改范围，仍需宿主侧验收：普通模式路由、Keeper 服务生命周期、进度 Adapter、本地文件及图片访问、主 Agent 创建 Skill、停止 SubAgent 后的清理。
 
