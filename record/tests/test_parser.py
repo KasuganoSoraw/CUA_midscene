@@ -17,8 +17,8 @@ class ParserPipelineTest(unittest.TestCase):
             screenshots.mkdir()
 
             with (
-                patch("cua_record.pipeline.LogProcessor") as log_processor,
-                patch("cua_record.pipeline.VideoScreenshotExtractor") as screenshot_extractor,
+                patch("cua_record.prepare.LogProcessor") as log_processor,
+                patch("cua_record.prepare.VideoScreenshotExtractor") as screenshot_extractor,
                 patch("cua_record.pipeline.TraceGenerator") as trace_generator,
             ):
                 log_processor.return_value.process_log_file.side_effect = (
@@ -26,7 +26,11 @@ class ParserPipelineTest(unittest.TestCase):
                 )
 
                 def prepare_screenshots(_project):
-                    (project / "recording-demo_processed_log_sc.json").write_text("[]", encoding="utf-8")
+                    (screenshots / "1.jpg").write_bytes(b"image")
+                    (project / "recording-demo_processed_log_sc.json").write_text(
+                        '[{"screenshot_full":"screenshots/1.jpg","screenshot_crop":"screenshots/1.jpg"}]',
+                        encoding="utf-8",
+                    )
                     return [], screenshots, {}
 
                 screenshot_extractor.return_value.process_project.side_effect = prepare_screenshots
