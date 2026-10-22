@@ -46,6 +46,13 @@ interface AgentProtocolFrame {
   error?: unknown;
 }
 
+interface AgentOutputState {
+  stdout: { pending: string };
+  diagnostics: string;
+  frames: AgentProtocolFrame[];
+  decoder: StringDecoder;
+}
+
 const maxStdoutBytes = 4 * 1024 * 1024;
 const maxDiagnosticsBytes = 32 * 1024;
 
@@ -222,13 +229,18 @@ export class PythonAgentInvoker implements PythonAgentControl {
     const invocationId = request.invocationId?.trim() || randomUUID();
     const launch = pythonAgentPaths(this.options);
     const timeoutMs = this.options.timeoutMs ?? 40 * 60 * 1000;
+    return this.waitForAgent(launch, task, invocationId, timeoutMs, onEvent, signal);
+  }
 
+  private waitForAgent(
+    launch: PythonAgentLaunch, task: string, invocationId: string, timeoutMs: number,
+    onEvent: (event: AgentEvent) => void, signal?: AbortSignal,
+  ): Promise<AgentInvocationResult> {
     return new Promise<AgentInvocationResult>((resolve, reject) => {
-      const stdout = { pending: '' };
-      let diagnostics = '';
+      const state: AgentOutputState = {
+        stdout: { pending: '' }, diagnostics: '', frames: [], decoder: new StringDecoder('utf8'),
+      };
       let settled = false;
-      const frames: AgentProtocolFrame[] = [];
-      const decoder = new StringDecoder('utf8');
       const child = this.startAgentProcess(launch);
       this.child = child;
       const timeout = setTimeout(() => child.kill(), timeoutMs);
@@ -251,30 +263,40 @@ export class PythonAgentInvoker implements PythonAgentControl {
       signal?.addEventListener('abort', abort, { once: true });
       if (signal?.aborted) abort();
 
-      const acceptLine = (line: string) => acceptAgentLine(line, frames, onEvent);
-
-      child.stdout.on('data', (chunk) => {
-        if (settled) return;
-        try {
-          acceptAgentChunk(stdout, chunk, decoder, acceptLine);
-        } catch (error) {
-          child.kill();
-          finish(new Error(`无法解析 Python CUA Agent 输出：${String(error)}`));
-        }
-      });
-      child.stderr.on('data', (chunk) => {
-        diagnostics = limitedAppend(diagnostics, chunk, maxDiagnosticsBytes);
-      });
-      child.once('error', (error) => finish(new Error(`无法启动 Python CUA Agent：${error.message}`)));
-      child.once('close', (code, signal) => {
-        try {
-          finish(undefined, completedAgentOutput(stdout.pending, decoder, acceptLine, frames, diagnostics, code, signal));
-        } catch (error) {
-          finish(error instanceof Error ? error : new Error(String(error)));
-        }
+      const acceptLine = (line: string) => acceptAgentLine(line, state.frames, (event) => {
+        if (event.type === 'tool.started' && event.data?.tool === 'cua_record') clearTimeout(timeout);
+        onEvent(event);
       });
 
+      this.watchAgentOutput(child, state, acceptLine, finish, () => settled);
       child.stdin.end(JSON.stringify({ task, invocationId }));
+    });
+  }
+
+  private watchAgentOutput(
+    child: ChildProcessWithoutNullStreams, state: AgentOutputState, acceptLine: (line: string) => void,
+    finish: (error?: Error, result?: AgentInvocationResult) => void, settled: () => boolean,
+  ): void {
+    child.stdout.on('data', (chunk) => {
+      if (settled()) return;
+      try {
+        acceptAgentChunk(state.stdout, chunk, state.decoder, acceptLine);
+      } catch (error) {
+        child.kill();
+        finish(new Error(`无法解析 Python CUA Agent 输出：${String(error)}`));
+      }
+    });
+    child.stderr.on('data', (chunk) => {
+      state.diagnostics = limitedAppend(state.diagnostics, chunk, maxDiagnosticsBytes);
+    });
+    child.once('error', (error) => finish(new Error(`无法启动 Python CUA Agent：${error.message}`)));
+    child.once('close', (code, signal) => {
+      try {
+        finish(undefined, completedAgentOutput(state.stdout.pending, state.decoder, acceptLine,
+          state.frames, state.diagnostics, code, signal));
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 

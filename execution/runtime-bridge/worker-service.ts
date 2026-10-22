@@ -7,13 +7,21 @@ export async function runRuntimeBridgeWorker(
   output: Writable,
   handlers?: RuntimeBridgeHandlers,
 ): Promise<void> {
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  input.once('end', cancel);
+  input.once('close', cancel);
   const lines = createInterface({ input, crlfDelay: Infinity });
-  for await (const line of lines) {
-    if (!line.trim()) continue;
-    const response = handlers === undefined
-      ? await dispatchRuntimeBridgeLine(line, undefined, (frame) => output.write(`${JSON.stringify(frame)}\n`))
-      : await dispatchRuntimeBridgeLine(line, handlers, (frame) => output.write(`${JSON.stringify(frame)}\n`));
-    output.write(`${response}\n`);
+  try {
+    for await (const line of lines) {
+      if (!line.trim()) continue;
+      const response = await dispatchRuntimeBridgeLine(line, handlers,
+        (frame) => { output.write(`${JSON.stringify(frame)}\n`); }, controller.signal);
+      output.write(`${response}\n`);
+    }
+  } finally {
+    input.removeListener('end', cancel);
+    input.removeListener('close', cancel);
   }
 }
 

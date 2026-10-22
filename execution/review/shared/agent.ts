@@ -29,6 +29,7 @@ export interface AgentEvent {
     | 'tool.completed'
     | 'execution.started'
     | 'execution.progress'
+    | 'recording.progress'
     | 'agent.completed'
     | 'failed'
     | 'needs-input'

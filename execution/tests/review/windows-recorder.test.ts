@@ -218,3 +218,58 @@ test('WindowsRecorderManager 可在 armed 阶段取消且不产生录制', async
   assert.equal((await manager.stop()).phase, 'idle');
   await manager.close();
 });
+
+async function sessionManager() {
+  const fixture = await recorderFixture();
+  const outputRoot = path.join(fixture.root, 'recordings');
+  await mkdir(outputRoot);
+  const children: FakeChild[] = [];
+  const manager = new WindowsRecorderManager({
+    executionRoot: fixture.executionRoot, pythonExecutable: fixture.pythonExecutable,
+    recordingsRoot: outputRoot,
+    spawnProcess: (() => {
+      const child = childProcess();
+      children.push(child);
+      queueMicrotask(() => child.stdout.write(JSON.stringify({ event: 'armed' }) + '\n'));
+      return child;
+    }) as any,
+  });
+  return { manager, children, outputRoot };
+}
+
+test('录制终态按会话保留，晚到的等待和取消不影响下一次录制', async () => {
+  const { manager, children, outputRoot } = await sessionManager();
+  const started = manager.start('display-0', 'first');
+  await assert.rejects(manager.start('display-0', 'duplicate'), /已有录制会话/);
+  await started;
+  children[0].stdout.write(JSON.stringify({ event: 'completed', recording_id: 'Recording_first' }) + '\n');
+  children[0].emit('close', 0, null);
+  await manager.start('display-0', 'second');
+  const first = await manager.waitForResult('first');
+  assert.equal(first.status, 'completed');
+  if (first.status === 'completed') {
+    assert.equal(first.recordingPath, path.join(outputRoot, 'Recording_first'));
+    assert.equal(typeof first.completedAt, 'number');
+  }
+  await manager.abort('first');
+  assert.equal(manager.status().phase, 'armed');
+  children[1].stdin.once('data', (chunk) => {
+    assert.equal(String(chunk), 'abort\n');
+    children[1].stdout.write(JSON.stringify({ event: 'cancelled', reason: 'user_aborted' }) + '\n');
+    children[1].emit('close', 0, null);
+  });
+  await manager.abort('second');
+  assert.equal((await manager.waitForResult('second')).status, 'cancelled');
+  await manager.close();
+});
+
+test('异常退出释放按会话等待者并返回失败终态', async () => {
+  const { manager, children } = await sessionManager();
+  await manager.start('display-0', 'failed');
+  const pending = manager.waitForResult('failed');
+  children[0].stderr.write('encoder failed');
+  children[0].emit('close', 7, null);
+  const result = await pending;
+  assert.equal(result.status, 'failed');
+  if (result.status === 'failed') assert.match(result.error, /encoder failed/);
+});
