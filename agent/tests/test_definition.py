@@ -13,10 +13,10 @@ def test_definition_is_loaded_from_packaged_markdown() -> None:
     assert "同一模型响应最多调用一个 Tool" not in CUA_AGENT_DEFINITION.instructions
     assert "catalog 未命中后不得询问" in CUA_AGENT_DEFINITION.instructions
     assert "不属于信息不足" in CUA_AGENT_DEFINITION.instructions
-    assert "最终回复必须包含 Tool 返回的 `url`" in CUA_AGENT_DEFINITION.instructions
+    assert "cua_workbench" not in CUA_AGENT_DEFINITION.instructions
     assert "最终回复必须原样包含该执行报告路径" in CUA_AGENT_DEFINITION.instructions
     assert "不要用它探测、确认或重复验证结果" in CUA_AGENT_DEFINITION.instructions
-    assert "Workbench 不是执行结果页面" in CUA_AGENT_DEFINITION.instructions
+    assert "工作台由产品设置入口打开" in CUA_AGENT_DEFINITION.instructions
     assert "使界面到达目标状态" in CUA_AGENT_DEFINITION.instructions
     assert "由调用方消费和分析" in CUA_AGENT_DEFINITION.instructions
     assert "电脑操作任务即已完成" in CUA_AGENT_DEFINITION.instructions
@@ -34,7 +34,7 @@ def test_definition_is_loaded_from_packaged_markdown() -> None:
         "npm install",
     ):
         assert irrelevant_concept not in CUA_AGENT_DEFINITION.instructions
-    assert "仅用于录制新流程、复核或校准已录制任务" in CUA_AGENT_DEFINITION.description
+    assert "产品设置入口" in CUA_AGENT_DEFINITION.description
 
 
 def test_loading_definition_does_not_share_mutable_invocation_state() -> None:
@@ -50,8 +50,8 @@ def test_loading_definition_does_not_share_mutable_invocation_state() -> None:
 def test_freeform_only_definition_describes_available_capabilities() -> None:
     definition = load_agent_definition(freeform_only=True)
     assert "自然语言" in definition.description
-    assert "仅提供 `cua_execute`" in definition.instructions
-    assert "不提供录制" in definition.instructions
+    assert "cua_record(goal)" in definition.instructions
+    assert "不要检索任务" in definition.instructions
     assert "最终回复必须原样包含该执行报告路径" in definition.instructions
     assert "发现并判断是否使用 Recorded Skill" not in definition.description
     assert load_agent_definition() == CUA_AGENT_DEFINITION

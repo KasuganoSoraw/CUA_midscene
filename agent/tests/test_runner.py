@@ -109,9 +109,9 @@ def test_freeform_only_runner_keeps_instructions_and_execution_reports() -> None
         assert "C:/runs/execution-report.html" in result.reply
         assert runtime.calls == [("execute", {"strategy": "freeform", "goal": "打开 Chrome"})]
         tools = model.tool_sets[0]
-        assert [tool.name for tool in tools] == ["cua_execute"]  # type: ignore[union-attr]
+        assert [tool.name for tool in tools] == ["cua_execute", "cua_record"]  # type: ignore[union-attr]
         for messages in model.calls:
-            assert "仅提供 `cua_execute`" in (messages[0].content or "")
+            assert "不要检索任务" in (messages[0].content or "")
             assert "先用 `cua_catalog`" not in (messages[0].content or "")
         assert model.tool_sets[1] == ()
 
@@ -324,7 +324,7 @@ def test_terminal_finalization_rejects_json_envelope_without_exposing_it() -> No
     asyncio.run(scenario())
 
 
-def test_workbench_success_is_terminal_and_final_reply_keeps_url() -> None:
+def test_workbench_tool_is_rejected_without_starting_runtime_work() -> None:
     async def scenario() -> None:
         url = "http://127.0.0.1:47831/?mode=recording"
         model = FakeModelClient(
@@ -354,10 +354,9 @@ def test_workbench_success_is_terminal_and_final_reply_keeps_url() -> None:
 
         result = await agent.invoke(InvocationRequest("打开录制入口", invocation_id="workbench"))
 
-        assert result.status is InvocationStatus.COMPLETED
-        assert url in result.reply
-        assert runtime.calls == [("workbench", {"mode": "recording"})]
-        assert model.tool_sets[1] == ()
+        assert result.status is InvocationStatus.FAILED
+        assert runtime.calls == []
+        assert len(model.tool_sets) == 1
 
     asyncio.run(scenario())
 
