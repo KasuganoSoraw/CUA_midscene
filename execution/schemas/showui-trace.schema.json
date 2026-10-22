@@ -19,7 +19,7 @@
                 "required": ["type"],
                 "properties": {
                   "type": {
-                    "enum": ["click", "doubleClick", "input", "keyboard", "wait"]
+                    "enum": ["click", "doubleClick", "rightClick", "input", "keyboard", "wait"]
                   },
                   "prompt": { "type": ["string", "null"] },
                   "locatePrompt": { "type": ["string", "null"] },
@@ -35,7 +35,7 @@
                       "required": ["useReferenceImage"]
                     },
                     "then": {
-                      "properties": { "type": { "enum": ["click", "doubleClick"] } }
+                      "properties": { "type": { "enum": ["click", "doubleClick", "rightClick"] } }
                     }
                   }
                 ],

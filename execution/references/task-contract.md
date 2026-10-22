@@ -121,9 +121,9 @@ tasks:
 
 调用只能覆盖已声明 ID。未提供输入使用 `default`；未知、重复、非字符串、未声明、未使用或格式错误的占位符都会在启动 Midscene 前失败。
 
-每个 trace step 对应一个 `step-NNN | <operation-type>` task。step 必须为正整数、唯一并严格递增。click、doubleClick、input、keyboard、wait 分别映射为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。转换器只读取 `caption.operation` 和 processed log 时间，不从其他文本猜测动作。
+每个 trace step 对应一个 `step-NNN | <operation-type>` task。step 必须为正整数、唯一并严格递增。click、doubleClick、rightClick、keyboard、wait 分别映射为 `aiTap`、`aiDoubleClick`、`aiRightClick`、`KeyboardPress`、`aiWaitFor`。普通 input 使用 `KeyboardTypeText`；录制文本粘贴使用 `aiInput` 的追加模式，并把剪贴板快照写入 `task.json` 输入默认值。转换器读取结构化 operation、processed log 时间及粘贴文本快照，不从其他自然语言字段猜测动作。
 
-click/doubleClick 的 `operation.useReferenceImage: true` 表示该步骤需要视觉参考。转换器只从同一步 processed log 的 `screenshot_reference` 绑定图片，并要求路径位于任务 `source/` 内且文件存在。canonical YAML 保留相对任务根目录的 URL；resolver 在运行前验证并生成绝对本地路径，HTTP(S) 与 data URL 原样保留。图片 prompt 是 Midscene 语义定位输入，不是模板匹配或坐标回放。
+click/doubleClick/rightClick 的 `operation.useReferenceImage: true` 表示该步骤需要视觉参考。转换器只从同一步 processed log 的 `screenshot_reference` 绑定图片，并要求路径位于任务 `source/` 内且文件存在。canonical YAML 保留相对任务根目录的 URL；resolver 在运行前验证并生成绝对本地路径，HTTP(S) 与 data URL 原样保留。图片 prompt 是 Midscene 语义定位输入，不是模板匹配或坐标回放。
 
 ## 校准与重建
 
@@ -141,4 +141,4 @@ TypeScript resolver 写入 `<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml`，
 
 一键创建只复制 trace、两份 processed log 和被 processed log 引用的截图，不复制原始视频或事件日志。Python 进度进入 stderr，最终 stdout 是单个 JSON；复制、转换或验证失败时删除本次新建的 task 半成品，但保留原录制产物与已有 run 报告。
 
-Runtime 不提供跨进程并发锁，上层调用方必须串行发起真实 computer use。失败必须原样暴露，不自动切换模式、修改任务、重试或改用剪贴板 Input。
+Runtime 不提供跨进程并发锁，上层调用方必须串行发起真实 computer use。失败必须原样暴露，不自动切换模式、修改任务、重试或更换输入动作。

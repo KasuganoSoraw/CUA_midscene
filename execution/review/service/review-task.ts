@@ -14,7 +14,7 @@ import type {
   ReviewTaskView,
 } from '../shared/types.js';
 
-const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|input|keyboard|wait)$/;
+const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait)$/;
 
 export function reviewRevision(taskJson: string | Buffer, taskYaml: string | Buffer): string {
   return `sha256:${createHash('sha256').update(taskJson).update('\0').update(taskYaml).digest('hex')}`;

@@ -99,9 +99,10 @@ function actionFromOperation(
   operation: ShowuiTraceOperation,
   step: number,
   processedStep: ProcessedLogStep,
-): { action: JsonObject; input?: [string, TaskInputDefinition] } {
-  if (operation.type === 'click' || operation.type === 'doubleClick') {
+): { actions: JsonObject[]; input?: [string, TaskInputDefinition] } {
+  if (operation.type === 'click' || operation.type === 'doubleClick' || operation.type === 'rightClick') {
     const prompt = requiredOperationText(operation.prompt, 'prompt', step);
+    const actionName = { click: 'aiTap', doubleClick: 'aiDoubleClick', rightClick: 'aiRightClick' }[operation.type];
     if (operation.useReferenceImage) {
       const rawReferencePath = processedStep.screenshot_reference?.trim();
       if (!rawReferencePath) {
@@ -118,41 +119,50 @@ function actionFromOperation(
       const stepId = `step-${String(step).padStart(3, '0')}`;
       const imageName = `${stepId}-target`;
       return {
-        action: {
-          [operation.type === 'click' ? 'aiTap' : 'aiDoubleClick']: null,
+        actions: [{
+          [actionName]: null,
           locate: {
             prompt: `${prompt}。目标外观应匹配参考图“${imageName}”正中央的主要图标，参考图周边仅用于辅助理解`,
             images: [{ name: imageName, url: referenceUrl }],
           },
-        },
+        }],
       };
     }
-    return { action: { [operation.type === 'click' ? 'aiTap' : 'aiDoubleClick']: prompt } };
+    return { actions: [{ [actionName]: prompt }] };
   }
   if (operation.useReferenceImage) {
-    throw new Error(`trace step ${step} 只有 click 或 doubleClick 可以使用视觉参考`);
+    throw new Error(`trace step ${step} 只有点击动作可以使用视觉参考`);
   }
   if (operation.type === 'input') {
     const prompt = requiredOperationText(operation.prompt, 'prompt', step);
     const locate = requiredOperationText(operation.locatePrompt, 'locatePrompt', step);
-    const value = requiredOperationText(operation.value, 'value', step);
+    const isPaste = processedStep.action === 'Paste text';
+    const value = isPaste
+      ? processedStep.clipboard_text
+      : requiredOperationText(operation.value, 'value', step);
+    if (typeof value !== 'string' || !value.length) {
+      throw new Error(`trace step ${step} 的粘贴文本不能为空`);
+    }
     const inputId = `step-${String(step).padStart(3, '0')}-input`;
     return {
-      action: {
-        KeyboardTypeText: { locate, value: `{{${inputId}}}`, mode: 'replace' },
-      },
+      actions: isPaste
+        ? [
+          { KeyboardPress: { keyName: 'End', locate: { prompt: locate } } },
+          { aiInput: null, value: `{{${inputId}}}`, mode: 'typeOnly' },
+        ]
+        : [{ KeyboardTypeText: { locate, value: `{{${inputId}}}`, mode: 'replace' } }],
       input: [inputId, { type: 'string', label: locate, description: prompt, default: value }],
     };
   }
   if (operation.type === 'keyboard') {
-    return { action: { KeyboardPress: { keyName: requiredOperationText(operation.key, 'key', step) } } };
+    return { actions: [{ KeyboardPress: { keyName: requiredOperationText(operation.key, 'key', step) } }] };
   }
   const condition = requiredOperationText(operation.condition, 'condition', step);
   return {
-    action: {
+    actions: [{
       aiWaitFor: operation.prompt?.trim() || condition,
       timeout: 15_000,
-    },
+    }],
   };
 }
 
@@ -180,7 +190,7 @@ export function buildTaskAssets(
       if (wait) flow.push({ sleep: wait });
     }
     const mapped = actionFromOperation(traceStep.caption.operation, step, processedSteps[index]);
-    flow.push(mapped.action);
+    flow.push(...mapped.actions);
     tasks.push({ name: `step-${String(step).padStart(3, '0')} | ${traceStep.caption.operation.type}`, flow });
     if (mapped.input) inputs[mapped.input[0]] = mapped.input[1];
     previousTimestamp = processedSteps[index].timestamp;

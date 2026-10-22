@@ -88,6 +88,8 @@ class LogProcessor:
         return {
             "timestamp": timestamp_seconds, "action": action,
             "coords": coords if coords else None, "current_software": window,
+            **({"clipboard_text": event_data["clipboard_text"]}
+               if isinstance(event_data.get("clipboard_text"), str) else {}),
         }, current_software
     
     def calculate_backspace_deletions(self, duration, base_rate=10):
@@ -175,9 +177,14 @@ class LogProcessor:
             buffer.append(message.replace("Hotkey: SHIFT+", "").strip())
             last_timestamp = action["timestamp"]
         elif message.startswith("Hotkey: CTRL+"):
+            if buffer:
+                self._flush_typing(merged_actions, buffer, last_timestamp, last_click_coords, current_window)
+                buffer = []
             merged_actions.append({
                 "timestamp": action["timestamp"], "action": message,
                 "coords": last_click_coords, "current_software": current_window,
+                **({"clipboard_text": action["clipboard_text"]}
+                   if isinstance(action.get("clipboard_text"), str) else {}),
             })
         elif ("Key Release:" in message or message == "Hotkey: SHIFT"
               or ("Hotkey:" in message and "BACKSPACE" not in message)):
@@ -319,6 +326,27 @@ class LogProcessor:
             i += 1
         
         return merged_actions
+
+    def fold_text_paste(self, actions):
+        """Represent text paste as an input step and omit its source-only copy gesture."""
+        merged = []
+        for index, action in enumerate(actions):
+            message = action.get("action") or ""
+            if message == "Hotkey: CTRL+C" and any(
+                isinstance(later.get("clipboard_text"), str)
+                and later.get("action") == "Hotkey: CTRL+V"
+                for later in actions[index + 1:]
+            ):
+                if merged and merged[-1].get("action") == "DragStart at":
+                    merged.pop()
+                continue
+            if message == "Hotkey: CTRL+V" and not action.get("clipboard_text"):
+                raise ValueError("录制的 Ctrl+V 缺少可用的剪贴板文本，无法生成输入步骤")
+            if message == "Hotkey: CTRL+V" and isinstance(action.get("clipboard_text"), str):
+                merged.append({**action, "action": "Paste text"})
+                continue
+            merged.append(action)
+        return merged
     
     def process_scroll_events(self, actions):
         """Group consecutive scroll events"""
@@ -606,6 +634,7 @@ class LogProcessor:
         actions = self.cleanup_click_before_drag(actions, tol=5)
         if actions:
             actions.pop()
+        actions = self.fold_text_paste(actions)
         print(f"After click-before-drag and final recording cleanup: {len(actions)-1} actions")
         
         # Step 9: Sort and Save processed log

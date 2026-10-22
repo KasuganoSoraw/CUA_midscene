@@ -125,6 +125,7 @@ class AlohaEventFormatter:
         coordinate_origin: tuple[int, int] = (0, 0),
         coordinate_size: tuple[int, int] | None = None,
         caps_lock_on: bool = False,
+        clipboard_provider: Callable[[], str | None] | None = None,
     ) -> None:
         self._stream = stream
         self._started_ns = started_ns
@@ -136,6 +137,7 @@ class AlohaEventFormatter:
         self._coordinate_origin = coordinate_origin
         self._coordinate_size = coordinate_size
         self._caps_lock_on = caps_lock_on
+        self._clipboard_provider = clipboard_provider
         self._pressed_keys: set[int] = set()
         self._pressed_modifier_keys: set[int] = set()
         self._pressed_key_names: dict[int, str] = {}
@@ -149,7 +151,13 @@ class AlohaEventFormatter:
         with self._lock:
             message = self._format_message(event)
             if message:
-                self._write(event.time_ns, message)
+                clipboard_text = None
+                if message == "Hotkey: CTRL+V" and self._clipboard_provider is not None:
+                    try:
+                        clipboard_text = self._clipboard_provider()
+                    except (OSError, ValueError):
+                        pass
+                self._write(event.time_ns, message, clipboard_text=clipboard_text)
 
     def finish(self, time_ns: int) -> None:
         """写入处理器消费的末尾哨兵，确保最后一个真实动作被保留。"""
@@ -270,12 +278,14 @@ class AlohaEventFormatter:
             return characters[1] if shifted else characters[0]
         return physical_name
 
-    def _write(self, time_ns: int, message: str) -> None:
+    def _write(self, time_ns: int, message: str, *, clipboard_text: str | None = None) -> None:
         document = {
             "timestamp": format_timestamp(time_ns - self._started_ns),
             "message": message,
             "window": self._window_provider(),
         }
+        if clipboard_text is not None:
+            document["clipboard_text"] = clipboard_text
         self._stream.write(json.dumps(document, ensure_ascii=False) + "\n")
         self._stream.flush()
 

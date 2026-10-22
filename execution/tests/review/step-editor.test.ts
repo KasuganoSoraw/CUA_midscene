@@ -97,6 +97,30 @@ test('input 语义表单与 Flow/参数定义双向转换', () => {
   });
 });
 
+test('右键点击和粘贴输入在复核表单中无损往返', () => {
+  const right = parseStepEditor({
+    id: 'step-001', operation: 'rightClick', flow: [{ aiRightClick: '文件行' }],
+  });
+  assert.equal(right.custom, false);
+  assert.deepEqual(buildStepContent(right, 'step-001').flow, [{ aiRightClick: '文件行' }]);
+
+  const paste = parseStepEditor({
+    id: 'step-002', operation: 'input',
+    flow: [
+      { KeyboardPress: { keyName: 'End', locate: { prompt: '搜索框' } } },
+      { aiInput: null, value: '{{step-002-input}}', mode: 'typeOnly' },
+    ],
+    input: { type: 'string', label: '搜索框', default: '中文 text' },
+  });
+  assert.equal(paste.custom, false);
+  assert.equal(paste.inputMode, 'append');
+  assert.equal(paste.inputDefault, '中文 text');
+  assert.deepEqual(buildStepContent(paste, 'step-002').flow, [
+    { KeyboardPress: { keyName: 'End', locate: { prompt: '搜索框' } } },
+    { aiInput: null, value: '{{step-002-input}}', mode: 'typeOnly' },
+  ]);
+});
+
 test('关闭运行时参数后 Flow 使用固定输入值', () => {
   const parsed = parseStepEditor({
     id: 'step-002',

@@ -81,10 +81,45 @@ test('双击 operation 映射为 aiDoubleClick', async () => {
   });
 });
 
+test('右键 operation 映射为 aiRightClick', async () => {
+  const fixture = await prepare('right-click-task');
+  const tracePath = path.join(fixture.taskRoot, 'source', 'showui-trace.json');
+  const trace = JSON.parse(await readFile(tracePath, 'utf8'));
+  trace.trajectory[0].caption.operation = { type: 'rightClick', prompt: '右键点击目标文件' };
+  await writeFile(tracePath, JSON.stringify(trace), 'utf8');
+  const document = await readYamlDocument(await convertTrace(fixture.options));
+  assert.deepEqual((document.tasks as Array<Record<string, any>>)[0], {
+    name: 'step-001 | rightClick', flow: [{ aiRightClick: '右键点击目标文件' }],
+  });
+});
+
+test('粘贴使用录制文本作为默认参数并追加输入', async () => {
+  const fixture = await prepare('paste-task');
+  const tracePath = path.join(fixture.taskRoot, 'source', 'showui-trace.json');
+  const logPath = path.join(fixture.taskRoot, 'source', 'processed-log-sc.json');
+  const trace = JSON.parse(await readFile(tracePath, 'utf8'));
+  const processed = JSON.parse(await readFile(logPath, 'utf8'));
+  trace.trajectory[1].caption.operation = {
+    type: 'input', prompt: '向搜索框追加文本', locatePrompt: '搜索框', value: '模型返回的其他值',
+  };
+  processed[1].action = 'Paste text';
+  processed[1].clipboard_text = ' 中文 text\n';
+  await writeFile(tracePath, JSON.stringify(trace), 'utf8');
+  await writeFile(logPath, JSON.stringify(processed), 'utf8');
+  const document = await readYamlDocument(await convertTrace(fixture.options));
+  const manifest = await readTaskManifest(path.join(fixture.taskRoot, 'task.json'));
+  assert.deepEqual((document.tasks as Array<Record<string, any>>)[1].flow.slice(-2), [
+    { KeyboardPress: { keyName: 'End', locate: { prompt: '搜索框' } } },
+    { aiInput: null, value: '{{step-002-input}}', mode: 'typeOnly' },
+  ]);
+  assert.equal(manifest.inputs['step-002-input'].default, ' 中文 text\n');
+});
+
 test('视觉参考 click 和 doubleClick 生成原生 Midscene locate.images', async () => {
   for (const [taskName, operationType, actionName] of [
     ['reference-click', 'click', 'aiTap'],
     ['reference-double-click', 'doubleClick', 'aiDoubleClick'],
+    ['reference-right-click', 'rightClick', 'aiRightClick'],
   ] as const) {
     const fixture = await prepare(taskName);
     const tracePath = path.join(fixture.taskRoot, 'source', 'showui-trace.json');

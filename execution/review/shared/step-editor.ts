@@ -9,6 +9,7 @@ export interface StepEditorModel {
   target: string;
   inputValue: string;
   inputMode: InputMode;
+  inputAction: 'KeyboardTypeText' | 'aiInput';
   parameterized: boolean;
   inputLabel: string;
   inputDescription: string;
@@ -80,6 +81,7 @@ export function defaultStepEditor(operation: ReviewOperation, delayMs = 0): Step
     target: operation === 'input' ? '描述输入框位置' : '描述要点击的目标',
     inputValue: '',
     inputMode: 'replace',
+    inputAction: 'KeyboardTypeText',
     parameterized: operation === 'input',
     inputLabel: '输入值',
     inputDescription: '',
@@ -96,9 +98,9 @@ export function defaultStepEditor(operation: ReviewOperation, delayMs = 0): Step
 
 function parseClickAction(
   action: JsonObject,
-  operation: 'click' | 'doubleClick',
+  operation: 'click' | 'doubleClick' | 'rightClick',
 ): { target: string; referenceImages: ReviewReferenceImage[]; convertHttpImage2Base64: boolean } | undefined {
-  const key = operation === 'click' ? 'aiTap' : 'aiDoubleClick';
+  const key = { click: 'aiTap', doubleClick: 'aiDoubleClick', rightClick: 'aiRightClick' }[operation];
   if (typeof action[key] === 'string' && Object.keys(action).length === 1) {
     return {
       target: action[key] as string,
@@ -138,7 +140,7 @@ export function referenceImagesFromFlow(
   flow: JsonObject[],
   operation: ReviewOperation,
 ): ReviewReferenceImage[] {
-  if (operation !== 'click' && operation !== 'doubleClick') return [];
+  if (operation !== 'click' && operation !== 'doubleClick' && operation !== 'rightClick') return [];
   const { action, standard } = splitFlow(flow);
   if (!standard || !action) return [];
   return clone(parseClickAction(action, operation)?.referenceImages ?? []);
@@ -152,11 +154,12 @@ export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flo
   result.inputLabel = step.input?.label ?? '输入值';
   result.inputDescription = step.input?.description ?? '';
   result.inputDefault = step.input?.default ?? '';
+  if (step.operation === 'input' && parsePasteEditor(result, step)) return result;
   if (!standard || !action) {
     return customStepEditor(result, step.flow);
   }
 
-  if (step.operation === 'click' || step.operation === 'doubleClick') {
+  if (step.operation === 'click' || step.operation === 'doubleClick' || step.operation === 'rightClick') {
     return parseClickEditor(result, action, step);
   }
   if (step.operation === 'input') {
@@ -173,6 +176,31 @@ export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flo
   return result;
 }
 
+function parsePasteEditor(
+  result: StepEditorModel,
+  step: Pick<ReviewStep, 'id' | 'flow'>,
+): boolean {
+  const actions = Object.hasOwn(step.flow[0] ?? {}, 'sleep') ? step.flow.slice(1) : step.flow;
+  if (actions.length !== 2) return false;
+  const focus = objectValue(actions[0].KeyboardPress);
+  const paste = actions[1];
+  const focusLocate = objectValue(focus?.locate);
+  if (
+    !focus || focus.keyName !== 'End' || typeof focusLocate?.prompt !== 'string'
+    || !Object.keys(focusLocate).every((key) => key === 'prompt')
+    || Object.keys(actions[0]).length !== 1
+    || !Object.keys(focus).every((key) => key === 'keyName' || key === 'locate')
+    || paste.aiInput !== null || paste.mode !== 'typeOnly'
+    || !Object.keys(paste).every((key) => ['aiInput', 'value', 'mode'].includes(key))
+  ) return false;
+  result.inputAction = 'aiInput';
+  result.inputMode = 'append';
+  result.target = focusLocate.prompt;
+  const value = stringValue(paste.value);
+  result.inputValue = value === `{{${step.id}-input}}` ? result.inputDefault : value;
+  return true;
+}
+
 function customStepEditor(result: StepEditorModel, flow: JsonObject[]): StepEditorModel {
   return { ...result, custom: true, customFlow: clone(flow) };
 }
@@ -181,7 +209,7 @@ function parseClickEditor(
   result: StepEditorModel, action: JsonObject,
   step: Pick<ReviewStep, 'operation' | 'flow'>,
 ): StepEditorModel {
-  const parsed = parseClickAction(action, step.operation as 'click' | 'doubleClick');
+  const parsed = parseClickAction(action, step.operation as 'click' | 'doubleClick' | 'rightClick');
   if (!parsed) return customStepEditor(result, step.flow);
   result.target = parsed.target;
   result.referenceImages = clone(parsed.referenceImages);
@@ -194,10 +222,14 @@ function parseInputEditor(
   step: Pick<ReviewStep, 'id' | 'flow'>,
 ): StepEditorModel {
   const keyboard = objectValue(action.KeyboardTypeText);
-  if (!keyboard || Object.keys(action).length !== 1) return customStepEditor(result, step.flow);
-  result.target = stringValue(keyboard.locate);
-  result.inputMode = keyboard.mode === 'append' ? 'append' : 'replace';
-  const value = stringValue(keyboard.value);
+  const paste = Object.hasOwn(action, 'aiInput') && action.aiInput === null
+    && Object.keys(action).every((key) => ['aiInput', 'locate', 'value', 'mode'].includes(key));
+  if ((!keyboard || Object.keys(action).length !== 1) && !paste) return customStepEditor(result, step.flow);
+  const parameters = paste ? action : keyboard!;
+  result.inputAction = paste ? 'aiInput' : 'KeyboardTypeText';
+  result.target = stringValue(parameters.locate);
+  result.inputMode = parameters.mode === 'append' || parameters.mode === 'typeOnly' ? 'append' : 'replace';
+  const value = stringValue(parameters.value);
   result.inputValue = value === `{{${step.id}-input}}` ? result.inputDefault : value;
   return result;
 }
@@ -220,7 +252,7 @@ function buildStepInput(model: StepEditorModel): TaskInputDefinition | null {
 }
 
 function buildClickAction(model: StepEditorModel): JsonObject {
-  const key = model.operation === 'click' ? 'aiTap' : 'aiDoubleClick';
+  const key = { click: 'aiTap', doubleClick: 'aiDoubleClick', rightClick: 'aiRightClick' }[model.operation as 'click' | 'doubleClick' | 'rightClick'];
   if (!model.referenceImages.length) return { [key]: model.target };
   return {
     [key]: null,
@@ -234,8 +266,16 @@ function buildClickAction(model: StepEditorModel): JsonObject {
 }
 
 function buildStepAction(model: StepEditorModel, stepId: string): JsonObject {
-  if (model.operation === 'click' || model.operation === 'doubleClick') return buildClickAction(model);
+  if (model.operation === 'click' || model.operation === 'doubleClick' || model.operation === 'rightClick') return buildClickAction(model);
   if (model.operation === 'input') {
+    if (model.inputAction === 'aiInput') {
+      return {
+        aiInput: null,
+        locate: model.target,
+        value: model.parameterized ? `{{${stepId}-input}}` : model.inputValue,
+        mode: model.inputMode === 'append' ? 'typeOnly' : 'replace',
+      };
+    }
     return {
       KeyboardTypeText: {
         locate: model.target,
@@ -254,6 +294,15 @@ export function buildStepContent(model: StepEditorModel, stepId: string): BuiltS
   const flow: JsonObject[] = [];
   const delayMs = Math.max(0, Math.round(model.delayMs || 0));
   if (delayMs) flow.push({ sleep: delayMs });
+  if (model.operation === 'input' && model.inputAction === 'aiInput' && model.inputMode === 'append') {
+    flow.push({ KeyboardPress: { keyName: 'End', locate: { prompt: model.target } } });
+    flow.push({
+      aiInput: null,
+      value: model.parameterized ? `{{${stepId}-input}}` : model.inputValue,
+      mode: 'typeOnly',
+    });
+    return { flow, input };
+  }
   flow.push(buildStepAction(model, stepId));
   return { flow, input };
 }

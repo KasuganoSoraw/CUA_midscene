@@ -149,6 +149,7 @@ class TraceGenerator:
         operation_types = {
             "click": "click",
             "doubleclick": "doubleClick",
+            "rightclick": "rightClick",
             "input": "input",
             "keyboard": "keyboard",
             "wait": "wait",
@@ -177,7 +178,9 @@ class TraceGenerator:
         event_name = re.split(r"\s+|:", action.strip(), maxsplit=1)[0].lower()
         if event_name in {"ldoubleclick", "ldblclick", "doubleclick", "dblclick"}:
             return "doubleClick"
-        if event_name == "type":
+        if event_name in {"rclick", "rightclick", "rdoubleclick"}:
+            return "rightClick"
+        if event_name in {"type", "paste"}:
             return "input"
         if event_name == "press":
             return "keyboard"
@@ -194,12 +197,13 @@ class TraceGenerator:
         required_fields = {
             "click": ("prompt",),
             "doubleClick": ("prompt",),
+            "rightClick": ("prompt",),
             "input": ("prompt", "locatePrompt", "value"),
             "keyboard": ("key",),
             "wait": ("condition",),
         }
         if operation_type not in required_fields:
-            return "Operation.type 必须是 click、doubleClick、input、keyboard 或 wait"
+            return "Operation.type 必须是 click、doubleClick、rightClick、input、keyboard 或 wait"
         if expected_type is not None and operation_type != expected_type:
             return (
                 f"录制事件要求 Operation.type 为 {expected_type}，"
@@ -211,8 +215,8 @@ class TraceGenerator:
         if "useReferenceImage" in operation:
             if operation["useReferenceImage"] is not True:
                 return "Operation.useReferenceImage 只能是布尔值 true；不需要时应省略"
-            if operation_type not in {"click", "doubleClick"}:
-                return "只有 click 或 doubleClick operation 可以使用 useReferenceImage"
+            if operation_type not in {"click", "doubleClick", "rightClick"}:
+                return "只有 click、doubleClick 或 rightClick operation 可以使用 useReferenceImage"
         return None
 
     def _sanitize_caption(self, cap: Dict[str, Any]) -> Dict[str, Any]:
@@ -263,6 +267,14 @@ class TraceGenerator:
         sw = action.get("current_software") or ""
         ts = action.get("timestamp")
         act = (action.get("action") or "").strip()
+        paste_guide = ""
+        if act == "Paste text" and isinstance(action.get("clipboard_text"), str):
+            paste_guide = (
+                "\n本步是向当前输入框追加录制时粘贴的文本；"
+                "Operation.type 必须为 input，locatePrompt 定位目标输入框。"
+                "Operation.value 必须等于以下 JSON 字符串解码后的文本："
+                f"{json.dumps(action['clipboard_text'], ensure_ascii=False)}\n"
+            )
         recent_json = json.dumps(recent_steps, ensure_ascii=False, indent=2)
 
         delta = self._action_delta(act, action, deltas_cfg, modifier_guide)
@@ -281,6 +293,7 @@ Overall Task: {overall_task}
 {delta}
 
 {reference_image_guide}
+{paste_guide}
 
 只输出 JSON。JSON 字段名必须保持为 Observation、Think、Action、Expectation、Operation。
 前四个字段的字段值必须使用中文；Operation.prompt 也应使用中文，只有界面原文、品牌名、按钮名、机场名、URL、快捷键和专有名词可以保留英文。
@@ -291,7 +304,7 @@ Overall Task: {overall_task}
         key = None
         if "dragstart" in a or a.startswith("drag"):
             key = "Drag"
-        elif "rclick" in a or "right click" in a:
+        elif "rclick" in a or "rdoubleclick" in a or "right click" in a:
             key = "RClick"
         elif "dbl" in a or "double" in a:
             key = "DblClick"
@@ -436,16 +449,18 @@ Overall Task: {overall_task}
         recent = self._recent_captions(traj)
         prompt = self._prompt(item, overall_task, step_idx, recent)
         cap = self._request_caption(prompt, crop_b64, full_b64)
+        self._set_paste_value(cap, item)
         if self._caption_needs_retry(cap, expected_operation_type):
             operation_error = self._operation_error(cap.get("operation"), expected_operation_type)
             retry_prompt = (
                 f"{prompt}\n\n"
                 f"上一次输出缺少有效 Action 或 Operation：{operation_error or 'Action 为空'}。"
                 "请重新输出完整 JSON，必须包含非空 Action，"
-                "并且 Operation.type 必须是 click、doubleClick、input、keyboard 或 wait；"
+                "并且 Operation.type 必须是 click、doubleClick、rightClick、input、keyboard 或 wait；"
                 "各类型的必需字段必须完整。"
             )
             cap = self._request_caption(retry_prompt, crop_b64, full_b64)
+            self._set_paste_value(cap, item)
         if self._caption_needs_retry(cap, expected_operation_type):
             operation_error = self._operation_error(cap.get("operation"), expected_operation_type)
             raise RuntimeError(
@@ -453,6 +468,13 @@ Overall Task: {overall_task}
                 f"{operation_error or 'Action 为空'}"
             )
         return cap
+
+    def _set_paste_value(self, caption, item):
+        if item.get("action") != "Paste text" or not isinstance(item.get("clipboard_text"), str):
+            return
+        if not isinstance(caption.get("operation"), dict):
+            caption["operation"] = {}
+        caption["operation"]["value"] = item["clipboard_text"]
 
     def _step_images(self, raw, screenshots_dir, ts, act_str):
         crop = raw.get("screenshot_crop") or raw.get("screenshot")

@@ -22,7 +22,7 @@ record trace
 - `cua/contracts/`：普通 TypeScript 类型和 Ajv 文件边界校验。
 - `runtime-bridge/`：向顶层 Python Agent 提供 JSON/JSONL catalog、execute、workbench 契约；不包含模型、prompt、Session 或 GDEClaw 逻辑。
 - `cua/recording/`：定位外部 record 环境、运行 parser、复制标准化生成资产并编排任务创建。
-- `cua/conversion/`：只根据结构化 trace operation 初始化任务；被标记的 click/doubleClick 会绑定 processed log 中的 reference patch。
+- `cua/conversion/`：根据结构化 trace operation 初始化任务；点击、双击和右键点击可绑定 reference patch，文本粘贴生成带录制默认值的追加输入步骤。
 - `cua/task/`：本地任务发现、YAML、输入、运行快照和执行编排。
 - `cua/act/`：不依赖录制任务或 YAML 的自然语言原生 aiAct 调用。
 - `cli/`：统一命令分发与 stdout/stderr 输出协议。

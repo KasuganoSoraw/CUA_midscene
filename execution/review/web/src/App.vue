@@ -73,6 +73,7 @@ function operationLabel(operation: ReviewOperation): string {
 const operationOptions = computed<ReviewSelectOption[]>(() => [
   { value: 'click', label: operationLabel('click') },
   { value: 'doubleClick', label: operationLabel('doubleClick') },
+  { value: 'rightClick', label: operationLabel('rightClick') },
   { value: 'input', label: operationLabel('input') },
   { value: 'keyboard', label: operationLabel('keyboard') },
   { value: 'wait', label: operationLabel('wait') },
@@ -169,7 +170,7 @@ const referenceBindingDisabledReason = computed<string | undefined>(() => {
   if (busy.value) return t('review.referenceBusy');
   if (advancedEditing.value) return t('review.referenceAdvanced');
   if (editor.custom) return t('review.referenceCustom');
-  if (editor.operation !== 'click' && editor.operation !== 'doubleClick') {
+  if (editor.operation !== 'click' && editor.operation !== 'doubleClick' && editor.operation !== 'rightClick') {
     return t('review.referenceOperation');
   }
   if (multipleReferenceImages.value) {
@@ -181,7 +182,7 @@ const referenceBindingDisabledReason = computed<string | undefined>(() => {
   return undefined;
 });
 const referenceUploadDisabled = computed(() => !writable.value || busy.value || conflict.value || advancedEditing.value
-  || editor.custom || multipleReferenceImages.value || (editor.operation !== 'click' && editor.operation !== 'doubleClick'));
+  || editor.custom || multipleReferenceImages.value || (editor.operation !== 'click' && editor.operation !== 'doubleClick' && editor.operation !== 'rightClick'));
 const dirty = computed(() => changes.value.length > 0);
 const builtContent = computed(() => buildStepContent(editor, current.value?.id ?? 'step-001'));
 const flowPreview = computed(() => JSON.stringify(builtContent.value.flow, null, 2));
@@ -196,7 +197,7 @@ function rebuildSteps(): void {
   const bindings = draft.value.manifest.source.stepBindings ?? {};
   steps.value = (draft.value.document.tasks as JsonObject[]).map((item, index) => {
     const name = String(item.name);
-    const match = /^(step-\d{3,}) \| (click|doubleClick|input|keyboard|wait)$/.exec(name);
+    const match = /^(step-\d{3,}) \| (click|doubleClick|rightClick|input|keyboard|wait)$/.exec(name);
     const id = match?.[1] ?? `step-${String(index + 1).padStart(3, '0')}`;
     const operation = (match?.[2] ?? 'click') as ReviewOperation;
     const flow = clone(item.flow as JsonObject[]);
@@ -732,14 +733,14 @@ onMounted(async () => {
       <section class="editor panel">
         <header class="review-editor-heading">
           <h2>{{ currentTitle }}</h2>
-          <div v-if="current" class="step-provenance"><span><i class="evidence-dot" :class="{ manual: !current.evidence }"></i>{{ current.evidence ? t('review.recordedStep') : t('review.manualStep') }}</span><span v-if="editor.operation === 'click' || editor.operation === 'doubleClick'"><WorkbenchIcon name="image" />{{ referenceImagesBound ? t('review.referenceEnabled') : t('review.referenceDisabled') }}</span></div>
+          <div v-if="current" class="step-provenance"><span><i class="evidence-dot" :class="{ manual: !current.evidence }"></i>{{ current.evidence ? t('review.recordedStep') : t('review.manualStep') }}</span><span v-if="editor.operation === 'click' || editor.operation === 'doubleClick' || editor.operation === 'rightClick'"><WorkbenchIcon name="image" />{{ referenceImagesBound ? t('review.referenceEnabled') : t('review.referenceDisabled') }}</span></div>
         </header>
         <section v-if="current" class="step-evidence">
           <input ref="referenceFileInput" hidden type="file" tabindex="-1" accept="image/png,image/jpeg,image/webp" :disabled="referenceUploadDisabled" @change="uploadReference" />
           <div class="evidence-tabs">
             <button v-if="current.evidence?.full" :class="{ active: evidenceMode === 'full' }" @click="evidenceMode = 'full'">{{ t('review.globalImage') }}</button>
             <button v-if="current.evidence?.crop" :class="{ active: evidenceMode === 'crop' }" @click="evidenceMode = 'crop'">{{ t('review.cropImage') }}</button>
-            <button v-if="editor.operation === 'click' || editor.operation === 'doubleClick'" :class="{ active: evidenceMode === 'reference' }" @click="evidenceMode = 'reference'">{{ t('review.referenceImage') }}</button>
+            <button v-if="editor.operation === 'click' || editor.operation === 'doubleClick' || editor.operation === 'rightClick'" :class="{ active: evidenceMode === 'reference' }" @click="evidenceMode = 'reference'">{{ t('review.referenceImage') }}</button>
             <span>{{ evidenceMode === 'reference' ? t('review.referenceImage') : t('review.recordedImage') }}</span>
           </div>
           <div v-if="evidenceMode === 'reference'" class="reference-gallery">
@@ -766,7 +767,7 @@ onMounted(async () => {
             <EvidencePlaceholder v-else />
           </div>
           <p v-if="referenceUploadError" class="inline-error" role="alert">{{ referenceUploadError }}</p>
-          <p v-if="conflict && (editor.operation === 'click' || editor.operation === 'doubleClick')" class="inline-error" role="alert">
+          <p v-if="conflict && (editor.operation === 'click' || editor.operation === 'doubleClick' || editor.operation === 'rightClick')" class="inline-error" role="alert">
             {{ t('review.referenceConflict') }}
             <button type="button" class="text-button" @click="draftDiscardOpen = true">{{ t('review.reload') }}</button>
           </p>
@@ -791,7 +792,7 @@ onMounted(async () => {
             {{ t('review.customFlow') }}
           </div>
 
-          <template v-else-if="editor.operation === 'click' || editor.operation === 'doubleClick'">
+          <template v-else-if="editor.operation === 'click' || editor.operation === 'doubleClick' || editor.operation === 'rightClick'">
             <label class="wide">{{ t('review.target') }}
               <textarea v-model="editor.target" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.targetPlaceholder')"></textarea>
             </label>

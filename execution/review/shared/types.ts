@@ -7,7 +7,7 @@ import type {
 } from '../../cua/contracts/types.js';
 
 export type ReviewOrigin = 'builtin' | 'user';
-export type ReviewOperation = 'click' | 'doubleClick' | 'input' | 'keyboard' | 'wait';
+export type ReviewOperation = 'click' | 'doubleClick' | 'rightClick' | 'input' | 'keyboard' | 'wait';
 
 export interface ReviewServerIdentity {
   service: string;

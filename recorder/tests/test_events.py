@@ -40,6 +40,26 @@ class EventFormattingTest(unittest.TestCase):
             messages(stream),
         )
 
+    def test_paste_captures_unicode_clipboard_snapshot(self) -> None:
+        stream = io.StringIO()
+        formatter = AlohaEventFormatter(
+            stream, started_ns=1_000_000_000,
+            window_provider=lambda: "editor.exe",
+            clipboard_provider=lambda: "复制的中文\n第二行",
+        )
+        formatter.handle(RawInputEvent("key_down", 1_010_000_000, vk_code=0x11))
+        formatter.handle(RawInputEvent("key_down", 1_020_000_000, vk_code=0x56))
+        events = [json.loads(line) for line in stream.getvalue().splitlines()]
+        self.assertEqual("Hotkey: CTRL+V", events[-1]["message"])
+        self.assertEqual("复制的中文\n第二行", events[-1]["clipboard_text"])
+
+    def test_right_click_is_distinct_from_left_click(self) -> None:
+        stream = io.StringIO()
+        formatter = self.create_formatter(stream)
+        formatter.handle(RawInputEvent("mouse_down", 1_010_000_000, x=10, y=20, button="right"))
+        formatter.handle(RawInputEvent("mouse_up", 1_020_000_000, x=10, y=20, button="right"))
+        self.assertEqual(["RClick at (10, 20)", "RRelease at (10, 20)"], messages(stream))
+
     def test_letter_case_uses_shift_xor_caps_lock(self) -> None:
         stream = io.StringIO()
         formatter = self.create_formatter(stream)

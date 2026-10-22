@@ -56,7 +56,7 @@ description: 使用本地场景/任务与 Midscene computer use 发现、创建�
 
 普通内容校准不得修改录制证据、`task.json` 或运行报告，也不得启用 `continueOnError`。参数契约修改是唯一允许单独编辑 `task.json` 的情况。步骤插入、删除或移动只能通过复核页面完成；Agent 不得直接重编号 YAML 步骤。
 
-难以用文字区分的图标可以经确认后在对应 `aiTap`/`aiDoubleClick` 中增加或调整 `locate.prompt` 与 `locate.images`，但只能引用任务包内已有的干净 reference patch。图片名必须被 prompt 明确引用；参考图中心表示录制目标外观，不是要求 Midscene 点击固定坐标。
+难以用文字区分的图标可以经确认后在对应 `aiTap`/`aiDoubleClick`/`aiRightClick` 中增加或调整 `locate.prompt` 与 `locate.images`，但只能引用任务包内已有的干净 reference patch。图片名必须被 prompt 明确引用；参考图中心表示录制目标外观，不是要求 Midscene 点击固定坐标。
 
 ## 本地复核页面
 

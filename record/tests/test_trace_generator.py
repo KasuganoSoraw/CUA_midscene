@@ -117,6 +117,8 @@ class TraceGeneratorOperationTest(unittest.TestCase):
                 )
 
                 self.assertEqual("input", generator._recorded_operation_type("Type: ADMIN"))
+                self.assertEqual("input", generator._recorded_operation_type("Paste text"))
+                self.assertEqual("rightClick", generator._recorded_operation_type("RClick at"))
                 self.assertEqual("keyboard", generator._recorded_operation_type("Press ENTER"))
                 self.assertIsNone(generator._recorded_operation_type("Hotkey: CTRL+S"))
                 self.assertIn(
@@ -124,6 +126,13 @@ class TraceGeneratorOperationTest(unittest.TestCase):
                     generator._operation_error(
                         {"type": "click", "prompt": "点击输入框"},
                         generator._recorded_operation_type("Type: ADMIN"),
+                    ),
+                )
+                self.assertIn(
+                    "Operation.type 为 rightClick",
+                    generator._operation_error(
+                        {"type": "click", "prompt": "点击菜单"},
+                        generator._recorded_operation_type("RClick at"),
                     ),
                 )
         finally:
@@ -140,6 +149,24 @@ class TraceGeneratorOperationTest(unittest.TestCase):
         with patch.dict(os.environ, {"OPENAI_VERIFY_SSL": "invalid"}):
             with self.assertRaisesRegex(ValueError, "OPENAI_VERIFY_SSL 必须是"):
                 env_bool("OPENAI_VERIFY_SSL", True)
+
+    def test_paste_uses_exact_clipboard_value(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = TraceGenerator(api_provider="openai")
+            item = {"action": "Paste text", "timestamp": 1.0, "clipboard_text": " 中文\n"}
+            caption = {
+                "action": "向输入框追加文本",
+                "operation": {
+                    "type": "input", "prompt": "向搜索框追加文本",
+                    "locatePrompt": "搜索框", "value": "其他文本",
+                },
+            }
+            with (
+                patch.object(generator, "_step_images", return_value=(None, None)),
+                patch.object(generator, "_request_caption", return_value=caption),
+            ):
+                result = generator._trace_step(item, item, "unused", "", [], 1, 1.0, "Paste text")
+            self.assertEqual(" 中文\n", result["operation"]["value"])
 
     def test_openai_request_can_disable_ssl_verification(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -288,7 +315,7 @@ class TraceGeneratorOperationTest(unittest.TestCase):
                 )
 
                 self.assertIn("只能是布尔值 true", generator._operation_error(invalid_type))
-                self.assertIn("只有 click 或 doubleClick", generator._operation_error(invalid_operation))
+                self.assertIn("只有 click、doubleClick 或 rightClick", generator._operation_error(invalid_operation))
         finally:
             if previous_key is None:
                 os.environ.pop("OPENAI_API_KEY", None)

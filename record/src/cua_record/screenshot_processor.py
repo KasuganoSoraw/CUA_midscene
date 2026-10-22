@@ -186,7 +186,7 @@ class VideoScreenshotExtractor:
 
     def _needs_full_frame(self, act_str):
         actt = act_str.lower()
-        return any(part in actt for part in ("scroll", "wheel", "hotkey", "type")) or actt.startswith("press ")
+        return any(part in actt for part in ("scroll", "wheel", "hotkey", "type", "paste")) or actt.startswith("press ")
 
     def _save_drag_screenshots(self, frame, drag_path, full_path, crop_path):
         full_ok = self._save_jpg(str(full_path), frame)
@@ -210,7 +210,7 @@ class VideoScreenshotExtractor:
         actt = act_str.lower()
         is_reference_action = (
             "doubleclick" in actt or "dblclick" in actt
-            or ("click" in actt and "right" not in actt and "rclick" not in actt)
+            or "click" in actt
         )
         reference_ok = True
         if is_reference_action:

@@ -47,6 +47,16 @@ class ScreenshotProcessorReferenceImageTest(unittest.TestCase):
             self.assertTrue(np.array_equal(reference[48, 48], self.frame[500, 500]))
             self.assertFalse(np.array_equal(marked[128, 128], self.frame[500, 500]))
 
+    def test_paste_uses_full_frame_without_click_coordinates(self):
+        actions = [{"timestamp": 1.0, "action": "Paste text", "coords": None, "clipboard_text": "中文"}]
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(self.extractor, "_get_frame_at", return_value=self.frame.copy()):
+                processed = self.extractor.process_actions(
+                    actions, "recording.mp4", Path(tmp), False, 1.0, 1.0,
+                )
+            self.assertEqual("中文", processed[0]["clipboard_text"])
+            self.assertNotIn("screenshot_reference", processed[0])
+
     def test_click_marker_is_small_and_translucent(self):
         actions = [
             {
@@ -101,7 +111,7 @@ class ScreenshotProcessorReferenceImageTest(unittest.TestCase):
             get_frame.assert_called_once_with("recording.mp4", 0.0)
             self.assertEqual("screenshots/0.000s.jpg", processed[0]["screenshot_full"])
 
-    def test_double_click_generates_reference_but_type_does_not(self):
+    def test_click_variants_generate_reference_but_type_does_not(self):
         actions = [
             {
                 "timestamp": 1.0,
@@ -110,6 +120,11 @@ class ScreenshotProcessorReferenceImageTest(unittest.TestCase):
             },
             {
                 "timestamp": 2.0,
+                "action": "RClick at",
+                "coords": [{"x": 500, "y": 500}],
+            },
+            {
+                "timestamp": 3.0,
                 "action": "Type: TEST",
                 "coords": [{"x": 500, "y": 500}],
             },
@@ -126,7 +141,8 @@ class ScreenshotProcessorReferenceImageTest(unittest.TestCase):
                 )
 
             self.assertIn("screenshot_reference", processed[0])
-            self.assertNotIn("screenshot_reference", processed[1])
+            self.assertIn("screenshot_reference", processed[1])
+            self.assertNotIn("screenshot_reference", processed[2])
 
     def test_keyboard_action_uses_unmarked_full_frame_crop(self):
         actions = [

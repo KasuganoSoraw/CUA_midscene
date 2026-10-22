@@ -22,6 +22,23 @@ def hotkey(timestamp, value):
 
 
 class LogProcessorKeyboardMergeTest(unittest.TestCase):
+    def test_paste_without_text_fails_before_task_generation(self):
+        with self.assertRaisesRegex(ValueError, "缺少可用的剪贴板文本"):
+            LogProcessor().fold_text_paste([hotkey(1.0, "CTRL+V")])
+
+    def test_paste_keeps_preceding_typing_and_drops_copy_selection(self):
+        actions = [
+            key_press(1.0, "A"),
+            {"timestamp": 1.1, "action": "DragStart at", "coords": [{"x": 1, "y": 2}], "current_software": "Editor"},
+            hotkey(1.2, "CTRL+C"),
+            {**hotkey(1.3, "CTRL+V"), "clipboard_text": "中文\ntext"},
+        ]
+        processor = LogProcessor()
+        merged = processor.merge_keyboard_events(actions)
+        folded = processor.fold_text_paste(merged)
+        self.assertEqual(["Type: A", "Paste text"], [item["action"] for item in folded])
+        self.assertEqual("中文\ntext", folded[-1]["clipboard_text"])
+
     def test_merge_numpad_digits_into_typing_action(self):
         actions = [
             key_press(58.678, "NUMPAD_4"),
@@ -70,6 +87,14 @@ class LogProcessorKeyboardMergeTest(unittest.TestCase):
 
 
 class LogProcessorDoubleClickTest(unittest.TestCase):
+    def test_right_click_keeps_right_button_semantics(self):
+        actions = [
+            {"timestamp": 1.0, "action": "RClick at", "coords": [{"x": 10, "y": 20}], "current_software": "Explorer"},
+            {"timestamp": 1.1, "action": "RRelease at", "coords": [{"x": 10, "y": 20}], "current_software": "Explorer"},
+        ]
+        merged = LogProcessor().merge_mouse_events(actions)
+        self.assertEqual(["RClick at"], [item["action"] for item in merged])
+
     def test_click_keeps_release_time_but_uses_press_time_for_evidence(self):
         actions = [
             {

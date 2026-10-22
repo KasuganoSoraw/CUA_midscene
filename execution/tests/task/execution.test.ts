@@ -38,6 +38,11 @@ test('整体 aiAct prompt 保留步骤和动作并忽略 sleep', () => {
       { name: 'step-003 | keyboard', flow: [{ KeyboardPress: { keyName: 'Enter' } }] },
       { name: 'step-004 | wait', flow: [{ aiWaitFor: '等待搜索结果页出现', timeout: 15_000 }] },
       { name: 'step-005 | doubleClick', flow: [{ aiDoubleClick: 'report.xlsx 文件行' }] },
+      { name: 'step-006 | rightClick', flow: [{ aiRightClick: 'report.xlsx 文件行' }] },
+      { name: 'step-007 | input', flow: [
+        { KeyboardPress: { keyName: 'End', locate: { prompt: '搜索框' } } },
+        { aiInput: null, value: '中文 text', mode: 'typeOnly' },
+      ] },
     ],
   };
   const result = buildRecordedTaskAiActPrompt(document);
@@ -46,6 +51,9 @@ test('整体 aiAct prompt 保留步骤和动作并忽略 sleep', () => {
   assert.match(result.prompt, /使用 KeyboardTypeText 在 "Chrome 顶部地址栏" 中替换输入 "GUI agent"/);
   assert.match(result.prompt, /按下 "Enter" 键/);
   assert.match(result.prompt, /双击以下描述对应的目标："report.xlsx 文件行"/);
+  assert.match(result.prompt, /右键点击以下描述对应的目标："report.xlsx 文件行"/);
+  assert.match(result.prompt, /在 "搜索框" 中按下 "End" 键/);
+  assert.match(result.prompt, /在 "当前焦点输入框" 中追加输入 "中文 text"/);
   assert.doesNotMatch(result.prompt, /500|timeout/);
   assert.deepEqual(result.images, []);
 });
