@@ -38,10 +38,6 @@ ALOHA_TRACE_TEMPERATURE=0.2
 
 ## 运行 Learn 流程
 
-普通模式使用 `python -m cua_record prepare <recording-directory>`，只整理日志和提取截图，不构造 TraceGenerator、不调用模型，也不创建专业 Task。命令在 stdout 返回单个 `{"event":"prepared","assets":...}` JSON，诊断和阶段进度写入 stderr。资产包含录制根目录、带截图的操作日志绝对路径、截图目录、步骤数量及处理耗时；图片引用保持相对录制根目录的路径。失败以非零退出码结束，不发布成功清单。
-
-`process` 使用相同的前两步，再调用 TraceGenerator 生成完整 Trace。
-
 安装依赖：
 
 ```powershell

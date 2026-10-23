@@ -94,51 +94,41 @@ class FakeRuntimeClient:
         return {"method": method, "ok": True}
 
 
-def test_shared_runner_executes_goals_and_flows_without_catalog() -> None:
-    async def scenario(goal: str) -> None:
-        model = FakeModelClient([
-            ModelResponse(tool_calls=(ModelToolCall(
-                "execute-1", "cua_execute", {"strategy": "freeform", "goal": goal},
-            ),)),
-            ModelResponse(content="已完成。C:/runs/execution-report.html"),
-        ])
-        runtime = FakeRuntimeClient()
-        agent = CuaAgent(model, lambda: runtime, freeform_only=True)  # type: ignore[arg-type]
-        result = await agent.invoke(InvocationRequest(goal))
-        assert result.status is InvocationStatus.COMPLETED
-        assert "C:/runs/execution-report.html" in result.reply
-        assert runtime.calls == [("execute", {"strategy": "freeform", "goal": goal})]
-        tools = model.tool_sets[0]
-        assert [tool.name for tool in tools] == [  # type: ignore[union-attr]
-            "cua_catalog", "cua_execute", "cua_record",
-        ]
-        for messages in model.calls:
-            assert "两者都直接选择 `freeform`，不要检索任务" in (messages[0].content or "")
-        assert model.tool_sets[1] == ()
-
-    for goal in ("帮我导出本月销售报表", "打开系统，进入报表页，选择本月并导出"):
-        asyncio.run(scenario(goal))
-
-
-def test_shared_runner_can_find_and_execute_a_named_professional_task() -> None:
+def test_freeform_only_runner_keeps_instructions_and_execution_reports() -> None:
     async def scenario() -> None:
         model = FakeModelClient([
             ModelResponse(tool_calls=(ModelToolCall(
-                "catalog-1", "cua_catalog", {"action": "describe-task", "scene": "s", "task": "t"},
-            ),)),
-            ModelResponse(tool_calls=(ModelToolCall(
-                "replay-1", "cua_execute", {"strategy": "replay", "scene": "s", "task": "t"},
+                "execute-1", "cua_execute", {"strategy": "freeform", "goal": "打开 Chrome"},
             ),)),
             ModelResponse(content="已完成。C:/runs/execution-report.html"),
         ])
         runtime = FakeRuntimeClient()
         agent = CuaAgent(model, lambda: runtime, freeform_only=True)  # type: ignore[arg-type]
-        result = await agent.invoke(InvocationRequest("执行场景 s 中的任务 t"))
+        result = await agent.invoke(InvocationRequest("打开 Chrome"))
         assert result.status is InvocationStatus.COMPLETED
-        assert runtime.calls == [
-            ("catalog", {"action": "describe-task", "scene": "s", "task": "t"}),
-            ("execute", {"strategy": "replay", "scene": "s", "task": "t"}),
-        ]
+        assert "C:/runs/execution-report.html" in result.reply
+        assert runtime.calls == [("execute", {"strategy": "freeform", "goal": "打开 Chrome"})]
+        tools = model.tool_sets[0]
+        assert [tool.name for tool in tools] == ["cua_execute"]  # type: ignore[union-attr]
+        for messages in model.calls:
+            assert "仅提供 `cua_execute`" in (messages[0].content or "")
+            assert "先用 `cua_catalog`" not in (messages[0].content or "")
+        assert model.tool_sets[1] == ()
+
+    asyncio.run(scenario())
+
+
+def test_freeform_only_runner_blocks_model_attempt_to_replay() -> None:
+    async def scenario() -> None:
+        model = FakeModelClient([ModelResponse(tool_calls=(ModelToolCall(
+            "replay-1", "cua_execute", {"strategy": "replay", "scene": "s", "task": "t"},
+        ),))])
+        runtime = FakeRuntimeClient()
+        agent = CuaAgent(model, lambda: runtime, freeform_only=True)  # type: ignore[arg-type]
+        result = await agent.invoke(InvocationRequest("打开 Chrome"))
+        assert result.status is InvocationStatus.FAILED
+        assert runtime.calls == []
+        assert "仅支持 freeform" in (result.error or "")
 
     asyncio.run(scenario())
 
@@ -334,7 +324,7 @@ def test_terminal_finalization_rejects_json_envelope_without_exposing_it() -> No
     asyncio.run(scenario())
 
 
-def test_workbench_tool_is_rejected_without_starting_runtime_work() -> None:
+def test_workbench_success_is_terminal_and_final_reply_keeps_url() -> None:
     async def scenario() -> None:
         url = "http://127.0.0.1:47831/?mode=recording"
         model = FakeModelClient(
@@ -364,9 +354,10 @@ def test_workbench_tool_is_rejected_without_starting_runtime_work() -> None:
 
         result = await agent.invoke(InvocationRequest("打开录制入口", invocation_id="workbench"))
 
-        assert result.status is InvocationStatus.FAILED
-        assert runtime.calls == []
-        assert len(model.tool_sets) == 1
+        assert result.status is InvocationStatus.COMPLETED
+        assert url in result.reply
+        assert runtime.calls == [("workbench", {"mode": "recording"})]
+        assert model.tool_sets[1] == ()
 
     asyncio.run(scenario())
 

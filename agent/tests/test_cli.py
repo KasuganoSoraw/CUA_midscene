@@ -17,8 +17,7 @@ from cua_agent import (
     ModelStreamItem,
     ModelToolCall,
 )
-from cua_agent.capabilities import resolve_tool_mode
-from cua_agent.cli import build_agent_from_env, invoke_from_stream
+from cua_agent.cli import _freeform_only_from_env, build_agent_from_env, invoke_from_stream
 from cua_agent.contracts import JsonValue
 from cua_agent.model import ModelMessage
 from cua_agent.runtime_client import (
@@ -35,15 +34,15 @@ def test_freeform_only_environment_flag(
     monkeypatch: pytest.MonkeyPatch, value: str, expected: bool,
 ) -> None:
     monkeypatch.setenv("CUA_AGENT_FREEFORM_ONLY", value)
-    assert resolve_tool_mode() == ("normal" if expected else "professional")
+    assert _freeform_only_from_env() is expected
 
 
 def test_freeform_only_environment_default_and_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CUA_AGENT_FREEFORM_ONLY", raising=False)
-    assert resolve_tool_mode() == "professional"
+    assert _freeform_only_from_env() is False
     monkeypatch.setenv("CUA_AGENT_FREEFORM_ONLY", "invalid")
-    with pytest.raises(ValueError, match="必须为 true 或 false"):
-        resolve_tool_mode()
+    with pytest.raises(RuntimeError, match="必须为 true 或 false"):
+        _freeform_only_from_env()
 
 
 def test_cli_passes_freeform_only_flag_to_agent(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -61,7 +60,7 @@ def test_cli_passes_freeform_only_flag_to_agent(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr("cua_agent.cli.CuaAgent", capture)
     build_agent_from_env()
-    assert options["tool_mode"] == "normal"
+    assert options["freeform_only"] is True
 
 
 class FakeRuntimeClient:

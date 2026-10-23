@@ -8,8 +8,6 @@ for raw_line in sys.stdin:
     request = json.loads(raw_line)
     payload = request["payload"]
     action = payload.get("action")
-    if action == "record-delay":
-        time.sleep(0.2)
     if action == "crash":
         print("fake worker crashed", file=sys.stderr, flush=True)
         raise SystemExit(7)

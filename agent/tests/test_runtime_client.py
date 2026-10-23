@@ -31,20 +31,6 @@ def config(**overrides: object) -> RuntimeProcessConfig:
     return RuntimeProcessConfig(**values)  # type: ignore[arg-type]
 
 
-def test_record_wait_has_no_execution_deadline_but_preserves_cancellation() -> None:
-    async def scenario() -> None:
-        async with JsonlRuntimeClient(config(request_timeout_seconds=0.05)) as client:
-            result = await client.request("record", {"action": "record-delay"})
-            assert result["method"] == "record"
-        started = asyncio.get_running_loop().time()
-        async with JsonlRuntimeClient(config()) as client:
-            with pytest.raises(RuntimeCancelledError):
-                await client.request("record", {"action": "record-delay"},
-                    cancelled=lambda: asyncio.get_running_loop().time() - started > 0.1)
-
-    asyncio.run(scenario())
-
-
 def test_runtime_config_accepts_host_javascript_executable_environment_and_cwd() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)

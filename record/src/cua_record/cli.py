@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
-import json
-import sys
 from collections.abc import Sequence
 
 from .pipeline import run_pipeline
-from .prepare import prepare_recording
 from .resources import default_prompt_path
 
 
@@ -19,8 +15,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     process = subparsers.add_parser("process", help="处理一个原始录制目录")
     process.add_argument("recording", help="包含 inputs/ 的录制目录")
-    prepare = subparsers.add_parser("prepare", help="整理日志及截图，不生成模型 Trace")
-    prepare.add_argument("recording", help="包含 inputs/ 的录制目录")
 
     subparsers.add_parser("doctor", help="验证模块与包内资源可用")
     return parser
@@ -30,14 +24,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "process":
         run_pipeline(args.recording)
-        return 0
-    if args.command == "prepare":
-        def progress(phase: str) -> None:
-            print(json.dumps({"event": "prepare.progress", "phase": phase}), flush=True)
-
-        with contextlib.redirect_stdout(sys.stderr):
-            prepared = prepare_recording(args.recording, progress)
-        print(json.dumps({"event": "prepared", "assets": prepared}, ensure_ascii=False))
         return 0
     if args.command == "doctor":
         prompt = default_prompt_path()

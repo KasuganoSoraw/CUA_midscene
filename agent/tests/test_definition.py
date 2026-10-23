@@ -11,12 +11,12 @@ def test_definition_is_loaded_from_packaged_markdown() -> None:
     assert "可以在同一响应中调用" in CUA_AGENT_DEFINITION.instructions
     assert "不要仅为了插入说明而拆散合理的一组 Tool call" in CUA_AGENT_DEFINITION.instructions
     assert "同一模型响应最多调用一个 Tool" not in CUA_AGENT_DEFINITION.instructions
-    assert "不向调用方请求策略确认" in CUA_AGENT_DEFINITION.instructions
+    assert "catalog 未命中后不得询问" in CUA_AGENT_DEFINITION.instructions
     assert "不属于信息不足" in CUA_AGENT_DEFINITION.instructions
-    assert "cua_workbench" not in CUA_AGENT_DEFINITION.instructions
+    assert "最终回复必须包含 Tool 返回的 `url`" in CUA_AGENT_DEFINITION.instructions
     assert "最终回复必须原样包含该执行报告路径" in CUA_AGENT_DEFINITION.instructions
     assert "不要用它探测、确认或重复验证结果" in CUA_AGENT_DEFINITION.instructions
-    assert "工作台由产品设置入口打开" in CUA_AGENT_DEFINITION.instructions
+    assert "Workbench 不是执行结果页面" in CUA_AGENT_DEFINITION.instructions
     assert "使界面到达目标状态" in CUA_AGENT_DEFINITION.instructions
     assert "由调用方消费和分析" in CUA_AGENT_DEFINITION.instructions
     assert "电脑操作任务即已完成" in CUA_AGENT_DEFINITION.instructions
@@ -34,7 +34,7 @@ def test_definition_is_loaded_from_packaged_markdown() -> None:
         "npm install",
     ):
         assert irrelevant_concept not in CUA_AGENT_DEFINITION.instructions
-    assert "产品设置入口" in CUA_AGENT_DEFINITION.description
+    assert "仅用于录制新流程、复核或校准已录制任务" in CUA_AGENT_DEFINITION.description
 
 
 def test_loading_definition_does_not_share_mutable_invocation_state() -> None:
@@ -47,28 +47,11 @@ def test_loading_definition_does_not_share_mutable_invocation_state() -> None:
     assert not hasattr(first, "session")
 
 
-def test_compatibility_options_share_one_definition() -> None:
+def test_freeform_only_definition_describes_available_capabilities() -> None:
     definition = load_agent_definition(freeform_only=True)
     assert "自然语言" in definition.description
-    assert "cua_record(goal)" in definition.instructions
+    assert "仅提供 `cua_execute`" in definition.instructions
+    assert "不提供录制" in definition.instructions
     assert "最终回复必须原样包含该执行报告路径" in definition.instructions
-    assert definition == CUA_AGENT_DEFINITION
-    assert load_agent_definition(tool_mode="normal") == definition
-    assert load_agent_definition(tool_mode="professional") == definition
-
-
-def test_task_lookup_requires_an_explicit_task_name_or_identifier() -> None:
-    instructions = load_agent_definition().instructions
-    assert "只有明确要求执行一个任务名或提供 task 标识时" in instructions
-    assert "两者都直接选择 `freeform`，不要检索任务" in instructions
-    assert "不要从业务描述中自行发明任务名" in instructions
-    assert "不把“销售报表”当作专业任务名" in instructions
-    assert "若只提供任务名，则说明未找到任务并请求补充目标或流程" in instructions
-    assert "任务可能已有 Recorded Skill 时" not in instructions
-
-
-def test_recording_contract_is_part_of_the_shared_definition() -> None:
-    instructions = load_agent_definition().instructions
-    assert "cua_record(goal)" in instructions
-    assert "一次调用等待用户完成或取消，不通过额外工具轮询" in instructions
-    assert "不执行刚录下来的流程" in instructions
+    assert "发现并判断是否使用 Recorded Skill" not in definition.description
+    assert load_agent_definition() == CUA_AGENT_DEFINITION

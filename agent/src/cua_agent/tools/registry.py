@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass
+from typing import cast
 
-from ..capabilities import ToolMode, resolve_tool_mode
 from ..contracts import JsonValue
 from ..runtime_client import (
     CancellationCheck,
@@ -33,13 +34,10 @@ class ToolDefinition:
 CATALOG_TOOL = ToolDefinition(
     name="cua_catalog",
     description=(
-        "查找专业工作台生成的 CUA 任务（Recorded Skill）。"
-        "仅当调用方明确要求执行一个任务名或提供 task 标识时使用。"
-        "完整操作流程或纯业务目标直接 freeform，不主动检索，不自行发明任务名。"
-        "调用方明确提供 task 标识但未提供 scene 时优先 find-task；"
-        "只有任务名称时，使用 list-scenes/list-tasks 定位该具名任务，不将名称猜成 ID；"
-        "已知 scene/task 时使用 describe-task。名称存在歧义时请求明确任务。"
-        "未命中且只有任务名时请求补充目标或流程，不猜测操作，不向调用方请求策略确认。"
+        "发现 Recorded Skill。调用方明确提供 task 标识但未提供 scene 时，优先使用 "
+        "find-task；只有自然语言目标、尚不知道 task 时，使用 list-scenes 和 list-tasks "
+        "浏览；已知 scene 和 task 时，使用 describe-task 获取详情。未发现匹配任务时，"
+        "直接改用 cua_execute 的 freeform 策略继续完成原始目标，不向调用方请求策略确认。"
     ),
     input_schema={
         "type": "object",
@@ -48,7 +46,7 @@ CATALOG_TOOL = ToolDefinition(
                 "properties": {
                     "action": {
                         "const": "list-scenes",
-                        "description": "为定位请求中明确要求执行的具名任务，列出可用场景。",
+                        "description": "尚不知道明确 scene 或 task 时，从场景开始浏览。",
                     }
                 },
                 "required": ["action"],
@@ -58,7 +56,7 @@ CATALOG_TOOL = ToolDefinition(
                 "properties": {
                     "action": {
                         "const": "list-tasks",
-                        "description": "在明确场景中定位调用方要求执行的具名任务。",
+                        "description": "已知 scene、尚不知道明确 task 时，列出该场景的任务。",
                     },
                     "scene": {"type": "string", "minLength": 1},
                 },
@@ -130,7 +128,7 @@ EXECUTE_TOOL = ToolDefinition(
                     "strategy": {
                         "const": "freeform",
                         "description": (
-                            "完整自然语言操作流程或业务目标直接执行，无需先检索；"
+                            "没有合适 Recorded Skill 时直接执行完整目标；"
                             "不需要调用方再次确认此策略。"
                         ),
                     },
@@ -144,18 +142,28 @@ EXECUTE_TOOL = ToolDefinition(
     },
 )
 
-RECORD_TOOL = ToolDefinition(
-    name="cua_record",
+WORKBENCH_TOOL = ToolDefinition(
+    name="cua_workbench",
     description=(
-        "用户要求录制、示教或记录接下来的 GUI 操作以创建可复用流程时使用。"
-        "默认主屏幕，启动桌面录制悬浮条并等待用户完成或放弃，不打开工作台。"
-        "正常完成后自动整理日志、提取截图，返回供主 Agent 生成 Skill 的资产路径；"
-        "取消时不预处理。不执行现有 Skill，不需要 scene、task 或 displayId。"
+        "启动或复用 Recorded Skill Workbench。仅用于录制新操作流程、复核或校准已录制任务，"
+        "或用户明确要求在 Workbench 中回放、调试已录制任务。它不是 cua_execute 的结果"
+        "查看页面；freeform 执行成功后不得为了确认或展示结果调用此 Tool。"
     ),
     input_schema={
         "type": "object",
-        "properties": {"goal": {"type": "string", "minLength": 1}},
-        "required": ["goal"],
+        "properties": {
+            "mode": {
+                "enum": ["recording", "review", "execution"],
+                "description": (
+                    "recording 用于录制新流程，review 用于复核或校准已录制任务；"
+                    "execution 仅表示在 Workbench 中打开已录制任务的执行、回放或调试界面，"
+                    "不表示查看 freeform cua_execute 的执行结果。"
+                ),
+            },
+            "scene": {"type": "string", "minLength": 1},
+            "task": {"type": "string", "minLength": 1},
+        },
+        "required": ["mode"],
         "additionalProperties": False,
     },
 )
@@ -169,17 +177,27 @@ class CuaToolRegistry:
         client: RuntimeClientProtocol,
         *,
         data_root: str | None = None,
-        freeform_only: bool | None = None,
-        tool_mode: ToolMode | None = None,
+        freeform_only: bool = False,
     ) -> None:
         self._client = client
         self._data_root = data_root
-        resolve_tool_mode(tool_mode, freeform_only)
+        self._freeform_only = freeform_only
         self._tools: dict[str, tuple[ToolDefinition, RuntimeMethod]] = {
             CATALOG_TOOL.name: (CATALOG_TOOL, "catalog"),
             EXECUTE_TOOL.name: (EXECUTE_TOOL, "execute"),
-            RECORD_TOOL.name: (RECORD_TOOL, "record"),
+            WORKBENCH_TOOL.name: (WORKBENCH_TOOL, "workbench"),
         }
+        if freeform_only:
+            branches = cast(list[dict[str, JsonValue]], EXECUTE_TOOL.input_schema["oneOf"])
+            execute = ToolDefinition(
+                name=EXECUTE_TOOL.name,
+                description=EXECUTE_TOOL.description,
+                input_schema=deepcopy(branches[2]),
+            )
+            execute.input_schema["type"] = "object"
+            properties = cast(dict[str, JsonValue], execute.input_schema["properties"])
+            properties["strategy"] = {"const": "freeform"}
+            self._tools = {execute.name: (execute, "execute")}
 
     @property
     def definitions(self) -> tuple[ToolDefinition, ...]:
@@ -196,20 +214,13 @@ class CuaToolRegistry:
         entry = self._tools.get(name)
         if entry is None:
             raise ValueError(f"无法识别 CUA Agent Tool：{name}")
-        if name == "cua_execute":
-            if arguments.get("strategy") not in ("replay", "guided", "freeform"):
-                raise ValueError("执行策略必须为 replay、guided 或 freeform")
-            if arguments.get("strategy") == "freeform":
-                _validate_freeform_arguments(arguments)
-        if name == "cua_record":
-            goal = arguments.get("goal")
-            if set(arguments) != {"goal"} or not isinstance(goal, str) or not goal.strip():
-                raise ValueError("cua_record 仅接受非空 goal")
+        if self._freeform_only:
+            _validate_freeform_arguments(arguments)
         _definition, method = entry
         payload = _normalize_tool_arguments(name, arguments)
         if self._data_root is not None and "dataRoot" not in payload:
             payload["dataRoot"] = self._data_root
-        if method in ("execute", "record") and on_event is not None:
+        if method == "execute" and on_event is not None:
             return await self._client.request(
                 method, payload, cancelled=cancelled, on_event=on_event
             )
@@ -217,8 +228,10 @@ class CuaToolRegistry:
 
 
 def _validate_freeform_arguments(arguments: Mapping[str, JsonValue]) -> None:
-    if set(arguments) - {"strategy", "goal", "displayId", "dataRoot"}:
-        raise ValueError("freeform 仅接受 strategy、goal、displayId 和内部 dataRoot")
+    if arguments.get("strategy") != "freeform":
+        raise ValueError("当前 CUA Agent 仅支持 freeform 自然语言执行")
+    if set(arguments) - {"strategy", "goal", "displayId"}:
+        raise ValueError("freeform 仅接受 strategy、goal 和可选 displayId")
     for name in ("goal", "displayId"):
         if name == "displayId" and name not in arguments:
             continue
@@ -245,9 +258,9 @@ def _normalize_tool_arguments(
             text = raw_action
         else:
             text = str(raw_action or "")
-        catalog_action = _extract_catalog_action(text)
-        if catalog_action is not None:
-            payload["action"] = catalog_action
+        normalized = _extract_catalog_action(text)
+        if normalized is not None:
+            payload["action"] = normalized
         return payload
     if name != "cua_execute" or "inputs" not in payload:
         return payload
@@ -299,9 +312,6 @@ def create_cua_tool_registry(
     client: RuntimeClientProtocol,
     *,
     data_root: str | None = None,
-    freeform_only: bool | None = None,
-    tool_mode: ToolMode | None = None,
+    freeform_only: bool = False,
 ) -> CuaToolRegistry:
-    return CuaToolRegistry(
-        client, data_root=data_root, freeform_only=freeform_only, tool_mode=tool_mode,
-    )
+    return CuaToolRegistry(client, data_root=data_root, freeform_only=freeform_only)

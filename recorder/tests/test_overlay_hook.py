@@ -62,36 +62,6 @@ class OverlayHookTest(unittest.TestCase):
         self.assertEqual(6, len(continued))
 
 
-class ToolbarProbe(RecorderOverlay):
-    def hit_test(self, x: int, y: int) -> str:
-        return self._hit(x, y)
-
-    def prepare_paint(self):
-        self._user = SimpleNamespace(BeginPaint=lambda *_args: 1, EndPaint=lambda *_args: 1)
-        self._gdi = SimpleNamespace(**{
-            name: lambda *_args: 1 for name in (
-                "CreateCompatibleDC", "CreateCompatibleBitmap", "SelectObject", "SetBkMode",
-                "BitBlt", "DeleteObject", "DeleteDC",
-            )
-        })
-        texts: list[str] = []
-        icons: list[str] = []
-        circles: list[tuple[float, float, float, float]] = []
-
-        def shape(_dc, _color, rect, *, circle=False):
-            if circle:
-                circles.append(rect)
-
-        self._shape = shape
-        self._text = lambda _dc, text, *_args: texts.append(text)
-        self._icon = lambda _dc, action, *_args: icons.append(action)
-        return texts, icons, circles
-
-    def paint_phase(self, phase: str) -> None:
-        self._state.update(phase)
-        self._paint(1)
-
-
 class ToolbarButtonTest(unittest.TestCase):
     def test_button_requests_are_guarded_and_mouse_activation_does_not_steal_focus(
         self,
@@ -121,9 +91,9 @@ class ToolbarButtonTest(unittest.TestCase):
             MA_NOACTIVATE, toolbar._handle_message(1, WM_MOUSEACTIVATE, 0, 0)
         )
 
-    def test_cancel_icon_uses_phase_specific_control(self) -> None:
+    def test_cancel_icon_only_applies_before_recording(self) -> None:
         commands: list[str] = []
-        toolbar = ToolbarProbe(
+        toolbar = RecorderOverlay(
             DisplayInfo("display-0", "DISPLAY0", 0, 0, 0, 1920, 1080, 1.5, True),
             commands.append,
         )
@@ -138,7 +108,7 @@ class ToolbarButtonTest(unittest.TestCase):
             toolbar._mouse(1, message, 243 | (36 << 16))
         self.assertEqual(["stop"], commands)
         toolbar._state.update("recording")
-        self.assertEqual("cancel", toolbar.hit_test(162, 24))
+        self.assertEqual("", toolbar._hit(162, 24))
         self.assertEqual("stop", toolbar._hit(122, 24))
         self.assertEqual("drag", toolbar._hit(194, 24))
         self.assertEqual("", toolbar._hit(208, 24))
@@ -146,23 +116,58 @@ class ToolbarButtonTest(unittest.TestCase):
     def test_toolbar_only_renders_elapsed_text_and_phase_appropriate_icons(
         self,
     ) -> None:
-        toolbar = ToolbarProbe(
+        toolbar = RecorderOverlay(
             DisplayInfo("display-0", "DISPLAY0", 0, 0, 0, 1920, 1080, 1.0, True),
             lambda _command: None,
         )
-        texts, icons, circles = toolbar.prepare_paint()
+        toolbar._user = SimpleNamespace(
+            BeginPaint=lambda *_args: 1,
+            EndPaint=lambda *_args: 1,
+        )
+        toolbar._gdi = SimpleNamespace(
+            **{
+                name: lambda *_args: 1
+                for name in (
+                    "CreateCompatibleDC",
+                    "CreateCompatibleBitmap",
+                    "SelectObject",
+                    "SetBkMode",
+                    "BitBlt",
+                    "DeleteObject",
+                    "DeleteDC",
+                )
+            }
+        )
+        texts: list[str] = []
+        icons: list[str] = []
+        circles: list[tuple[float, float, float, float]] = []
+
+        def shape(
+            _dc: int,
+            _color: int,
+            rect: tuple[float, float, float, float],
+            *,
+            circle: bool = False,
+        ) -> None:
+            if circle:
+                circles.append(rect)
+
+        toolbar._shape = shape
+        toolbar._text = lambda _dc, text, *_args: texts.append(text)
+        toolbar._icon = lambda _dc, action, *_args: icons.append(action)
         for phase, expected in [
             ("arming", []),
             ("armed", ["start", "cancel"]),
             ("starting", []),
-            ("recording", ["stop", "cancel"]),
+            ("recording", ["stop"]),
             ("stopping", []),
         ]:
             with self.subTest(phase=phase):
                 texts.clear()
                 icons.clear()
                 circles.clear()
-                toolbar.paint_phase(phase)
+                toolbar._state.update(phase)
+                toolbar._paint(1)
                 self.assertEqual(["00:00"], texts)
                 self.assertEqual(expected, icons)
                 grip = [rect for rect in circles if rect[0] >= 184]

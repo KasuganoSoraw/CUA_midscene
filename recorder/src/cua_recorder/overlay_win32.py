@@ -426,8 +426,6 @@ class RecorderOverlay:
                 return "cancel"
         if phase == "recording" and 104 <= x < 140:
             return "stop"
-        if phase == "recording" and 144 <= x < 180:
-            return "cancel"
         return ""
 
     def _window_proc(self, hwnd: int, message: int, wparam: int, lparam: int) -> int:
@@ -702,9 +700,6 @@ class RecorderOverlay:
             color = _rgb(90, 60, 63) if self._hover == "stop" else _rgb(69, 47, 51)
             self._shape(dc, color, (104, 8, 140, 40))
             self._icon(dc, "stop", 122, _rgb(240, 92, 94))
-            if self._hover == "cancel":
-                self._shape(dc, _rgb(67, 67, 72), (144, 8, 180, 40))
-            self._icon(dc, "cancel", 162, _rgb(190, 190, 196))
         else:
             active = int(time.monotonic() * 4) % 3
             for index in range(3):
