@@ -7,10 +7,9 @@ import type {
   TaskDescription,
 } from '../cua/contracts/types.js';
 import type { ExecutionProgress } from '../executors/midscene-progress.js';
-import type { RecordingProgress } from '../review/shared/recording.js';
 
 export const runtimeBridgeSchemaVersion = '1.0' as const;
-export const cuaRuntimeToolNames = ['cua_catalog', 'cua_execute', 'cua_record'] as const;
+export const cuaRuntimeToolNames = ['cua_catalog', 'cua_execute', 'cua_workbench'] as const;
 export type CuaRuntimeToolName = typeof cuaRuntimeToolNames[number];
 
 interface CuaToolRequestBase {
@@ -75,7 +74,7 @@ export interface CuaWorkbenchResult {
   reused: boolean;
 }
 
-export type RuntimeBridgeMethod = 'catalog' | 'execute' | 'workbench' | 'record';
+export type RuntimeBridgeMethod = 'catalog' | 'execute' | 'workbench';
 
 export interface RuntimeBridgeRequest {
   schemaVersion: typeof runtimeBridgeSchemaVersion;
@@ -94,7 +93,7 @@ export interface RuntimeBridgeEventFrame {
   schemaVersion: typeof runtimeBridgeSchemaVersion;
   requestId: string;
   type: 'event';
-  event: ExecutionProgress | RecordingProgress;
+  event: ExecutionProgress;
 }
 
 export type RuntimeBridgeResponse =

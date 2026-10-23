@@ -66,18 +66,12 @@ class VideoScreenshotExtractor:
             cap.release()
 
     def _save_jpg(self, path, img):
-        return self._save_encoded(path, img, ".jpg", [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        return cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
 
     def _save_png(self, path, img):
-        return self._save_encoded(path, img, ".png", [cv2.IMWRITE_PNG_COMPRESSION, 3])
-
-    def _save_encoded(self, path, img, extension, options):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        success, encoded = cv2.imencode(extension, img, options)
-        if not success:
-            return False
-        Path(path).write_bytes(encoded.tobytes())
-        return True
+        return cv2.imwrite(path, img, [cv2.IMWRITE_PNG_COMPRESSION, 3])
 
     def _safe_crop(self, frame, x, y, crop_size=256):
         if x is None or y is None:

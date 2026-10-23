@@ -38,8 +38,6 @@ import {
   type RecorderControl,
 } from '../service/windows-recorder.js';
 import type { AgentInvocationRequest } from '../shared/agent.js';
-import { ConversationRecordingService } from '../service/conversation-recording.js';
-import { registerRecordingRoutes } from './recording-routes.js';
 
 interface ReviewRouteOptions {
   layout: RuntimeLayout;
@@ -213,9 +211,6 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     recordingsRoot: activeRecordingsRoot,
   });
   app.addHook('onClose', async () => recorder.close());
-  registerRecordingRoutes(app, new ConversationRecordingService(
-    recorder, path.resolve(options.executionRoot ?? process.cwd()),
-  ), recorder);
 
   if (!options.layout.data) throw new Error('任务运行页面需要配置 CUA_DATA_ROOT');
   const execution = options.dependencies?.execution ?? new TaskExecutionManager({

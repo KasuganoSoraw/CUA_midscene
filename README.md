@@ -13,7 +13,7 @@
 | `scripts/` | `__init__.py`、`build_component.py`、`component_manifest.py`、`verify_component.py`、`smoke_component.py` |
 | 根目录 | `component.toml`、`CUA_VERSION`、本说明和 Git 忽略规则 |
 
-工作台提供录制、任务复核和人工执行，由宿主设置入口打开。普通录制工具复用其后台 Review Service，不打开网页。Python 包 README 是 wheel 构建元数据，definition Markdown 和默认 prompt JSON 是运行资源，不能按文件扩展名排除。
+工作台提供录制、任务复核和人工执行，也是 `cua_workbench` 的运行依赖。Python 包 README 是 wheel 构建元数据，definition Markdown 和默认 prompt JSON 是运行资源，不能按文件扩展名排除。
 
 `main` 是 CUA 源码开发与完整测试的事实源。本分支只维护交付范围、必要构建配置和集成说明；宿主的注册、会话、事件适配和产品生命周期代码留在宿主仓，不进入 CUA 模型 prompt 或 Runtime。
 
@@ -35,9 +35,7 @@ python scripts/smoke_component.py dist/computer-use-component --python "C:\path\
 
 ## 调用与配置
 
-普通和专业入口共享 Python `CuaAgent`。宿主提交完整任务，接收通用事件和最终结果，并传入取消检查。完整操作流程和业务目标直接 freeform；只有明确要求执行一个任务名或提供 task 标识时，才检索专业工作台生成的任务并选择 replay/guided。录制示教使用 `cua_record`。宿主不注册 CUA 私有工具，不保存跨 invocation 的对话上下文。不提供对话唤起工作台的工具，内部 Runtime `workbench` 方法保留给宿主设置及 Keeper 使用。
-
-“帮我导出本月销售报表”或完整的逐步导出流程都直接执行；“执行任务『每日库存核对』”才触发专业任务检索，不从业务描述中自行发明任务名。若只有任务名且没有匹配任务，应请求补充目标或流程，不猜测操作。普通 Skill 应由 Main Agent 加载并展开流程后提交，不能只传名称。
+宿主向 Python `CuaAgent` 提交完整任务，接收通用事件和最终结果，并传入取消检查。内部 catalog、执行策略和工作台调用由 CUA Agent 决策；宿主不注册 CUA 私有工具。不保存跨 invocation 的对话上下文。
 
 进程入口 `python -m cua_agent invoke` 从 stdin 读取一次 JSON 请求，例如 `{"task":"打开指定应用","invocationId":"task-1"}`，stdout 返回事件及最终结果 JSONL，stderr 保存诊断。Python API 支持执行期间取消；该单次 stdin 请求协议不接收取消 frame。
 
@@ -50,16 +48,7 @@ python scripts/smoke_component.py dist/computer-use-component --python "C:\path\
 - `CUA_PYTHON_EXECUTABLE`：安装了三个组件包的 Python 绝对路径。
 - `CUA_AGENT_JS_RUNTIME_EXECUTABLE`：宿主提供的兼容 JavaScript executable。
 - `CUA_AGENT_RUNTIME_BRIDGE`：组件 `runtime/dist/runtime-bridge/worker.js` 的绝对路径。
-- Python API 使用 `CuaAgent(...)` 和 `load_agent_definition()`，无需配置模式。`tool_mode`、`freeform_only`、`CUA_AGENT_TOOL_MODE` 和 `CUA_AGENT_FREEFORM_ONLY` 接受兼容配置并校验有效值，按上述顺序取值；normal/professional 均使用同一提示词和 `cua_catalog`、`cua_execute`、`cua_record` 工具集，不限制执行策略。
-- `CUA_REVIEW_URL`：Keeper 持有的 Review Service 根地址，默认 `http://127.0.0.1:47831/`。普通录制要求服务已启动、Review 协议为 4，且双方 `CUA_DATA_ROOT` 一致；工具不自动启动第二套服务。
-
-## 普通录制适配
-
-Main Agent 将录制意图和电脑操作交给同一个 computer-use SubAgent。模型只传入 `cua_record({"goal":"完整录制目标"})`，默认主屏幕；用户通过悬浮条开始、结束或放弃。一次工具调用等待录制终态，不需要模型轮询。结束后执行 `cua_record prepare`，只整理日志及提取截图，不生成 Trace、YAML Task 或 Skill。专业完整处理继续使用 `process`。
-
-宿主完整转交 `InvocationResult.data`：成功时包含 `status=completed`、`recordingId`、`assets.recordingRoot/processedLogPath/screenshotsDir/stepCount/timingsMs`；用户放弃时为 `status=cancelled`，不生成操作资产；失败时为 `status=failed`，保留结构化诊断。文件和图片工具应有权读取录制目录。主 Agent 负责读取资产并创建正式 Skill，执行 Skill 时向 CUA 派发完整自然语言流程，而不是只传 Skill 名称。
-
-宿主转发 `recording.progress`，其 data 包含 `source=recorder` 和 `phase`。阶段为 armed、recording、received、processing、extracting 及 completed/cancelled/failed。录制等待不使用普通 GUI 执行超时。Host 取消应通过 Python API 取消检查触发清理，并等待本次录制释放资源；不要关闭 Keeper。Invocation 使用独立 Runtime worker，不能复用 Keeper 的串行 RuntimeClient 控制通道。更新组件后需重启 Keeper，以加载当前服务协议。
+- `CUA_AGENT_FREEFORM_ONLY=true`：仅开放自然语言执行，禁用 Agent 的录制任务发现、回放和工作台工具；未设置或为 `false` 时提供完整能力。Python API 使用 `CuaAgent(..., freeform_only=True)`，能力说明通过 `load_agent_definition(freeform_only=True)` 获取。宿主需同步隐藏产品侧的录制工作台入口；独立 Review/CLI 不受此开关限制。
 
 真实桌面操作须由宿主串行调用。用户任务写入 `CUA_DATA_ROOT/projects`，运行产物写入 `CUA_DATA_ROOT/runs`。运行历史默认超过 5 GiB 后清理至 4 GiB，保护当前、活动和最近 24 小时的记录；可通过 `CUA_RUNS_MAX_MB`、`CUA_RUNS_TARGET_MB` 和 `CUA_RUNS_MIN_AGE_HOURS` 调整，`CUA_RUNS_MAX_MB=0` 禁用清理。
 
