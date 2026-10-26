@@ -9,6 +9,7 @@ import type {
 import type { ExecutionProgress } from '../executors/midscene-progress.js';
 
 export const runtimeBridgeSchemaVersion = '1.0' as const;
+// Runtime 宿主能力名称；模型可见工具由 Python Agent 的配置独立决定。
 export const cuaRuntimeToolNames = ['cua_catalog', 'cua_execute', 'cua_workbench'] as const;
 export type CuaRuntimeToolName = typeof cuaRuntimeToolNames[number];
 

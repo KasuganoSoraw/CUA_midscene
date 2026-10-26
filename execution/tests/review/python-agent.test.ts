@@ -6,6 +6,45 @@ import test from 'node:test';
 import type { spawn } from 'node:child_process';
 import { PythonAgentInvoker } from '../../review/service/python-agent.js';
 
+test('Python Agent 宿主调用保留明确的 execution 参数绑定', async () => {
+  const names = ['CUA_AGENT_MODEL_BASE_URL', 'CUA_AGENT_MODEL_NAME'] as const;
+  const previous = names.map((name) => process.env[name]);
+  process.env.CUA_AGENT_MODEL_BASE_URL = 'https://example.test/v1';
+  process.env.CUA_AGENT_MODEL_NAME = 'test-model';
+  const child = Object.assign(new EventEmitter(), {
+    stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(),
+    kill: () => true,
+  });
+  let input = '';
+  child.stdin.on('data', (chunk) => { input += chunk.toString(); });
+  const invoker = new PythonAgentInvoker({
+    executionRoot: path.resolve('.'), dataRoot: path.resolve('.'),
+    agentRoot: path.resolve('../agent'), pythonExecutable: process.execPath,
+    javascriptRuntimeExecutable: process.execPath, runtimeBridge: path.resolve('package.json'),
+    spawnProcess: (() => {
+      queueMicrotask(() => {
+        child.stdout.end(`${JSON.stringify({ type: 'result', result: {
+          schemaVersion: '1.0', invocationId: 'bound', status: 'completed',
+          reply: '已完成', toolCalls: [],
+        } })}\n`);
+        child.emit('close', 0, null);
+      });
+      return child;
+    }) as unknown as typeof spawn,
+  });
+  try {
+    const execution = { strategy: 'replay' as const, scene: 's', task: 't', inputs: { x: '1' } };
+    await invoker.invoke({ task: '执行选定任务', invocationId: 'bound', execution });
+    assert.deepEqual(JSON.parse(input), { task: '执行选定任务', invocationId: 'bound', execution });
+  } finally {
+    await invoker.close();
+    names.forEach((name, index) => {
+      if (previous[index] === undefined) delete process.env[name];
+      else process.env[name] = previous[index];
+    });
+  }
+});
+
 test('Python Agent 子进程在退出前逐帧转发事件', async () => {
   const names = [
     'CUA_AGENT_MODEL_BASE_URL',

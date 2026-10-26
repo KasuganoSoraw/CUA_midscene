@@ -8,7 +8,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import cast
 
-from ..contracts import JsonValue
+from ..configuration import ToolMode, resolve_tool_mode
+from ..contracts import JsonValue, normalize_execution
 from ..runtime_client import (
     CancellationCheck,
     RuntimeClientProtocol,
@@ -142,33 +143,6 @@ EXECUTE_TOOL = ToolDefinition(
     },
 )
 
-WORKBENCH_TOOL = ToolDefinition(
-    name="cua_workbench",
-    description=(
-        "启动或复用 Recorded Skill Workbench。仅用于录制新操作流程、复核或校准已录制任务，"
-        "或用户明确要求在 Workbench 中回放、调试已录制任务。它不是 cua_execute 的结果"
-        "查看页面；freeform 执行成功后不得为了确认或展示结果调用此 Tool。"
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "mode": {
-                "enum": ["recording", "review", "execution"],
-                "description": (
-                    "recording 用于录制新流程，review 用于复核或校准已录制任务；"
-                    "execution 仅表示在 Workbench 中打开已录制任务的执行、回放或调试界面，"
-                    "不表示查看 freeform cua_execute 的执行结果。"
-                ),
-            },
-            "scene": {"type": "string", "minLength": 1},
-            "task": {"type": "string", "minLength": 1},
-        },
-        "required": ["mode"],
-        "additionalProperties": False,
-    },
-)
-
-
 class CuaToolRegistry:
     """把模型可见的私有 Tool 名称映射到 Runtime bridge method。"""
 
@@ -178,15 +152,21 @@ class CuaToolRegistry:
         *,
         data_root: str | None = None,
         freeform_only: bool = False,
+        tool_mode: ToolMode | None = None,
+        expected_execution: Mapping[str, JsonValue] | None = None,
     ) -> None:
         self._client = client
         self._data_root = data_root
         self._freeform_only = freeform_only
+        mode = resolve_tool_mode(tool_mode)
+        self._expected_execution = (
+            normalize_execution(expected_execution) if expected_execution is not None else None
+        )
         self._tools: dict[str, tuple[ToolDefinition, RuntimeMethod]] = {
-            CATALOG_TOOL.name: (CATALOG_TOOL, "catalog"),
             EXECUTE_TOOL.name: (EXECUTE_TOOL, "execute"),
-            WORKBENCH_TOOL.name: (WORKBENCH_TOOL, "workbench"),
         }
+        if mode == "discover" and expected_execution is None and not freeform_only:
+            self._tools = {CATALOG_TOOL.name: (CATALOG_TOOL, "catalog"), **self._tools}
         if freeform_only:
             branches = cast(list[dict[str, JsonValue]], EXECUTE_TOOL.input_schema["oneOf"])
             execute = ToolDefinition(
@@ -218,6 +198,8 @@ class CuaToolRegistry:
             _validate_freeform_arguments(arguments)
         _definition, method = entry
         payload = _normalize_tool_arguments(name, arguments)
+        if self._expected_execution is not None:
+            _require_bound_execution(payload, self._expected_execution)
         if self._data_root is not None and "dataRoot" not in payload:
             payload["dataRoot"] = self._data_root
         if method == "execute" and on_event is not None:
@@ -225,6 +207,18 @@ class CuaToolRegistry:
                 method, payload, cancelled=cancelled, on_event=on_event
             )
         return await self._client.request(method, payload, cancelled=cancelled)
+
+
+def _require_bound_execution(
+    arguments: Mapping[str, JsonValue], expected: Mapping[str, JsonValue],
+) -> None:
+    actual = normalize_execution(arguments)
+    bound = dict(expected)
+    if actual.get("strategy") != "freeform":
+        actual.setdefault("inputs", {})
+        bound.setdefault("inputs", {})
+    if actual != bound:
+        raise ValueError("模型调用必须与调用方 execution 绑定一致，不得更换任务、参数或策略")
 
 
 def _validate_freeform_arguments(arguments: Mapping[str, JsonValue]) -> None:
@@ -258,9 +252,9 @@ def _normalize_tool_arguments(
             text = raw_action
         else:
             text = str(raw_action or "")
-        normalized = _extract_catalog_action(text)
-        if normalized is not None:
-            payload["action"] = normalized
+        catalog_action = _extract_catalog_action(text)
+        if catalog_action is not None:
+            payload["action"] = catalog_action
         return payload
     if name != "cua_execute" or "inputs" not in payload:
         return payload
@@ -313,5 +307,10 @@ def create_cua_tool_registry(
     *,
     data_root: str | None = None,
     freeform_only: bool = False,
+    tool_mode: ToolMode | None = None,
+    expected_execution: Mapping[str, JsonValue] | None = None,
 ) -> CuaToolRegistry:
-    return CuaToolRegistry(client, data_root=data_root, freeform_only=freeform_only)
+    return CuaToolRegistry(
+        client, data_root=data_root, freeform_only=freeform_only,
+        tool_mode=tool_mode, expected_execution=expected_execution,
+    )

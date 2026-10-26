@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
+from .configuration import resolve_tool_mode
 from .contracts import InvocationRequest, JsonValue
 from .events import AgentEvent
 from .openai_compatible import OpenAICompatibleConfig, OpenAICompatibleModelClient
@@ -55,6 +56,7 @@ def build_agent_from_env() -> CuaAgent:
         data_root=os.environ.get("CUA_DATA_ROOT"),
         max_turns=_positive_int_env("CUA_AGENT_MAX_TURNS", 8),
         freeform_only=_freeform_only_from_env(),
+        tool_mode=resolve_tool_mode(),
     )
 
 
@@ -82,6 +84,7 @@ async def invoke_from_stream(
         request = InvocationRequest(
             task=task,
             invocation_id=invocation_id,
+            execution=value.get("execution"),
         )
         active_agent = agent or build_agent_from_env()
 

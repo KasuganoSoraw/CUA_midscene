@@ -12,6 +12,7 @@ import './task/execution.test.js';
 import './act/execution.test.js';
 import './runtime-bridge/bridge.test.js';
 import './runtime-bridge/tools.test.js';
+import './runtime-bridge/workbench-host.test.js';
 import './runtime-bridge/failure-report.test.js';
 import './executors/keyboard-type-action.test.js';
 import './executors/ai-act-runner.test.js';

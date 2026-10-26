@@ -1,47 +1,29 @@
 from cua_agent import CUA_AGENT_DEFINITION, load_agent_definition
 
 
-def test_definition_is_loaded_from_packaged_markdown() -> None:
-    assert CUA_AGENT_DEFINITION.name == "Computer-Use"
-    assert CUA_AGENT_DEFINITION.invocation_mode == "stateless-task"
-    assert "完整任务" in CUA_AGENT_DEFINITION.description
-    assert "Recorded Skill" in CUA_AGENT_DEFINITION.instructions
-    assert "不输出隐藏推理、思维链或长篇分析" in CUA_AGENT_DEFINITION.instructions
-    assert "发起单个或一组 Tool call 前，必须先" in CUA_AGENT_DEFINITION.instructions
-    assert "可以在同一响应中调用" in CUA_AGENT_DEFINITION.instructions
-    assert "不要仅为了插入说明而拆散合理的一组 Tool call" in CUA_AGENT_DEFINITION.instructions
-    assert "同一模型响应最多调用一个 Tool" not in CUA_AGENT_DEFINITION.instructions
-    assert "catalog 未命中后不得询问" in CUA_AGENT_DEFINITION.instructions
-    assert "不属于信息不足" in CUA_AGENT_DEFINITION.instructions
-    assert "最终回复必须包含 Tool 返回的 `url`" in CUA_AGENT_DEFINITION.instructions
-    assert "最终回复必须原样包含该执行报告路径" in CUA_AGENT_DEFINITION.instructions
-    assert "不要用它探测、确认或重复验证结果" in CUA_AGENT_DEFINITION.instructions
-    assert "Workbench 不是执行结果页面" in CUA_AGENT_DEFINITION.instructions
-    assert "使界面到达目标状态" in CUA_AGENT_DEFINITION.instructions
-    assert "由调用方消费和分析" in CUA_AGENT_DEFINITION.instructions
-    assert "电脑操作任务即已完成" in CUA_AGENT_DEFINITION.instructions
-    assert "调用方任务所使用的语言" in CUA_AGENT_DEFINITION.instructions
-    assert "简短中文" not in CUA_AGENT_DEFINITION.instructions
-    assert "中文回复" not in CUA_AGENT_DEFINITION.instructions
-    for irrelevant_concept in (
-        "GDEClaw",
-        "Main Agent",
-        "Host Adapter",
-        "Midscene",
-        "Runtime",
-        "Session",
-        "scheduler",
-        "npm install",
+def test_execution_definition_is_loaded_from_packaged_markdown() -> None:
+    definition = CUA_AGENT_DEFINITION
+    assert definition.name == "Computer-Use"
+    assert definition.invocation_mode == "stateless-task"
+    assert "完整任务" in definition.description
+    instructions = definition.instructions
+    for rule in (
+        "不负责选择、发现或管理 Skill", "每次调用都是独立任务", "仅提供 `cua_execute`",
+        "必须原样使用调用方确认的参数", "不得更换任务", "使用 `strategy=freeform`",
+        "不通过 Tool 打开、录制、复核、校准或调试 Workbench", "不调用 Catalog",
+        "最终回复必须原样包含该执行报告路径", "不得编造路径", "不得用于探测或确认",
+        "调用方任务所使用的语言", "由调用方消费和分析", "不自动重试",
     ):
-        assert irrelevant_concept not in CUA_AGENT_DEFINITION.instructions
-    assert "仅用于录制新流程、复核或校准已录制任务" in CUA_AGENT_DEFINITION.description
+        assert rule in instructions
+    assert "cua_workbench" not in instructions
+    assert "先用 `cua_catalog`" not in instructions
+    assert "任务资产的直接解析尚不支持" in definition.description
 
 
 def test_loading_definition_does_not_share_mutable_invocation_state() -> None:
     first = load_agent_definition()
     second = load_agent_definition()
-
-    assert first == second
+    assert first == second == CUA_AGENT_DEFINITION
     assert first is not second
     assert not hasattr(first, "messages")
     assert not hasattr(first, "session")
@@ -53,5 +35,10 @@ def test_freeform_only_definition_describes_available_capabilities() -> None:
     assert "仅提供 `cua_execute`" in definition.instructions
     assert "不提供录制" in definition.instructions
     assert "最终回复必须原样包含该执行报告路径" in definition.instructions
-    assert "发现并判断是否使用 Recorded Skill" not in definition.description
-    assert load_agent_definition() == CUA_AGENT_DEFINITION
+
+
+def test_discovery_is_an_explicit_separate_profile() -> None:
+    definition = load_agent_definition(tool_mode="discover")
+    assert "可使用 `cua_catalog`" in definition.instructions
+    assert "不提供打开、录制、复核、校准或调试 Workbench" in definition.instructions
+    assert "cua_workbench" not in definition.instructions

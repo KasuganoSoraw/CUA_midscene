@@ -274,7 +274,7 @@ export class PythonAgentInvoker implements PythonAgentControl {
         }
       });
 
-      child.stdin.end(JSON.stringify({ task, invocationId }));
+      child.stdin.end(JSON.stringify({ task, invocationId, execution: request.execution }));
     });
   }
 

@@ -133,6 +133,23 @@ def test_freeform_only_runner_blocks_model_attempt_to_replay() -> None:
     asyncio.run(scenario())
 
 
+def assert_catalog_execution_events(events: list[AgentEvent]) -> None:
+    assert [event.type for event in events] == [
+        "agent.started", "progress", "tool.started", "tool.completed", "progress",
+        "tool.started", "execution.started", "tool.completed", "agent.completed",
+    ]
+    started = [event for event in events if event.type == "tool.started"]
+    completed = [event for event in events if event.type == "tool.completed"]
+    assert started[0].data == {
+        "callId": "call-1", "tool": "cua_catalog", "turn": 1,
+        "arguments": {"action": "list-scenes"},
+    }
+    assert completed[0].data == {
+        "callId": "call-1", "tool": "cua_catalog", "turn": 1, "status": "succeeded",
+        "output": {"method": "catalog", "ok": True},
+    }
+
+
 def test_runner_handles_multiple_tool_rounds_and_emits_domain_events() -> None:
     async def scenario() -> None:
         model = FakeModelClient(
@@ -158,6 +175,7 @@ def test_runner_handles_multiple_tool_rounds_and_emits_domain_events() -> None:
             model,
             lambda: runtime,  # type: ignore[arg-type]
             create_invocation_id=lambda: "inv-1",
+            tool_mode="discover",
         )
 
         result = await agent.invoke(InvocationRequest("打开 Chrome"), event_sink=events.append)
@@ -169,32 +187,7 @@ def test_runner_handles_multiple_tool_rounds_and_emits_domain_events() -> None:
             ("execute", {"strategy": "freeform", "goal": "打开 Chrome"}),
         ]
         assert runtime.closed
-        assert [event.type for event in events] == [
-            "agent.started",
-            "progress",
-            "tool.started",
-            "tool.completed",
-            "progress",
-            "tool.started",
-            "execution.started",
-            "tool.completed",
-            "agent.completed",
-        ]
-        started = [event for event in events if event.type == "tool.started"]
-        completed = [event for event in events if event.type == "tool.completed"]
-        assert started[0].data == {
-            "callId": "call-1",
-            "tool": "cua_catalog",
-            "turn": 1,
-            "arguments": {"action": "list-scenes"},
-        }
-        assert completed[0].data == {
-            "callId": "call-1",
-            "tool": "cua_catalog",
-            "turn": 1,
-            "status": "succeeded",
-            "output": {"method": "catalog", "ok": True},
-        }
+        assert_catalog_execution_events(events)
         assert model.calls[0][1] == ModelMessage(role="user", content="打开 Chrome")
         assert model.calls[1][-1].role == "tool"
         assert model.tool_sets[2] == ()
@@ -324,7 +317,7 @@ def test_terminal_finalization_rejects_json_envelope_without_exposing_it() -> No
     asyncio.run(scenario())
 
 
-def test_workbench_success_is_terminal_and_final_reply_keeps_url() -> None:
+def test_workbench_model_call_is_rejected_without_runtime_side_effects() -> None:
     async def scenario() -> None:
         url = "http://127.0.0.1:47831/?mode=recording"
         model = FakeModelClient(
@@ -354,10 +347,10 @@ def test_workbench_success_is_terminal_and_final_reply_keeps_url() -> None:
 
         result = await agent.invoke(InvocationRequest("打开录制入口", invocation_id="workbench"))
 
-        assert result.status is InvocationStatus.COMPLETED
-        assert url in result.reply
-        assert runtime.calls == [("workbench", {"mode": "recording"})]
-        assert model.tool_sets[1] == ()
+        assert result.status is InvocationStatus.FAILED
+        assert "无法识别" in (result.error or "")
+        assert runtime.calls == []
+        assert len(model.calls) == 1
 
     asyncio.run(scenario())
 
@@ -425,8 +418,9 @@ def test_runner_does_not_share_messages_between_invocations() -> None:
 
         assert len(model.calls[0]) == 2
         assert len(model.calls[1]) == 2
-        assert model.calls[0][1].content == "任务一"
-        assert model.calls[1][1].content == "任务二"
+        assert (model.calls[0][1].content or "").startswith("任务一")
+        assert (model.calls[1][1].content or "").startswith("任务二")
+        assert "任务一" not in (model.calls[1][1].content or "")
         assert len(runtimes) == 2
         assert all(runtime.closed for runtime in runtimes)
 
@@ -454,7 +448,9 @@ def test_runner_stops_on_tool_failure_without_retrying_or_switching() -> None:
         agent = CuaAgent(model, lambda: runtime)  # type: ignore[arg-type]
 
         result = await agent.invoke(
-            InvocationRequest("查询告警", invocation_id="inv-failed"), event_sink=events.append
+            InvocationRequest("查询告警", invocation_id="inv-failed", execution={
+                "strategy": "replay", "scene": "ems", "task": "query",
+            }), event_sink=events.append,
         )
 
         assert result.status is InvocationStatus.FAILED
@@ -545,7 +541,9 @@ def test_runner_does_not_invent_failure_report_paths_or_expose_other_tool_artifa
         model = FakeModelClient([ModelResponse(tool_calls=(ModelToolCall(
             "failed-call", tool, arguments,
         ),))])
-        result = await CuaAgent(model, lambda: FailedRuntime()).invoke(InvocationRequest("查询"))
+        result = await CuaAgent(model, lambda: FailedRuntime(), tool_mode="discover").invoke(
+            InvocationRequest("查询"),
+        )
         assert result.status is InvocationStatus.FAILED
         assert result.data is None
         assert result.tool_calls[0].output is None
@@ -587,6 +585,7 @@ def test_runner_reports_needs_input_cancellation_and_turn_limit() -> None:
             FakeModelClient([repeated_call, repeated_call]),
             lambda: FakeRuntimeClient(),  # type: ignore[arg-type]
             max_turns=2,
+            tool_mode="discover",
         )
         limited = await limited_agent.invoke(InvocationRequest("查询", invocation_id="limited"))
         assert limited.status is InvocationStatus.FAILED
@@ -686,7 +685,9 @@ def test_runner_emits_tool_call_explanation_after_response_is_complete() -> None
                 ModelResponse(content="Done", final_status="completed"),
             ]
         )
-        agent = CuaAgent(model, lambda: FakeRuntimeClient())  # type: ignore[arg-type]
+        agent = CuaAgent(
+            model, lambda: FakeRuntimeClient(), tool_mode="discover",  # type: ignore[arg-type]
+        )
 
         result = await agent.invoke(
             InvocationRequest("List available tasks", invocation_id="tool-explanation"),
