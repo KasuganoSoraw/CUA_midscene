@@ -12,6 +12,10 @@ CUA_DATA_ROOT=D:\CUA\data
 CUA_RECORDINGS_ROOT=D:\CUA\recordings
 CUA_AGENT_TOOL_MODE=execute
 CUA_AGENT_FREEFORM_ONLY=false
+# 由宿主注入实际地址，本地调试填写真实运行端口：
+GDECLAW_API_BASE_URL=http://127.0.0.1:<实际端口>
+# 可选，缺省使用系统临时目录：
+CUA_SKILL_EXPORT_TEMP_ROOT=D:\CUA\skill-exports
 ```
 
 同时配置 Midscene/录制模型。真实密钥和本机路径不提交。
@@ -35,7 +39,9 @@ PowerShell 可使用 npm.cmd 避免 npm.ps1 执行策略限制。服务监听 12
 
 Workbench 的新 API 使用 /api/skills/:skillName。录制生成 POST /api/recordings/:recording/skills，body={}；通过 /api/skill-generation 查询后台状态。保存直接写正式 JSON/YAML，不需要发布和宿主更新 API。
 
-原始录制位于 CUA_RECORDINGS_ROOT；生成过程复用 Python 后处理器和模型，并把轨迹及截图复制到 Skill source。临时目录和写锁使用根下隐藏目录，不作为任务展示。
+原始录制位于 CUA_RECORDINGS_ROOT；生成过程复用 Python 后处理器和模型，在独立临时目录组装和校验 Skill，生成根目录平铺的单 Skill ZIP，再 POST 到 GDEClaw 的 /api/gdeclaw/skills/import?enable=true&target_name=...。multipart 文件字段为 file，不手动设置 Content-Type，不传 X-Agent-Id。导入成功后重新校验正式目录；缺少 GDECLAW_API_BASE_URL 时明确失败，不直接安装。
+
+ZIP 保留在临时导出根中，成功结果和导入失败诊断包含 ZIP 路径；它不是正式任务。临时根不能位于正式 Skill 根内，可按本机空间策略清理。现有步骤保存和图片上传使用正式根下的写锁，不调用宿主更新接口。
 
 浏览器草稿按数据根、Skill 根和规范名称隔离。保存使用 revision；冲突保留草稿，必须确认后重新加载。四个身份/流程文件都参与 revision。
 

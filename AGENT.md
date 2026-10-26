@@ -20,7 +20,7 @@
 10. Runtime 不提供跨进程 computer use 并发锁。上层调用方必须保证真实桌面操作串行执行，不得把执行器描述为并发安全。
 11. 单个函数或方法不得超过 50 行，应按职责组织代码，不通过压缩语句或机械转发规避限制。TypeScript 主流程应保持可顺读；抽象应服务于复用、隔离 I/O/第三方边界、独立业务规则或复杂度控制。
 12. Agent 到 Runtime 的依赖方向固定为 `agent (Python) -> execution/runtime-bridge (TypeScript) -> Midscene`。`execution` 不得导入 Python Agent、模型 SDK、Agent prompt 或 GDEClaw；GDEClaw 不得注册 CUA 内部 Tool。Agent invocation 不保存跨调用 Session，依赖只在安装/部署阶段准备。
-13. 仓库提供 Python 包、单次进程 invocation、Review `--dev` 调试入口和 Runtime bridge。GDEClaw 注册与生命周期 Adapter、网络服务和长期 Agent daemon 位于仓库边界之外。
+13. 仓库提供 Python 包、单次进程 invocation、Review `--dev` 调试入口和 Runtime bridge。Skill 生成在独立临时目录完成并打包 ZIP，通过宿主注入的 GDECLAW_API_BASE_URL 调用原生导入接口；GDEClaw 负责正式安装、注册与启用。CUA 不直接安装到正式 Skill 根，不实现宿主网络服务、生命周期管理或长期 Agent daemon。
 14. `execution/SKILL.md` 是 CLI 维护说明；正式任务的 SKILL.md 是供 GDEClaw 选择与委派的 Skill 描述，Runtime 读取其身份并校验 CUA 标记。Python Agent 不自行扫描或加载这些 Markdown。Workbench 只由宿主设置入口调用 Runtime workbench，浏览器和 worker 生命周期归宿主所有。不臆造 GDEClaw 注册、更新、启用或分发 API。
 15. 代码、注释、文档、Skill 和 UI 文案只描述稳定设计、能力边界和必要用法。变更历史只在用户明确要求时记录；其他场景不写入对话过程、用户纠正过程、版本演进或前后方案比较，修改时同步清理同类元叙述。
 16. 源码仓的环境变量契约只保存在根 `.env.example`，本地真实值只保存在被忽略的根 `.env.local`。TypeScript Runtime 按“进程环境、根 `.env.local`、根 `.env`”读取；Python 包由调用方注入进程环境。组件和独立 execution 发布包不得携带环境文件。

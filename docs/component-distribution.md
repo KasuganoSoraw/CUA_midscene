@@ -73,6 +73,8 @@ Host 向 Agent 提供模型变量、可信 Skill 根、数据根、JavaScript ex
 $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 $env:CUA_SKILLS_ROOT = 'C:\path\to\gdeclaw-skills'
 $env:CUA_AGENT_TOOL_MODE = 'execute'
+# Skill 创建需要宿主的真实动态端口：
+$env:GDECLAW_API_BASE_URL = 'http://127.0.0.1:<实际端口>'
 $env:CUA_AGENT_JS_RUNTIME_EXECUTABLE = 'C:\Program Files\nodejs\node.exe'
 $env:CUA_AGENT_RUNTIME_BRIDGE = "$component\runtime\dist\runtime-bridge\worker.js"
 
@@ -105,7 +107,7 @@ GDEClaw Main Agent 选择原生 Skill，提交完整任务及可选 `execution: 
 
 Agent 与 Runtime 必须整体升级到支持 `skillName` 的组件。JSONL envelope 为 1.0，Skill 资产契约由 Runtime 导出 `skillAssetContractVersion=1.0`；不能仅凭 envelope 版本判定旧组件支持 Skill 绑定。
 
-Workbench 由设置按钮通过 Keeper 持有的 Runtime worker 调用 `workbench` 方法，返回 URL 与 reused 后由宿主前端打开；页面使用期间保持 worker 存活。正式目录、绑定与迁移契约见 [CUA Skill 集成](gdeclaw-skill-integration.md)。目录写入不代表已验证宿主的注册、启用、签名或分发。
+Workbench 由设置按钮通过 Keeper 持有的 Runtime worker 调用 `workbench` 方法，返回 URL 与 reused 后由宿主前端打开；页面使用期间保持 worker 存活。创建任务通过 GDECLAW_API_BASE_URL 的原生导入接口上传单 Skill ZIP，宿主负责安装、注册和启用；CUA_SKILLS_ROOT 必须对应同一 default workspace。可选 CUA_SKILL_EXPORT_TEMP_ROOT 仅保存导出产物，不是正式资产根。正式目录、绑定、导入和迁移契约见 [CUA Skill 集成](gdeclaw-skill-integration.md)；签名和分发等内部机制仍由宿主验证。
 
 使用兼容 Electron executable 时，Host 还需提供 Node 模式环境，例如：
 

@@ -4,7 +4,7 @@
 
 GDEClaw Main Agent 使用原生 Skill 机制选择任务，提交完整电脑操作目标及明确的 Skill 绑定。CUA SubAgent 只执行指定任务，不重新发现 Skill，不继续业务分析、数据提取或报告撰写。Workbench 用于人工录制、生成、复核和调试，由设置按钮通过 Keeper 启动。
 
-CUA 直接读写正式 Skill 目录，不提供发布或同步按钮，不依赖宿主更新 API。本仓库不实现 GDEClaw Skill 注册、启用、停用、签名、版本管理或 SkillHub；这些生命周期机制及目录变更的感知方式须由内部仓库确认。
+CUA 在独立临时目录生成并校验单个 Skill ZIP，通过 GDEClaw 原生 HTTP 导入接口安装、注册和启用。Workbench 后续直接读取、编辑和执行正式 Skill，不提供发布或同步按钮，不依赖宿主更新 API。CUA 不实现宿主内部的安装、注册、启用、签名、版本管理或 SkillHub。
 
 ## 配置与版本
 
@@ -14,6 +14,10 @@ CUA_DATA_ROOT=D:\CUA\data
 CUA_RECORDINGS_ROOT=D:\CUA\recordings
 CUA_AGENT_TOOL_MODE=execute
 CUA_AGENT_FREEFORM_ONLY=false
+# 由宿主注入实际运行时 API 地址，端口不固定：
+GDECLAW_API_BASE_URL=http://127.0.0.1:<实际端口>
+# 可选；未配置使用系统临时目录：
+CUA_SKILL_EXPORT_TEMP_ROOT=D:\CUA\skill-exports
 ```
 
 CUA_SKILLS_ROOT 必须是绝对路径。统一 RuntimeLayout 按进程环境、仓库根 .env.local、仓库根 .env 解析；进程显式空值表示未配置。宿主应在启动 Runtime worker 时注入环境，Python CLI 不自行查找环境文件。路径不暴露给模型。
@@ -22,6 +26,8 @@ CUA_SKILLS_ROOT 必须是绝对路径。统一 RuntimeLayout 按进程环境、�
 - 自由目标 freeform 不需要 Skill 根；运行报告仍需要 CUA_DATA_ROOT。
 - CUA_DATA_ROOT 保存 runs、缓存及隔离的旧版兼容数据，不存放新正式任务。
 - CUA_RECORDINGS_ROOT 保存原始录制及其处理产物；正式 Skill 的 source 保存所需证据副本，不复制原始视频。
+- GDECLAW_API_BASE_URL 用于创建时的原生导入；缺失时在调用录制模型前失败，不阻止 Workbench 启动或已有任务执行。默认 workspace 不发送 X-Agent-Id，不增加 Token 或鉴权机制。
+- CUA_SKILL_EXPORT_TEMP_ROOT 采用相同配置优先级，必须是可读写绝对目录；未配置使用系统临时目录。导出目录不可位于正式 Skill 根内，真实路径校验会识别链接别名。
 
 Skill 资产契约版本为 1.0，Manifest schemaVersion=0.1，task.json schemaVersion=0.3。JSONL envelope 保持 1.0；此 envelope 版本不表示旧组件支持 skillName。宿主必须整体升级 Python Agent 与 TypeScript Runtime，使用导出 skillAssetContractVersion=1.0 的组件，不能混搭旧 scene/task Agent。Review identity protocolVersion=4 并包含 skillsRootKey；旧页面链接需要重新打开。
 
@@ -51,7 +57,7 @@ description: 查询网络告警。由 CUA 子 Agent 执行此电脑操作任务�
 ---
 ```
 
-名称使用至多 64 字符的小写英文、数字和连字符，不接受目录路径、Windows 保留名称或随机身份补丁。目录名必须与 frontmatter name 完全一致。
+名称使用至多 64 字符的小写英文、数字和连字符，不接受目录路径或 Windows 保留名称。目录名必须与 frontmatter name 完全一致。
 
 ```json
 {
@@ -64,7 +70,9 @@ description: 查询网络告警。由 CUA 子 Agent 执行此电脑操作任务�
 
 task.json 使用 skillName、title、description、goal、source 和 inputs，不包含 scene/task。skillName 与 title 等于规范 name；description 与 SKILL.md 一致。task.yaml 的 agent.groupName 等于 skillName，groupDescription 等于 goal。步骤和参数仍使用 step-NNN 与 step-NNN-input。
 
-录制处理复用现有 TraceGenerator 模型客户端，根据完整轨迹生成 name/description/goal；步骤仍由 operation 确定性转换。模型摘要无效时创建失败，不使用随机名称回退。名称冲突明确失败且不覆盖现有目录；用户可保留现有 Skill，检查或调整来源后重新生成。
+录制处理复用现有 TraceGenerator 模型客户端，根据完整轨迹生成 name/description/goal；步骤仍由 operation 确定性转换。模型摘要无效时创建失败。打包前扫描正式根下所有实际目录名及已有 SKILL.md 的规范 name，包括未标记的普通宿主 Skill；仅名称占用检查读取这些元数据，不把普通 Skill 纳入工作台管理。
+
+名称优先使用模型原值。已占用时追加安全随机生成的六位十六进制后缀，并截断主名称以满足 64 字符限制。名称在组装前统一确定，所有身份字段及 YAML groupName 保持一致；description、goal、步骤与录制证据不变，不重复调用模型。导入接口随后返回 409 时停止，不覆盖、不自动换名重传。
 
 ## 安全与写入
 
@@ -72,11 +80,49 @@ task.json 使用 skillName、title、description、goal、source 和 inputs，�
 
 目录边界使用规范化路径、realpath 与逐级链接检查。Skill 内不接受符号链接资产、绝对图片路径、网络图片引用、Windows 盘符或 ../。模型不能指定 skillsRoot、skillRoot、dataRoot 或任意文件路径。
 
-创建先在根目录的受控隐藏暂存目录组装并验证，再使用排他 mkdir 预留正式名称、排他复制文件，最后提交 Manifest。普通目录即使为空也不会被覆盖；并发同名创建只有一个成功。提交标记之前目录不可被识别为有效 Skill；组装或安装失败清理本次拥有的半成品。
+每次创建在导出根下使用独立的 cua-skill-export-* 临时任务目录。组装和 ZIP 打包失败仅清理本次拥有的目录，不触碰正式 Skill 或原始录制。ZIP 以排他写入保存；ZIP 生成后不自动删除，成功和导入失败均可保留用于排查。正式安装及冲突仲裁由 GDEClaw 原生接口负责，不实现安装数据库或复杂并发协调。
 
 保存使用排他写锁、四个身份/流程文件的 revision、重新读取校验与双文件失败回滚。参考图使用内容哈希和不可变存储，绑定与步骤一起保存。浏览器草稿不是正式资产；冲突时保留草稿并要求重新加载。写锁异常退出可能留下 .cua-locks 中的锁文件，维护者应确认没有运行中的写入后清理对应锁文件。
 
 本地 Manifest 是资产类型/版本声明，不是密码学签名或权限证明。拥有 Skill 根写权限的进程属于宿主信任边界；CUA 不替代宿主目录权限、签名与生命周期校验，也不保证对抗恶意进程持续替换目录的文件系统竞态。
+
+## 原生 Skill 导入
+
+单 Skill ZIP 使用 fflate 生成，文件直接位于归档根，不包含临时任务目录或 Skill 名称外层：
+
+```text
+<skill-name>.zip
+├── SKILL.md
+├── cua-manifest.json
+├── task.json
+├── task.yaml
+└── source/
+    ├── showui-trace.json
+    ├── processed-log.json
+    ├── processed-log-sc.json
+    └── ...
+```
+
+归档布局由独立打包函数维护，并由测试检查完整性；真实 GDEClaw 导入器仍需联调核对这一布局。
+
+```typescript
+const baseUrl = process.env.GDECLAW_API_BASE_URL?.trim();
+if (!baseUrl) throw new Error('缺少 GDECLAW_API_BASE_URL');
+const url = new URL('/api/gdeclaw/skills/import', baseUrl);
+url.searchParams.set('enable', 'true');
+url.searchParams.set('target_name', skillName);
+const form = new FormData();
+form.append('file', new Blob([new Uint8Array(zipBytes)], { type: 'application/zip' }), `${skillName}.zip`);
+const response = await fetch(url, { method: 'POST', body: form });
+```
+
+enable 与 target_name 是查询参数，multipart 只包含 file，不发送 rename_map、X-Agent-Id 或 Token。Content-Type 及 boundary 由 fetch 自动生成。基础地址来自可信配置，不硬编码端口；请求禁止重定向，超时为 60 秒，不自动重试。
+
+HTTP 400、409、500 等失败状态保留上游诊断及 ZIP 路径。2xx 响应必须是合法 JSON 对象且不能显式报告失败；随后还必须从 CUA_SKILLS_ROOT 通过 readSkill 重新校验刚导入的身份和全部资产。仅收到成功响应但目录不可发现时返回配置或资产错误，不能报告完整成功。
+
+网络中断、超时或成功响应无法解析时，导入结果可能不确定。应先核实 GDEClaw 中是否已经安装，不要直接换名重传。CUA 不删除可能已经由宿主安装的 Skill。
+
+创建结果包含 created、valid、skillName、goal、zipPath。Workbench 只有在导入及正式资产复核均成功后才刷新并打开新任务。ZIP 路径是诊断产物，不是新的正式目录。
 
 ## 宿主 Workbench 调用
 
@@ -141,6 +187,6 @@ npm.cmd run cua -- skill run --skill-name network-alarm-search --strategy replay
 
 ## 验证边界
 
-自动化覆盖目录安全、冲突、安装清理、录制摘要、正式保存、图片引用、平铺页面、生成导航、服务隔离、绑定校验、guided/replay/freeform、执行终态与报告。测试模型和录制使用隔离夹具，dry-run 不操作真实业务桌面。
+自动化覆盖目录安全、普通 Skill 名称占用、随机后缀身份一致性、临时导出、ZIP 布局、multipart 请求、导入失败与超时、正式目录复核、录制摘要、正式保存、图片引用、平铺页面、生成导航、服务隔离、绑定校验、guided/replay/freeform、执行终态与报告。HTTP 导入使用 mock fetch，模型和录制使用隔离夹具，dry-run 不操作真实业务桌面。
 
-GDEClaw 内部仍需实现：注入环境与可信目录权限，Keeper 生命周期与设置按钮，选定原生 Skill 后构造 execution，以及确认目录写入如何触发注册/刷新、启用、签名和分发。本仓库的目录写入通过不代表这些宿主流程已经验证。
+GDEClaw 宿主需注入实际 GDECLAW_API_BASE_URL 与 default workspace 对应的 CUA_SKILLS_ROOT，并保证导入接口和 Runtime 访问同一正式目录。Keeper 保持 worker 存活，设置按钮打开返回 URL，Main Agent 选定 Skill 后构造 execution。原生导入器的解包、注册、启用、签名及分发行为由内部仓库维护；mock 请求通过不表示这些宿主流程已经完成真实联调。

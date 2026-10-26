@@ -84,6 +84,10 @@ CUA_AGENT_MAX_TURNS=8
 CUA_DATA_ROOT=C:\path\to\cua-data
 CUA_SKILLS_ROOT=C:\path\to\gdeclaw-skills
 CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
+# 创建 Skill 需要宿主实际动态地址：
+# GDECLAW_API_BASE_URL=http://127.0.0.1:<实际端口>
+# 可选临时导出根，缺省使用系统临时目录：
+# CUA_SKILL_EXPORT_TEMP_ROOT=C:\path\to\skill-exports
 ```
 
 TypeScript Runtime 的配置优先级为进程环境、仓库根 `.env.local`、仓库根 `.env`；子工程目录不保存或读取环境文件。`CUA_SKILLS_ROOT` 保存正式 Skill；`CUA_DATA_ROOT` 保存运行产物、缓存与旧版兼容数据；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。组件宿主通过 `CUA_PYTHON_EXECUTABLE` 提供已经安装 `cua_record` 与 `cua_recorder` 的统一 Python；源码开发不设置该变量时，两个 Worker 分别使用相邻工程的 `.venv`。Python Worker 继承 Runtime 已加载的进程环境。
@@ -92,7 +96,7 @@ TypeScript Runtime 的配置优先级为进程环境、仓库根 `.env.local`、
 
 ## CLI
 
-正式 Skill 使用以下命令；默认 guided，明确要求严格回放时传 --strategy replay：
+正式 Skill 使用以下命令；默认 guided，明确要求严格回放时传 --strategy replay。create-from-recording 在独立临时目录组装、校验并打包 ZIP，经 GDECLAW_API_BASE_URL 的原生接口导入后读取正式目录验证；不直接安装到 CUA_SKILLS_ROOT。名称占用时在打包前追加安全随机后缀，HTTP 409 或超时不自动重传：
 
 ```powershell
 npm.cmd run cua -- skill list --json
@@ -127,9 +131,13 @@ node dist/cli/main.js scene list --json
 node dist/cli/main.js review --no-open
 ```
 
-`task create-from-recording` 是原始录制的默认创建入口。可用 `--python-executable` 显式选择已经安装 `cua_record` 的 Python，否则按 `CUA_PYTHON_EXECUTABLE` 和源码开发环境解析。record processor 不接收 goal；命令在 trace 生成后将可选 `--goal` 写入任务 goal/description 和 YAML groupDescription。省略时这些字段保存空字符串。Python 进度写入 stderr，stdout 只输出最终 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
+`task create-from-recording` 是旧项目兼容创建入口。可用 `--python-executable` 显式选择已经安装 `cua_record` 的 Python，否则按 `CUA_PYTHON_EXECUTABLE` 和源码开发环境解析。record processor 不接收 goal；命令在 trace 生成后将可选 `--goal` 写入任务 goal/description 和 YAML groupDescription。省略时这些字段保存空字符串。Python 进度写入 stderr，stdout 只输出最终 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
-`review` 只启动监听 `127.0.0.1` 的“桌面任务中心”，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT`、相同规范化 `CUA_SKILLS_ROOT` 与兼容开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。页面提供中文与英文即时切换并在本机保存选择；`lang=zh-CN|en-US` 查询参数可指定初始语言。普通模式只展示任务检查、录制流程和运行任务所需的信息；`--dev` 额外启用高级任务数据、revision、运行诊断和 Python Agent 调试入口。“任务检查”平铺展示 CUA_SKILLS_ROOT 中通过标记及身份校验的 Skill；空目录提供从录制创建的入口。用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML，也可在页面内确认后删除整个用户任务目录，普通宿主 Skill 和其他任务保持不变。“录制流程”进入时自动检测显示器并默认选择主屏，同时提供重新检测操作；它使用 Windows Worker 提供 `Ctrl+Shift+F9` 准备/开始/停止控制，也读取 `CUA_RECORDINGS_ROOT` 的一级目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并复用录制模型与 Trace 转换直接创建完整 CUA Skill。原始录制可在页面内确认后删除，已生成任务不受影响；活动录制期间不允许删除。页面不播放视频、不展示完整日志，也不流式转发 Python 后处理日志；创建期间只显示不可确定的“正在生成”状态，生成状态由服务保持，切换页签或刷新页面可恢复；成功后自动打开新 Skill 检查，也保留详情入口。重复生成会重新处理录制，同名 Skill 明确拒绝覆盖。
+`review` 只启动监听 `127.0.0.1` 的“桌面任务中心”，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT`、相同规范化 `CUA_SKILLS_ROOT` 与兼容开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。
+
+页面提供中文与英文即时切换并在本机保存选择；`lang=zh-CN|en-US` 查询参数可指定初始语言。普通模式只展示任务检查、录制流程和运行任务所需的信息；`--dev` 额外启用高级任务数据、revision、运行诊断和 Python Agent 调试入口。“任务检查”平铺展示 CUA_SKILLS_ROOT 中通过标记及身份校验的 Skill；空目录提供从录制创建的入口。用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML，也可在页面内确认后删除整个用户任务目录，普通宿主 Skill 和其他任务保持不变。
+
+“录制流程”进入时自动检测显示器并默认选择主屏，同时提供重新检测操作；它使用 Windows Worker 提供 `Ctrl+Shift+F9` 准备/开始/停止控制，也读取 `CUA_RECORDINGS_ROOT` 的一级目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件。录制模型与 Trace 转换生成完整 Skill，在独立临时目录打包后经 GDEClaw 原生接口导入。原始录制可在页面内确认后删除，已生成任务不受影响；活动录制期间不允许删除。页面不播放视频、不展示完整日志，也不流式转发 Python 后处理日志；创建期间只显示不可确定的“正在生成”状态，生成状态由服务保持，切换页签或刷新页面可恢复；成功后自动打开新 Skill 检查，也保留详情入口。重复生成会重新处理录制；本地名称已占用时追加随机后缀，宿主返回名称冲突则停止，不覆盖已有资产。
 
 未配置 `CUA_RECORDINGS_ROOT` 不会阻止 review 服务和任务复核启动。录制页只提示需要配置的环境变量、仓库根 `.env.local` 配置位置和路径示例，不直接修改环境文件，也不从后台服务进程唤起可能失焦或阻塞的桌面目录选择框。配置后重启 review 服务即可生效。存在零个或多个视频/事件文件的录制目录仍会显示，但不能生成任务。
 

@@ -36,7 +36,9 @@ flowchart LR
     WB --> Runtime
     WB --> Recorder[Recorder · Python]
     Recorder --> Record[Record · Python]
-    Record -->|Trace 与任务摘要| Assets[CUA Skill 正式目录]
+    Record -->|Trace 与任务摘要| Export[临时 Skill 与 ZIP]
+    Export --> Import[GDEClaw 原生导入]
+    Import --> Assets[CUA Skill 正式目录]
     Runtime <--> Assets
     Runtime --> Midscene[Midscene Computer Use]
     Midscene --> Desktop[目标桌面]
@@ -109,7 +111,7 @@ Workbench 提供任务检查、流程录制和任务调试三个常规入口。�
 
 ### 4.1 录制与 Skill 生成
 
-人工演示产生视频与事件日志，经 Record 处理为 Trace 与截图证据，再由 Runtime 转换为任务资产并进行静态校验。Workbench 提供后续复核、校准与试运行入口。
+人工演示产生视频与事件日志，经 Record 处理为 Trace 与截图证据。Runtime 在独立临时目录转换、校验并打包单 Skill ZIP，通过 GDEClaw 原生 HTTP 接口导入，成功后重新读取正式目录验证。Workbench 提供后续复核、校准与试运行入口。
 
 ![录制与 Recorded Skill 生成流程](assets/cua-architecture/recording-pipeline.png)
 
@@ -147,7 +149,8 @@ flowchart TD
 
 | 资产 | 存储位置 | 用途 |
 | --- | --- | --- |
-| 正式 Skill | `<CUA_SKILLS_ROOT>/<skill-name>/` | 直接生成、复核、保存和执行 |
+| 正式 Skill | `<CUA_SKILLS_ROOT>/<skill-name>/` | 宿主原生导入，CUA 复核、保存和执行 |
+| 导出产物 | `CUA_SKILL_EXPORT_TEMP_ROOT` 或系统临时目录 | 独立组装目录与保留的单 Skill ZIP |
 | 运行数据 | `<CUA_DATA_ROOT>/runs/<run-id>/` | 本次快照、状态、结果、截图及 Midscene 报告 |
 | 原始录制 | `CUA_RECORDINGS_ROOT` 指定的目录 | 保存视频与事件日志，作为录制处理输入 |
 

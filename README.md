@@ -46,7 +46,8 @@ Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现
   -> recorder：采集 MP4 + 键鼠 TXT（也可使用兼容的既有录制）
   -> record：日志、全屏截图、带红叉 trace crop、干净 reference patch、trace
   -> skill create-from-recording：模型归纳 Skill 身份、描述和目标
-  -> TypeScript converter：完整 Skill 直接写入 CUA_SKILLS_ROOT/<skill-name>
+  -> TypeScript converter：独立临时目录组装、校验并生成单 Skill ZIP
+  -> GDEClaw 原生 HTTP 导入：安装、注册并启用到 CUA_SKILLS_ROOT/<skill-name>
   -> Workbench：复核并保存正式 task.yaml、task.json 与参考图
   -> GDEClaw Main Agent：选择 Skill，提交 skillName、inputs 和执行策略
   -> Runtime resolver：<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml

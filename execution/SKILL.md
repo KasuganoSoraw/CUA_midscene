@@ -14,13 +14,16 @@ description: 维护 CUA 正式 Skill 资产、录制转换和 Midscene Runtime�
 - 只有完整合法的 CUA 标记资产可由 Runtime 管理。普通宿主 Skill 不进入 CUA 列表、编辑、删除或执行范围。
 - 图片只用于语义定位，不能用红叉 crop 替代干净定位参考图，不能越出 Skill 目录。
 - 运行产物位于 CUA_DATA_ROOT/runs；CUA_RECORDINGS_ROOT 保存原始录制及处理结果。
-- 宿主负责 Skill 注册、启用、签名、版本和分发。目录写入不代表已验证这些内部机制。
+- 创建时在独立临时目录组装并生成单 Skill ZIP，通过 GDEClaw 原生导入接口安装、注册和启用；不直接安装到正式根。后续保存直接编辑正式资产，不调用宿主更新接口。
+- 宿主负责签名、版本和分发；导入响应及正式资产校验通过不表示已验证全部内部生命周期机制。
 
 ## 环境与 CLI
 
 Node.js `>=20.18.1`。源码仓只在仓库根提供 `.env.example`，本机配置放入忽略的 .env.local；组件不携带环境文件。进程环境优先于根 .env.local 和 .env。CUA_SKILLS_ROOT 必须为绝对路径，未配置时 Skill 创建、发现和执行明确失败，freeform 不依赖该根。
 
 Windows `cua_recorder` 是采集 Worker，`cua_record` 后处理器负责轨迹与 Skill 摘要。宿主用 CUA_PYTHON_EXECUTABLE 指定已准备的统一 Python；调用时不安装依赖。
+
+Skill 创建要求 GDECLAW_API_BASE_URL 为宿主实际 API 基础地址；POST /api/gdeclaw/skills/import 使用 enable=true、target_name 查询参数和 multipart file，不发送 X-Agent-Id 或额外 Token。CUA_SKILL_EXPORT_TEMP_ROOT 可配置绝对导出根，缺省系统临时目录，不得位于正式 Skill 根内。ZIP 保留用于排查，超时结果不确定时先核实宿主状态，不直接换名重传。
 
 录制生成和真实执行应设置足够长的超时。模型请求默认 120 秒，Runtime 单请求默认 1800 秒，Review 外层 invocation 默认 40 分钟。
 

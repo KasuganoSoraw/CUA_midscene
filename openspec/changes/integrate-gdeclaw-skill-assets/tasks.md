@@ -1,12 +1,13 @@
 ## 1. 正式资产
 
 - [x] 1.1 定义 Skill Manifest、task.json Schema、统一根目录和安全解析
-- [x] 1.2 实现合法 Skill 发现、身份校验、原子安装及失败清理
+- [x] 1.2 实现合法 Skill 发现、身份校验、名称占用检查及导入后校验
 
 ## 2. 录制生成
 
 - [x] 2.1 复用模型客户端归纳 Skill 元数据，复用 Trace 转换生成资产
-- [x] 2.2 无命名表单的录制生成写入正式 Skill 根并返回 skillName
+- [x] 2.2 无命名表单的录制生成导出单 Skill ZIP，经宿主原生接口导入并返回 skillName 与 zipPath
+- [x] 2.3 覆盖临时目录隔离、归档布局、重名后缀、multipart、HTTP 错误及超时不重传
 
 ## 3. Workbench
 
