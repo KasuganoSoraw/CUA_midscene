@@ -28,7 +28,7 @@ CUA/
 
 `recorder` 是 Windows-only 采集进程，生成 MP4 与键鼠 TXT；`record` 基于 ShowUI-Aloha Learn，负责录制后处理，不包含 Act、Actor、Executor 或回放能力。`execution` 使用 TypeScript，在 Runtime worker 自身进程内直接调用 Midscene，并通过 JSONL Runtime bridge 服务 Python Agent。`execution` 可作为底层 Skill/CLI 独立发布，不安装为本机 Codex Skill。
 
-顶层 `agent/` 是唯一 canonical CUA Subagent。GDEClaw Main Agent 选择原生 Skill，CUA 默认仅通过私有 `cua_execute` 执行明确绑定的结构化任务或完整自然语言目标，不重新选择 Skill。独立 discover 配置可启用 Catalog；Workbench 始终由宿主设置入口调用底层 Runtime 方法，不暴露为模型 Tool。GDEClaw 不注册内部 Tool，CUA Subagent 不保存跨调用上下文或 Memory。宿主 Skill 目录任务的直接解析尚未实现，集成契约见 [执行专用 SubAgent](docs/execution-only-subagent.md)。
+顶层 `agent/` 是唯一 canonical CUA Subagent。GDEClaw Main Agent 选择原生 Skill，CUA 默认仅通过私有 `cua_execute` 执行明确绑定的结构化任务或完整自然语言目标，不重新选择 Skill。独立 discover 配置可启用 Catalog；Workbench 始终由宿主设置入口调用底层 Runtime 方法，不暴露为模型 Tool。GDEClaw 不注册内部 Tool，CUA Subagent 不保存跨调用上下文或 Memory。正式任务从 CUA_SKILLS_ROOT 中按合法 CUA 标记和 skillName 解析，默认 guided，集成契约见 [CUA Skill 集成](docs/gdeclaw-skill-integration.md)。
 
 Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现，直接调用 Python Agent invocation 并实时展示通用事件。它是薄的开发调试入口，不承载聊天产品、跨调用上下文或 Agent 决策逻辑。Host Adapter 使用相同的高层请求、事件与结果语义。
 
@@ -36,7 +36,7 @@ Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现
 
 - 仓库发布 Python `CuaAgent`、单次 `cua-agent invoke` 进程协议、私有 Tool loop、TypeScript Runtime bridge 和 `review --dev` 调试入口。
 - GDEClaw 注册与生命周期 Adapter、常驻 Agent 服务、跨调用 Session 和产品消息传输属于 Host 产品边界，不由本仓库提供。
-- `execution/SKILL.md` 是底层 CLI 的操作与维护说明；场景/任务目录中的 `SKILL.md` 是随任务包交付的维护说明。Python Agent 不读取这些 Markdown，而是通过 `cua_catalog` 获取结构化 scene/task 数据。
+- `execution/SKILL.md` 是底层 CLI 维护说明；正式任务的 `SKILL.md` 是 GDEClaw Skill 描述。Main Agent 选择 Skill，Python SubAgent 只执行明确的 skillName 绑定，不自行读取 Markdown 或重新搜索。
 - Python Agent 的私有 Tool 可以把受控调用摘要作为诊断结果返回，但 GDEClaw 不注册、选择或直接调用这些 Tool。
 
 ## 数据流
@@ -45,12 +45,12 @@ Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现
 教学录制
   -> recorder：采集 MP4 + 键鼠 TXT（也可使用兼容的既有录制）
   -> record：日志、全屏截图、带红叉 trace crop、干净 reference patch、trace
-  -> task create-from-recording：自动规范化 source、初始化并静态验证任务
-  -> TypeScript converter：task.yaml + task.json
-  -> 开发者、Review 或维护型 Agent 确认后直接维护 task.yaml
-  -> TypeScript resolver：<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml
-  -> task run：按多个 Midscene task 顺序执行
-  -> act run --scene/--task：投影为完整步骤 prompt，再执行单个 ai action
+  -> skill create-from-recording：模型归纳 Skill 身份、描述和目标
+  -> TypeScript converter：完整 Skill 直接写入 CUA_SKILLS_ROOT/<skill-name>
+  -> Workbench：复核并保存正式 task.yaml、task.json 与参考图
+  -> GDEClaw Main Agent：选择 Skill，提交 skillName、inputs 和执行策略
+  -> Runtime resolver：<CUA_DATA_ROOT>/runs/<run-id>/resolved-task.yaml
+  -> guided（默认）或显式 replay：通过 Midscene 执行
 
 无录制自然语言要求
   -> GDEClaw Main Agent：委派完整任务
@@ -89,7 +89,7 @@ npm run cua -- review --no-open
 npm run cua -- review --dev --no-open
 ```
 
-普通 `review` 提供“桌面任务中心”，包含任务检查、录制流程和运行任务，并可在中文与英文之间即时切换；语言选择会在本机保存，也可通过 `?lang=zh-CN` 或 `?lang=en-US` 指定初始语言。任务检查支持删除可写的用户任务，录制流程支持删除原始录制；两类删除均需在页面内确认，活动任务和活动录制受保护。空项目提供从录制创建任务的入口。进入录制流程时页面会自动检测屏幕并默认选择主屏。`review --dev` 额外提供高级任务数据和无 Session 的 Agent 调试入口。完整 CLI 命令见 [`execution/README.md`](./execution/README.md)，Agent 进程调用见 [`agent/README.md`](./agent/README.md)。
+普通 `review` 提供“桌面任务中心”，包含任务检查、录制流程和运行任务，并可在中文与英文之间即时切换；语言选择会在本机保存，也可通过 `?lang=zh-CN` 或 `?lang=en-US` 指定初始语言。任务检查支持删除可写的用户任务，录制流程支持删除原始录制；两类删除均需在页面内确认，活动任务和活动录制受保护。空 Skill 目录提供从录制创建任务的入口，名称、描述和目标自动归纳。进入录制流程时页面会自动检测屏幕并默认选择主屏。`review --dev` 额外提供高级任务数据和无 Session 的 Agent 调试入口。完整 CLI 命令见 [`execution/README.md`](./execution/README.md)，Agent 进程调用见 [`agent/README.md`](./agent/README.md)。
 
 执行器要求 Node.js `>=20.18.1`。
 
@@ -108,7 +108,7 @@ const run = await runNaturalLanguageAiAct({
 
 该 API 保存 `ai-act-prompt.txt` 和 `ai-act-result.json`，随后由 `executors/midscene-ai-act.ts` 直接调用一次 `agent.aiAct()`。
 
-`task create-from-recording` 是从原始录制创建任务的默认入口。`--goal` 仅作为创建后任务的描述信息，不会进入 trace 生成 prompt；可以省略，省略时任务 goal/description 与 YAML groupDescription 保存空字符串。命令会运行 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
+`skill create-from-recording --recording <目录>` 是正式 Skill 创建入口，不要求命名或场景输入。以下 `task create-from-recording` 和 `task init-from-trace` 仅用于旧 projects 数据兼容，不用于 Workbench 正式 Skill。`--goal` 仅作为创建后任务的描述信息，不会进入 trace 生成 prompt；可以省略，省略时任务 goal/description 与 YAML groupDescription 保存空字符串。命令会运行 record parser、复制标准化生成资产、初始化任务并完成静态验证，不复制原始视频和事件日志。
 
 仅当 trace 与 processed log 已经放入 user task `source/` 时，使用高级初始化入口：
 
@@ -121,15 +121,16 @@ npm run cua -- task init-from-trace --scene <scene> --task <task> --goal "<任�
 ## Skill 与用户数据
 
 ```text
-<CUA_DATA_ROOT>/projects/<scene>/    # 本地创建和维护的任务
-└── <task>/
+<CUA_SKILLS_ROOT>/                  # 正式 GDEClaw Skill 根
+└── <skill-name>/
     ├── task.yaml                    # 唯一长期执行事实源
     ├── task.json                    # 元数据、trace 来源和输入默认值
     ├── SKILL.md
+    ├── cua-manifest.json           # CUA 类型、格式版本与规范身份
     └── source/                      # trace、日志、截图和 reference patch
 
 <CUA_DATA_ROOT>/
-├── projects/<scene>/<task>/         # 用户创建和长期维护的任务数据包
+├── projects/<scene>/<task>/         # 显式旧版 CLI 兼容数据，新工作流不使用
 ├── cache/
 └── runs/<run-id>/
     ├── run-state.json              # 运行生命周期与进程身份
@@ -142,7 +143,7 @@ npm run cua -- task init-from-trace --scene <scene> --task <task> --goal "<任�
     └── midscene/                    # Midscene 报告、截图等产物
 ```
 
-数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、仓库根 `.env.local`、仓库根 `.env`。`CUA_PYTHON_EXECUTABLE` 是组件宿主提供的统一 Python，必须已经安装 `cua-agent`、`cua-recorder` 与 `cua-record`；源码开发未设置时，record 后处理和 Windows recorder 分别使用相邻工程的 `.venv`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。发布包不附带内置任务，任务发现只读取配置的数据根；空目录返回空列表，创建、验证和执行必须配置数据根。
+数据根优先级为 `--data-root`、进程 `CUA_DATA_ROOT`、仓库根 `.env.local`、仓库根 `.env`。`CUA_PYTHON_EXECUTABLE` 是组件宿主提供的统一 Python，必须已经安装 `cua-agent`、`cua-recorder` 与 `cua-record`；源码开发未设置时，record 后处理和 Windows recorder 分别使用相邻工程的 `.venv`。`CUA_RECORDINGS_ROOT` 是 review 页面读取并写入新录制的原始录制集合；缺少它不会阻止任务复核启动，录制页只提示变量名、配置位置和示例，不直接修改本机环境。发布包不附带内置任务。正式任务发现只读取 CUA_SKILLS_ROOT，并验证 CUA 标记与统一身份；未配置时明确提示，freeform 不依赖 Skill 根。CUA_DATA_ROOT 保存运行产物、缓存与旧版兼容数据。
 
 trace 每个 step 必须包含结构化 `caption.operation`。converter 不从 observation、think、action、expectation 或关键词猜测动作。click、doubleClick、input、keyboard、wait 分别转换为 `aiTap`、`aiDoubleClick`、`KeyboardTypeText`、`KeyboardPress`、`aiWaitFor`。click/doubleClick 仅在 `useReferenceImage: true` 时绑定对应 processed log 的 `screenshot_reference`；证据缺失、越界或文件不存在会直接失败。canonical YAML 保存任务内相对图片路径，resolver 验证后只在本次运行快照中改为绝对路径，逐步执行和整体 aiAct 均保留图片 prompt。`KeyboardTypeText` 通过底层键盘事件输入 ASCII，不使用剪贴板。
 

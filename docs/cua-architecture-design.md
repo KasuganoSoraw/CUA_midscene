@@ -10,13 +10,13 @@
 
 企业软件操作可能跨越浏览器、桌面应用、堡垒机和远程桌面。不同环境提供的自动化接口与界面结构并不一致，重复操作也需要沉淀为可维护的流程。
 
-CUA 面向真实桌面，以屏幕视觉理解与键盘鼠标操作为交互基础，并将人工演示转换为可复用的录制任务。系统由任务级 Agent 决策、录制知识处理和 GUI 执行三个部分协作完成任务。
+CUA 面向真实桌面，以屏幕视觉理解与键盘鼠标操作为交互基础，并将人工演示转换为可复用的录制任务。系统由任务级 Agent 执行、录制知识处理和 GUI 执行三个部分协作完成任务。
 
 ### 1.2 设计目标
 
 1. **跨应用操作：** 通过屏幕与键鼠操作完成完整 GUI 目标，适用于浏览器、桌面应用及远程桌面等场景。
 2. **操作知识沉淀：** 将人工演示转换为可维护、可参数化调用的 Recorded Skill。
-3. **多种执行策略：** 根据录制任务的匹配程度，选择逐步执行、录制指导执行或自然语言执行。
+3. **多种执行策略：** 依据调用方绑定使用录制指导执行或严格回放；没有 Skill 绑定时执行完整自然语言目标。
 4. **独立运行与复核：** 提供任务调用、运行产物管理和本地工作台，便于执行、维护与问题定位。
 
 ### 1.3 设计范围
@@ -25,17 +25,31 @@ CUA 面向真实桌面，以屏幕视觉理解与键盘鼠标操作为交互基�
 
 ## 2 总体技术架构
 
-CUA 采用任务决策、录制知识处理与 GUI 执行分离的模块化架构。Python 承担 Agent、Recorder 和 Record；TypeScript 承担任务转换与管理、执行编排、Midscene 适配及 Workbench 服务。
+CUA 采用任务接入、录制知识处理与 GUI 执行分离的模块化架构。Python 承担 Agent、Recorder 和 Record；TypeScript 承担任务转换与管理、执行编排、Midscene 适配及 Workbench 服务。
 
-![CUA 总体技术架构](assets/cua-architecture/architecture.png)
+```mermaid
+flowchart LR
+    Host[GDEClaw Main Agent] -->|完整目标与可选 Skill 绑定| Agent[CUA SubAgent · Python]
+    Keeper[GDEClaw Keeper] -->|设置入口| WB[Workbench]
+    Agent --> Bridge[Runtime Bridge · JSONL]
+    Bridge --> Runtime[Execution Runtime · TypeScript]
+    WB --> Runtime
+    WB --> Recorder[Recorder · Python]
+    Recorder --> Record[Record · Python]
+    Record -->|Trace 与任务摘要| Assets[CUA Skill 正式目录]
+    Runtime <--> Assets
+    Runtime --> Midscene[Midscene Computer Use]
+    Midscene --> Desktop[目标桌面]
+    Runtime --> Runs[单次运行产物]
+```
 
-*图 1 CUA 总体技术架构。蓝色实线表示调用与执行，绿色虚线表示录制数据流，灰色点线表示资产读取。任务管理与 Runtime Bridge 均属于 TypeScript Execution Runtime。*
+*图 1 CUA 总体技术架构。任务管理与 Runtime Bridge 均属于 TypeScript Execution Runtime；Skill 选择由宿主负责。*
 
 ### 2.1 模块职责
 
 | 模块 | 主要职责 | 实现边界 |
 | --- | --- | --- |
-| CUA Agent | 接收完整目标、发现录制任务、选择策略并调用私有工具 | Python `agent/`；不自行进行截图级动作规划 |
+| CUA Agent | 执行调用方已选定的 Skill 或自由目标，不重新选择任务 | Python `agent/`；不自行进行截图级动作规划 |
 | Recorder | 采集桌面视频与物理键鼠事件 | Python `recorder/`；Windows 录制进程 |
 | Record | 处理日志、提取截图并生成结构化 Trace | Python `record/`；基于 ShowUI-Aloha Learn 的录制后处理 |
 | 任务管理 | 转换 Trace、组织任务资产、发现任务并解析输入 | TypeScript `execution/cua/`；属于 Execution Runtime |
@@ -59,7 +73,7 @@ Recorder 采集人工演示的视频和键鼠事件；Record 处理事件日志�
 
 ### 3.2 Recorded Skill 生成与管理
 
-Recorded Skill 是以场景和任务组织的可复用录制任务资产包。Runtime 根据 Trace 的结构化 `operation` 确定性生成 Midscene 原生 YAML，不从其他自然语言字段猜测动作。
+CUA Skill 是位于 CUA_SKILLS_ROOT/<skill-name> 的独立录制任务资产；SKILL.md name 是身份，cua-manifest.json 声明 CUA 类型与版本。Runtime 根据 Trace 的结构化 `operation` 确定性生成 Midscene 原生 YAML，不从其他自然语言字段猜测动作。
 
 - `task.yaml`：唯一长期执行事实源，保存有序操作流程及参数占位符。
 - `task.json`：保存任务元数据、输入定义、录制默认值及来源绑定。
@@ -67,7 +81,7 @@ Recorded Skill 是以场景和任务组织的可复用录制任务资产包。Ru
 
 任务位于外部数据目录，发布包不附带内置任务。单次输入在解析后进入独立运行快照，不写回任务。复核和校准通过 Workbench 或维护入口完成；Agent 的私有工具不提供任务创建或长期编辑能力。
 
-### 3.3 Agent 任务决策
+### 3.3 Agent 任务执行
 
 CUA Agent 每次接收一项完整 GUI 任务，在一次调用内执行模型 Tool Calling。内部工具包括：
 
@@ -85,11 +99,11 @@ CUA Agent 每次接收一项完整 GUI 任务，在一次调用内执行模型 T
 | Guided | 将解析后的录制步骤及选定参考图投影为整体指导，由 Midscene 统一执行 | 有匹配录制知识、需要对当前界面进行适应 |
 | Freeform | 将完整自然语言目标直接交给 Midscene 原生 `aiAct()` | 无匹配录制任务或临时性任务 |
 
-三种策略共用 Midscene Computer Use。Replay 保留流程顺序；Guided 使用录制知识提供执行指导；Freeform 不依赖录制任务或预生成 YAML。策略由 Agent 在执行前明确选择，失败后不自动切换或重试。
+三种策略共用 Midscene Computer Use。Replay 保留流程顺序；Guided 使用录制知识提供执行指导；Freeform 不依赖录制任务或预生成 YAML。策略由宿主绑定确定，默认 guided，明确要求严格回放时 replay，失败后不自动切换或重试。
 
 ### 3.5 Workbench 可视化工作台
 
-Workbench 提供任务检查、录制流程和运行任务三个常规入口。用户可查看录制证据、维护本地任务、设置本次输入并访问可用的执行报告。保存任务前进行契约校验与 revision 冲突检查；空项目可从录制创建场景和任务。
+Workbench 提供任务检查、流程录制和任务调试三个常规入口。用户可查看录制证据、维护正式 Skill、设置本次输入并访问可用的执行报告。保存任务前进行契约校验与 revision 冲突检查；空目录可从录制生成独立 Skill。
 
 ## 4 核心业务流程
 
@@ -105,11 +119,23 @@ Workbench 提供任务检查、录制流程和运行任务三个常规入口。�
 
 ### 4.2 GUI 任务执行
 
-Agent 在任务可能已有录制知识时查询 catalog，依据匹配结果选择 Replay、Guided 或 Freeform。没有匹配任务本身不构成信息不足；只有缺少必要业务目标、输入或约束时，才请求补充。
+调用方选定 Skill 后提供明确的身份、输入与策略，CUA 只验证并执行该绑定；省略策略时使用 Guided。无 Skill 绑定的完整自然语言任务直接使用 Freeform。只有缺少必要业务目标、输入或约束时，才请求补充。
 
-![任务决策与执行策略](assets/cua-architecture/execution-strategies.png)
+```mermaid
+flowchart TD
+    Request[完整任务请求] --> Binding{是否绑定 Skill}
+    Binding -->|是| Validate[校验身份、输入与资产]
+    Validate --> Strategy{绑定策略}
+    Strategy -->|默认 guided| Guided[录制指导自适应执行]
+    Strategy -->|显式 replay| Replay[按保存步骤严格回放]
+    Binding -->|否| Freeform[完整自然语言自适应执行]
+    Guided --> Runtime[Execution Runtime / Midscene]
+    Replay --> Runtime
+    Freeform --> Runtime
+    Runtime --> Result[终态结果、可用报告与截图]
+```
 
-*图 3 任务决策与执行流程。三条策略分支进入同一 Runtime 与 Midscene 执行体系，最终返回状态和可用产物。*
+*图 3 任务绑定与执行流程。CUA 不重新发现或选择 Skill；执行结束后进入终态。*
 
 执行过程中，Runtime 向 Agent 传递关联的进度事件。执行结束后返回成功状态或原始错误，以及可用的报告、最终截图等产物信息，供调用方消费。Agent 不以创建任务、修改流程或静默重试掩盖执行失败。
 
@@ -121,7 +147,7 @@ Agent 在任务可能已有录制知识时查询 catalog，依据匹配结果选
 
 | 资产 | 存储位置 | 用途 |
 | --- | --- | --- |
-| 用户任务 | `<CUA_DATA_ROOT>/projects/<scene>/<task>/` | 创建、复核和长期维护 |
+| 正式 Skill | `<CUA_SKILLS_ROOT>/<skill-name>/` | 直接生成、复核、保存和执行 |
 | 运行数据 | `<CUA_DATA_ROOT>/runs/<run-id>/` | 本次快照、状态、结果、截图及 Midscene 报告 |
 | 原始录制 | `CUA_RECORDINGS_ROOT` 指定的目录 | 保存视频与事件日志，作为录制处理输入 |
 
@@ -149,7 +175,7 @@ GUI 执行以屏幕与键鼠为基础，不以 DOM、浏览器驱动或 CDP 为�
 
 ### 6.2 职责与事实源
 
-Agent 负责任务级决策，Record 负责演示语义生成，Runtime 负责转换、解析与执行，Midscene 负责具体 GUI 操作。`task.yaml` 保持唯一长期执行事实源，录制证据与单次执行产物各有独立用途。
+Main Agent 负责 Skill 选择，CUA SubAgent 负责指定任务执行，Record 负责演示语义生成，Runtime 负责转换、解析与执行，Midscene 负责具体 GUI 操作。`task.yaml` 保持唯一长期执行事实源，录制证据与单次执行产物各有独立用途。
 
 ### 6.3 能力边界
 
@@ -161,7 +187,7 @@ Agent 负责任务级决策，Record 负责演示语义生成，Runtime 负责�
 
 ## 7 总结
 
-CUA 以录制和语义轨迹生成沉淀操作知识，以任务资产保存可复用流程，以 Agent 选择执行策略，并通过统一的 Runtime 与 Midscene 完成桌面操作。工作台和运行产物为任务维护、执行复核与问题定位提供支撑。
+CUA 以录制和语义轨迹生成沉淀操作知识，以任务资产保存可复用流程，以宿主明确绑定 Skill 与执行策略，并通过统一的 Runtime 与 Midscene 完成桌面操作。工作台和运行产物为任务维护、执行复核与问题定位提供支撑。
 
 实现说明见 [CUA Agent](../agent/README.md)、[Execution Runtime](../execution/README.md)、[Recorder](../recorder/README.md)、[Record](../record/README.md) 与[组件交付](component-distribution.md)。
 

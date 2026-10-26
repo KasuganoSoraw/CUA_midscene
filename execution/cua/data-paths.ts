@@ -9,18 +9,28 @@ export const executionRoot = packageRoot;
 export const dataRootEnv = 'CUA_DATA_ROOT';
 export const skillsRootEnv = 'CUA_SKILLS_ROOT';
 
+async function normalizeConfiguredPath(absolute: string): Promise<string> {
+  let existing = absolute;
+  const suffix: string[] = [];
+  for (;;) {
+    try { return path.join(await realpath(existing), ...suffix); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      const parent = path.dirname(existing);
+      if (parent === existing) throw error;
+      suffix.unshift(path.basename(existing));
+      existing = parent;
+    }
+  }
+}
+
 export async function resolveSkillsRoot(root = executionRoot): Promise<string | undefined> {
   const configured = process.env[skillsRootEnv] === undefined
     ? (await readEnvironmentValue(skillsRootEnv, root)).value
     : process.env[skillsRootEnv]?.trim();
   if (!configured) return undefined;
   if (!path.isAbsolute(configured)) throw new Error('CUA_SKILLS_ROOT 必须配置绝对路径');
-  const absolute = path.resolve(configured);
-  try { return await realpath(absolute); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    return absolute;
-  }
+  return normalizeConfiguredPath(path.resolve(configured));
 }
 
 export function requireSkillsRoot(layout: Pick<RuntimeLayout, 'skillsRoot'>): string {
@@ -85,7 +95,7 @@ export async function requireDataPaths(layout: RuntimeLayout): Promise<DataPaths
     throw new Error('该命令需要可写数据目录，请提供 --data-root 或配置 CUA_DATA_ROOT');
   }
   try {
-    for (const directory of Object.values(layout.data)) {
+    for (const directory of [layout.data.root, layout.data.runsRoot, layout.data.cacheRoot]) {
       await mkdir(directory, { recursive: true });
       await access(directory, constants.W_OK);
     }

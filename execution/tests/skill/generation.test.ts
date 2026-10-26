@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -28,6 +28,14 @@ test('Skill 根配置遵循进程、env.local、env 顺序且不回退到 projec
     assert.equal(await resolveSkillsRoot(executionRoot), undefined);
     process.env.CUA_SKILLS_ROOT = 'relative';
     await assert.rejects(resolveSkillsRoot(executionRoot), /绝对路径/);
+    const actual = path.join(root, 'actual');
+    await mkdir(actual);
+    await symlink(actual, path.join(root, 'alias'), 'junction');
+    process.env.CUA_SKILLS_ROOT = path.join(root, 'alias', 'new-skills');
+    const normalized = await resolveSkillsRoot(executionRoot);
+    await mkdir(process.env.CUA_SKILLS_ROOT);
+    assert.equal(normalized, await realpath(process.env.CUA_SKILLS_ROOT));
+    assert.equal(normalized, await resolveSkillsRoot(executionRoot));
   } finally {
     if (previous === undefined) delete process.env.CUA_SKILLS_ROOT; else process.env.CUA_SKILLS_ROOT = previous;
     await rm(root, { recursive: true, force: true });

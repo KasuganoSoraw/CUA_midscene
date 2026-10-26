@@ -41,7 +41,7 @@ test('空项目启动 review 时只返回空用户 catalog，不加载测试样�
     const task = await fetch(new URL('/api/tasks/browser-demo/air-tickets-demo', started.url));
     assert.equal(task.status, 400);
     assert.match((await task.json() as any).error, /任务不存在/);
-    await access(path.join(root, 'projects'));
+    await assert.rejects(access(path.join(root, 'projects')));
   } finally {
     await started.close();
   }

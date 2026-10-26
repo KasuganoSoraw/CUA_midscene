@@ -1,5 +1,17 @@
 # CUA Midscene 任务与执行契约
 
+## 正式 CUA Skill
+
+正式任务位于 CUA_SKILLS_ROOT/<skill-name>，根目录必须由宿主配置为绝对路径。SKILL.md frontmatter name、目录、cua-manifest.json 与 0.3 task.json 的 skillName 必须一致。Manifest 使用 schemaVersion=0.1、kind=cua-skill、taskSchemaVersion=0.3。只有完整合法的标记资产可被管理，普通 GDEClaw Skill 不进入 CUA 工作流。
+
+task.yaml 保存唯一长期执行流程，task.json 保存目标、inputs 和 source 引用。所有本地图片和证据引用必须位于当前 Skill 内，不接受符号链接越界、绝对路径或网络图片。录制模型自动归纳名称、描述、goal；生成无需场景或命名表单，并直接安装正式目录。
+
+使用 skill list、skill describe --skill-name、skill create-from-recording --recording、skill validate --skill-name 和 skill run --skill-name。执行默认 guided，显式 --strategy replay 严格回放；freeform 不绑定 Skill。
+
+默认 SubAgent 仅提供 cua_execute，结构化 execution 使用 skillName、可选 strategy 和 inputs，拒绝模型路径参数与绑定篡改。Workbench 使用 /api/skills/:skillName，保存直接写正式资产，revision 冲突保留草稿。宿主设置入口调用 Runtime workbench，负责打开 URL 并保持 worker 存活。
+
+以下目录及 scene/task 契约仅用于旧版 projects 兼容 CLI，不用于正式 Skill 或 GDEClaw 默认执行绑定。宿主需整体升级 Agent 与 Runtime；JSONL envelope=1.0 不代表旧组件支持 skillName。
+
 ## 目录
 
 ```text

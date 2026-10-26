@@ -89,6 +89,7 @@ export async function readSkill(skillsRoot: string, skillName: string): Promise<
   const target = path.join(root, skillName);
   if ((await lstat(target)).isSymbolicLink()) throw new Error('Skill 目录不能是符号链接');
   const actual = assertContained(root, await realpath(target));
+  if (path.basename(actual) !== skillName) throw new Error('Skill 实际目录名与规范身份不一致');
   return readSkillDirectory(actual, skillName);
 }
 

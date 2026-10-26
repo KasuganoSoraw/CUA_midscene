@@ -2,7 +2,7 @@
 
 `cua-agent` 是面向 GDEClaw 和本地开发调试的唯一 canonical Computer-Use Subagent。
 
-它每次接收一个完整任务，在单次调用内负责模型 Tool Calling 和任务级执行策略选择；它不保存跨调用 Session、长期记忆或用户聊天历史。catalog、replay、guided、freeform、workbench 和 Midscene 执行由 TypeScript `execution` Runtime 提供。
+它每次接收一个完整任务，在单次调用内负责模型 Tool Calling 和指定任务执行；它不保存跨调用 Session、长期记忆或用户聊天历史。catalog、replay、guided、freeform、workbench 和 Midscene 执行由 TypeScript `execution` Runtime 提供。
 
 本目录是独立 Python 包边界。依赖由安装或部署阶段准备，invocation 不执行 `uv sync`、`pip install`、`npm install` 或 lock 操作。
 
@@ -20,7 +20,7 @@ GDEClaw Main Agent
   -> Midscene
 ```
 
-GDEClaw 不需要注册内部 Tool，也不需要理解 replay、guided 或 freeform。Host Adapter 负责用户会话、任务 ID、后台生命周期和取消；本包只保存一次 invocation 内的 messages 和 Tool result，结束后即释放，不实现长期 Memory、持久 Session、scheduler 或多 Agent routing。Tool 名称和输入/输出摘要可以作为受控诊断数据返回，但不构成 Host 可调用 Tool。
+GDEClaw 不注册内部 Tool；Main Agent 选定 Skill 并传入 skillName 与 inputs，缺省 guided，明确严格回放时指定 replay。Host Adapter 负责用户会话、任务 ID、后台生命周期和取消；本包只保存一次 invocation 内的 messages 和 Tool result，结束后即释放，不实现长期 Memory、持久 Session、scheduler 或多 Agent routing。Tool 名称和输入/输出摘要可以作为受控诊断数据返回，但不构成 Host 可调用 Tool。
 
 ## 开发
 
@@ -47,7 +47,7 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 `CUA_AGENT_TOOL_MODE=execute` 为默认执行专用配置，只暴露 `cua_execute`，支持 replay、guided、freeform；宿主选择 Skill，SubAgent 不再次发现任务。独立调用方可显式使用 discover 配置获得 `cua_catalog` 和 `cua_execute`。任何配置都不暴露 `cua_workbench` 模型 Tool；底层 Workbench Runtime 方法保留给宿主设置入口。
 
-GDEClaw 使用 `CuaAgent(..., tool_mode="execute")` 和 `load_agent_definition(tool_mode="execute")`。结构化请求通过 `InvocationRequest.execution` 传入与 cua_execute 一致的 strategy、scene、task 和 inputs；无绑定时将完整 task 直接作为 freeform 目标。本次调用会拒绝模型更换绑定参数，不接受任意 Skill 路径。现有 `freeform_only=True` 和环境变量 `CUA_AGENT_FREEFORM_ONLY=true` 仍只允许 freeform，不支持结构化绑定。完整契约、宿主 Workbench 调用及 Skill 目录接入限制见 [执行专用集成](../docs/execution-only-subagent.md)。
+GDEClaw 使用 `CuaAgent(..., tool_mode="execute")` 和 `load_agent_definition(tool_mode="execute")`。结构化请求通过 `InvocationRequest.execution` 传入 skillName、inputs 与可选 strategy（默认 guided）；无绑定时将完整 task 直接作为 freeform 目标。本次调用会拒绝模型更换绑定参数，不接受任意 Skill 路径。现有 `freeform_only=True` 和环境变量 `CUA_AGENT_FREEFORM_ONLY=true` 仍只允许 freeform，不支持结构化绑定。完整资产契约、宿主 Workbench 调用及集成边界见 [执行专用集成](../docs/execution-only-subagent.md)。
 
 ## 调用结果与取消
 
@@ -64,7 +64,7 @@ Host 产品的安装/构建流程应：
 
 1. 读取组件 `manifest.json`，将 `cua-agent`、`cua-recorder` 和 `cua-record` wheels 安装到同一个隔离 Python 环境。
 2. 整体复制组件的 JavaScript Runtime，并提供兼容的 JavaScript executable。
-3. 向 Agent 提供模型配置、`CUA_DATA_ROOT`、Runtime executable 和 bridge 绝对路径。
+3. 向 Agent 提供模型配置、`CUA_DATA_ROOT`、Runtime executable 和 bridge 绝对路径；结构化 Skill 执行还需向 Runtime 注入可信 `CUA_SKILLS_ROOT`。
 4. invocation 只启动 `cua-agent invoke`，不调用包管理命令。
 
 `review --dev` 使用完全相同的 Python invocation，只是将事件和结果显示在开发调试页面。普通 `review` 不注册该入口。

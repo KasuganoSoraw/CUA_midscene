@@ -19,11 +19,16 @@ class SkillSummaryTests(unittest.TestCase):
         self.assertIn("电脑操作目标", call.call_args.args[0])
 
     def test_summary_rejects_incomplete_or_path_based_names(self):
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "test"}, clear=False):
+            generator = TraceGenerator()
         for name in ("../escape", "C:\\skills", "Invalid-Name", "a" * 65):
-            with self.subTest(name=name), self.assertRaises(ValueError):
-                TraceGenerator._validated_skill_metadata({"name": name, "description": "用途", "goal": "目标"})
-        with self.assertRaises(ValueError):
-            TraceGenerator._validated_skill_metadata({"name": "valid-name"})
+            text = json.dumps({"name": name, "description": "用途", "goal": "目标"})
+            with self.subTest(name=name), patch.object(generator, "_call_openai", return_value=text):
+                with self.assertRaises(ValueError):
+                    generator.summarize_skill([])
+        with patch.object(generator, "_call_openai", return_value='{"name":"valid-name"}'):
+            with self.assertRaises(ValueError):
+                generator.summarize_skill([])
 
 
 if __name__ == "__main__":

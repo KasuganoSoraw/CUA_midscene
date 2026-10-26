@@ -35,9 +35,9 @@ TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv �
 
 ## Python Agent 与 Runtime Bridge
 
-唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 提交完整 task 及可选 execution 绑定；执行专用模型工具只有 cua_execute，结构化任务直接执行指定绑定，自由目标直接 freeform。GUI 微观规划交给 Midscene。Catalog 保留给 CLI、Runtime 和独立 discover 配置；workbench Runtime 方法供 Keeper 和设置入口直接调用，返回 URL 与 reused，不依赖模型或默认打开系统浏览器。模型工具不由 GDEClaw 注册。当前不直接解析宿主 Skill 目录资产，详见 [执行专用契约](../docs/execution-only-subagent.md)。
+唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 提交完整 task 及可选 execution 绑定；执行专用模型工具只有 cua_execute，结构化任务直接执行指定绑定，自由目标直接 freeform。GUI 微观规划交给 Midscene。Catalog 保留给 CLI、Runtime 和独立 discover 配置；workbench Runtime 方法供 Keeper 和设置入口直接调用，返回 URL 与 reused，不依赖模型或默认打开系统浏览器。模型工具不由 GDEClaw 注册。正式 Skill 从 CUA_SKILLS_ROOT 按合法标记和规范 skillName 解析，默认 guided。详见 [Skill 集成契约](../docs/gdeclaw-skill-integration.md)。
 
-GDEClaw 专用 Adapter 属于 Host 产品边界。本仓库提供 Python API、一次一进程的 `cua-agent invoke` 和 Review 开发调用。`execution/SKILL.md` 及场景/任务 `SKILL.md` 面向 CLI 操作、维护和打包；Python Agent 不读取这些 Markdown，`cua_catalog` 只返回结构化 catalog/manifest/YAML 摘要。
+GDEClaw 专用 Adapter 属于 Host 产品边界。本仓库提供 Python API、一次一进程的 `cua-agent invoke` 和 Review 开发调用。`execution/SKILL.md` 面向 CLI 维护；正式任务 SKILL.md 用于 GDEClaw Skill 选择与 CUA 身份校验，Python Agent 不自行读取这些 Markdown，`cua_catalog` 只返回结构化 catalog/manifest/YAML 摘要。
 
 本包只通过 `cua-midscene/runtime-bridge` 和构建后的 `dist/runtime-bridge/worker.js` 提供版本化 JSONL Runtime：
 
@@ -82,14 +82,26 @@ CUA_AGENT_MODEL_NAME=minimax-m3
 CUA_AGENT_MODEL_TIMEOUT_SECONDS=120
 CUA_AGENT_MAX_TURNS=8
 CUA_DATA_ROOT=C:\path\to\cua-data
+CUA_SKILLS_ROOT=C:\path\to\gdeclaw-skills
 CUA_RECORDINGS_ROOT=C:\path\to\recorder-output
 ```
 
-TypeScript Runtime 的配置优先级为进程环境、仓库根 `.env.local`、仓库根 `.env`；子工程目录不保存或读取环境文件。`CUA_DATA_ROOT` 保存用户任务和运行产物；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。组件宿主通过 `CUA_PYTHON_EXECUTABLE` 提供已经安装 `cua_record` 与 `cua_recorder` 的统一 Python；源码开发不设置该变量时，两个 Worker 分别使用相邻工程的 `.venv`。Python Worker 继承 Runtime 已加载的进程环境。
+TypeScript Runtime 的配置优先级为进程环境、仓库根 `.env.local`、仓库根 `.env`；子工程目录不保存或读取环境文件。`CUA_SKILLS_ROOT` 保存正式 Skill；`CUA_DATA_ROOT` 保存运行产物、缓存与旧版兼容数据；`CUA_RECORDINGS_ROOT` 是 Worker 写入且 catalog 读取的一级录制目录集合。组件宿主通过 `CUA_PYTHON_EXECUTABLE` 提供已经安装 `cua_record` 与 `cua_recorder` 的统一 Python；源码开发不设置该变量时，两个 Worker 分别使用相邻工程的 `.venv`。Python Worker 继承 Runtime 已加载的进程环境。
 
 `CUA_AGENT_MODEL_BASE_URL`、`CUA_AGENT_MODEL_NAME` 配置 Python Agent 的任务级推理模型；未设置时读取对应 `MIDSCENE_MODEL_*`。`CUA_AGENT_MODEL_API_KEY` 可为空；未设置时读取 `MIDSCENE_MODEL_API_KEY`，显式设为空值时不发送 Bearer Authorization。`CUA_AGENT_MODEL_HEADERS` 接受 JSON object 格式的自定义 HTTP 请求头。模型请求超时默认 120 秒、最大 Tool Calling 轮次默认 8，Runtime 单请求超时为 1800 秒。`review --dev` 在源码环境使用顶层 `agent/.venv`、服务进程 JavaScript executable 和 `execution/dist/runtime-bridge/worker.js`；集成环境可显式设置 `CUA_AGENT_ROOT`、`CUA_AGENT_PYTHON_EXECUTABLE`、`CUA_AGENT_JS_RUNTIME_EXECUTABLE` 与 `CUA_AGENT_RUNTIME_BRIDGE`。这些路径由安装流程准备。
 
 ## CLI
+
+正式 Skill 使用以下命令；默认 guided，明确要求严格回放时传 --strategy replay：
+
+```powershell
+npm.cmd run cua -- skill list --json
+npm.cmd run cua -- skill create-from-recording --recording D:\CUA\recordings\Recording_1
+npm.cmd run cua -- skill validate --skill-name network-alarm-search
+npm.cmd run cua -- skill run --skill-name network-alarm-search --dry-run
+```
+
+以下 scene/task 命令仅用于 CUA_DATA_ROOT/projects 中的旧版兼容数据，不是正式 Skill 的生成、发现或执行路径。
 
 开发仓从 `execution` 运行：
 
@@ -117,13 +129,13 @@ node dist/cli/main.js review --no-open
 
 `task create-from-recording` 是原始录制的默认创建入口。可用 `--python-executable` 显式选择已经安装 `cua_record` 的 Python，否则按 `CUA_PYTHON_EXECUTABLE` 和源码开发环境解析。record processor 不接收 goal；命令在 trace 生成后将可选 `--goal` 写入任务 goal/description 和 YAML groupDescription。省略时这些字段保存空字符串。Python 进度写入 stderr，stdout 只输出最终 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
-`review` 只启动监听 `127.0.0.1` 的“桌面任务中心”，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT` 与相同开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。页面提供中文与英文即时切换并在本机保存选择；`lang=zh-CN|en-US` 查询参数可指定初始语言。普通模式只展示任务检查、录制流程和运行任务所需的信息；`--dev` 额外启用高级任务数据、revision、运行诊断和 Python Agent 调试入口。“任务检查”只读取 `<CUA_DATA_ROOT>/projects`；发布包不附带内置任务，空项目提供从录制创建的入口。用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML，也可在页面内确认后删除整个用户任务目录，场景和其他任务保持不变。“录制流程”进入时自动检测显示器并默认选择主屏，同时提供重新检测操作；它使用 Windows Worker 提供 `Ctrl+Shift+F9` 准备/开始/停止控制，也读取 `CUA_RECORDINGS_ROOT` 的一级目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并复用 `createTaskFromRecording()` 创建完整用户任务。原始录制可在页面内确认后删除，已生成任务不受影响；活动录制期间不允许删除。页面不播放视频、不展示完整日志，也不流式转发 Python 后处理日志；创建期间只显示不可确定的“正在生成”状态，生成状态由服务保持，切换页签或刷新页面可恢复；成功后可点击进入新任务检查。同一录制可以用于创建不同任务，每次都会重新处理。
+`review` 只启动监听 `127.0.0.1` 的“桌面任务中心”，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT`、相同规范化 `CUA_SKILLS_ROOT` 与兼容开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。页面提供中文与英文即时切换并在本机保存选择；`lang=zh-CN|en-US` 查询参数可指定初始语言。普通模式只展示任务检查、录制流程和运行任务所需的信息；`--dev` 额外启用高级任务数据、revision、运行诊断和 Python Agent 调试入口。“任务检查”平铺展示 CUA_SKILLS_ROOT 中通过标记及身份校验的 Skill；空目录提供从录制创建的入口。用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML，也可在页面内确认后删除整个用户任务目录，普通宿主 Skill 和其他任务保持不变。“录制流程”进入时自动检测显示器并默认选择主屏，同时提供重新检测操作；它使用 Windows Worker 提供 `Ctrl+Shift+F9` 准备/开始/停止控制，也读取 `CUA_RECORDINGS_ROOT` 的一级目录，以占位卡片展示唯一 MP4 和唯一 `.txt`/`.log`/`.json` 事件文件，并复用录制模型与 Trace 转换直接创建完整 CUA Skill。原始录制可在页面内确认后删除，已生成任务不受影响；活动录制期间不允许删除。页面不播放视频、不展示完整日志，也不流式转发 Python 后处理日志；创建期间只显示不可确定的“正在生成”状态，生成状态由服务保持，切换页签或刷新页面可恢复；成功后自动打开新 Skill 检查，也保留详情入口。重复生成会重新处理录制，同名 Skill 明确拒绝覆盖。
 
 未配置 `CUA_RECORDINGS_ROOT` 不会阻止 review 服务和任务复核启动。录制页只提示需要配置的环境变量、仓库根 `.env.local` 配置位置和路径示例，不直接修改环境文件，也不从后台服务进程唤起可能失焦或阻塞的桌面目录选择框。配置后重启 review 服务即可生效。存在零个或多个视频/事件文件的录制目录仍会显示，但不能生成任务。
 
 `--input` 可重复；`--inputs <json-file>` 接收字符串值 JSON 对象。inspect 与 run 使用同一个 resolver，不调用模型、不回写任务。`--dry-run` 只构建并解析 YAML，不操作电脑，也不是模拟执行。
 
-参考图步骤使用 Midscene 原生图片 prompt：canonical `task.yaml` 的 `images[].url` 保存相对任务根目录的路径（通常位于 `source/screenshots/`），resolver 验证文件和目录边界后在 resolved YAML 中改为绝对路径。HTTP(S) 与 data URL 保持不变。图片只用于语义定位，Midscene 仍结合文字 prompt、参考图和当前屏幕寻找目标，并点击定位结果；系统不执行像素模板匹配或录制坐标回放。
+参考图步骤使用 Midscene 原生图片 prompt：canonical `task.yaml` 的 `images[].url` 保存相对任务根目录的路径（通常位于 `source/screenshots/`），resolver 验证文件和目录边界后在 resolved YAML 中改为绝对路径。正式 Skill 不接受外部图片 URL；旧项目兼容解析可保留 HTTP(S) 与 data URL。图片只用于语义定位，Midscene 仍结合文字 prompt、参考图和当前屏幕寻找目标，并点击定位结果；系统不执行像素模板匹配或录制坐标回放。
 
 ### 定位参考图
 
@@ -159,7 +171,7 @@ const run = await runNaturalLanguageAiAct({
 
 ## 调试结果与执行报告
 
-“任务调试”使用场景任务目录选择运行目标，参数区按输入步骤展示临时输入卡片；无运行参数时显示空状态。页面生成包含 `[电脑操控](plugin://computer-use@buildin_extension)`、任务标识和运行方式的指令，复制后由用户自行粘贴到 GDEClaw 对话。复制不携带本次调试参数，不触发 Agent 调用或发送消息；页面不提供定时任务入口。
+“任务调试”使用平铺 Skill 列表选择运行目标，默认 guided，参数区按输入步骤展示临时输入卡片；无运行参数时显示空状态。页面生成包含 `[电脑操控](plugin://computer-use@buildin_extension)`、任务标识和运行方式的指令，复制后由用户自行粘贴到 GDEClaw 对话。复制不携带本次调试参数，不触发 Agent 调用或发送消息；页面不提供定时任务入口。
 
 工作台“任务调试”分别展示执行完成、运行未完成和用户主动停止的结果。明确的错误信号使用简短说明，其余错误不推测根因；技术详情默认折叠，并隐藏运行时输入及模型访问凭据。执行完成表示执行器结束本次运行，实际操作结果由用户结合报告检查。页面不调用 Agent 分析，也不自动重试任务。
 

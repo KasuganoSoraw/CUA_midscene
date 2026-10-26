@@ -1,6 +1,6 @@
 # Computer-Use Component
 
-Computer-Use Component 是供 GDEClaw 或其他 Host 安装的组件目录。它包含三个 Python wheel、编译后的 JavaScript Runtime、production `node_modules`、schemas 和 manifest；不包含内置任务、Python、Node/Electron executable、环境文件、模型配置或数据目录。任务在 Host 配置的 `CUA_DATA_ROOT/projects` 中创建和维护。
+Computer-Use Component 是供 GDEClaw 或其他 Host 安装的组件目录。它包含三个 Python wheel、编译后的 JavaScript Runtime、production `node_modules`、schemas 和 manifest；不包含内置任务、Python、Node/Electron executable、环境文件、模型配置或数据目录。正式任务在 Host 配置的 `CUA_SKILLS_ROOT` 中创建和维护，`CUA_DATA_ROOT` 保存运行产物、缓存及隔离的旧版兼容数据。
 
 ## 构建与验证
 
@@ -67,10 +67,12 @@ uv pip install --python $python $wheels
 
 ## 运行 Agent
 
-Host 向 Agent 提供模型变量、数据根、JavaScript executable 和 bridge 绝对路径：
+Host 向 Agent 提供模型变量、可信 Skill 根、数据根、JavaScript executable 和 bridge 绝对路径：
 
 ```powershell
 $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
+$env:CUA_SKILLS_ROOT = 'C:\path\to\gdeclaw-skills'
+$env:CUA_AGENT_TOOL_MODE = 'execute'
 $env:CUA_AGENT_JS_RUNTIME_EXECUTABLE = 'C:\Program Files\nodejs\node.exe'
 $env:CUA_AGENT_RUNTIME_BRIDGE = "$component\runtime\dist\runtime-bridge\worker.js"
 
@@ -99,7 +101,11 @@ $env:CUA_PYTHON_EXECUTABLE = $python
 
 ## GDEClaw 适配
 
-GDEClaw Main Agent 只提交完整任务并接收事件与结果。Host Adapter 负责组件安装、用户 Session、任务取消、真实 computer use 串行化和运行时路径注入，不注册 CUA 的私有 Tool。
+GDEClaw Main Agent 选择原生 Skill，提交完整任务及可选 `execution: { skillName, inputs, strategy }` 绑定并接收事件与结果。Skill 策略缺省为 guided，明确严格回放时为 replay；没有 Skill 绑定时直接 freeform。Host Adapter 负责组件安装、用户 Session、任务取消、真实 computer use 串行化和运行时路径注入，不注册 CUA 的私有 Tool。
+
+Agent 与 Runtime 必须整体升级到支持 `skillName` 的组件。JSONL envelope 为 1.0，Skill 资产契约由 Runtime 导出 `skillAssetContractVersion=1.0`；不能仅凭 envelope 版本判定旧组件支持 Skill 绑定。
+
+Workbench 由设置按钮通过 Keeper 持有的 Runtime worker 调用 `workbench` 方法，返回 URL 与 reused 后由宿主前端打开；页面使用期间保持 worker 存活。正式目录、绑定与迁移契约见 [CUA Skill 集成](gdeclaw-skill-integration.md)。目录写入不代表已验证宿主的注册、启用、签名或分发。
 
 使用兼容 Electron executable 时，Host 还需提供 Node 模式环境，例如：
 

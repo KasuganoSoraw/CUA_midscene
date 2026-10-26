@@ -109,7 +109,9 @@ export async function loadReviewTask(
     readYamlDocument(taskYamlPath),
   ]);
   const steps = await buildReviewSteps(taskRoot, manifest, document);
-  manifest.source.stepBindings ??= Object.fromEntries(steps.map(step => [step.id, step.evidence?.sourceStep ?? null]));
+  if (!manifest.source.stepBindings && steps.some(step => step.evidence)) {
+    manifest.source.stepBindings = Object.fromEntries(steps.map(step => [step.id, step.evidence?.sourceStep ?? null]));
+  }
   return {
     scene, task, title: manifest.title, description: manifest.description,
     origin: description.origin, writable: description.writable,

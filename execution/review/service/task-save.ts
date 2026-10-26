@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { TaskAssetManifest, TaskCatalogRoots, TaskManifest } from '../../cua/contracts/types.js';
+import type { TaskAssetManifest, TaskCatalogRoots } from '../../cua/contracts/types.js';
 import { validateContract } from '../../cua/contracts/validation.js';
 import { resolveYamlInputs, validateRecordedTaskDocument, dumpYamlDocument } from '../../cua/task/yaml-task.js';
 import type { SaveReviewTaskRequest, SaveReviewTaskResult } from '../shared/types.js';

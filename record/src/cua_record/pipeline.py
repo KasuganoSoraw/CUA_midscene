@@ -66,7 +66,19 @@ def run_pipeline(project_name: str) -> Path:
     # It will discover the video and create {project}_processed_log_sc.json and /screenshots.
     _, screenshots_dir, meta = vse.process_project(str(project_dir))
 
-    # ---------- Step 3: generate LLM trace -> {project}_trace.json ----------
+    out_trace = _generate_skill_trace(project_dir, screenshots_dir)
+
+    print("=== Pipeline Complete ===")
+    print(f"Project: {project_dir.name}")
+    print(f"Processed log: {processed_log_path.name}")
+    print(f"Screenshots dir: {Path(screenshots_dir).name}")
+    print(f"Processed log (+screens): {project_dir.name}_processed_log_sc.json")
+    print(f"Trace: {out_trace.name}")
+    return out_trace
+
+
+def _generate_skill_trace(project_dir: Path, screenshots_dir: str) -> Path:
+    """生成逐步轨迹及用于 Skill 正式资产的任务摘要。"""
     log_sc = project_dir / f"{project_dir.name}_processed_log_sc.json"
     if not log_sc.exists():
         raise FileNotFoundError(f"Expected processed-with-screenshots log not found: {log_sc}")
@@ -75,7 +87,7 @@ def run_pipeline(project_name: str) -> Path:
 
     tg = TraceGenerator(
         default_prompt_path=str(default_prompt_path()),
-        api_provider="openai",            # or "claude" — adjust here if needed
+        api_provider="openai",
         openai_model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
         claude_model="claude-sonnet-4-20250514",
     )
@@ -87,10 +99,4 @@ def run_pipeline(project_name: str) -> Path:
         generate_skill_metadata=True,
     )
 
-    print("=== Pipeline Complete ===")
-    print(f"Project: {project_dir.name}")
-    print(f"Processed log: {processed_log_path.name}")
-    print(f"Screenshots dir: {Path(screenshots_dir).name}")
-    print(f"Processed log (+screens): {log_sc.name}")
-    print(f"Trace: {out_trace.name}")
     return out_trace

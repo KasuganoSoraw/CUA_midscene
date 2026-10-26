@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -32,6 +32,7 @@ test('Skill 执行默认 guided，显式 replay 与自由目标使用各自引�
     assert.equal((await cuaExecute({ skillName: 'alarm-query' }, dependencies)).strategy, 'guided');
     assert.equal((await cuaExecute({ skillName: 'alarm-query', strategy: 'replay' }, dependencies)).strategy, 'replay');
     assert.deepEqual(calls, ['ai-act-task.yaml', 'resolved-task.yaml']);
+    await assert.rejects(access(data.projectsRoot));
     const catalog = await cuaCatalog({ action: 'list-skills' }, { resolveRuntimeLayout: dependencies.resolveRuntimeLayout });
     assert.equal(catalog.action, 'list-skills');
     if (catalog.action === 'list-skills') assert.equal(catalog.skills[0].skillName, 'alarm-query');

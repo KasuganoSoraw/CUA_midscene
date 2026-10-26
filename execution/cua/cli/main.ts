@@ -34,7 +34,15 @@ export async function failedRunOutput(error: unknown): Promise<string | undefine
 
 export const helpText = `CUA 场景、任务与 Midscene YAML 执行工具
 
-用法：cua <scene|task|act> <command> [options]
+用法：cua <skill|scene|task|act> <command> [options]
+
+正式 CUA Skill（需要 CUA_SKILLS_ROOT）：
+  skill list [--json]
+  skill describe --skill-name <name> [--json]
+  skill create-from-recording --recording <目录> [--python-executable <path>]
+  skill validate --skill-name <name> [--input key=value]
+  skill run --skill-name <name> [--strategy guided|replay] [--input key=value] [--data-root <path>] [--dry-run]
+  缺省 guided；scene/task 命令用于旧 projects 兼容数据。
 
 场景：
   scene list [--data-root <path>] [--json]

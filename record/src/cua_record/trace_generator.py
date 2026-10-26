@@ -442,7 +442,7 @@ Overall Task: {overall_task}
         with open(output_trace_path, "w", encoding="utf-8") as f:
             json.dump(trace, f, ensure_ascii=False, indent=2)
 
-    def summarize_skill(self, trajectory: List[Dict[str, Any]]) -> Dict[str, str]:
+    def summarize_skill(self, trajectory: list[dict[str, Any]]) -> dict[str, str]:
         """使用录制模型归纳单个 Skill 的语义身份、描述和电脑操作目标。"""
         steps = [
             {"step": step["step_idx"], "operation": step["caption"].get("operation"),
@@ -467,7 +467,7 @@ Overall Task: {overall_task}
         return self._validated_skill_metadata(self._extract_json(text))
 
     @staticmethod
-    def _validated_skill_metadata(value: Dict[str, Any]) -> Dict[str, str]:
+    def _validated_skill_metadata(value: dict[str, Any]) -> dict[str, str]:
         if any(not isinstance(value.get(key), str) or not value[key].strip()
                for key in ("name", "description", "goal")):
             raise ValueError("Skill 摘要必须包含非空 name、description 和 goal")
