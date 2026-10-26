@@ -1,16 +1,67 @@
 import { constants } from 'node:fs';
-import { access, mkdir } from 'node:fs/promises';
+import { access, mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import type { DataPaths, RuntimeLayout } from './contracts/types.js';
-import { readEnvironmentValue } from './environment.js';
+import { readEnvironmentValue, readRuntimeEnvironmentValue } from './environment.js';
 import { packageRoot } from './package-root.js';
 
 export const executionRoot = packageRoot;
 export const dataRootEnv = 'CUA_DATA_ROOT';
+export const skillsRootEnv = 'CUA_SKILLS_ROOT';
+export const skillExportTempRootEnv = 'CUA_SKILL_EXPORT_TEMP_ROOT';
+
+async function normalizeConfiguredPath(absolute: string): Promise<string> {
+  let existing = absolute;
+  const suffix: string[] = [];
+  for (;;) {
+    try { return path.join(await realpath(existing), ...suffix); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      const parent = path.dirname(existing);
+      if (parent === existing) throw error;
+      suffix.unshift(path.basename(existing));
+      existing = parent;
+    }
+  }
+}
+
+export async function resolveSkillsRoot(root = executionRoot): Promise<string | undefined> {
+  const configured = process.env[skillsRootEnv] === undefined
+    ? (await readEnvironmentValue(skillsRootEnv, root)).value
+    : process.env[skillsRootEnv]?.trim();
+  if (!configured) return undefined;
+  if (!path.isAbsolute(configured)) throw new Error('CUA_SKILLS_ROOT 必须配置绝对路径');
+  return normalizeConfiguredPath(path.resolve(configured));
+}
+
+export function requireSkillsRoot(layout: Pick<RuntimeLayout, 'skillsRoot'>): string {
+  if (!layout.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT：正式 CUA Skill 的绝对根目录');
+  return layout.skillsRoot;
+}
+
+export async function resolveSkillExportRoot(skillsRoot: string, root = executionRoot): Promise<string> {
+  if (!path.isAbsolute(skillsRoot)) throw new Error('CUA_SKILLS_ROOT 必须配置绝对路径');
+  const configured = await readRuntimeEnvironmentValue(skillExportTempRootEnv, root);
+  const temporary = configured ?? os.tmpdir();
+  if (!path.isAbsolute(temporary)) throw new Error('CUA_SKILL_EXPORT_TEMP_ROOT 必须配置绝对路径');
+  const formal = await normalizeConfiguredPath(path.resolve(skillsRoot));
+  const normalized = await normalizeConfiguredPath(path.resolve(temporary));
+  if (isInside(formal, normalized)) throw new Error('Skill 临时导出目录不得位于 CUA_SKILLS_ROOT 内');
+  try {
+    await mkdir(normalized, { recursive: true });
+    await access(normalized, constants.R_OK | constants.W_OK);
+    const actual = await realpath(normalized);
+    if (isInside(formal, actual)) throw new Error('Skill 临时导出目录不得位于 CUA_SKILLS_ROOT 内');
+    return actual;
+  } catch (error) {
+    throw new Error(`Skill 临时导出目录不可用：${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
 function isInside(parent: string, target: string): boolean {
   const relative = path.relative(parent, target);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
 async function configuredDataRoot(
@@ -51,6 +102,7 @@ export async function resolveRuntimeLayout(
     data = dataPaths(normalized);
   }
   return {
+    skillsRoot: await resolveSkillsRoot(root),
     catalog: {
       ...(options.builtinProjectsRoot ? { builtinProjectsRoot: path.resolve(options.builtinProjectsRoot) } : {}),
       ...(data ? { userProjectsRoot: data.projectsRoot } : {}),
@@ -64,7 +116,7 @@ export async function requireDataPaths(layout: RuntimeLayout): Promise<DataPaths
     throw new Error('该命令需要可写数据目录，请提供 --data-root 或配置 CUA_DATA_ROOT');
   }
   try {
-    for (const directory of Object.values(layout.data)) {
+    for (const directory of [layout.data.root, layout.data.runsRoot, layout.data.cacheRoot]) {
       await mkdir(directory, { recursive: true });
       await access(directory, constants.W_OK);
     }

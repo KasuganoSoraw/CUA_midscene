@@ -6,19 +6,27 @@ import type { ExecutionProgressSink } from '../../executors/midscene-progress.js
 import { keyboardInputAiActContext } from '../../executors/computer-agent.js';
 import { withRunDirectory } from '../run-directory.js';
 import { resolveTask } from './tasks.js';
+import { resolveSkillTask } from '../skills/assets.js';
 import { validateYamlDocument, writeYamlDocument } from './yaml-task.js';
 
 export const aiActContext = keyboardInputAiActContext;
 
-export interface ExecutionOptions {
-  scene: string;
-  task: string;
-  catalog: TaskCatalogRoots;
+interface ExecutionOptionsBase {
   runsRoot: string;
   inputs?: Record<string, string>;
   dryRun?: boolean;
   onProgress?: ExecutionProgressSink;
   executor?: typeof executeMidsceneYaml;
+}
+
+export type ExecutionOptions = ExecutionOptionsBase & (
+  | { scene: string; task: string; catalog: TaskCatalogRoots; skillName?: never; skillsRoot?: never }
+  | { skillName: string; skillsRoot: string; scene?: never; task?: never; catalog?: never }
+);
+
+async function resolveExecutionTask(options: ExecutionOptions): Promise<ResolvedTaskResult> {
+  if (options.skillName !== undefined) return resolveSkillTask({ ...options, skillsRoot: options.skillsRoot });
+  return resolveTask(options);
 }
 
 export interface TaskRun {
@@ -224,7 +232,7 @@ async function execute(
 }
 
 export async function runTask(options: ExecutionOptions): Promise<TaskRun> {
-  const resolved = await resolveTask(options);
+  const resolved = await resolveExecutionTask(options);
   return withRunDirectory(options.runsRoot, async (runDirectory) => {
     const resolvedTaskPath = path.join(runDirectory, 'resolved-task.yaml');
     await writeYamlDocument(resolvedTaskPath, resolved.document);
@@ -240,7 +248,7 @@ export async function runTask(options: ExecutionOptions): Promise<TaskRun> {
 }
 
 export async function runRecordedTaskAiAct(options: ExecutionOptions): Promise<RecordedTaskAiActRun> {
-  const resolved = await resolveTask(options);
+  const resolved = await resolveExecutionTask(options);
   const taskPrompt = buildRecordedTaskAiActPrompt(resolved.document);
   return withRunDirectory(options.runsRoot, async (runDirectory) => {
     const resolvedTaskPath = path.join(runDirectory, 'resolved-task.yaml');
@@ -252,7 +260,7 @@ export async function runRecordedTaskAiAct(options: ExecutionOptions): Promise<R
       aiActYamlPath,
       aiActYamlDocument(
         taskPrompt.images.length ? taskPrompt : taskPrompt.prompt,
-        `${options.task}-ai-act`,
+        `${options.skillName ?? options.task}-ai-act`,
         resolved.manifest.goal,
         '录制任务整体 aiAct',
       ),

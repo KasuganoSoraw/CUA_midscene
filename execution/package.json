@@ -15,9 +15,12 @@
     "cua",
     "dist",
     "executors",
+    "references",
     "review",
     "runtime-bridge",
     "schemas",
+    "README.md",
+    "SKILL.md",
     "tsconfig.build.json",
     "tsconfig.json"
   ],
@@ -38,7 +41,8 @@
     "cua": "tsx cli/main.ts",
     "runtime-bridge": "tsx runtime-bridge/worker.ts",
     "check": "tsx executors/check-env.ts",
-    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p review/web/tsconfig.json"
+    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p review/web/tsconfig.json",
+    "test": "npm run typecheck && tsx --test tests/all.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -51,6 +55,7 @@
     "ajv-formats": "^3.0.1",
     "dotenv": "^16.4.7",
     "fastify": "^5.10.0",
+    "fflate": "0.8.3",
     "sharp": "0.34.5",
     "yaml": "^2.8.1"
   },

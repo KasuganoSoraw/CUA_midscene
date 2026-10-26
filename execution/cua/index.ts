@@ -1,4 +1,7 @@
 export type * from './contracts/types.js';
+export { resolveSkillsRoot, requireSkillsRoot } from './data-paths.js';
+export { readSkill, listSkills, describeSkill, resolveSkillTask } from './skills/assets.js';
+export { createSkillFromRecording } from './skills/create.js';
 export { cleanupRunHistory, readRunHistoryPolicy, type RunHistoryPolicy, type RunHistoryCleanupResult } from './run-history.js';
 export {
   runNaturalLanguageAiAct,

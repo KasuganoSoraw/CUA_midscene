@@ -103,7 +103,7 @@ function normalizeScreenshotPath(rawValue: unknown, field: string, index: number
   return normalized;
 }
 
-async function generatedAssets(recordingPath: string): Promise<{
+export async function generatedAssets(recordingPath: string): Promise<{
   tracePath: string;
   processedLogPath: string;
   processedLogScPath: string;
@@ -140,7 +140,7 @@ async function generatedAssets(recordingPath: string): Promise<{
   };
 }
 
-async function copyGeneratedAssets(
+export async function copyGeneratedAssets(
   recordingPath: string,
   sourceRoot: string,
   assets: Awaited<ReturnType<typeof generatedAssets>>,
