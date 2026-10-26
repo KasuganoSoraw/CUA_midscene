@@ -136,8 +136,7 @@ def test_registry_normalizes_double_encoded_inputs_and_rejects_invalid_values() 
             "cua_execute",
             {
                 "strategy": "replay",
-                "scene": "nce-test",
-                "task": "nce-qos",
+                "skillName": "nce-qos",
                 "inputs": '{"step-006-input":"50.0.188.54:31943","step-009-input":"admin"}',
             },
         )
@@ -147,8 +146,7 @@ def test_registry_normalizes_double_encoded_inputs_and_rejects_invalid_values() 
                 "execute",
                 {
                     "strategy": "replay",
-                    "scene": "nce-test",
-                    "task": "nce-qos",
+                    "skillName": "nce-qos",
                     "inputs": {
                         "step-006-input": "50.0.188.54:31943",
                         "step-009-input": "admin",
@@ -162,8 +160,7 @@ def test_registry_normalizes_double_encoded_inputs_and_rejects_invalid_values() 
                 "cua_execute",
                 {
                     "strategy": "replay",
-                    "scene": "nce-test",
-                    "task": "nce-qos",
+                    "skillName": "nce-qos",
                     "inputs": "not-json",
                 },
             )
@@ -172,8 +169,7 @@ def test_registry_normalizes_double_encoded_inputs_and_rejects_invalid_values() 
                 "cua_execute",
                 {
                     "strategy": "guided",
-                    "scene": "nce-test",
-                    "task": "nce-qos",
+                    "skillName": "nce-qos",
                     "inputs": '{"step-006-input":31943}',
                 },
             )

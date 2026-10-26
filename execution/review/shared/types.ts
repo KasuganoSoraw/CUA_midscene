@@ -4,6 +4,9 @@ import type {
   TaskCatalogItem,
   TaskInputDefinition,
   TaskManifest,
+  TaskAssetManifest,
+  SkillTaskManifest,
+  SkillCatalogItem,
 } from '../../cua/contracts/types.js';
 
 export type ReviewOrigin = 'builtin' | 'user';
@@ -13,6 +16,7 @@ export interface ReviewServerIdentity {
   service: string;
   protocolVersion: number;
   dataRootKey: string;
+  skillsRootKey?: string;
   devMode: boolean;
 }
 
@@ -39,9 +43,26 @@ export interface ReviewStep {
   referenceImages?: ReviewReferenceImage[];
 }
 
-export interface ReviewTaskDraft {
-  manifest: TaskManifest;
+export interface ReviewTaskDraft<M extends TaskAssetManifest = TaskManifest> {
+  manifest: M;
   document: JsonObject;
+}
+
+export interface ReviewSkillView extends ReviewTaskDraft<SkillTaskManifest> {
+  skillName: string;
+  title: string;
+  description: string;
+  origin: 'user';
+  writable: true;
+  revision: string;
+  steps: ReviewStep[];
+}
+
+export interface ReviewSkillCatalogResponse {
+  configured: boolean;
+  envName: 'CUA_SKILLS_ROOT';
+  skills: SkillCatalogItem[];
+  error?: string;
 }
 
 export interface ReviewTaskView extends ReviewTaskDraft {
@@ -75,12 +96,12 @@ export interface ReviewChange {
   details: string[];
 }
 
-export interface ReviewMutationResult {
-  draft: ReviewTaskDraft;
+export interface ReviewMutationResult<M extends TaskAssetManifest = TaskManifest> {
+  draft: ReviewTaskDraft<M>;
   change: ReviewChange;
 }
 
-export interface SaveReviewTaskRequest extends ReviewTaskDraft {
+export interface SaveReviewTaskRequest<M extends TaskAssetManifest = TaskManifest> extends ReviewTaskDraft<M> {
   expectedRevision: string;
 }
 
@@ -137,13 +158,22 @@ export interface CreateRecordingTaskResult {
   goal: string;
 }
 
-export interface RecordingGenerationStatus {
+export interface CreateRecordingSkillResult {
+  created: true;
+  valid: true;
+  skillName: string;
+  goal: string;
+}
+
+export type SkillGenerationStatus = RecordingGenerationStatus<Record<string, never>, CreateRecordingSkillResult>;
+
+export interface RecordingGenerationStatus<Request = CreateRecordingTaskRequest, Result = CreateRecordingTaskResult> {
   phase: 'idle' | 'running' | 'succeeded' | 'failed';
   recording?: string;
-  request?: CreateRecordingTaskRequest;
+  request?: Request;
   startedAt?: string;
   finishedAt?: string;
-  result?: CreateRecordingTaskResult;
+  result?: Result;
   error?: string;
 }
 
@@ -208,6 +238,14 @@ export interface StartTaskExecutionRequest {
   inputs: Record<string, string>;
 }
 
+export interface StartSkillExecutionRequest {
+  skillName: string;
+  mode?: TaskExecutionMode;
+  inputs: Record<string, string>;
+}
+
+export type WorkbenchExecutionRequest = StartTaskExecutionRequest | StartSkillExecutionRequest;
+
 export interface TaskExecutionResultSummary {
   reportUrl?: string;
   runDir?: string;
@@ -219,6 +257,7 @@ export interface TaskExecutionStatus {
   phase: TaskExecutionPhase;
   scene?: string;
   task?: string;
+  skillName?: string;
   mode?: TaskExecutionMode;
   preparedAt?: string;
   startsAt?: string;

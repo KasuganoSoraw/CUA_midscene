@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -66,22 +67,26 @@ def normalize_execution(value: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
     """校验与 cua_execute 共用的参数形态，不接受宿主路径或 Skill 目录。"""
     if not isinstance(value, Mapping):
         raise ValueError("execution 必须是 JSON object")
-    strategy = value.get("strategy")
+    strategy = value.get("strategy", "guided" if "skillName" in value else None)
     if strategy not in ("replay", "guided", "freeform"):
         raise ValueError("execution.strategy 必须为 replay、guided 或 freeform")
     allowed = {"strategy", "goal", "displayId"} if strategy == "freeform" else {
-        "strategy", "scene", "task", "inputs",
+        "strategy", "skillName", "inputs",
     }
     if set(value) - allowed:
-        raise ValueError("execution 包含不支持的字段，不接受任意路径或 Skill 绑定字段")
+        raise ValueError("execution 包含不支持的字段，不接受 scene/task 或任意路径")
     result: dict[str, JsonValue] = {"strategy": strategy}
     if strategy == "freeform":
         result["goal"] = _execution_string(value.get("goal"), "goal")
         if "displayId" in value:
             result["displayId"] = _execution_string(value["displayId"], "displayId")
         return result
-    for name in ("scene", "task"):
-        result[name] = _execution_string(value.get(name), name, identifier=True)
+    name = _execution_string(value.get("skillName"), "skillName", identifier=True)
+    if len(name) > 64 or re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", name) is None:
+        raise ValueError("execution.skillName 必须是小写英文、数字和连字符组成的 Skill 标识")
+    if re.fullmatch(r"con|prn|aux|nul|com[0-9]|lpt[0-9]", name):
+        raise ValueError("execution.skillName 不能使用系统保留名称")
+    result["skillName"] = name
     if "inputs" in value:
         inputs = value["inputs"]
         if not isinstance(inputs, dict) or any(

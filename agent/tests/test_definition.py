@@ -9,7 +9,7 @@ def test_execution_definition_is_loaded_from_packaged_markdown() -> None:
     instructions = definition.instructions
     for rule in (
         "不负责选择、发现或管理 Skill", "每次调用都是独立任务", "仅提供 `cua_execute`",
-        "必须原样使用调用方确认的参数", "不得更换任务", "使用 `strategy=freeform`",
+        "必须原样使用调用方确认的参数", "不得更换 Skill", "使用 `strategy=freeform`",
         "不通过 Tool 打开、录制、复核、校准或调试 Workbench", "不调用 Catalog",
         "最终回复必须原样包含该执行报告路径", "不得编造路径", "不得用于探测或确认",
         "调用方任务所使用的语言", "由调用方消费和分析", "不自动重试",
@@ -17,7 +17,7 @@ def test_execution_definition_is_loaded_from_packaged_markdown() -> None:
         assert rule in instructions
     assert "cua_workbench" not in instructions
     assert "先用 `cua_catalog`" not in instructions
-    assert "任务资产的直接解析尚不支持" in definition.description
+    assert "合法 CUA 标记" in definition.description
 
 
 def test_loading_definition_does_not_share_mutable_invocation_state() -> None:

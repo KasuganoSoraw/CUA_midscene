@@ -143,6 +143,30 @@ EXECUTE_TOOL = ToolDefinition(
     },
 )
 
+def _skill_execute_tool() -> ToolDefinition:
+    schema = deepcopy(EXECUTE_TOOL.input_schema)
+    branches = cast(list[dict[str, JsonValue]], schema["oneOf"])
+    for branch in branches[:2]:
+        properties = cast(dict[str, JsonValue], branch["properties"])
+        properties.pop("scene", None)
+        properties.pop("task", None)
+        properties["skillName"] = {
+            "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 64,
+            "description": "调用方已经选定的 CUA Skill 名称，不是文件路径。",
+        }
+        branch["required"] = ["strategy", "skillName"]
+    return ToolDefinition(
+        name="cua_execute", description=(
+            "执行调用方绑定的完整电脑操作任务。结构化任务使用 skillName 和 inputs，"
+            "默认 guided；明确严格回放时使用 replay。无 Skill 绑定时使用 freeform 和完整 goal。"
+            "不得自行发现或更换 Skill，成功后停止。"
+        ), input_schema=schema,
+    )
+
+
+SKILL_EXECUTE_TOOL = _skill_execute_tool()
+
+
 class CuaToolRegistry:
     """把模型可见的私有 Tool 名称映射到 Runtime bridge method。"""
 
@@ -164,10 +188,13 @@ class CuaToolRegistry:
             normalize_execution(expected_execution) if expected_execution is not None else None
         )
         self._tools: dict[str, tuple[ToolDefinition, RuntimeMethod]] = {
-            EXECUTE_TOOL.name: (EXECUTE_TOOL, "execute"),
+            SKILL_EXECUTE_TOOL.name: (SKILL_EXECUTE_TOOL, "execute"),
         }
         if mode == "discover" and expected_execution is None and not freeform_only:
-            self._tools = {CATALOG_TOOL.name: (CATALOG_TOOL, "catalog"), **self._tools}
+            self._tools = {
+                CATALOG_TOOL.name: (CATALOG_TOOL, "catalog"),
+                EXECUTE_TOOL.name: (EXECUTE_TOOL, "execute"),
+            }
         if freeform_only:
             branches = cast(list[dict[str, JsonValue]], EXECUTE_TOOL.input_schema["oneOf"])
             execute = ToolDefinition(

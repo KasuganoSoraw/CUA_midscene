@@ -1,5 +1,6 @@
 import { startReviewServer } from '../../review/server/main.js';
 import type { CuaWorkbenchRequest, CuaWorkbenchResult } from '../contracts.js';
+import { requireSkillName } from '../../cua/skills/paths.js';
 
 export interface CuaWorkbenchDependencies {
   startReviewServer: typeof startReviewServer;
@@ -9,6 +10,7 @@ function targetUrl(baseUrl: string, request: CuaWorkbenchRequest): string {
   const url = new URL(baseUrl);
   url.searchParams.set('mode', request.mode);
   if (request.mode !== 'recording') {
+    if (request.skillName !== undefined) url.searchParams.set('skillName', requireSkillName(request.skillName));
     if (request.scene !== undefined) url.searchParams.set('scene', request.scene);
     if (request.task !== undefined) url.searchParams.set('task', request.task);
   }

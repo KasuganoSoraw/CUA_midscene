@@ -108,7 +108,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     status: () => ({ ...executionStatus }),
     start: async (request) => {
       executionStatus = {
-        phase: 'preparing', scene: request.scene, task: request.task, mode: request.mode,
+        phase: 'preparing', ...('skillName' in request ? { skillName: request.skillName } : { scene: request.scene, task: request.task }), mode: request.mode,
         preparedAt: '2026-08-24T10:00:00.000Z', startsAt: '2026-08-24T10:00:05.000Z',
       };
       return { ...executionStatus };
@@ -202,6 +202,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
       service: reviewServiceName,
       protocolVersion: reviewProtocolVersion,
       dataRootKey: reviewDataRootKey(root),
+      skillsRootKey: 'unconfigured',
       devMode: true,
     });
     assert.deepEqual(await (await fetch(new URL('/api/agent/status', base))).json(), {

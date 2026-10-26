@@ -121,7 +121,7 @@ def test_freeform_only_runner_keeps_instructions_and_execution_reports() -> None
 def test_freeform_only_runner_blocks_model_attempt_to_replay() -> None:
     async def scenario() -> None:
         model = FakeModelClient([ModelResponse(tool_calls=(ModelToolCall(
-            "replay-1", "cua_execute", {"strategy": "replay", "scene": "s", "task": "t"},
+            "replay-1", "cua_execute", {"strategy": "replay", "skillName": "bound-skill"},
         ),))])
         runtime = FakeRuntimeClient()
         agent = CuaAgent(model, lambda: runtime, freeform_only=True)  # type: ignore[arg-type]
@@ -436,7 +436,7 @@ def test_runner_stops_on_tool_failure_without_retrying_or_switching() -> None:
                         ModelToolCall(
                             "call-1",
                             "cua_execute",
-                            {"strategy": "replay", "scene": "ems", "task": "query"},
+                            {"strategy": "replay", "skillName": "alarm-query"},
                         ),
                     )
                 ),
@@ -449,7 +449,7 @@ def test_runner_stops_on_tool_failure_without_retrying_or_switching() -> None:
 
         result = await agent.invoke(
             InvocationRequest("查询告警", invocation_id="inv-failed", execution={
-                "strategy": "replay", "scene": "ems", "task": "query",
+                "strategy": "replay", "skillName": "alarm-query",
             }), event_sink=events.append,
         )
 
@@ -461,7 +461,7 @@ def test_runner_stops_on_tool_failure_without_retrying_or_switching() -> None:
         assert result.tool_calls[0].output is None
         assert len(model.calls) == 1
         assert runtime.calls == [
-            ("execute", {"strategy": "replay", "scene": "ems", "task": "query"})
+            ("execute", {"strategy": "replay", "skillName": "alarm-query"})
         ]
         assert next(event for event in events if event.type == "tool.completed").data == {
             "callId": "call-1",

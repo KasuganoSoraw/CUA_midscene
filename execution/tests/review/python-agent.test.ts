@@ -33,7 +33,7 @@ test('Python Agent 宿主调用保留明确的 execution 参数绑定', async ()
     }) as unknown as typeof spawn,
   });
   try {
-    const execution = { strategy: 'replay' as const, scene: 's', task: 't', inputs: { x: '1' } };
+    const execution = { strategy: 'guided' as const, skillName: 'alarm-query', inputs: { x: '1' } };
     await invoker.invoke({ task: '执行选定任务', invocationId: 'bound', execution });
     assert.deepEqual(JSON.parse(input), { task: '执行选定任务', invocationId: 'bound', execution });
   } finally {

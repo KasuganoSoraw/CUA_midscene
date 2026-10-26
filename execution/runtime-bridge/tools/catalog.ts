@@ -6,6 +6,8 @@ import {
   resolveRuntimeLayout,
 } from '../../cua/index.js';
 import type { CuaCatalogRequest, CuaCatalogResult } from '../contracts.js';
+import { requireSkillsRoot } from '../../cua/data-paths.js';
+import { describeSkill, listSkills, readSkill } from '../../cua/skills/assets.js';
 
 export interface CuaCatalogDependencies {
   resolveRuntimeLayout: typeof resolveRuntimeLayout;
@@ -28,7 +30,7 @@ function requiredId(value: unknown, name: string): string {
   return value.trim();
 }
 
-const CATALOG_ACTIONS = ['list-scenes', 'list-tasks', 'find-task', 'describe-task'] as const;
+const CATALOG_ACTIONS = ['list-skills', 'describe-skill', 'list-scenes', 'list-tasks', 'find-task', 'describe-task'] as const;
 
 function normalizeCatalogAction(rawAction: unknown): string {
   let text: string;
@@ -58,6 +60,11 @@ export async function cuaCatalog(
   }
   const api = { ...defaultDependencies, ...dependencies };
   const layout = await api.resolveRuntimeLayout(request.dataRoot);
+  if (action === 'list-skills') return { action, skills: await listSkills(requireSkillsRoot(layout)) };
+  if (action === 'describe-skill') {
+    const skillName = requiredId((request as { skillName?: unknown }).skillName, 'skillName');
+    return { action, skillName, description: describeSkill(await readSkill(requireSkillsRoot(layout), skillName)) };
+  }
   if (action === 'list-scenes') {
     return { action: 'list-scenes', scenes: await api.listScenes(layout.catalog) };
   }

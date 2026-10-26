@@ -25,7 +25,7 @@ def test_execution_schema_preserves_all_strategies_without_catalog_or_workbench(
 def test_bound_execution_runs_directly_without_catalog(strategy: str) -> None:
     parameters: dict[str, JsonValue] = {"strategy": strategy, "goal": "打开系统"}
     if strategy != "freeform":
-        parameters = {"strategy": strategy, "scene": "ems", "task": "query",
+        parameters = {"strategy": strategy, "skillName": "alarm-query",
                       "inputs": {"target": "device-1"}}
     model = FakeModelClient([
         ModelResponse(tool_calls=(ModelToolCall("run", "cua_execute", parameters),)),
@@ -53,12 +53,33 @@ def test_plain_task_is_freeform_and_cannot_invent_recorded_binding() -> None:
     assert runtime.calls == [("execute", parameters)]
 
 
+def test_skill_binding_defaults_to_guided_and_terminal_execution_ignores_extra_tools() -> None:
+    request = InvocationRequest(
+        "执行告警查询", execution={"skillName": "alarm-query", "inputs": {}},
+    )
+    arguments = {"strategy": "guided", "skillName": "alarm-query", "inputs": {}}
+    assert request.execution == arguments
+    model = FakeModelClient([
+        ModelResponse(tool_calls=(
+            ModelToolCall("run", "cua_execute", arguments),
+            ModelToolCall("extra", "cua_catalog", {"action": "list-scenes"}),
+        )),
+        ModelResponse(content="已完成。C:/runs/execution-report.html"),
+    ])
+    runtime = FakeRuntimeClient()
+    result = asyncio.run(CuaAgent(model, lambda: runtime).invoke(request))
+    assert result.status is InvocationStatus.COMPLETED
+    assert runtime.calls == [("execute", arguments)]
+    assert len(result.tool_calls) == 1
+    assert model.tool_sets[1] == ()
+
+
 @pytest.mark.parametrize("field,value", [
-    ("task", "other"), ("scene", "other"), ("strategy", "guided"),
+    ("skillName", "other-skill"), ("scene", "other"), ("strategy", "guided"),
     ("inputs", {"target": "other"}), ("skillRoot", "C:/skills"),
 ])
 def test_model_cannot_change_bound_task_inputs_or_strategy(field: str, value: JsonValue) -> None:
-    bound: dict[str, JsonValue] = {"strategy": "replay", "scene": "s", "task": "t"}
+    bound: dict[str, JsonValue] = {"strategy": "replay", "skillName": "bound-skill"}
     altered = {**bound, field: value}
     model = FakeModelClient([ModelResponse(tool_calls=(
         ModelToolCall("run", "cua_execute", altered),
@@ -91,12 +112,12 @@ def test_execution_registry_checks_fields_without_relying_on_model_schema() -> N
 
 
 @pytest.mark.parametrize("execution", [
-    {"strategy": "replay", "task": "t"},
-    {"strategy": "replay", "scene": "s", "task": "../t"},
+    {"strategy": "replay"},
+    {"strategy": "replay", "skillName": "../t"},
     {"strategy": "replay", "scene": "s", "task": "C:\\tasks\\t"},
     {"strategy": "freeform", "goal": "打开系统", "skillRoot": "C:/skills"},
     {"strategy": "freeform", "goal": "打开系统", "dataRoot": "C:/data"},
-    {"strategy": "replay", "scene": "s", "task": "t", "inputs": {"x": 1}},
+    {"strategy": "replay", "skillName": "bound-skill", "inputs": {"x": 1}},
 ])
 def test_invocation_binding_rejects_incomplete_or_path_based_requests(execution) -> None:
     with pytest.raises(ValueError):
@@ -104,7 +125,7 @@ def test_invocation_binding_rejects_incomplete_or_path_based_requests(execution)
 
 
 def test_binding_is_copied_and_cli_forwards_it_without_task_discovery() -> None:
-    bound: dict[str, JsonValue] = {"strategy": "replay", "scene": "s", "task": "t",
+    bound: dict[str, JsonValue] = {"strategy": "replay", "skillName": "bound-skill",
                                   "inputs": {"x": "original"}}
     request = InvocationRequest("执行任务", execution=bound)
     bound["inputs"]["x"] = "changed"
@@ -135,7 +156,7 @@ def test_tool_mode_environment_and_explicit_override(monkeypatch: pytest.MonkeyP
 
 def test_explicit_binding_disables_discovery_even_in_discovery_profile() -> None:
     registry = create_cua_tool_registry(None, tool_mode="discover", expected_execution={
-        "strategy": "replay", "scene": "s", "task": "t",
+        "strategy": "replay", "skillName": "bound-skill",
     })
     assert [tool.name for tool in registry.definitions] == ["cua_execute"]
 
@@ -157,7 +178,7 @@ def test_freeform_only_remains_restricted_for_each_tool_mode(mode) -> None:
     assert registry.definitions[0].input_schema["properties"]["strategy"] == {"const": "freeform"}
     model = FakeModelClient([])
     result = asyncio.run(CuaAgent(model, lambda: FakeRuntimeClient(), freeform_only=True).invoke(
-        InvocationRequest("执行任务", execution={"strategy": "replay", "scene": "s", "task": "t"}),
+        InvocationRequest("执行任务", execution={"strategy": "replay", "skillName": "bound-skill"}),
     ))
     assert result.status is InvocationStatus.FAILED
     assert "freeform_only" in result.error

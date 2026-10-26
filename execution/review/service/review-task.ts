@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { JsonObject, ProcessedLogStep, ShowuiTrace, TaskCatalogRoots, TaskManifest } from '../../cua/contracts/types.js';
+import type { JsonObject, ProcessedLogStep, ShowuiTrace, TaskAssetManifest, TaskCatalogRoots } from '../../cua/contracts/types.js';
 import { readProcessedLog, readShowuiTrace, readTaskManifest } from '../../cua/contracts/validation.js';
 import { describeTask } from '../../cua/task/tasks.js';
 import { readYamlDocument } from '../../cua/task/yaml-task.js';
@@ -66,7 +66,7 @@ function evidenceFor(
   };
 }
 
-async function readRecording(taskRoot: string, manifest: TaskManifest): Promise<{
+async function readRecording(taskRoot: string, manifest: TaskAssetManifest): Promise<{
   trace?: ShowuiTrace;
   processed?: ProcessedLogStep[];
   sourceRoot: string;
@@ -84,7 +84,7 @@ async function readRecording(taskRoot: string, manifest: TaskManifest): Promise<
   }
 }
 
-function effectiveBindings(manifest: TaskManifest, tasks: JsonObject[], trace?: ShowuiTrace): Record<string, number | null> {
+function effectiveBindings(manifest: TaskAssetManifest, tasks: JsonObject[], trace?: ShowuiTrace): Record<string, number | null> {
   if (manifest.source.stepBindings) return { ...manifest.source.stepBindings };
   if (!trace || trace.trajectory.length !== tasks.length) return {};
   return Object.fromEntries(tasks.map((task, index) => {
@@ -108,6 +108,16 @@ export async function loadReviewTask(
     readTaskManifest(taskJsonPath),
     readYamlDocument(taskYamlPath),
   ]);
+  const steps = await buildReviewSteps(taskRoot, manifest, document);
+  manifest.source.stepBindings ??= Object.fromEntries(steps.map(step => [step.id, step.evidence?.sourceStep ?? null]));
+  return {
+    scene, task, title: manifest.title, description: manifest.description,
+    origin: description.origin, writable: description.writable,
+    revision: reviewRevision(taskJson, taskYaml), manifest, document, steps,
+  };
+}
+
+export async function buildReviewSteps(taskRoot: string, manifest: TaskAssetManifest, document: JsonObject): Promise<ReviewStep[]> {
   const tasks = document.tasks as JsonObject[];
   const recording = await readRecording(taskRoot, manifest);
   const bindings = effectiveBindings(manifest, tasks, recording.trace);
@@ -115,7 +125,7 @@ export async function loadReviewTask(
   if (recording.trace && recording.processed && recording.trace.trajectory.length === recording.processed.length) {
     recording.trace.trajectory.forEach((item, index) => processedByStep.set(item.step_idx, recording.processed![index]));
   }
-  const steps: ReviewStep[] = tasks.map((item, index) => {
+  return tasks.map((item, index) => {
     const match = stepNamePattern.exec(String(item.name));
     if (!match) throw new Error(`无法构造复核步骤：tasks[${index + 1}].name 非法`);
     const [, id, , operation] = match;
@@ -136,20 +146,6 @@ export async function loadReviewTask(
       ...(referenceImages.length ? { referenceImages } : {}),
     };
   });
-  return {
-    scene,
-    task,
-    title: manifest.title,
-    description: manifest.description,
-    origin: description.origin as 'builtin' | 'user',
-    writable: Boolean(description.writable),
-    revision: reviewRevision(taskJson, taskYaml),
-    manifest: Object.keys(bindings).length
-      ? { ...manifest, source: { ...manifest.source, stepBindings: bindings } }
-      : manifest,
-    document,
-    steps,
-  };
 }
 
 export async function resolveReviewTaskRoot(scene: string, task: string, catalog: TaskCatalogRoots): Promise<{

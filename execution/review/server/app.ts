@@ -23,6 +23,7 @@ export async function createReviewApp(options: {
   dependencies?: ReviewRouteDependencies;
 }): Promise<FastifyInstance> {
   const app = Fastify({
+    ajv: { customOptions: { removeAdditional: false } },
     bodyLimit: reviewBodyLimit,
     logger: false,
   });

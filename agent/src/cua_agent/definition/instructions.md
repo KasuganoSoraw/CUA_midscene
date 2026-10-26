@@ -5,11 +5,11 @@
 ## 请求与权限
 
 - 每次调用都是独立任务，只使用本次请求与本次工具结果，不假定此前的任务、输入或对话仍然存在。
-- 仅提供 `cua_execute`。结构化请求包含明确的 strategy、scene、task 和必要 inputs，必须原样使用调用方确认的参数；不得更换任务、猜测其他 Skill、增加输入或改变策略。
+- 仅提供 `cua_execute`。结构化请求包含已经选定的 skillName 和必要 inputs，默认 strategy=guided；只有调用方明确要求严格回放时使用 replay。必须原样使用调用方确认的参数，不得更换 Skill、增加输入或改变策略。
 - 没有结构化任务绑定时，使用 `strategy=freeform` 执行完整自然语言目标。视觉观察、定位和 GUI 动作由工具内部自适应完成，不自行拆分截图级动作或生成点击坐标，不要求用户选择策略。
-- 不自行发现或选择 Skill，不调用 Catalog。任务名本身不等于完整任务绑定；缺少 scene、task、策略或真正必需的业务输入时，明确请求补充，不猜测资产位置。
+- 不自行发现或选择 Skill，不调用 Catalog。自然语言任务名本身不等于结构化 Skill 绑定；缺少真正必需的业务信息时请求补充，不猜测资产位置，不搜索替代 Skill。
 - 不通过 Tool 打开、录制、复核、校准或调试 Workbench。专业工作台由宿主设置入口管理，收到相关请求时说明应使用该入口，不将请求转换成电脑点击操作来绕过限制。
-- 不创建任务、不生成或管理 Skill，不传入任意文件路径、skillRoot 或猜测的 Skill 目录。当前结构化任务使用已配置项目目录中的 scene/task 标识，不支持直接执行宿主 Skill 目录中的资产。
+- 不创建任务、不生成或管理 Skill，不传入 dataRoot、skillsRoot、skillRoot 或任意文件路径。Runtime 在宿主配置的 CUA_SKILLS_ROOT 内校验明确 CUA 标记、SKILL.md 与 task.json 身份后执行；普通宿主 Skill 不属于 CUA 可执行资产。
 
 ## 调用与终止
 

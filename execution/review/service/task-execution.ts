@@ -3,8 +3,9 @@ import { access } from 'node:fs/promises';
 import path from 'node:path';
 import type { JsonObject, TaskCatalogRoots } from '../../cua/contracts/types.js';
 import { resolveTask } from '../../cua/task/tasks.js';
+import { resolveSkillTask } from '../../cua/skills/assets.js';
 import type {
-  StartTaskExecutionRequest,
+  WorkbenchExecutionRequest,
   TaskExecutionResultSummary,
   TaskExecutionStatus,
 } from '../shared/types.js';
@@ -12,7 +13,7 @@ import { resolveExecutionReport } from './execution-report.js';
 
 export interface TaskExecutionControl {
   status(): TaskExecutionStatus;
-  start(request: StartTaskExecutionRequest): Promise<TaskExecutionStatus>;
+  start(request: WorkbenchExecutionRequest): Promise<TaskExecutionStatus>;
   stop(): Promise<TaskExecutionStatus>;
   close(): Promise<void>;
 }
@@ -26,6 +27,7 @@ interface TaskExecutionManagerOptions {
   catalog: TaskCatalogRoots;
   dataRoot: string;
   executionRoot: string;
+  skillsRoot?: string;
   countdownMs?: number;
   resolveLaunch?: () => Promise<CliLaunch>;
   spawnProcess?: typeof spawn;
@@ -39,6 +41,16 @@ const maxDiagnosticsBytes = 16 * 1024;
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function executionCliTarget(request: WorkbenchExecutionRequest): string[] {
+  const mode = request.mode ?? 'act';
+  if ('skillName' in request) {
+    const strategy = mode === 'task' ? 'replay' : 'guided';
+    return ['skill', 'run', '--skill-name', request.skillName, '--strategy', strategy];
+  }
+  const command = mode === 'task' ? 'task' : 'act';
+  return [command, 'run', '--scene', request.scene, '--task', request.task];
 }
 
 function limitedAppend(current: string, chunk: Buffer | string, limit: number): string {
@@ -137,17 +149,15 @@ export class TaskExecutionManager implements TaskExecutionControl {
     return clone(this.current);
   }
 
-  async start(request: StartTaskExecutionRequest): Promise<TaskExecutionStatus> {
+  async start(request: WorkbenchExecutionRequest): Promise<TaskExecutionStatus> {
     if (activePhases.has(this.current.phase)) {
       throw Object.assign(new Error('已有任务正在准备或执行，请先等待其完成或停止'), { statusCode: 409 });
     }
 
-    await resolveTask({
-      scene: request.scene,
-      task: request.task,
-      catalog: this.options.catalog,
-      inputs: request.inputs,
-    });
+    if ('skillName' in request) {
+      if (!this.options.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT');
+      await resolveSkillTask({ skillName: request.skillName, skillsRoot: this.options.skillsRoot, inputs: request.inputs });
+    } else await resolveTask({ ...request, catalog: this.options.catalog });
     const launch = await (this.options.resolveLaunch ?? (() => resolveTaskCliLaunch(this.options.executionRoot)))();
     const countdownMs = this.options.countdownMs ?? 5_000;
     const preparedAt = new Date();
@@ -155,9 +165,8 @@ export class TaskExecutionManager implements TaskExecutionControl {
     this.stopRequested = false;
     this.current = {
       phase: 'preparing',
-      scene: request.scene,
-      task: request.task,
-      mode: request.mode,
+      ...('skillName' in request ? { skillName: request.skillName } : { scene: request.scene, task: request.task }),
+      mode: request.mode ?? 'act',
       preparedAt: preparedAt.toISOString(),
       startsAt: new Date(preparedAt.getTime() + countdownMs).toISOString(),
     };
@@ -194,25 +203,23 @@ export class TaskExecutionManager implements TaskExecutionControl {
 
   private async launch(
     generation: number,
-    request: StartTaskExecutionRequest,
+    request: WorkbenchExecutionRequest,
     launch: CliLaunch,
   ): Promise<void> {
     if (generation !== this.generation || this.current.phase !== 'preparing') return;
-    const command = request.mode === 'task' ? ['task', 'run'] : ['act', 'run'];
+    const mode = request.mode ?? 'act';
     const args = [
       ...launch.prefixArgs,
-      ...command,
-      '--scene', request.scene,
-      '--task', request.task,
+      ...executionCliTarget(request),
       '--data-root', this.options.dataRoot,
-      ...(request.mode === 'task' ? ['--json'] : []),
+      ...(mode === 'task' && !('skillName' in request) ? ['--json'] : []),
       ...Object.entries(request.inputs).flatMap(([key, value]) => ['--input', `${key}=${value}`]),
     ];
     let child: ChildProcessWithoutNullStreams;
     try {
       child = (this.options.spawnProcess ?? spawn)(launch.command, args, {
         cwd: path.resolve(this.options.executionRoot),
-        env: process.env,
+        env: { ...process.env, ...(this.options.skillsRoot ? { CUA_SKILLS_ROOT: this.options.skillsRoot } : {}) },
         shell: false,
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -238,7 +245,7 @@ export class TaskExecutionManager implements TaskExecutionControl {
   }
 
   private async completeExecution(
-    generation: number, request: StartTaskExecutionRequest,
+    generation: number, request: WorkbenchExecutionRequest,
     code: number | null, signal: NodeJS.Signals | null, stdout: string, diagnostics: string,
   ): Promise<void> {
     if (generation !== this.generation || !activePhases.has(this.current.phase)) return;

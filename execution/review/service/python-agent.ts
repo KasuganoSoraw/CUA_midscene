@@ -31,6 +31,7 @@ interface PythonAgentLaunch {
 interface PythonAgentInvokerOptions {
   executionRoot: string;
   dataRoot: string;
+  skillsRoot?: string;
   agentRoot?: string;
   pythonExecutable?: string;
   javascriptRuntimeExecutable?: string;
@@ -290,6 +291,7 @@ export class PythonAgentInvoker implements PythonAgentControl {
           CUA_AGENT_JS_RUNTIME_EXECUTABLE: launch.javascriptRuntimeExecutable,
           CUA_AGENT_RUNTIME_BRIDGE: launch.runtimeBridge,
           CUA_DATA_ROOT: this.options.dataRoot,
+          ...(this.options.skillsRoot ? { CUA_SKILLS_ROOT: this.options.skillsRoot } : {}),
         },
         shell: false,
         windowsHide: true,

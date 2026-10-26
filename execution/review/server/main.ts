@@ -17,7 +17,7 @@ export interface StartedReviewServer {
 
 export const defaultReviewPort = 47831;
 export const reviewServiceName = 'cua-midscene-review';
-export const reviewProtocolVersion = 3;
+export const reviewProtocolVersion = 4;
 
 export function reviewDataRootKey(root: string): string {
   const normalized = path.normalize(path.resolve(root));
@@ -25,11 +25,12 @@ export function reviewDataRootKey(root: string): string {
   return createHash('sha256').update(stable).digest('hex');
 }
 
-function identityFor(dataRoot: string, devMode: boolean): ReviewServerIdentity {
+function identityFor(dataRoot: string, skillsRoot: string | undefined, devMode: boolean): ReviewServerIdentity {
   return {
     service: reviewServiceName,
     protocolVersion: reviewProtocolVersion,
     dataRootKey: reviewDataRootKey(dataRoot),
+    skillsRootKey: skillsRoot ? reviewDataRootKey(skillsRoot) : 'unconfigured',
     devMode,
   };
 }
@@ -40,6 +41,7 @@ function identityMatches(actual: unknown, expected: ReviewServerIdentity): boole
   return identity.service === expected.service
     && identity.protocolVersion === expected.protocolVersion
     && identity.dataRootKey === expected.dataRootKey
+    && identity.skillsRootKey === expected.skillsRootKey
     && (!expected.devMode || identity.devMode === true);
 }
 
@@ -81,11 +83,11 @@ export async function startReviewServer(options: {
   dev?: boolean;
   dependencies?: ReviewRouteDependencies;
 } = {}): Promise<StartedReviewServer> {
-  const layout = await resolveRuntimeLayout(options.dataRoot);
+  const layout = await resolveRuntimeLayout(options.dataRoot, { executionRoot: options.executionRoot });
   const data = await requireDataPaths(layout);
   const staticRoot = path.resolve(options.staticRoot ?? path.join(packageRoot, 'dist', 'review', 'web'));
   const devMode = options.dev === true;
-  const identity = identityFor(data.root, devMode);
+  const identity = identityFor(data.root, layout.skillsRoot, devMode);
   const port = options.port ?? defaultReviewPort;
   const expectedUrl = `http://127.0.0.1:${port}/`;
   if (await probeReviewServer(expectedUrl, identity)) {
