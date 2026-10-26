@@ -5,10 +5,14 @@ import type {
   SceneCatalogItem,
   TaskCatalogItem,
   TaskDescription,
+  SkillCatalogItem,
+  SkillDescription,
 } from '../cua/contracts/types.js';
 import type { ExecutionProgress } from '../executors/midscene-progress.js';
 
 export const runtimeBridgeSchemaVersion = '1.0' as const;
+export const skillAssetContractVersion = '1.0' as const;
+// Runtime 宿主能力名称；模型可见工具由 Python Agent 的配置独立决定。
 export const cuaRuntimeToolNames = ['cua_catalog', 'cua_execute', 'cua_workbench'] as const;
 export type CuaRuntimeToolName = typeof cuaRuntimeToolNames[number];
 
@@ -17,12 +21,16 @@ interface CuaToolRequestBase {
 }
 
 export type CuaCatalogRequest =
+  | (CuaToolRequestBase & { action: 'list-skills' })
+  | (CuaToolRequestBase & { action: 'describe-skill'; skillName: string })
   | (CuaToolRequestBase & { action: 'list-scenes' })
   | (CuaToolRequestBase & { action: 'list-tasks'; scene: string })
   | (CuaToolRequestBase & { action: 'find-task'; task: string })
   | (CuaToolRequestBase & { action: 'describe-task'; scene: string; task: string });
 
 export type CuaCatalogResult =
+  | { action: 'list-skills'; skills: SkillCatalogItem[] }
+  | { action: 'describe-skill'; skillName: string; description: SkillDescription }
   | { action: 'list-scenes'; scenes: SceneCatalogItem[] }
   | { action: 'list-tasks'; scene: string; tasks: TaskCatalogItem[] }
   | { action: 'find-task'; task: string; matches: TaskCatalogItem[] }
@@ -36,6 +44,7 @@ interface CuaRecordedExecutionRequest extends CuaToolRequestBase {
 }
 
 export type CuaExecuteRequest =
+  | (CuaToolRequestBase & { skillName: string; strategy?: 'guided' | 'replay'; inputs?: Record<string, string>; dryRun?: boolean })
   | (CuaRecordedExecutionRequest & { strategy: 'replay' })
   | (CuaRecordedExecutionRequest & { strategy: 'guided' })
   | (CuaToolRequestBase & {
@@ -46,7 +55,7 @@ export type CuaExecuteRequest =
     });
 
 export interface CuaExecuteResult {
-  strategy: CuaExecuteRequest['strategy'];
+  strategy: 'replay' | 'guided' | 'freeform';
   status: 'succeeded' | 'failed';
   runDir: string;
   resolvedTaskPath?: string;
@@ -65,6 +74,7 @@ export type CuaWorkbenchRequest =
       mode: 'review' | 'execution';
       scene?: string;
       task?: string;
+      skillName?: string;
     });
 
 export interface CuaWorkbenchResult {

@@ -10,6 +10,7 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Literal, TypeAlias, cast
 from uuid import uuid4
 
+from .configuration import ToolMode, resolve_tool_mode
 from .contracts import (
     InvocationRequest,
     InvocationResult,
@@ -31,6 +32,7 @@ from .runtime_client import (
     CancellationCheck,
     ManagedRuntimeClientProtocol,
     RuntimeCancelledError,
+    RuntimeClientProtocol,
     RuntimeEventSink,
     RuntimeMethodError,
     RuntimeProgressEvent,
@@ -64,8 +66,6 @@ FINALIZATION_PROTOCOL = """
   执行报告路径是最终自然语言回复中唯一允许出现的执行产物路径。
   只总结已完成的电脑操作和 Tool 直接返回的结果。不要为了理解最终页面中的
   业务内容而读取截图、执行报告或尝试新的 GUI 操作；这些执行产物由调用方处理。
-- `cua_workbench`：必须原样返回 Tool Result 中的 `url`，
-  并说明它用于录制、复核或已录制任务回放中的哪一种用途。
 - 使用调用方任务所使用的语言；调用方明确指定其他语言时遵循其要求。
 - 不要输出 JSON、`status`/`reply` envelope 或 Markdown code fence。
 """.strip()
@@ -110,6 +110,7 @@ class CuaAgent:
         max_turns: int = 8,
         create_invocation_id: Callable[[], str] | None = None,
         freeform_only: bool = False,
+        tool_mode: ToolMode | None = None,
     ) -> None:
         if max_turns <= 0:
             raise ValueError("max_turns 必须大于 0")
@@ -117,7 +118,7 @@ class CuaAgent:
         self._runtime_client_factory = runtime_client_factory
         self._data_root = data_root
         self._freeform_only = freeform_only
-        self._instructions = load_agent_definition(freeform_only=freeform_only).instructions
+        self._tool_mode = resolve_tool_mode(tool_mode)
         self._max_turns = max_turns
         self._create_invocation_id = create_invocation_id or (lambda: str(uuid4()))
 
@@ -133,13 +134,12 @@ class CuaAgent:
         try:
             _check_cancelled(cancelled)
             async with self._runtime_client_factory() as runtime_client:
-                tools = create_cua_tool_registry(
-                    runtime_client, data_root=self._data_root, freeform_only=self._freeform_only,
-                )
+                task, tools, instructions = self._invocation_context(request, runtime_client)
                 return await self._run_loop(
                     invocation_id,
-                    request.task,
+                    task,
                     tools,
+                    instructions=instructions,
                     event_sink=event_sink,
                     cancelled=cancelled,
                 )
@@ -161,29 +161,45 @@ class CuaAgent:
                 error=message,
             )
 
+    def _invocation_context(
+        self, request: InvocationRequest, runtime: RuntimeClientProtocol,
+    ) -> tuple[str, CuaToolRegistry, str]:
+        mode = "execute" if request.execution is not None else self._tool_mode
+        expected = request.execution
+        if expected is None and (mode == "execute" or self._freeform_only):
+            expected = {"strategy": "freeform", "goal": request.task}
+        if self._freeform_only and expected is not None and expected["strategy"] != "freeform":
+            raise ValueError("freeform_only=True 不接受结构化任务绑定")
+        task = request.task
+        if expected is not None:
+            task += "\n\n调用方确认的 cua_execute 参数，必须原样使用：\n" + json.dumps(
+                expected, ensure_ascii=False,
+            )
+        tools = create_cua_tool_registry(
+            runtime, data_root=self._data_root, freeform_only=self._freeform_only,
+            tool_mode=mode, expected_execution=expected,
+        )
+        instructions = load_agent_definition(
+            freeform_only=self._freeform_only, tool_mode=mode,
+        ).instructions
+        return task, tools, instructions
+
     async def _run_loop(
         self,
         invocation_id: str,
         task: str,
         tools: CuaToolRegistry,
         *,
+        instructions: str,
         event_sink: EventSink | None,
         cancelled: CancellationCheck | None,
     ) -> InvocationResult:
-        messages = _initial_messages(task, self._instructions)
+        messages = _initial_messages(task, instructions)
         traces: list[ToolTrace] = []
 
         for turn in range(1, self._max_turns + 1):
             _check_cancelled(cancelled)
-            await _emit(
-                event_sink,
-                AgentEvent(
-                    invocation_id,
-                    "progress",
-                    f"正在进行第 {turn} 轮任务判断",
-                    {"turn": turn},
-                ),
-            )
+            await _emit_turn(event_sink, invocation_id, turn)
             response = await _stream_model_turn(
                 self._model_client,
                 tuple(messages),
@@ -400,7 +416,7 @@ class CuaAgent:
         cancelled: CancellationCheck | None,
     ) -> InvocationResult:
         _check_cancelled(cancelled)
-        finalization_messages = _build_finalization_messages(messages, self._instructions)
+        finalization_messages = _build_finalization_messages(messages)
         response = _normalize_final_response(
             await _await_model_response(
                 self._model_client.complete(finalization_messages, ()),
@@ -433,26 +449,33 @@ def _is_terminal_tool_success(
     call: ModelToolCall,
     result: Mapping[str, object],
 ) -> bool:
-    if call.name == "cua_workbench":
-        return True
     return call.name == "cua_execute" and result.get("status") == "succeeded"
 
 
 def _build_finalization_messages(
     messages: list[ModelMessage],
-    instructions: str = CUA_AGENT_DEFINITION.instructions,
+    instructions: str | None = None,
 ) -> tuple[ModelMessage, ...]:
     if not messages or messages[0].role != "system" or messages[0].content is None:
         raise ValueError("Agent messages 必须以包含内容的 system message 开头")
     if any(message.role == "system" for message in messages[1:]):
         raise ValueError("Agent messages 只能在开头包含一个 system message")
+    active_instructions = instructions or messages[0].content.removesuffix(
+        f"\n\n{FINAL_RESPONSE_PROTOCOL}",
+    )
     return (
         ModelMessage(
             role="system",
-            content=f"{instructions}\n\n{FINALIZATION_PROTOCOL}",
+            content=f"{active_instructions}\n\n{FINALIZATION_PROTOCOL}",
         ),
         *messages[1:],
     )
+
+
+async def _emit_turn(event_sink: EventSink | None, invocation_id: str, turn: int) -> None:
+    await _emit(event_sink, AgentEvent(
+        invocation_id, "progress", f"正在进行第 {turn} 轮任务判断", {"turn": turn},
+    ))
 
 
 async def _emit_tool_started(

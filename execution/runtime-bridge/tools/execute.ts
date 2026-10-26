@@ -1,4 +1,7 @@
 import path from 'node:path';
+import { requireSkillsRoot } from '../../cua/data-paths.js';
+import { requireSkillName } from '../../cua/skills/paths.js';
+import type { ExecutionOptions } from '../../cua/task/execution.js';
 import {
   requireDataPaths,
   resolveRuntimeLayout,
@@ -46,6 +49,7 @@ export async function cuaExecute(
   dependencies: Partial<CuaExecuteDependencies> = {},
   onProgress?: ExecutionProgressSink,
 ): Promise<CuaExecuteResult> {
+  if ('skillName' in request) return executeSkillRequest(request, dependencies, onProgress);
   if (!['replay', 'guided', 'freeform'].includes(request.strategy)) {
     throw new Error(`无法识别 cua_execute strategy：${String((request as { strategy?: unknown }).strategy)}`);
   }
@@ -119,5 +123,32 @@ export async function cuaExecute(
     };
   }
   throw new Error(`无法识别 cua_execute strategy：${String((request as { strategy?: unknown }).strategy)}`);
+}
+
+async function executeSkillRequest(
+  request: Extract<CuaExecuteRequest, { skillName: string }>,
+  dependencies: Partial<CuaExecuteDependencies>, onProgress?: ExecutionProgressSink,
+): Promise<CuaExecuteResult> {
+  const allowed = new Set(['skillName', 'strategy', 'inputs', 'dryRun', 'dataRoot']);
+  if (Object.keys(request).some(key => !allowed.has(key))) throw new Error('Skill 执行包含不支持的字段或任意路径');
+  const strategy = request.strategy ?? 'guided';
+  if (strategy !== 'guided' && strategy !== 'replay') throw new Error('Skill 仅支持 guided 或 replay');
+  const skillName = requireSkillName(request.skillName);
+  const api = { ...defaultDependencies, ...dependencies };
+  const layout = await api.resolveRuntimeLayout(request.dataRoot);
+  const data = await api.requireDataPaths(layout);
+  const options: ExecutionOptions = {
+    skillName, skillsRoot: requireSkillsRoot(layout), runsRoot: data.runsRoot,
+    inputs: optionalStringRecord(request.inputs, 'inputs'), dryRun: request.dryRun, onProgress,
+  };
+  const run = strategy === 'guided' ? await api.runRecordedTaskAiAct(options) : await api.runTask(options);
+  return {
+    strategy, status: run.executorResult.status, runDir: path.dirname(run.resolvedTaskPath),
+    resolvedTaskPath: run.resolvedTaskPath,
+    ...('promptPath' in run ? { promptPath: String(run.promptPath) } : {}),
+    ...(run.executorResult.reportPath ? { reportPath: run.executorResult.reportPath } : {}),
+    ...(run.executorResult.finalScreenshotPath ? { finalScreenshotPath: run.executorResult.finalScreenshotPath } : {}),
+    executor: run.executorResult,
+  };
 }
 

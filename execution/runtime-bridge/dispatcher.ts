@@ -84,7 +84,8 @@ function errorDetails(error: unknown): JsonObject {
 async function runtimeMethodErrorDetails(request: RuntimeBridgeRequest, error: unknown): Promise<JsonObject> {
   const details = errorDetails(error);
   if (request.method !== 'execute') return details;
-  const reportPath = await failedExecutionReport(error, request.payload.strategy);
+  const strategy = request.payload.strategy ?? (request.payload.skillName === undefined ? undefined : 'guided');
+  const reportPath = await failedExecutionReport(error, strategy);
   if (reportPath !== undefined) details.reportPath = reportPath;
   return details;
 }
