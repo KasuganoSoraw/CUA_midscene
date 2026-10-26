@@ -5,7 +5,7 @@ import test from 'node:test';
 import * as vue from 'vue';
 import { compileScript, parse } from 'vue/compiler-sfc';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
-import { useI18n } from '../../review/web/src/i18n.js';
+import { translate, useI18n } from '../../review/web/src/i18n.js';
 
 async function recordingSetup() {
   const file = new URL('../../review/web/src/components/RecordingWorkspace.vue', import.meta.url);
@@ -56,4 +56,13 @@ test('任务目录使用 Skill 身份平铺，不读取场景目录 API', async 
   assert.match(source, /v-for="entry in visibleSkills"/);
   assert.match(source, /emit\('select', entry.skillName\)/);
   assert.doesNotMatch(source, /SceneCatalogItem|TaskCatalogItem|api\.tasks|scene-group/);
+});
+
+test('中英文任务提示使用 Skill 名称，不添加产品前缀', () => {
+  for (const locale of ['zh-CN', 'en-US'] as const) {
+    for (const key of ['recording.skillAutoSummary', 'review.emptyHelp', 'review.catalog'] as const) {
+      assert.match(translate(locale, key), /Skill/);
+      assert.doesNotMatch(translate(locale, key), /CUA/);
+    }
+  }
 });
