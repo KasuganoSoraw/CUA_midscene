@@ -159,6 +159,7 @@ class CuaToolRegistry:
         self._data_root = data_root
         self._freeform_only = freeform_only
         mode = resolve_tool_mode(tool_mode)
+        self._execute_only = mode == "execute" or freeform_only or expected_execution is not None
         self._expected_execution = (
             normalize_execution(expected_execution) if expected_execution is not None else None
         )
@@ -198,6 +199,8 @@ class CuaToolRegistry:
             _validate_freeform_arguments(arguments)
         _definition, method = entry
         payload = _normalize_tool_arguments(name, arguments)
+        if self._execute_only:
+            payload = normalize_execution(payload)
         if self._expected_execution is not None:
             _require_bound_execution(payload, self._expected_execution)
         if self._data_root is not None and "dataRoot" not in payload:

@@ -71,11 +71,11 @@ Recorded Skill 是以场景和任务组织的可复用录制任务资产包。Ru
 
 CUA Agent 每次接收一项完整 GUI 任务，在一次调用内执行模型 Tool Calling。内部工具包括：
 
-- `cua_catalog`：发现场景、任务及其输入要求。
+- `cua_catalog`：仅在独立 discover 模型配置中发现场景、任务及其输入要求；执行专用配置不暴露此工具。
 - `cua_execute`：按明确选定的策略执行完整目标。
-- `cua_workbench`：在需要录制、复核、校准或调试时打开工作台。
+- Workbench 的 workbench Runtime 方法：由宿主设置入口经 Keeper 直接启动或复用服务，不暴露为模型工具。
 
-Agent 负责选择任务和执行策略，具体视觉观察、元素定位及键鼠动作交由 Midscene。Agent 不保存跨调用会话、长期记忆或用户聊天历史；调用方需要提供本次任务所需的目标、输入与约束。
+执行专用 Agent 使用调用方选定的任务和策略，不再次选择 Skill；自由目标直接 freeform。具体视觉观察、元素定位及键鼠动作交由 Midscene。Agent 不保存跨调用会话、长期记忆或用户聊天历史；调用方需要提供本次任务所需的绑定、输入与约束。
 
 ### 3.4 GUI 执行引擎
 

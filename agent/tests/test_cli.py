@@ -61,6 +61,7 @@ def test_cli_passes_freeform_only_flag_to_agent(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr("cua_agent.cli.CuaAgent", capture)
     build_agent_from_env()
     assert options["freeform_only"] is True
+    assert options["tool_mode"] == "execute"
 
 
 class FakeRuntimeClient:

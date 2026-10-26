@@ -35,7 +35,7 @@ TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv �
 
 ## Python Agent 与 Runtime Bridge
 
-唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 只调用其高层 `{ task }` invocation；Python Agent 自己运行模型 Tool Calling、判断 Recorded Skill、选择 replay/guided/freeform，并把 GUI 微观规划交给 Midscene。`cua_catalog`、`cua_execute`、`cua_workbench` 是 Python Agent 私有 Tool，不是 GDEClaw 的公共 Tool。
+唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 提交完整 task 及可选 execution 绑定；执行专用模型工具只有 cua_execute，结构化任务直接执行指定绑定，自由目标直接 freeform。GUI 微观规划交给 Midscene。Catalog 保留给 CLI、Runtime 和独立 discover 配置；workbench Runtime 方法供 Keeper 和设置入口直接调用，返回 URL 与 reused，不依赖模型或默认打开系统浏览器。模型工具不由 GDEClaw 注册。当前不直接解析宿主 Skill 目录资产，详见 [执行专用契约](../docs/execution-only-subagent.md)。
 
 GDEClaw 专用 Adapter 属于 Host 产品边界。本仓库提供 Python API、一次一进程的 `cua-agent invoke` 和 Review 开发调用。`execution/SKILL.md` 及场景/任务 `SKILL.md` 面向 CLI 操作、维护和打包；Python Agent 不读取这些 Markdown，`cua_catalog` 只返回结构化 catalog/manifest/YAML 摘要。
 

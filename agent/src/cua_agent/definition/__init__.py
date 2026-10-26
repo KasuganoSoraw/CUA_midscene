@@ -21,12 +21,18 @@ def load_agent_definition(
     instructions = "instructions.md" if mode == "execute" else "discovery-instructions.md"
     if freeform_only:
         instructions = "freeform-instructions.md"
+    description = _read_text("description.md")
+    if mode == "discover":
+        description = (
+            "独立电脑操作 Agent，可发现项目任务并执行 replay、guided 或 freeform；"
+            "不提供工作台工具。"
+        )
     return AgentDefinition(
         name="Computer-Use",
         invocation_mode="stateless-task",
         description=(
             "接受包含目标、输入和约束的完整电脑操作任务，使用自然语言执行桌面操作。"
-            if freeform_only else _read_text("description.md")
+            if freeform_only else description
         ),
         instructions=_read_text(instructions),
     )

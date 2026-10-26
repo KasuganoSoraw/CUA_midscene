@@ -82,6 +82,14 @@ def test_execution_mode_rejects_unavailable_model_tools(tool: str) -> None:
     assert runtime.calls == []
 
 
+def test_execution_registry_checks_fields_without_relying_on_model_schema() -> None:
+    registry = create_cua_tool_registry(None, tool_mode="execute")
+    with pytest.raises(ValueError, match="不支持的字段"):
+        asyncio.run(registry.call("cua_execute", {
+            "strategy": "freeform", "goal": "打开系统", "skillRoot": "C:/skills",
+        }))
+
+
 @pytest.mark.parametrize("execution", [
     {"strategy": "replay", "task": "t"},
     {"strategy": "replay", "scene": "s", "task": "../t"},
@@ -140,3 +148,17 @@ def test_execution_can_request_required_business_inputs_without_running_tools() 
     result = asyncio.run(CuaAgent(model, lambda: runtime).invoke(InvocationRequest("查询设备")))
     assert result.status is InvocationStatus.NEEDS_INPUT
     assert runtime.calls == []
+
+
+@pytest.mark.parametrize("mode", ["execute", "discover"])
+def test_freeform_only_remains_restricted_for_each_tool_mode(mode) -> None:
+    registry = create_cua_tool_registry(None, tool_mode=mode, freeform_only=True)
+    assert [tool.name for tool in registry.definitions] == ["cua_execute"]
+    assert registry.definitions[0].input_schema["properties"]["strategy"] == {"const": "freeform"}
+    model = FakeModelClient([])
+    result = asyncio.run(CuaAgent(model, lambda: FakeRuntimeClient(), freeform_only=True).invoke(
+        InvocationRequest("执行任务", execution={"strategy": "replay", "scene": "s", "task": "t"}),
+    ))
+    assert result.status is InvocationStatus.FAILED
+    assert "freeform_only" in result.error
+    assert model.calls == []
