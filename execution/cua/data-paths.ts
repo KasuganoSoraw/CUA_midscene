@@ -1,13 +1,15 @@
 import { constants } from 'node:fs';
 import { access, mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import type { DataPaths, RuntimeLayout } from './contracts/types.js';
-import { readEnvironmentValue } from './environment.js';
+import { readEnvironmentValue, readRuntimeEnvironmentValue } from './environment.js';
 import { packageRoot } from './package-root.js';
 
 export const executionRoot = packageRoot;
 export const dataRootEnv = 'CUA_DATA_ROOT';
 export const skillsRootEnv = 'CUA_SKILLS_ROOT';
+export const skillExportTempRootEnv = 'CUA_SKILL_EXPORT_TEMP_ROOT';
 
 async function normalizeConfiguredPath(absolute: string): Promise<string> {
   let existing = absolute;
@@ -38,9 +40,28 @@ export function requireSkillsRoot(layout: Pick<RuntimeLayout, 'skillsRoot'>): st
   return layout.skillsRoot;
 }
 
+export async function resolveSkillExportRoot(skillsRoot: string, root = executionRoot): Promise<string> {
+  if (!path.isAbsolute(skillsRoot)) throw new Error('CUA_SKILLS_ROOT 必须配置绝对路径');
+  const configured = await readRuntimeEnvironmentValue(skillExportTempRootEnv, root);
+  const temporary = configured ?? os.tmpdir();
+  if (!path.isAbsolute(temporary)) throw new Error('CUA_SKILL_EXPORT_TEMP_ROOT 必须配置绝对路径');
+  const formal = await normalizeConfiguredPath(path.resolve(skillsRoot));
+  const normalized = await normalizeConfiguredPath(path.resolve(temporary));
+  if (isInside(formal, normalized)) throw new Error('Skill 临时导出目录不得位于 CUA_SKILLS_ROOT 内');
+  try {
+    await mkdir(normalized, { recursive: true });
+    await access(normalized, constants.R_OK | constants.W_OK);
+    const actual = await realpath(normalized);
+    if (isInside(formal, actual)) throw new Error('Skill 临时导出目录不得位于 CUA_SKILLS_ROOT 内');
+    return actual;
+  } catch (error) {
+    throw new Error(`Skill 临时导出目录不可用：${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 function isInside(parent: string, target: string): boolean {
   const relative = path.relative(parent, target);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
 async function configuredDataRoot(

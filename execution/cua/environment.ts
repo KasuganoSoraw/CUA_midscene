@@ -45,3 +45,8 @@ export async function readEnvironmentValue(
   }
   return {};
 }
+
+export async function readRuntimeEnvironmentValue(name: string, executionRoot = packageRoot): Promise<string | undefined> {
+  if (process.env[name] !== undefined) return process.env[name]?.trim() || undefined;
+  return (await readEnvironmentValue(name, executionRoot)).value;
+}

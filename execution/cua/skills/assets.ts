@@ -14,13 +14,24 @@ export interface SkillAsset {
   document: JsonObject;
 }
 
-export function parseSkillMarkdown(text: string): SkillAsset['skill'] {
+function parseSkillFrontmatter(text: string): Record<string, unknown> {
   const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
   if (!match) throw new Error('SKILL.md 缺少合法 frontmatter');
   const document = parseDocument(match[1], { uniqueKeys: true });
   if (document.errors.length) throw new Error(`SKILL.md frontmatter 非法：${document.errors[0].message}`);
   const metadata = document.toJS() as Record<string, unknown> | null;
-  if (!metadata || typeof metadata.name !== 'string' || typeof metadata.description !== 'string' || !metadata.description.trim()) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) throw new Error('SKILL.md frontmatter 必须是对象');
+  return metadata;
+}
+
+export function parseSkillName(text: string): string {
+  const metadata = parseSkillFrontmatter(text);
+  return requireSkillName(metadata.name as string);
+}
+
+export function parseSkillMarkdown(text: string): SkillAsset['skill'] {
+  const metadata = parseSkillFrontmatter(text);
+  if (typeof metadata.name !== 'string' || typeof metadata.description !== 'string' || !metadata.description.trim()) {
     throw new Error('SKILL.md 必须包含非空 name 和 description');
   }
   return { name: requireSkillName(metadata.name), description: metadata.description.trim() };
