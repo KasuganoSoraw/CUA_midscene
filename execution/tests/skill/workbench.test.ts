@@ -37,7 +37,7 @@ async function setup(configured = true) {
       createSkill: async options => {
         assert.equal(options.skillsRoot, skillsRoot);
         await createSkillFixture(options.skillsRoot, 'generated-alarm-query');
-        return { created: true, valid: true, skillName: 'generated-alarm-query', goal: '查询' };
+        return { created: true, valid: true, skillName: 'generated-alarm-query', goal: '查询', zipPath: path.join(root, 'generated-alarm-query.zip') };
       },
     },
   });

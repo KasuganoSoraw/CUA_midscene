@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createSkillFromRecording } from '../../cua/skills/create.js';
 import { readSkill } from '../../cua/skills/assets.js';
 import { requireSkillsRoot, resolveRuntimeLayout, resolveSkillsRoot } from '../../cua/data-paths.js';
-import { assembleSkillFixture } from '../helpers/skill-fixture.js';
+import { installImportedFixture, recordingSkillFixture } from '../helpers/skill-import-fixture.js';
 
 test('Skill 根配置遵循进程、env.local、env 顺序且不回退到 projects', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-skill-env-'));
@@ -42,30 +42,117 @@ test('Skill 根配置遵循进程、env.local、env 顺序且不回退到 projec
   }
 });
 
-test('录制生成使用模型语义摘要，直接写入 Skill 根，不创建 projects', async () => {
+test('录制生成在独立目录打包，经宿主导入后读取正式资产，不直接安装', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-skill-generation-'));
-  const fixture = path.join(root, 'fixture');
-  const recording = path.join(root, 'Recording_1');
-  const skillsRoot = path.join(root, 'skills');
   try {
-    await assembleSkillFixture(fixture, 'network-alarm-search');
-    await mkdir(recording);
-    await mkdir(path.join(recording, 'inputs'));
-    const trace = JSON.parse(await readFile(path.join(fixture, 'source', 'showui-trace.json'), 'utf8'));
-    trace.skill = { name: 'network-alarm-search', description: '查询网络告警', goal: '查询并展示告警结果' };
-    const result = await createSkillFromRecording({ recording, skillsRoot, pythonExecutable: process.execPath }, {
-      runRecorder: async () => {
-        await writeFile(path.join(recording, 'Recording_1_trace.json'), JSON.stringify(trace));
-        for (const suffix of ['processed_log', 'processed_log_sc']) {
-          await cp(path.join(fixture, 'source', 'processed-log-sc.json'), path.join(recording, `Recording_1_${suffix}.json`));
-        }
+    const options = await recordingSkillFixture(root);
+    let parserCalls = 0;
+    const result = await createSkillFromRecording(options, {
+      runRecorder: async () => { parserCalls += 1; },
+      fetch: async (_url, init) => {
+        await assert.rejects(access(options.skillsRoot));
+        await installImportedFixture(init!.body as FormData, options.skillsRoot);
+        return Response.json({ success: true });
       },
     });
+    assert.equal(parserCalls, 1);
     assert.equal(result.skillName, 'network-alarm-search');
-    const asset = await readSkill(skillsRoot, result.skillName);
+    const asset = await readSkill(options.skillsRoot, result.skillName);
     assert.equal(asset.manifest.goal, '查询并展示告警结果');
     assert.match(asset.skill.description, /CUA 子 Agent/);
+    assert.ok((await readFile(result.zipPath)).length);
+    assert.equal(path.relative(options.exportRoot, result.zipPath).startsWith('..'), false);
+    assert.equal(await readFile(path.join(options.recording, 'inputs', 'events.txt'), 'utf8'), 'original events');
+    assert.deepEqual(await readdir(options.skillsRoot), ['network-alarm-search']);
     assert.equal((await readdir(root)).includes('projects'), false);
-    await assert.rejects(createSkillFromRecording({ recording, skillsRoot: '', pythonExecutable: process.execPath }), /CUA_SKILLS_ROOT/);
+    await assert.rejects(createSkillFromRecording({ ...options, skillsRoot: '' }), /CUA_SKILLS_ROOT/);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('普通 Skill 重名自动追加后缀，所有权威身份一致且原始证据不变', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-generation-conflict-'));
+  try {
+    const options = await recordingSkillFixture(root);
+    const ordinary = path.join(options.skillsRoot, 'ordinary-directory');
+    await mkdir(ordinary, { recursive: true });
+    const markdown = '---\nname: network-alarm-search\ndescription: ordinary\n---\n';
+    await writeFile(path.join(ordinary, 'SKILL.md'), markdown);
+    const tracePath = path.join(options.recording, 'Recording_1_trace.json');
+    const trace = await readFile(tracePath, 'utf8');
+    const result = await createSkillFromRecording(options, {
+      runRecorder: async () => {},
+      fetch: async (url, init) => {
+        const name = await installImportedFixture(init!.body as FormData, options.skillsRoot);
+        assert.equal(new URL(String(url)).searchParams.get('target_name'), name);
+        return Response.json({ success: true });
+      },
+    });
+    assert.match(result.skillName, /^network-alarm-search-[a-f0-9]{6}$/);
+    const asset = await readSkill(options.skillsRoot, result.skillName);
+    assert.equal(asset.marker.skillName, result.skillName);
+    assert.equal(asset.manifest.skillName, result.skillName);
+    assert.equal(asset.manifest.title, result.skillName);
+    assert.equal((asset.document.agent as { groupName: string }).groupName, result.skillName);
+    assert.equal(asset.manifest.goal, '查询并展示告警结果');
+    assert.equal(asset.manifest.description, '查询网络告警 由 CUA 子 Agent 执行此电脑操作任务。');
+    assert.equal(await readFile(tracePath, 'utf8'), trace);
+    assert.equal(await readFile(path.join(ordinary, 'SKILL.md'), 'utf8'), markdown);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('宿主报告成功但正式目录不可发现时明确失败，并保留 ZIP', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-generation-discovery-'));
+  try {
+    const options = await recordingSkillFixture(root);
+    await assert.rejects(createSkillFromRecording(options, {
+      runRecorder: async () => {}, fetch: async () => Response.json({ success: true }),
+    }), /已报告导入成功.*CUA_SKILLS_ROOT/);
+    await assert.rejects(access(options.skillsRoot));
+    const [directory] = await readdir(options.exportRoot);
+    assert.ok((await readFile(path.join(options.exportRoot, directory, 'network-alarm-search.zip'))).length);
+    assert.equal(await readFile(path.join(options.recording, 'inputs', 'events.txt'), 'utf8'), 'original events');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('导入 409 不覆盖已存在资产、不换名重传，ZIP 保留用于排查', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-generation-409-'));
+  try {
+    const options = await recordingSkillFixture(root);
+    let calls = 0;
+    await assert.rejects(createSkillFromRecording(options, {
+      runRecorder: async () => {}, fetch: async (_url, init) => {
+        calls += 1;
+        await installImportedFixture(init!.body as FormData, options.skillsRoot);
+        return Response.json({ detail: 'name exists' }, { status: 409 });
+      },
+    }), /名称冲突.*HTTP 409/);
+    assert.equal(calls, 1);
+    assert.equal((await readSkill(options.skillsRoot, 'network-alarm-search')).skill.name, 'network-alarm-search');
+    assert.deepEqual(await readdir(options.skillsRoot), ['network-alarm-search']);
+    const [directory] = await readdir(options.exportRoot);
+    await access(path.join(options.exportRoot, directory, 'network-alarm-search.zip'));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('缺少宿主地址在模型解析前失败，组装校验失败仅清理本次临时目录', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-generation-errors-'));
+  const previous = process.env.GDECLAW_API_BASE_URL;
+  try {
+    const options = await recordingSkillFixture(root);
+    process.env.GDECLAW_API_BASE_URL = '';
+    let parserCalls = 0;
+    const runRecorder = async () => { parserCalls += 1; };
+    await assert.rejects(createSkillFromRecording(options, { runRecorder }), /GDECLAW_API_BASE_URL/);
+    assert.equal(parserCalls, 0);
+    delete process.env.GDECLAW_API_BASE_URL;
+    const log = path.join(options.recording, 'Recording_1_processed_log_sc.json');
+    await writeFile(log, JSON.stringify([{ timestamp: 0, action: 'LClick', screenshot_crop: '../outside.png' }]));
+    await assert.rejects(createSkillFromRecording(options, { runRecorder, fetch: async () => { throw new Error('must not upload'); } }));
+    assert.deepEqual(await readdir(options.exportRoot), []);
+    await assert.rejects(access(options.skillsRoot));
+    assert.equal(await readFile(path.join(options.recording, 'inputs', 'events.txt'), 'utf8'), 'original events');
+  } finally {
+    if (previous === undefined) delete process.env.GDECLAW_API_BASE_URL; else process.env.GDECLAW_API_BASE_URL = previous;
+    await rm(root, { recursive: true, force: true });
+  }
 });

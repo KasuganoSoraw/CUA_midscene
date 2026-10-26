@@ -3,8 +3,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, test } from 'node:test';
-import { listSkills, readSkill, resolveSkillTask } from '../../cua/skills/assets.js';
-import { installSkill } from '../../cua/skills/create.js';
+import { listSkills, readSkill, readSkillDirectory, resolveSkillTask } from '../../cua/skills/assets.js';
 import { requireSkillName } from '../../cua/skills/paths.js';
 import { assembleSkillFixture, createSkillFixture } from '../helpers/skill-fixture.js';
 
@@ -37,22 +36,22 @@ test('普通宿主 Skill 不被发现或解析，身份及版本错误不会被�
   await assert.rejects(readSkill(root, 'alarm-query'), /契约校验/);
 });
 
-test('安装名称冲突及并发不覆盖资产，组装失败清理暂存目录', async () => {
+test('读取与解析正式 Skill 不修改已有资产', async () => {
   const root = await temporary();
-  const results = await Promise.allSettled([createSkillFixture(root), createSkillFixture(root)]);
-  assert.equal(results.filter(item => item.status === 'fulfilled').length, 1);
+  await createSkillFixture(root);
   const before = await readFile(path.join(root, 'alarm-query', 'task.json'), 'utf8');
-  await assert.rejects(createSkillFixture(root), /拒绝覆盖/);
+  await listSkills(root);
+  await resolveSkillTask({ skillsRoot: root, skillName: 'alarm-query' });
   assert.equal(await readFile(path.join(root, 'alarm-query', 'task.json'), 'utf8'), before);
-  await assert.rejects(installSkill(root, 'incomplete-task', async () => { throw new Error('assemble failed'); }), /assemble failed/);
-  assert.deepEqual(await readdir(path.join(root, '.cua-staging')), []);
-  assert.equal((await readdir(root)).includes('incomplete-task'), false);
+  assert.deepEqual((await readdir(root)).sort(), ['alarm-query']);
 });
 
 test('目录身份、越界引用、Windows 路径与符号链接被拒绝', async () => {
   const root = await temporary();
   for (const name of ['../escape', 'C:\\skills', 'Upper-Name', 'con']) assert.throws(() => requireSkillName(name));
-  await assert.rejects(installSkill(root, 'wrong-name', stage => assembleSkillFixture(stage, 'actual-name')), /身份不一致/);
+  const invalid = path.join(root, 'wrong-name');
+  await assembleSkillFixture(invalid, 'actual-name');
+  await assert.rejects(readSkillDirectory(invalid, 'wrong-name'), /身份不一致/);
   const target = await createSkillFixture(root);
   const manifest = JSON.parse(await readFile(path.join(target, 'task.json'), 'utf8'));
   manifest.source.tracePath = '../outside.json';

@@ -22,6 +22,8 @@ import './executors/midscene-final-screenshot.test.js';
 import './skill/package.test.js';
 import './skill/assets.test.js';
 import './skill/generation.test.js';
+import './skill/export.test.js';
+import './skill/host-import.test.js';
 import './skill/workbench.test.js';
 import './skill/execution.test.js';
 import './skill/recording-web.test.js';

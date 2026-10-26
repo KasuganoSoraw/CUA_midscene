@@ -3,7 +3,8 @@ import path from 'node:path';
 import { buildRecordedSteps } from '../../cua/conversion/showui-trace.js';
 import { writeJsonFile } from '../../cua/contracts/validation.js';
 import { writeYamlDocument } from '../../cua/task/yaml-task.js';
-import { installSkill, skillMarkdown } from '../../cua/skills/create.js';
+import { skillMarkdown } from '../../cua/skills/create.js';
+import { readSkillDirectory } from '../../cua/skills/assets.js';
 
 export async function assembleSkillFixture(root: string, name = 'alarm-query'): Promise<void> {
   await mkdir(path.join(root, 'source'), { recursive: true });
@@ -27,5 +28,10 @@ export async function assembleSkillFixture(root: string, name = 'alarm-query'): 
 }
 
 export async function createSkillFixture(skillsRoot: string, name = 'alarm-query'): Promise<string> {
-  return installSkill(skillsRoot, name, root => assembleSkillFixture(root, name));
+  await mkdir(skillsRoot, { recursive: true });
+  const root = path.join(skillsRoot, name);
+  await mkdir(root);
+  await assembleSkillFixture(root, name);
+  await readSkillDirectory(root, name);
+  return root;
 }

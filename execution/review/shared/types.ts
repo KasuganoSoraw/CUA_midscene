@@ -163,6 +163,7 @@ export interface CreateRecordingSkillResult {
   valid: true;
   skillName: string;
   goal: string;
+  zipPath?: string;
 }
 
 export type SkillGenerationStatus = RecordingGenerationStatus<Record<string, never>, CreateRecordingSkillResult>;

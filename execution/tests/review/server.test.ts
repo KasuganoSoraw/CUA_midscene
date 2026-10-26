@@ -47,7 +47,13 @@ test('空项目启动 review 时只返回空用户 catalog，不加载测试样�
   }
 });
 
-test('review server 在 loopback 随机端口暴露 catalog，并安全提供静态资源与证据', async () => {
+test('review server 在 loopback 随机端口暴露 catalog，并安全提供静态资源与证据', async (context) => {
+  const previousSkillsRoot = process.env.CUA_SKILLS_ROOT;
+  process.env.CUA_SKILLS_ROOT = '';
+  context.after(() => {
+    if (previousSkillsRoot === undefined) delete process.env.CUA_SKILLS_ROOT;
+    else process.env.CUA_SKILLS_ROOT = previousSkillsRoot;
+  });
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-server-'));
   await createTaskFixture(path.join(root, 'projects'));
   await cp(new URL('../fixtures/recorded-projects/browser-demo/air-tickets-demo/', import.meta.url),

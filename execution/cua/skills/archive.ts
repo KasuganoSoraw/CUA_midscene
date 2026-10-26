@@ -4,7 +4,7 @@ import { zip, type Zippable } from 'fflate';
 import { readSkillDirectory } from './assets.js';
 import { safeSkillFile } from './paths.js';
 
-async function archiveEntries(root: string, relative = '', files: Zippable = {}): Promise<Zippable> {
+async function archiveEntries(root: string, relative = '', files: Zippable = Object.create(null)): Promise<Zippable> {
   for (const entry of await readdir(path.join(root, relative), { withFileTypes: true })) {
     const name = path.posix.join(relative, entry.name);
     if (entry.isDirectory()) await archiveEntries(root, name, files);
