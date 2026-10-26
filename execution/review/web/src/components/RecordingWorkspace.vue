@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import type { SceneCatalogItem } from '../../../../cua/contracts/types';
 import type {
-  CreateRecordingTaskResult,
+  CreateRecordingSkillResult,
   RecorderDisplay,
   RecorderStatus,
-  RecordingGenerationStatus,
+  SkillGenerationStatus,
   ReviewRecording,
   ReviewRecordingCatalog,
 } from '../../../shared/types';
@@ -20,11 +19,11 @@ import refreshIcon from '../assets/ucd/refresh.svg';
 const { t, formatDateTime } = useI18n();
 
 const props = defineProps<{
-  scenes: SceneCatalogItem[];
+  skillsConfigured: boolean;
 }>();
 
 const emit = defineEmits<{
-  created: [result: CreateRecordingTaskResult];
+  created: [result: CreateRecordingSkillResult];
 }>();
 
 const catalog = ref<ReviewRecordingCatalog>({
@@ -33,14 +32,10 @@ const catalog = ref<ReviewRecordingCatalog>({
   recordings: [],
 });
 const selectedId = ref('');
-const sceneId = ref('');
-const taskId = ref('');
-const goal = ref('');
 const actionBusy = ref(false);
-const generation = ref<RecordingGenerationStatus>({ phase: 'idle' });
+const generation = ref<SkillGenerationStatus>({ phase: 'idle' });
 const busy = computed(() => actionBusy.value || generation.value.phase === 'running');
 const opening = ref(false);
-const sceneMenuOpen = ref(false);
 const error = ref('');
 const message = ref(() => t('recording.loading'));
 const recorderStatus = ref<RecorderStatus>({ phase: 'idle' });
@@ -54,18 +49,17 @@ let recorderPoll: ReturnType<typeof setInterval> | undefined;
 let generationPolling = false;
 let disposed = false;
 
-function applyGeneration(next: RecordingGenerationStatus, restoreForm = false): void {
+function applyGeneration(next: SkillGenerationStatus, restoreForm = false): void {
+  const wasRunning = generation.value.phase === 'running';
   generation.value = next;
   if (restoreForm && next.request && next.recording) {
     selectedId.value = next.recording;
-    sceneId.value = next.request.scene;
-    taskId.value = next.request.task;
-    goal.value = next.request.goal ?? '';
   }
   if (next.phase === 'running') message.value = () => t('recording.creating');
   else if (next.phase === 'succeeded' && next.result) {
     const result = next.result;
-    message.value = () => t('recording.created', { scene: result.scene, task: result.task });
+    message.value = () => t('recording.skillCreated', { name: result.skillName });
+    if (wasRunning && !disposed) emit('created', result);
   } else if (next.phase === 'failed') message.value = () => t('recording.createFailed');
 }
 
@@ -73,7 +67,7 @@ async function loadGeneration(restoreForm = false): Promise<void> {
   if (generationPolling) return;
   generationPolling = true;
   try {
-    applyGeneration(await api.recordingGeneration(), restoreForm);
+    applyGeneration(await api.skillGeneration(), restoreForm);
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
   } finally {
@@ -85,22 +79,8 @@ const selected = computed<ReviewRecording | undefined>(() =>
   catalog.value.recordings.find((item) => item.id === selectedId.value),
 );
 const canCreate = computed(() =>
-  Boolean(selected.value?.ready && sceneId.value.trim() && taskId.value.trim() && !busy.value),
+  Boolean(selected.value?.ready && props.skillsConfigured && !busy.value),
 );
-const sceneOptions = computed(() => {
-  const query = sceneId.value.trim().toLocaleLowerCase();
-  return props.scenes
-    .filter((item) => item.status === 'ready')
-    .map((item) => ({
-      id: item.scene,
-      title: item.title,
-    }))
-    .filter((item) => item.id && (
-      !query
-      || item.id.toLocaleLowerCase().includes(query)
-      || item.title.toLocaleLowerCase().includes(query)
-    ));
-});
 const recorderCollapsed = computed(() =>
   ['arming', 'armed', 'starting', 'recording', 'stopping'].includes(recorderStatus.value.phase),
 );
@@ -129,17 +109,6 @@ function formatSize(size: number | undefined): string {
 
 function formatTime(value: string | undefined): string {
   return value ? formatDateTime(value) : t('common.unknownTime');
-}
-
-function selectScene(id: string): void {
-  sceneId.value = id;
-  sceneMenuOpen.value = false;
-}
-
-function closeSceneMenu(event: FocusEvent): void {
-  const container = event.currentTarget as HTMLElement;
-  const next = event.relatedTarget;
-  if (!(next instanceof Node) || !container.contains(next)) sceneMenuOpen.value = false;
 }
 
 function applyCatalog(next: ReviewRecordingCatalog): void {
@@ -250,11 +219,7 @@ async function createTask(): Promise<void> {
   error.value = '';
   message.value = () => t('recording.creating');
   try {
-    applyGeneration(await api.createRecordingTask(selected.value.id, {
-      scene: sceneId.value.trim(),
-      task: taskId.value.trim(),
-      goal: goal.value.trim(),
-    }));
+    applyGeneration(await api.createRecordingSkill(selected.value.id));
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
     message.value = () => t('recording.createFailed');
@@ -418,58 +383,8 @@ onUnmounted(() => {
             <div v-if="selected.errors.length" class="recording-errors"><strong>{{ t('recording.invalid') }}</strong><span v-for="item in selected.errors" :key="item">{{ item }}</span></div>
             <form class="recording-form" @submit.prevent="createTask">
               <h3>{{ t('recording.create') }}</h3>
-              <label>{{ t('recording.taskName') }}<input v-model="taskId" :disabled="busy" autocomplete="off" :placeholder="t('recording.taskPlaceholder')" /></label>
-          <div class="recording-field">
-            <label for="recording-scene-input">{{ t('recording.sceneGroup') }}</label>
-            <div class="scene-combobox" @focusout="closeSceneMenu">
-              <input
-                id="recording-scene-input"
-                v-model="sceneId"
-                :disabled="busy"
-                autocomplete="off"
-                role="combobox"
-                aria-autocomplete="list"
-                aria-controls="recording-scene-options"
-                :aria-expanded="sceneMenuOpen"
-                :placeholder="t('recording.scenePlaceholder')"
-                @focus="sceneMenuOpen = true"
-                @input="sceneMenuOpen = true"
-                @keydown.esc="sceneMenuOpen = false"
-              />
-              <button
-                type="button"
-                class="scene-combobox-toggle"
-                :class="{ open: sceneMenuOpen }"
-                :disabled="busy"
-                :aria-expanded="sceneMenuOpen"
-                :aria-label="t('recording.expandScenes')"
-                @click="sceneMenuOpen = !sceneMenuOpen"
-              ></button>
-              <div
-                v-if="sceneMenuOpen"
-                id="recording-scene-options"
-                class="scene-options"
-                role="listbox"
-              >
-                <button
-                  v-for="item in sceneOptions"
-                  :key="item.id"
-                  type="button"
-                  role="option"
-                  :aria-selected="sceneId === item.id"
-                  @click="selectScene(item.id)"
-                >
-                  <strong>{{ item.id }}</strong>
-                  <span v-if="item.title && item.title !== item.id">{{ item.title }}</span>
-                </button>
-                <div v-if="!sceneOptions.length" class="scene-option-empty">
-                  {{ t('recording.createScene') }}
-                </div>
-              </div>
-            </div>
-          </div>
-
-              <label>{{ t('recording.goal') }}<textarea v-model="goal" :disabled="busy" rows="4" :placeholder="t('recording.goalPlaceholder')"></textarea></label>
+              <p>{{ t('recording.skillAutoSummary') }}</p>
+              <p v-if="!skillsConfigured" class="inline-error">{{ t('review.skillsConfigHelp') }}</p>
               <div v-if="error" class="inline-error" role="alert">{{ error }}</div>
               <div class="recording-form-actions"><button class="primary" type="submit" :disabled="!canCreate">{{ busy ? t('recording.generating') : t('recording.generate') }}</button></div>
             </form>
@@ -481,11 +396,11 @@ onUnmounted(() => {
           <div v-if="generation.phase === 'running'" class="generation-state phase-running" role="status">
             <div class="indeterminate-progress"><span></span></div>
             <strong>{{ t('recording.generating') }}</strong>
-            <small>{{ generation.recording }} · {{ generation.request?.scene }}/{{ generation.request?.task }}</small>
+            <small>{{ generation.recording }}</small>
             <p>{{ t('recording.generatingHelp') }}</p>
           </div>
           <div v-else-if="generation.phase === 'succeeded' && generation.result" class="generation-state phase-succeeded" role="status">
-            <strong>{{ t('recording.generationSucceeded') }}</strong><p>{{ t('recording.created', { scene: generation.result.scene, task: generation.result.task }) }}</p>
+            <strong>{{ t('recording.generationSucceeded') }}</strong><p>{{ t('recording.skillCreated', { name: generation.result.skillName }) }}</p>
             <button type="button" class="text-link" @click="emit('created', generation.result)">{{ t('recording.openCreated') }}</button>
           </div>
           <div v-else-if="generation.phase === 'failed'" class="generation-state phase-failed" role="alert">

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import type { SceneCatalogItem, TaskCatalogReadyItem } from '../../../../cua/contracts/types';
-import type { ReviewTaskView, TaskExecutionMode, TaskExecutionStatus } from '../../../shared/types';
+import type { SkillCatalogItem, SkillDescription } from '../../../../cua/contracts/types';
+import type { ReviewSkillView, TaskExecutionMode, TaskExecutionStatus } from '../../../shared/types';
 import { api } from '../api';
 import { useI18n } from '../i18n';
 import { executionFeedback } from '../execution-feedback';
@@ -15,18 +15,16 @@ import infoIcon from '../assets/ucd/execution-info.svg';
 
 const { t } = useI18n();
 const props = defineProps<{
-  scenes: SceneCatalogItem[];
-  initialScene?: string;
-  initialTask?: string;
+  skills: SkillCatalogItem[];
+  initialSkillName?: string;
   targetVersion?: number;
   developerMode?: boolean;
 }>();
 const emit = defineEmits<{ create: [] }>();
-const scene = ref('');
-const task = ref('');
-const selectedTask = ref<TaskCatalogReadyItem>();
-const taskView = ref<ReviewTaskView>();
-const mode = ref<TaskExecutionMode>('task');
+const skillName = ref('');
+const selectedTask = ref<SkillDescription>();
+const taskView = ref<ReviewSkillView>();
+const mode = ref<TaskExecutionMode>('act');
 const inputs = ref<Record<string, string>>({});
 const status = ref<TaskExecutionStatus>({ phase: 'idle' });
 const busy = ref(false);
@@ -48,7 +46,7 @@ const modeOptions = computed<ReviewSelectOption[]>(() => [
   { value: 'act', label: `${t('execution.adaptiveMode')}——${t('execution.adaptiveModeHelp')}` },
 ]);
 const parameters = computed(() => taskView.value ? executionParameters(taskView.value) : []);
-const instruction = computed(() => selectedTask.value ? executionInstruction(task.value, mode.value) : '');
+const instruction = computed(() => selectedTask.value ? executionInstruction(skillName.value, mode.value) : '');
 const active = computed(() => ['preparing', 'running', 'stopping'].includes(status.value.phase));
 const canStart = computed(() => Boolean(selectedTask.value && taskView.value && !active.value && !busy.value && !connectionError.value));
 const countdown = computed(() => {
@@ -72,26 +70,20 @@ const phaseLabel = computed(() => feedback.value ? t(feedback.value.titleKey, { 
   succeeded: t('execution.succeeded', { elapsed: elapsed.value }), failed: t('execution.failed'), stopped: t('execution.stopped'),
 })[status.value.phase]);
 
-async function selectTask(target: { scene: string; task?: string }): Promise<void> {
-  if (active.value && (target.scene !== status.value.scene || target.task !== status.value.task)) return;
+async function selectTask(name: string): Promise<void> {
+  if (active.value && name !== status.value.skillName) return;
   const version = ++selectionVersion;
-  scene.value = target.scene;
-  task.value = target.task ?? '';
+  skillName.value = name;
   selectedTask.value = undefined;
   taskView.value = undefined;
   inputs.value = {};
   error.value = '';
   busy.value = true;
   try {
-    if (!target.scene) return;
-    const tasks = (await api.tasks(target.scene)).tasks;
-    if (disposed || version !== selectionVersion) return;
-    const candidate = target.task
-      ? tasks.find(item => item.task === target.task && item.status === 'ready')
-      : tasks.find(item => item.status === 'ready');
+    if (!name) return;
+    const candidate = props.skills.find(item => item.skillName === name && item.status === 'ready');
     if (!candidate || candidate.status !== 'ready') return;
-    task.value = candidate.task;
-    const view = await api.task(target.scene, candidate.task);
+    const view = await api.skill(name);
     if (disposed || version !== selectionVersion) return;
     selectedTask.value = candidate;
     taskView.value = view;
@@ -104,12 +96,11 @@ async function selectTask(target: { scene: string; task?: string }): Promise<voi
 }
 
 async function applyTarget(): Promise<void> {
-  const requestedScene = active.value ? status.value.scene : props.initialScene;
-  const requestedTask = active.value ? status.value.task : props.initialTask;
-  const selectedScene = props.scenes.find(item => item.scene === requestedScene && item.status === 'ready')
-    ?? props.scenes.find(item => item.status === 'ready');
+  const requested = active.value ? status.value.skillName : props.initialSkillName;
+  const candidate = props.skills.find(item => item.skillName === requested && item.status === 'ready')
+    ?? props.skills.find(item => item.status === 'ready');
   if (active.value && status.value.mode) mode.value = status.value.mode;
-  await selectTask({ scene: selectedScene?.scene ?? '', task: requestedTask });
+  await selectTask(active.value ? status.value.skillName ?? '' : candidate?.skillName ?? '');
 }
 
 async function refreshStatus(): Promise<void> {
@@ -144,7 +135,7 @@ async function start(): Promise<void> {
   busy.value = true;
   error.value = '';
   try {
-    status.value = await api.startExecution({ scene: scene.value, task: task.value, mode: mode.value, inputs: { ...inputs.value } });
+    status.value = await api.startSkillExecution({ skillName: skillName.value, mode: mode.value, inputs: { ...inputs.value } });
     clock.value = Date.now();
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : String(caught);
@@ -190,13 +181,13 @@ onUnmounted(() => { disposed = true; selectionVersion += 1; if (poll) clearInter
 
 <template>
   <section class="execution-console panel">
-    <TaskCatalog :scenes="scenes" :scene="scene" :task="task" :busy="busy || active"
-      :version="targetVersion ?? 0" :current-step-count="selectedTask?.taskCount ?? 0"
+    <TaskCatalog :skills="skills" :skill-name="skillName" :busy="busy || active"
+      :current-step-count="selectedTask?.taskCount ?? 0"
       @select="selectTask" @create="emit('create')" />
     <section class="execution-main" :aria-busy="busy">
       <template v-if="selectedTask">
         <header class="execution-task-heading">
-          <div><h2 :title="selectedTask.title">{{ selectedTask.title }}</h2><span>{{ t('execution.summary', { steps: t('common.steps', { count: selectedTask.taskCount }), actions: t('common.actions', { count: selectedTask.actionCount }) }) }}</span></div>
+          <div><h2 :title="selectedTask.skillName">{{ selectedTask.skillName }}</h2><span>{{ t('execution.summary', { steps: t('common.steps', { count: selectedTask.taskCount }), actions: t('common.actions', { count: selectedTask.actionCount }) }) }}</span></div>
           <p v-if="selectedTask.description || selectedTask.goal">{{ selectedTask.description || selectedTask.goal }}</p>
         </header>
         <label class="execution-field">
@@ -242,8 +233,8 @@ onUnmounted(() => { disposed = true; selectionVersion += 1; if (poll) clearInter
       <p v-if="status.startedAt" class="execution-elapsed">{{ t('execution.duration', { elapsed }) }}</p>
       <div v-if="status.phase === 'preparing'" class="countdown">{{ countdown }}</div>
       <p v-if="status.phase === 'idle'" class="execution-result-empty">{{ t('execution.resultEmpty') }}</p>
-      <dl v-if="status.task" class="execution-run-facts">
-        <div><dt>{{ t('review.task') }}</dt><dd>{{ status.scene }} / {{ status.task }}</dd></div>
+      <dl v-if="status.skillName" class="execution-run-facts">
+        <div><dt>Skill</dt><dd>{{ status.skillName }}</dd></div>
         <div v-if="status.mode"><dt>{{ t('execution.mode') }}</dt><dd>{{ t(status.mode === 'act' ? 'execution.adaptiveMode' : 'execution.stepMode') }}</dd></div>
       </dl>
       <div v-if="feedback" class="execution-feedback" role="status">

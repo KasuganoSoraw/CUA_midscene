@@ -1,4 +1,8 @@
 import type {
+  ReviewSkillCatalogResponse,
+  ReviewSkillView,
+  SkillGenerationStatus,
+  StartSkillExecutionRequest,
   CreateRecordingTaskRequest,
   RecordingGenerationStatus,
   DeleteRecordingResult,
@@ -20,6 +24,7 @@ import type {
   StartTaskExecutionRequest,
   TaskExecutionStatus,
 } from '../../shared/types.js';
+import type { SkillTaskManifest } from '../../../cua/contracts/types.js';
 import type {
   AgentEvent,
   AgentInvocationRequest,
@@ -100,6 +105,35 @@ async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> 
 }
 
 export const api = {
+  skills: () => request<ReviewSkillCatalogResponse>('/api/skills'),
+  skill: (name: string) => request<ReviewSkillView>(`/api/skills/${encodeURIComponent(name)}`),
+  skillGeneration: () => request<SkillGenerationStatus>('/api/skill-generation'),
+  createRecordingSkill: (recording: string) => request<SkillGenerationStatus>(
+    `/api/recordings/${encodeURIComponent(recording)}/skills`, { method: 'POST', body: '{}' },
+  ),
+  deleteSkill: (name: string) => request<{ deleted: true; skillName: string }>(
+    `/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' },
+  ),
+  mutateSkill: (name: string, draft: ReviewTaskDraft<SkillTaskManifest>, mutation: ReviewMutation) =>
+    request<ReviewMutationResult<SkillTaskManifest>>(`/api/skills/${encodeURIComponent(name)}/mutate`, {
+      method: 'POST', body: JSON.stringify({ draft, mutation }),
+    }),
+  saveSkill: (name: string, revision: string, draft: ReviewTaskDraft<SkillTaskManifest>) =>
+    request<SaveReviewTaskResult>(`/api/skills/${encodeURIComponent(name)}`, {
+      method: 'PUT', body: JSON.stringify({ expectedRevision: revision, ...draft }),
+    }),
+  uploadSkillReferenceImage: (name: string, revision: string, file: File) =>
+    request<{ image: ReviewReferenceImage }>(`/api/skills/${encodeURIComponent(name)}/reference-images?${new URLSearchParams({ revision })}`, {
+      method: 'POST', headers: { 'content-type': file.type }, body: file,
+    }),
+  skillEvidenceUrl: (name: string, reference: string) => {
+    const url = new URL(`/api/skills/${encodeURIComponent(name)}/evidence`, location.origin);
+    url.searchParams.set('path', reference);
+    return url.toString();
+  },
+  startSkillExecution: (body: StartSkillExecutionRequest) => request<TaskExecutionStatus>(
+    '/api/execution/start', { method: 'POST', body: JSON.stringify(body) },
+  ),
   reviewIdentity: () => request<ReviewServerIdentity>('/api/review/identity'),
   agentStatus: () => request<AgentStatus>('/api/agent/status'),
   invokeAgent: (body: AgentInvocationRequest) => request<AgentInvocationResult>(
