@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { TaskCatalogRoots, TaskManifest } from '../../cua/contracts/types.js';
+import type { TaskAssetManifest, TaskCatalogRoots } from '../../cua/contracts/types.js';
 import { validateContract } from '../../cua/contracts/validation.js';
 import { resolveYamlInputs, validateRecordedTaskDocument, dumpYamlDocument } from '../../cua/task/yaml-task.js';
 import type { SaveReviewTaskRequest, SaveReviewTaskResult } from '../shared/types.js';
@@ -10,13 +10,14 @@ import { resolveReviewTaskRoot, reviewRevision } from './review-task.js';
 export class ReviewConflictError extends Error {}
 export class ReviewReadonlyError extends Error {}
 
-export async function validateReviewDraft(request: Pick<SaveReviewTaskRequest, 'manifest' | 'document'>): Promise<void> {
-  const manifest = await validateContract<TaskManifest>(request.manifest, 'task.schema.json', 'review task.json draft');
+export async function validateReviewDraft(request: Pick<SaveReviewTaskRequest<TaskAssetManifest>, 'manifest' | 'document'>): Promise<void> {
+  const schema = request.manifest.schemaVersion === '0.3' ? 'skill-task.schema.json' : 'task.schema.json';
+  const manifest = await validateContract<TaskAssetManifest>(request.manifest, schema, 'review task.json draft');
   validateRecordedTaskDocument(request.document, manifest, 'review task.yaml draft');
   resolveYamlInputs(request.document, manifest);
 }
 
-async function atomicReplace(target: string, content: string): Promise<void> {
+export async function atomicReplace(target: string, content: string): Promise<void> {
   const temporary = `${target}.review-${randomBytes(6).toString('hex')}.tmp`;
   await writeFile(temporary, content, 'utf8');
   try {

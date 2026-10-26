@@ -1,8 +1,13 @@
 import type { JsonObject } from '../../cua/contracts/types.js';
+import type { CuaExecuteRequest } from '../../runtime-bridge/contracts.js';
+
+export type AgentExecutionRequest<T = Exclude<CuaExecuteRequest, { scene: string }>> = T extends CuaExecuteRequest
+  ? Omit<T, 'dataRoot' | 'dryRun'> : never;
 
 export interface AgentInvocationRequest {
   task: string;
   invocationId?: string;
+  execution?: AgentExecutionRequest;
 }
 
 export type AgentInvocationStatus = 'completed' | 'needs-input' | 'failed' | 'cancelled';

@@ -1,4 +1,4 @@
-import type { JsonObject, TaskInputDefinition } from '../../cua/contracts/types.js';
+import type { JsonObject, TaskInputDefinition, TaskAssetManifest } from '../../cua/contracts/types.js';
 import type {
   ReviewChange,
   ReviewMutation,
@@ -57,7 +57,7 @@ function setInputPlaceholder(flow: JsonObject[], inputId: string): JsonObject[] 
   return result;
 }
 
-function entriesFromDraft(draft: ReviewTaskDraft): Entry[] {
+function entriesFromDraft(draft: ReviewTaskDraft<TaskAssetManifest>): Entry[] {
   const bindings = draft.manifest.source.stepBindings ?? {};
   return (draft.document.tasks as JsonObject[]).map((task, index) => {
     const match = stepNamePattern.exec(String(task.name));
@@ -83,7 +83,7 @@ function changeFor(mutation: ReviewMutation, affected: number): ReviewChange {
   return { kind: 'update', summary: `修改第 ${mutation.index + 1} 个步骤`, details: ['步骤内容已更新'] };
 }
 
-export function applyReviewMutation(draft: ReviewTaskDraft, mutation: ReviewMutation): ReviewMutationResult {
+export function applyReviewMutation<M extends TaskAssetManifest>(draft: ReviewTaskDraft<M>, mutation: ReviewMutation): ReviewMutationResult<M> {
   const entries = entriesFromDraft(draft);
   if (mutation.type === 'insert') {
     assertIndex(mutation.index, entries.length, true);

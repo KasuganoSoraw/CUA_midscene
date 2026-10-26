@@ -38,6 +38,10 @@ import {
   type RecorderControl,
 } from '../service/windows-recorder.js';
 import type { AgentInvocationRequest } from '../shared/agent.js';
+import { registerSkillRoutes } from './skill-routes.js';
+import type { createSkillFromRecording } from '../../cua/skills/create.js';
+import type { WorkbenchExecutionRequest } from '../shared/types.js';
+import { requireSkillName } from '../../cua/skills/paths.js';
 
 interface ReviewRouteOptions {
   layout: RuntimeLayout;
@@ -48,6 +52,7 @@ interface ReviewRouteOptions {
 }
 
 export interface ReviewRouteDependencies {
+  createSkill?: typeof createSkillFromRecording;
   createFromRecording?: typeof createTaskFromRecording;
   openDirectory?: typeof openRecordingDirectory;
   openReport?: typeof openExecutionReportFile;
@@ -87,6 +92,7 @@ interface StartRecorderBody {
 }
 
 const startTaskExecutionBodySchema = {
+  oneOf: [{
   type: 'object',
   required: ['scene', 'task', 'mode', 'inputs'],
   properties: {
@@ -99,6 +105,11 @@ const startTaskExecutionBodySchema = {
     },
   },
   additionalProperties: false,
+  }, {
+    type: 'object', required: ['skillName', 'inputs'], additionalProperties: false,
+    properties: { skillName: { type: 'string', minLength: 1 }, mode: { type: 'string', enum: ['task', 'act'] },
+      inputs: { type: 'object', additionalProperties: { type: 'string' } } },
+  }],
 } as const;
 
 const subagentInvocationBodySchema = {
@@ -106,6 +117,17 @@ const subagentInvocationBodySchema = {
   required: ['task'],
   properties: {
     task: { type: 'string', minLength: 1 },
+    invocationId: { type: 'string', minLength: 1 },
+    execution: {
+      oneOf: [{
+        type: 'object', required: ['skillName'], additionalProperties: false,
+        properties: { skillName: { type: 'string', minLength: 1 }, strategy: { type: 'string', enum: ['guided', 'replay'] },
+          inputs: { type: 'object', additionalProperties: { type: 'string' } } },
+      }, {
+        type: 'object', required: ['strategy', 'goal'], additionalProperties: false,
+        properties: { strategy: { const: 'freeform' }, goal: { type: 'string', minLength: 1 }, displayId: { type: 'string', minLength: 1 } },
+      }],
+    },
   },
   additionalProperties: false,
 } as const;
@@ -214,14 +236,20 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
 
   if (!options.layout.data) throw new Error('任务运行页面需要配置 CUA_DATA_ROOT');
   const execution = options.dependencies?.execution ?? new TaskExecutionManager({
+    skillsRoot: options.layout.skillsRoot,
     catalog: options.layout.catalog,
     dataRoot: options.layout.data.root,
     executionRoot: path.resolve(options.executionRoot ?? process.cwd()),
   });
   app.addHook('onClose', async () => execution.close());
+  const skillGeneration = registerSkillRoutes(app, {
+    layout: options.layout, recordingsRoot: activeRecordingsRoot, executionRoot: options.executionRoot,
+    create: options.dependencies?.createSkill, executionStatus: () => execution.status(),
+  });
 
   const agent = options.devMode
     ? options.dependencies?.agent ?? new PythonAgentInvoker({
+      skillsRoot: options.layout.skillsRoot,
       executionRoot: path.resolve(options.executionRoot ?? process.cwd()),
       dataRoot: options.layout.data.root,
     })
@@ -253,7 +281,8 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   app.post<{ Body: JsonObject }>('/api/execution/start', {
     schema: { body: startTaskExecutionBodySchema },
   }, async (request) => {
-    const body = requireObjectBody<StartTaskExecutionRequest>(request.body);
+    const body = requireObjectBody<WorkbenchExecutionRequest>(request.body);
+    if ('skillName' in body) return execution.start({ ...body, skillName: requireSkillName(body.skillName), mode: body.mode ?? 'act' });
     return execution.start({
       scene: requireIdentifier(body.scene, 'scene'),
       task: requireIdentifier(body.task, 'task'),
@@ -355,6 +384,10 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     schema: { params: recordingParamsSchema },
   }, async (request) => {
     const activeGeneration = generation.status();
+    const activeSkillGeneration = skillGeneration.status();
+    if (activeSkillGeneration.phase === 'running' && activeSkillGeneration.recording === request.params.recording) {
+      throw Object.assign(new Error('正在使用此录制生成 Skill，暂时不能删除'), { statusCode: 409 });
+    }
     if (activeGeneration.phase === 'running' && activeGeneration.recording === request.params.recording) {
       throw Object.assign(new Error('正在使用此录制生成任务，暂时不能删除'), { statusCode: 409 });
     }

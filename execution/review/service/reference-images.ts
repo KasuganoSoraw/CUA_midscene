@@ -7,6 +7,9 @@ import { referenceImageMaxBytes, referenceImageMaxPixels } from '../shared/refer
 import type { ReviewReferenceImage } from '../shared/types.js';
 import { resolveReviewTaskRoot, reviewRevision } from './review-task.js';
 import { ReviewConflictError, ReviewReadonlyError } from './task-save.js';
+import { readSkill } from '../../cua/skills/assets.js';
+import { withSkillWriteLock } from '../../cua/skills/lock.js';
+import { skillRevision } from './review-skill.js';
 
 function inside(root: string, target: string): boolean {
   const relative = path.relative(root, target);
@@ -92,4 +95,25 @@ export async function uploadReferenceImage(options: {
   await assertRevision(taskRoot, options.expectedRevision);
   const filename = await storeImmutableReferenceImage(directory, normalized, format);
   return { image: { name: 'reference-image', url: `source/reference-images/${filename}` } };
+}
+
+export async function uploadSkillReferenceImage(options: {
+  skillsRoot: string; skillName: string; expectedRevision: string; contentType: string; data: Buffer;
+}): Promise<{ image: ReviewReferenceImage }> {
+  if (!Buffer.isBuffer(options.data) || !options.data.length) throw new Error('定位参考图不能为空');
+  if (options.data.length > referenceImageMaxBytes) throw Object.assign(new Error('定位参考图不能超过 5 MB'), { statusCode: 413 });
+  return withSkillWriteLock(options.skillsRoot, options.skillName, async () => {
+    const asset = await readSkill(options.skillsRoot, options.skillName);
+    if (await skillRevision(asset) !== options.expectedRevision) throw new ReviewConflictError('Skill 已被外部修改，请重新加载后上传');
+    const format = imageFormat(options.data);
+    const normalized = await normalizeReferenceImage(options.data, options.contentType, format);
+    const source = path.join(asset.root, 'source');
+    const directory = path.join(source, 'reference-images');
+    await mkdir(directory, { recursive: true });
+    if (!inside(await realpath(source), await realpath(directory))) throw new Error('定位参考图越出 source 目录');
+    const current = await readSkill(options.skillsRoot, options.skillName);
+    if (await skillRevision(current) !== options.expectedRevision) throw new ReviewConflictError('Skill 已被外部修改，请重新加载后上传');
+    const filename = await storeImmutableReferenceImage(directory, normalized, format);
+    return { image: { name: 'reference-image', url: `source/reference-images/${filename}` } };
+  });
 }
