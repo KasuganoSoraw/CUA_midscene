@@ -15,12 +15,9 @@
     "cua",
     "dist",
     "executors",
-    "references",
     "review",
     "runtime-bridge",
     "schemas",
-    "README.md",
-    "SKILL.md",
     "tsconfig.build.json",
     "tsconfig.json"
   ],
@@ -41,8 +38,7 @@
     "cua": "tsx cli/main.ts",
     "runtime-bridge": "tsx runtime-bridge/worker.ts",
     "check": "tsx executors/check-env.ts",
-    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p review/web/tsconfig.json",
-    "test": "npm run typecheck && tsx --test tests/all.test.ts"
+    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p review/web/tsconfig.json"
   },
   "keywords": [],
   "author": "",
