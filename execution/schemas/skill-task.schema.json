@@ -1,0 +1,39 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "skillName", "title", "description", "goal", "source", "inputs"],
+  "properties": {
+    "schemaVersion": { "const": "0.3" },
+    "skillName": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 64 },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "goal": { "type": "string", "minLength": 1 },
+    "inputs": {
+      "type": "object",
+      "propertyNames": { "pattern": "^step-[0-9]{3,}-input$" },
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false,
+        "required": ["type", "label", "default"],
+        "properties": {
+          "type": { "const": "string" }, "label": { "type": "string", "minLength": 1 },
+          "default": { "type": "string" }, "description": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tracePath", "processedLogPath", "conversionCommand"],
+      "properties": {
+        "tracePath": { "type": "string", "minLength": 1 },
+        "processedLogPath": { "type": "string", "minLength": 1 },
+        "conversionCommand": { "type": "string" },
+        "recordingPreparationCommand": { "type": ["string", "null"] },
+        "traceGenerationCommand": { "type": ["string", "null"] },
+        "stepBindings": {
+          "type": "object", "propertyNames": { "pattern": "^step-[0-9]{3,}$" },
+          "additionalProperties": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] }
+        }
+      }
+    }
+  }
+}

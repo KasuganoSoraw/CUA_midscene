@@ -11,6 +11,7 @@ import { describeTask, listScenes, listTasks, resolveTask } from '../task/tasks.
 import { dumpYamlDocument } from '../task/yaml-task.js';
 import { readExecutorResult } from '../contracts/validation.js';
 import { failedRunDirectory } from '../run-directory.js';
+import { runSkillCommand } from '../skills/cli.js';
 
 type OptionValue = string | string[] | boolean;
 type ParsedOptions = Record<string, OptionValue | undefined>;
@@ -53,6 +54,11 @@ export const helpText = `CUA 场景、任务与 Midscene YAML 执行工具
 `;
 
 const commandOptions: Record<string, { values: string[]; booleans: string[]; repeated?: string[]; required?: string[] }> = {
+  'skill list': { values: ['data-root'], booleans: ['json'] },
+  'skill describe': { values: ['skill-name', 'data-root'], booleans: ['json'], required: ['skill-name'] },
+  'skill create-from-recording': { values: ['recording', 'python-executable', 'data-root'], booleans: [], required: ['recording'] },
+  'skill validate': { values: ['skill-name', 'inputs', 'input', 'data-root'], booleans: ['json'], repeated: ['input'], required: ['skill-name'] },
+  'skill run': { values: ['skill-name', 'strategy', 'inputs', 'input', 'data-root'], booleans: ['json', 'dry-run'], repeated: ['input'], required: ['skill-name'] },
   'scene list': { values: ['data-root'], booleans: ['json'] },
   'task list': { values: ['scene', 'data-root'], booleans: ['json'], required: ['scene'] },
   'task describe': { values: ['scene', 'task', 'data-root'], booleans: ['json'], required: ['scene', 'task'] },
@@ -254,6 +260,7 @@ export async function runCliCommand(
 ): Promise<string> {
   const { domain, command, options } = parseCommand(argv);
   const layout = await resolveRuntimeLayout(value(options, 'data-root'));
+  if (domain === 'skill') return runSkillCommand(command, options, layout);
   const catalogResult = await runCatalogCommand(domain, command, options, layout);
   if (catalogResult !== undefined) return catalogResult;
   const creationResult = await runCreationCommand(domain, command, options, layout, dependencies);

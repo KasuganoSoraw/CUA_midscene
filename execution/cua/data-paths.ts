@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { access, mkdir } from 'node:fs/promises';
+import { access, mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import type { DataPaths, RuntimeLayout } from './contracts/types.js';
 import { readEnvironmentValue } from './environment.js';
@@ -7,6 +7,26 @@ import { packageRoot } from './package-root.js';
 
 export const executionRoot = packageRoot;
 export const dataRootEnv = 'CUA_DATA_ROOT';
+export const skillsRootEnv = 'CUA_SKILLS_ROOT';
+
+export async function resolveSkillsRoot(root = executionRoot): Promise<string | undefined> {
+  const configured = process.env[skillsRootEnv] === undefined
+    ? (await readEnvironmentValue(skillsRootEnv, root)).value
+    : process.env[skillsRootEnv]?.trim();
+  if (!configured) return undefined;
+  if (!path.isAbsolute(configured)) throw new Error('CUA_SKILLS_ROOT 必须配置绝对路径');
+  const absolute = path.resolve(configured);
+  try { return await realpath(absolute); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    return absolute;
+  }
+}
+
+export function requireSkillsRoot(layout: Pick<RuntimeLayout, 'skillsRoot'>): string {
+  if (!layout.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT：正式 CUA Skill 的绝对根目录');
+  return layout.skillsRoot;
+}
 
 function isInside(parent: string, target: string): boolean {
   const relative = path.relative(parent, target);
@@ -51,6 +71,7 @@ export async function resolveRuntimeLayout(
     data = dataPaths(normalized);
   }
   return {
+    skillsRoot: await resolveSkillsRoot(root),
     catalog: {
       ...(options.builtinProjectsRoot ? { builtinProjectsRoot: path.resolve(options.builtinProjectsRoot) } : {}),
       ...(data ? { userProjectsRoot: data.projectsRoot } : {}),

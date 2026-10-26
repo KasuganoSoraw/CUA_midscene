@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "skillName", "taskSchemaVersion"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "kind": { "const": "cua-skill" },
+    "skillName": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 64 },
+    "taskSchemaVersion": { "const": "0.3" }
+  }
+}

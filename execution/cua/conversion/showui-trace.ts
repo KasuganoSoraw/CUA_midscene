@@ -171,6 +171,30 @@ export function buildTaskAssets(
   processedSteps: ProcessedLogStep[],
   options: ConvertOptions,
 ): { document: JsonObject; manifest: TaskManifest } {
+  const built = buildRecordedSteps(trace, processedSteps);
+  return {
+    document: {
+      computer: {},
+      agent: { groupName: options.task, groupDescription: options.goal, generateReport: true },
+      tasks: built.tasks,
+    },
+    manifest: {
+      schemaVersion: '0.2', scene: options.scene, task: options.task, title: options.task,
+      description: options.goal, goal: options.goal,
+      source: {
+        tracePath: 'source/showui-trace.json', processedLogPath: 'source/processed-log-sc.json',
+        conversionCommand: options.conversionCommand, stepBindings: built.stepBindings,
+        ...(options.recordingPreparationCommand ? { recordingPreparationCommand: options.recordingPreparationCommand } : {}),
+        ...(options.traceGenerationCommand ? { traceGenerationCommand: options.traceGenerationCommand } : {}),
+      },
+      inputs: built.inputs,
+    },
+  };
+}
+
+export function buildRecordedSteps(trace: ShowuiTrace, processedSteps: ProcessedLogStep[]): {
+  tasks: JsonObject[]; inputs: Record<string, TaskInputDefinition>; stepBindings: Record<string, number>;
+} {
   if (!trace.trajectory.length) throw new Error('trace trajectory 不能为空');
   if (trace.trajectory.length !== processedSteps.length) {
     throw new Error(`trace step 数量 ${trace.trajectory.length} 与 processed log 数量 ${processedSteps.length} 不一致`);
@@ -197,37 +221,9 @@ export function buildTaskAssets(
     previousStep = step;
   });
 
-  return {
-    document: {
-      computer: {},
-      agent: { groupName: options.task, groupDescription: options.goal, generateReport: true },
-      tasks,
-    },
-    manifest: {
-      schemaVersion: '0.2',
-      scene: options.scene,
-      task: options.task,
-      title: options.task,
-      description: options.goal,
-      goal: options.goal,
-      source: {
-        tracePath: 'source/showui-trace.json',
-        processedLogPath: 'source/processed-log-sc.json',
-        conversionCommand: options.conversionCommand,
-        stepBindings: Object.fromEntries(
-          trace.trajectory.map((item) => [
-            `step-${String(item.step_idx).padStart(3, '0')}`,
-            item.step_idx,
-          ]),
-        ),
-        ...(options.recordingPreparationCommand
-          ? { recordingPreparationCommand: options.recordingPreparationCommand }
-          : {}),
-        ...(options.traceGenerationCommand ? { traceGenerationCommand: options.traceGenerationCommand } : {}),
-      },
-      inputs,
-    },
-  };
+  return { tasks, inputs, stepBindings: Object.fromEntries(trace.trajectory.map(item => [
+    `step-${String(item.step_idx).padStart(3, '0')}`, item.step_idx,
+  ])) };
 }
 
 export async function convertTrace(options: ConvertOptions): Promise<string> {

@@ -56,6 +56,38 @@ export interface TaskManifest {
   inputs: Record<string, TaskInputDefinition>;
 }
 
+export interface CuaSkillManifest {
+  schemaVersion: '0.1';
+  kind: 'cua-skill';
+  skillName: string;
+  taskSchemaVersion: '0.3';
+}
+
+export interface SkillTaskManifest {
+  schemaVersion: '0.3';
+  skillName: string;
+  title: string;
+  description: string;
+  goal: string;
+  source: TaskSource;
+  inputs: Record<string, TaskInputDefinition>;
+}
+
+export type TaskAssetManifest = TaskManifest | SkillTaskManifest;
+
+export interface SkillDescription {
+  skillName: string;
+  description: string;
+  goal: string;
+  inputs: Record<string, TaskInputDefinition>;
+  taskCount: number;
+  actionCount: number;
+}
+
+export type SkillCatalogItem =
+  | (SkillDescription & { status: 'ready' })
+  | { status: 'error'; skillName: string; description: string; error: string };
+
 export interface TaskDescription extends TaskManifest {
   origin: CatalogOrigin;
   writable: boolean;
@@ -155,6 +187,7 @@ export interface DataPaths {
 export interface RuntimeLayout {
   catalog: TaskCatalogRoots;
   data?: DataPaths;
+  skillsRoot?: string;
 }
 
 export interface TaskPaths {
@@ -169,7 +202,7 @@ export interface TaskPaths {
 
 export interface ResolvedTaskResult {
   document: JsonObject;
-  manifest: TaskManifest;
+  manifest: TaskAssetManifest;
   sourcePath: string;
   inputs: Record<string, string>;
   origin: 'builtin' | 'user';

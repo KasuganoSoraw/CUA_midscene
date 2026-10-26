@@ -83,7 +83,8 @@ def run_pipeline(project_name: str) -> Path:
         recording_json_path=str(log_sc),
         screenshots_dir=str(screenshots_dir),
         output_trace_path=str(out_trace),
-        overall_task=""
+        overall_task="",
+        generate_skill_metadata=True,
     )
 
     print("=== Pipeline Complete ===")

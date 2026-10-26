@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseYamlScript } from '@midscene/core/yaml';
 import { parse, stringify } from 'yaml';
-import type { JsonObject, TaskManifest } from '../contracts/types.js';
+import type { JsonObject, TaskAssetManifest } from '../contracts/types.js';
 
 const placeholderPattern = /\{\{([a-z][a-z0-9-]*)\}\}/g;
 const recordedTaskNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait)$/;
@@ -62,12 +62,13 @@ export async function writeYamlDocument(sourcePath: string, document: JsonObject
 
 export function validateRecordedTaskDocument(
   document: JsonObject,
-  manifest: TaskManifest,
+  manifest: TaskAssetManifest,
   source: string,
 ): void {
   if (!isRecord(document.agent)) throw new Error(`录制任务 YAML agent 必须是对象：${source}`);
-  if (document.agent.groupName !== manifest.task) {
-    throw new Error(`录制任务 YAML agent.groupName 必须等于 task.json 的 task：${source}`);
+  const identity = manifest.schemaVersion === '0.3' ? manifest.skillName : manifest.task;
+  if (document.agent.groupName !== identity) {
+    throw new Error(`录制任务 YAML agent.groupName 必须等于任务身份：${source}`);
   }
   if (document.agent.groupDescription !== manifest.goal) {
     throw new Error(`录制任务 YAML agent.groupDescription 必须等于 task.json 的 goal：${source}`);
@@ -141,7 +142,7 @@ function collectPlaceholders(value: unknown): Set<string> {
 
 export function resolveYamlInputs(
   document: JsonObject,
-  manifest: TaskManifest,
+  manifest: TaskAssetManifest,
   provided: Record<string, string> = {},
 ): { document: JsonObject; inputs: Record<string, string> } {
   const unknown = Object.keys(provided).filter((key) => !Object.hasOwn(manifest.inputs, key)).sort();

@@ -1,11 +1,11 @@
 ## 1. 正式资产
 
-- [ ] 1.1 定义 Skill Manifest、task.json Schema、统一根目录和安全解析
-- [ ] 1.2 实现合法 Skill 发现、身份校验、原子安装及失败清理
+- [x] 1.1 定义 Skill Manifest、task.json Schema、统一根目录和安全解析
+- [x] 1.2 实现合法 Skill 发现、身份校验、原子安装及失败清理
 
 ## 2. 录制生成
 
-- [ ] 2.1 复用模型客户端归纳 Skill 元数据，复用 Trace 转换生成资产
+- [x] 2.1 复用模型客户端归纳 Skill 元数据，复用 Trace 转换生成资产
 - [ ] 2.2 无命名表单的录制生成写入正式 Skill 根并返回 skillName
 
 ## 3. Workbench
