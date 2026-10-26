@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import type { JsonObject, SceneCatalogItem, TaskCatalogItem } from '../../../cua/contracts/types';
+import type { JsonObject, SkillCatalogItem, SkillTaskManifest } from '../../../cua/contracts/types';
 import type {
   ReviewChange,
   ReviewEvidence,
@@ -9,7 +9,7 @@ import type {
   ReviewReferenceImage,
   ReviewStep,
   ReviewTaskDraft,
-  ReviewTaskView,
+  ReviewSkillView,
 } from '../../shared/types';
 import {
   buildStepContent,
@@ -46,26 +46,16 @@ const requestedDevMode = initialParams.get('dev') === '1';
 let initialMode: 'review' | 'recordings' | 'execution' = 'review';
 if (requestedMode === 'recording') initialMode = 'recordings';
 else if (requestedMode === 'execution') initialMode = 'execution';
-const initialScene = initialParams.get('scene')?.trim() ?? '';
-const initialTask = initialParams.get('task')?.trim() ?? '';
+const initialSkillName = initialParams.get('skillName')?.trim() ?? '';
 
 const mode = ref<'review' | 'recordings' | 'execution' | 'agent'>(initialMode);
 const devMode = ref(false);
-const scenes = ref<SceneCatalogItem[]>([]);
-const tasks = ref<TaskCatalogItem[]>([]);
-const scene = ref(initialScene);
-const task = ref(initialTask);
-const executionScene = ref(initialMode === 'execution' ? initialScene : '');
-const executionTask = ref(initialMode === 'execution' ? initialTask : '');
+const skills = ref<SkillCatalogItem[]>([]);
+const skillsConfigured = ref(false);
+const catalogError = ref('');
+const skillName = ref(initialSkillName);
+const executionSkillName = ref(initialMode === 'execution' ? initialSkillName : '');
 const executionTargetVersion = ref(0);
-const sceneSelectOptions = computed<ReviewSelectOption[]>(() =>
-  scenes.value.map((item) => ({
-    value: item.scene,
-    label: item.status === 'error' ? `${item.title} (${t('common.unavailable')})` : item.title,
-    description: item.status === 'error' ? item.error : item.description,
-    disabled: item.status === 'error',
-  })),
-);
 function operationLabel(operation: ReviewOperation): string {
   return t(`review.operation.${operation}` as MessageKey);
 }
@@ -82,8 +72,8 @@ const inputModeOptions = computed<ReviewSelectOption[]>(() => [
   { value: 'replace', label: t('review.inputReplace') },
   { value: 'append', label: t('review.inputAppend') },
 ]);
-const view = ref<ReviewTaskView>();
-const draft = ref<ReviewTaskDraft>();
+const view = ref<ReviewSkillView>();
+const draft = ref<ReviewTaskDraft<SkillTaskManifest>>();
 const steps = ref<ReviewStep[]>([]);
 const selected = ref(0);
 const editor = reactive(defaultStepEditor('click'));
@@ -97,14 +87,13 @@ const conflict = ref(false);
 const taskDeleteOpen = ref(false);
 const draftDiscardOpen = ref(false);
 const dragIndex = ref<number>();
-const catalogVersion = ref(0);
 const referenceFileInput = ref<HTMLInputElement>();
 const referenceUploading = ref(false);
 const referenceUploadError = ref('');
 const requestedEvidenceMode = ref<EvidenceMode>('full');
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
-let draftStorage: ReviewDraftStorage | undefined;
+let draftStorage: ReviewDraftStorage<SkillTaskManifest> | undefined;
 let loadingDraft = false;
 let editorDrafts: Record<string, StepEditorModel> = {};
 const draftStorageState = ref<'idle' | 'saved' | 'error'>('idle');
@@ -115,7 +104,7 @@ function persistDraft(): void {
   if (!draft.value || !view.value?.writable || !dirty.value || hydratingEditor || loadingDraft) return;
   try {
     if (!draftStorage) throw new Error(t('review.autoSaveUnavailable'));
-    draftStorage.write(view.value.scene, view.value.task, {
+    draftStorage.write('skill', view.value.skillName, {
       version: 1, revision: baseRevision.value, draft: clone(draft.value),
       changes: clone(changes.value), selected: selected.value, editor: clone(editor),
       editors: clone(editorDrafts),
@@ -246,86 +235,73 @@ watch(editor, () => {
   if (!hydratingEditor && !advancedEditing.value) syncSemanticDraft();
 }, { deep: true, flush: 'sync' });
 
-async function loadScenes(): Promise<void> {
+async function loadSkills(): Promise<void> {
   busy.value = true;
   try {
-    scenes.value = (await api.scenes()).scenes;
-    const currentReady = scenes.value.some((item) => item.scene === scene.value && item.status === 'ready');
-    if (!currentReady) scene.value = scenes.value.find((item) => item.status === 'ready')?.scene ?? '';
-    if (scene.value) {
-      await loadTasks();
-    } else {
-      tasks.value = [];
-      task.value = '';
+    const result = await api.skills();
+    skills.value = result.skills;
+    skillsConfigured.value = result.configured;
+    catalogError.value = result.error ?? '';
+    const ready = skills.value.filter(item => item.status === 'ready');
+    if (!ready.some(item => item.skillName === skillName.value)) skillName.value = ready[0]?.skillName ?? '';
+    if (skillName.value) await loadTask();
+    else {
       clearTaskView();
-      status.value = scenes.value.length ? () => t('review.noHealthyScenes') : () => t('review.noScenes');
+      status.value = result.error ? () => result.error! : () => t('review.noTasks');
     }
   } catch (error) {
-    scenes.value = [];
-    tasks.value = [];
-    scene.value = '';
-    task.value = '';
+    skills.value = [];
+    skillName.value = '';
     clearTaskView();
     const text = error instanceof Error ? error.message : String(error);
+    catalogError.value = text;
     status.value = () => text;
   } finally { busy.value = false; }
 }
 
-async function openCreatedTask(result: { scene: string; task: string }): Promise<void> {
-  scene.value = result.scene;
-  task.value = result.task;
+async function openCreatedTask(result: { skillName: string }): Promise<void> {
+  skillName.value = result.skillName;
   mode.value = 'review';
-  await loadScenes();
+  await loadSkills();
 }
 
-async function loadTasks(): Promise<void> {
-  if (!scene.value) {
-    tasks.value = [];
-    task.value = '';
-    clearTaskView();
-    return;
-  }
-  busy.value = true;
-  conflict.value = false;
-  try {
-    tasks.value = (await api.tasks(scene.value)).tasks;
-    const currentReady = tasks.value.some((item) => item.task === task.value && item.status === 'ready');
-    if (!currentReady) task.value = tasks.value.find((item) => item.status === 'ready')?.task ?? '';
-    if (task.value) {
-      await loadTask();
-    } else {
-      clearTaskView();
-      status.value = tasks.value.length ? () => t('review.noHealthyTasks') : () => t('review.noTasks');
-    }
-  } catch (error) {
-    tasks.value = [];
-    task.value = '';
-    clearTaskView();
-    const text = error instanceof Error ? error.message : String(error);
-    status.value = () => text;
-  } finally { busy.value = false; }
-}
-
-async function openTask(item: TaskCatalogItem): Promise<void> {
-  if (item.status !== 'ready') return;
-  task.value = item.task;
+async function openCatalogTask(name: string): Promise<void> {
+  if (busy.value) return;
+  skillName.value = name;
   await loadTask();
 }
 
-async function openCatalogTask(target: { scene: string; task: string }): Promise<void> {
-  if (busy.value) return;
-  scene.value = target.scene;
-  task.value = target.task;
-  await loadTasks();
+function restoreStoredDraft(loaded: ReviewSkillView): void {
+  try {
+    const stored = draftStorage?.read('skill', loaded.skillName);
+    if (stored) {
+      if (stored.draft.manifest.skillName !== loaded.skillName) throw new Error(t('review.autoSaveUnavailable'));
+      editorDrafts = stored.editors ?? {};
+      draft.value = stored.draft;
+      changes.value = stored.changes;
+      baseRevision.value = stored.revision;
+      selected.value = Math.max(0, Math.min(stored.selected, (stored.draft.document.tasks as JsonObject[]).length - 1));
+      rebuildSteps();
+      populateEditor();
+      hydratingEditor = true;
+      Object.assign(editor, stored.editor);
+      hydratingEditor = false;
+      draftStorageState.value = 'saved';
+      conflict.value = stored.revision !== loaded.revision;
+    }
+  } catch (error) {
+    draftStorageState.value = 'error';
+    draftStorageError.value = error instanceof Error ? error.message : String(error);
+  }
 }
 
 async function loadTask(restoreDraft = true): Promise<void> {
-  if (!scene.value || !task.value) return;
+  if (!skillName.value) return;
   busy.value = true;
   loadingDraft = true;
   conflict.value = false;
   try {
-    const loaded = await api.task(scene.value, task.value);
+    const loaded = await api.skill(skillName.value);
     view.value = loaded;
     editorDrafts = {};
     baseRevision.value = loaded.revision;
@@ -338,32 +314,12 @@ async function loadTask(restoreDraft = true): Promise<void> {
     populateEditor();
     draftStorageState.value = 'idle';
     draftStorageError.value = '';
-    if (loaded.writable && restoreDraft) {
-      try {
-        const stored = draftStorage?.read(loaded.scene, loaded.task);
-        if (stored) {
-          editorDrafts = stored.editors ?? {};
-          draft.value = stored.draft;
-          changes.value = stored.changes;
-          baseRevision.value = stored.revision;
-          selected.value = Math.max(0, Math.min(stored.selected, (stored.draft.document.tasks as JsonObject[]).length - 1));
-          rebuildSteps();
-          populateEditor();
-          hydratingEditor = true;
-          Object.assign(editor, stored.editor);
-          hydratingEditor = false;
-          draftStorageState.value = 'saved';
-          conflict.value = stored.revision !== loaded.revision;
-        }
-      } catch (error) {
-        draftStorageState.value = 'error';
-        draftStorageError.value = error instanceof Error ? error.message : String(error);
-      }
-    }
+    if (loaded.writable && restoreDraft) restoreStoredDraft(loaded);
     if (mode.value === 'review') {
       const url = new URL(window.location.href);
-      url.searchParams.set('scene', loaded.scene);
-      url.searchParams.set('task', loaded.task);
+      url.searchParams.delete('scene');
+      url.searchParams.delete('task');
+      url.searchParams.set('skillName', loaded.skillName);
       window.history.replaceState(null, '', url);
     }
     status.value = loaded.writable ? () => t('review.ready') : () => t('review.readonlyStatus');
@@ -383,7 +339,7 @@ async function mutate(mutation: ReviewMutation): Promise<boolean> {
   else if (mutation.type === 'move') candidates.splice(mutation.to, 0, ...candidates.splice(mutation.from, 1));
   busy.value = true;
   try {
-    const result = await api.mutate(scene.value, task.value, draft.value, mutation);
+    const result = await api.mutateSkill(skillName.value, draft.value, mutation);
     editorDrafts = {};
     draft.value = result.draft;
     changes.value.push(result.change);
@@ -517,11 +473,13 @@ async function save(): Promise<boolean> {
   const selectedIndex = selected.value;
   busy.value = true;
   try {
-    const result = await api.save(scene.value, task.value, baseRevision.value, clone(draft.value));
-    try { draftStorage?.remove(view.value.scene, view.value.task); } catch { /* Saved task files remain authoritative. */ }
+    const result = await api.saveSkill(skillName.value, baseRevision.value, clone(draft.value));
+    try { draftStorage?.remove('skill', view.value.skillName); } catch { /* Saved task files remain authoritative. */ }
     changes.value = [];
-    catalogVersion.value += 1;
     await loadTask(false);
+    skills.value = skills.value.map(item => item.status === 'ready' && item.skillName === skillName.value
+      ? { ...item, taskCount: steps.value.length, actionCount: steps.value.reduce((count, step) => count + step.flow.length, 0) }
+      : item);
     selected.value = Math.min(selectedIndex, steps.value.length - 1);
     populateEditor();
     status.value = () => t('review.saved', { files: result.changed.join(', ') || t('review.noChanges') });
@@ -537,8 +495,7 @@ async function save(): Promise<boolean> {
 async function runCurrentTask(): Promise<void> {
   if (!view.value || busy.value) return;
   if (dirty.value && !(await save())) return;
-  executionScene.value = scene.value;
-  executionTask.value = task.value;
+  executionSkillName.value = skillName.value;
   executionTargetVersion.value += 1;
   mode.value = 'execution';
 }
@@ -546,7 +503,7 @@ async function runCurrentTask(): Promise<void> {
 async function reloadTask(): Promise<void> {
   if (!view.value) return;
   try {
-    draftStorage?.remove(view.value.scene, view.value.task);
+    draftStorage?.remove('skill', view.value.skillName);
     await loadTask();
   } catch (error) {
     const text = error instanceof Error ? error.message : String(error);
@@ -563,18 +520,17 @@ function requestTaskDeletion(): void {
 
 async function confirmTaskDeletion(): Promise<void> {
   if (!view.value?.writable || busy.value) return;
-  const deletedScene = scene.value;
-  const deletedTask = task.value;
+  const deletedSkill = skillName.value;
   busy.value = true;
   conflict.value = false;
   try {
-    await api.deleteTask(deletedScene, deletedTask);
-    try { draftStorage?.remove(deletedScene, deletedTask); } catch { /* Deleted task drafts are not restored without a task. */ }
+    await api.deleteSkill(deletedSkill);
+    try { draftStorage?.remove('skill', deletedSkill); } catch { /* Deleted task drafts are not restored without a task. */ }
     taskDeleteOpen.value = false;
-    task.value = '';
+    skillName.value = '';
     clearTaskView();
-    await loadScenes();
-    status.value = () => t('review.taskDeleted', { scene: deletedScene, task: deletedTask });
+    await loadSkills();
+    status.value = () => t('review.skillDeleted', { name: deletedSkill });
   } catch (error) {
     taskDeleteOpen.value = false;
     const text = error instanceof Error ? error.message : String(error);
@@ -592,7 +548,7 @@ function evidencePath(step: ReviewStep | undefined): string | undefined {
 function referenceImageUrl(image: ReviewReferenceImage): string {
   return /^(?:https?:|data:)/i.test(image.url)
     ? image.url
-    : api.evidenceUrl(scene.value, task.value, image.url);
+    : api.skillEvidenceUrl(skillName.value, image.url);
 }
 
 function bindReferenceImage(): void {
@@ -626,15 +582,14 @@ async function uploadReference(event: Event): Promise<void> {
     referenceUploadError.value = t('review.referenceSizeError');
     return;
   }
-  const targetScene = scene.value;
-  const targetTask = task.value;
+  const targetSkill = skillName.value;
   const targetStep = current.value?.id;
   if (!targetStep) return;
   busy.value = true;
   referenceUploading.value = true;
   try {
-    const result = await api.uploadReferenceImage(targetScene, targetTask, baseRevision.value, file);
-    if (scene.value !== targetScene || task.value !== targetTask || current.value?.id !== targetStep) {
+    const result = await api.uploadSkillReferenceImage(targetSkill, baseRevision.value, file);
+    if (skillName.value !== targetSkill || current.value?.id !== targetStep) {
       throw new Error(t('review.referenceTargetChanged'));
     }
     hydratingEditor = true;
@@ -659,12 +614,12 @@ onMounted(async () => {
   try {
     const identity = await api.reviewIdentity();
     devMode.value = requestedDevMode && identity.devMode;
-    draftStorage = new ReviewDraftStorage(window.localStorage, identity.dataRootKey);
+    draftStorage = new ReviewDraftStorage<SkillTaskManifest>(window.localStorage, `${identity.dataRootKey}:${identity.skillsRootKey ?? 'unconfigured'}`);
   } catch (error) {
     draftStorageState.value = 'error';
     draftStorageError.value = error instanceof Error ? error.message : String(error);
   }
-  await loadScenes();
+  await loadSkills();
   if (devMode.value && requestedMode === 'agent') mode.value = 'agent';
 });
 </script>
@@ -704,14 +659,14 @@ onMounted(async () => {
       <button @click="draftDiscardOpen = true">{{ t('review.reload') }}</button>
     </div>
 
-    <main v-if="mode === 'review' && !busy && !scenes.length" class="panel review-empty" aria-live="polite">
+    <main v-if="mode === 'review' && !busy && !skills.length" class="panel review-empty" aria-live="polite">
       <h2>{{ t('review.emptyTitle') }}</h2>
-      <p>{{ t('review.emptyHelp') }}</p>
+      <p>{{ catalogError || t('review.emptyHelp') }}</p>
       <button class="primary" @click="mode = 'recordings'">{{ t('review.createFromRecording') }}</button>
     </main>
 
     <main v-else-if="mode === 'review'" class="workspace review-layout">
-      <TaskCatalog :scenes="scenes" :scene="scene" :task="task" :busy="busy" :version="catalogVersion" :current-step-count="steps.length" @select="openCatalogTask" @create="mode = 'recordings'" />
+      <TaskCatalog :skills="skills" :skill-name="skillName" :busy="busy" :current-step-count="steps.length" @select="openCatalogTask" @create="mode = 'recordings'" />
       <section class="steps panel">
         <div class="review-steps-heading"><h2>{{ t('review.workflow') }}</h2><div><span>{{ view?.title ?? t('review.selectTask') }}</span><small>{{ t('common.steps', { count: steps.length }) }}</small></div></div>
         <button class="secondary add-step" :disabled="!writable || busy" @click="insertStep"><WorkbenchIcon name="add" />{{ t('review.insert') }}</button>
@@ -763,7 +718,7 @@ onMounted(async () => {
             </article>
           </div>
           <div v-else class="recorded-image-frame" :class="{ 'is-placeholder': !evidencePath(current) }">
-            <img v-if="evidencePath(current)" :src="api.evidenceUrl(scene, task, evidencePath(current)!)" :alt="t('review.evidenceAlt', { name: current.name })" />
+            <img v-if="evidencePath(current)" :src="api.skillEvidenceUrl(skillName, evidencePath(current)!)" :alt="t('review.evidenceAlt', { name: current.name })" />
             <EvidencePlaceholder v-else />
           </div>
           <p v-if="referenceUploadError" class="inline-error" role="alert">{{ referenceUploadError }}</p>
@@ -888,14 +843,13 @@ onMounted(async () => {
     </main>
 
     <main v-else-if="mode === 'recordings'" class="workspace recording-layout">
-      <RecordingWorkspace :scenes="scenes" @created="openCreatedTask" />
+      <RecordingWorkspace :skills-configured="skillsConfigured" @created="openCreatedTask" />
     </main>
 
     <main v-else-if="mode === 'execution'" class="workspace execution-layout">
       <ExecutionWorkspace
-        :scenes="scenes"
-        :initial-scene="executionScene || scene"
-        :initial-task="executionTask || task"
+        :skills="skills"
+        :initial-skill-name="executionSkillName || skillName"
         :target-version="executionTargetVersion"
         :developer-mode="devMode"
         @create="mode = 'recordings'"
@@ -910,7 +864,7 @@ onMounted(async () => {
       :open="draftDiscardOpen"
       :title="t('review.discardTitle')"
       :message="t('review.discardDraft')"
-      :target="`${scene}/${task}`"
+      :target="skillName"
       :confirm-label="t('review.reload')"
       :cancel-label="t('common.cancel')"
       :busy="busy"
@@ -922,7 +876,7 @@ onMounted(async () => {
       :open="taskDeleteOpen"
       :title="t('review.deleteTaskTitle')"
       :message="t('review.deleteTaskMessage')"
-      :target="`${scene}/${task}`"
+      :target="skillName"
       :confirm-label="t('review.deleteTask')"
       :cancel-label="t('common.cancel')"
       :busy="busy"

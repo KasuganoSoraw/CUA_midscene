@@ -5,17 +5,17 @@ import test from 'node:test';
 import { compileScript, parse } from 'vue/compiler-sfc';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { createRenderer, nextTick, type Component } from 'vue';
-import type { ReviewTaskView, TaskExecutionStatus } from '../../review/shared/types.js';
-import type { TaskCatalogReadyItem } from '../../cua/contracts/types.js';
+import type { ReviewSkillView, TaskExecutionStatus } from '../../review/shared/types.js';
+import type { SkillCatalogItem } from '../../cua/contracts/types.js';
 import { executionInstruction, executionParameters } from '../../review/web/src/execution-presentation.js';
 import { executionFeedback } from '../../review/web/src/execution-feedback.js';
 import { useI18n } from '../../review/web/src/i18n.js';
 
-function fixture(withInputs = true): ReviewTaskView {
+function fixture(withInputs = true): ReviewSkillView {
   return {
-    scene: 'orders', task: 'query', title: '订单查询', description: '查询订单', origin: 'user', writable: true, revision: 'revision',
+    skillName: 'query', title: '订单查询', description: '查询订单', origin: 'user', writable: true, revision: 'revision',
     manifest: {
-      schemaVersion: '0.2', scene: 'orders', task: 'query', title: '订单查询', description: '查询订单', goal: '查询订单',
+      schemaVersion: '0.3', skillName: 'query', title: '订单查询', description: '查询订单', goal: '查询订单',
       source: { tracePath: '', processedLogPath: '', conversionCommand: '' },
       inputs: withInputs ? { 'step-002-input': { type: 'string', label: '订单号', default: 'ORDER-1', description: '填写本次订单号' } } : {},
     },
@@ -28,8 +28,8 @@ function fixture(withInputs = true): ReviewTaskView {
 }
 
 test('复制指令保留插件链接，随任务和运行方式变化，不包含运行输入', () => {
-  assert.equal(executionInstruction('air-tickets-demo', 'act'), '[电脑操控](plugin://computer-use@buildin_extension) 运行录制任务 air-tickets-demo 自适应运行');
-  assert.equal(executionInstruction('query', 'task'), '[电脑操控](plugin://computer-use@buildin_extension) 运行录制任务 query 按步骤运行');
+  assert.equal(executionInstruction('air-tickets-demo', 'act'), '[电脑操控](plugin://computer-use@buildin_extension) 执行 Skill air-tickets-demo（skillName=air-tickets-demo，strategy=guided）');
+  assert.equal(executionInstruction('query', 'task'), '[电脑操控](plugin://computer-use@buildin_extension) 执行 Skill query（skillName=query，strategy=replay）');
   assert.equal(executionInstruction('', 'task'), '');
 });
 
@@ -61,16 +61,15 @@ async function settle(): Promise<void> { for (let i = 0; i < 12; i++) { await Pr
 
 async function mountWorkspace(options: { withInputs?: boolean; status?: TaskExecutionStatus; rejectCopy?: boolean; failTask?: boolean; failStatus?: boolean; failReport?: boolean } = {}) {
   const view = fixture(options.withInputs);
-  const task: TaskCatalogReadyItem = { ...view.manifest, status: 'ready', origin: 'user', writable: true, taskRoot: '', taskYamlPath: '', taskCount: 2, actionCount: 2 };
+  const task: SkillCatalogItem = { skillName: 'query', description: '查询订单', goal: '查询订单', inputs: view.manifest.inputs, status: 'ready', taskCount: 2, actionCount: 2 };
   let currentStatus: TaskExecutionStatus = options.status ?? { phase: 'idle' };
   const starts: any[] = [];
   const copies: string[] = [];
   const calls: string[] = [];
   const api = {
-    tasks: async () => { calls.push('tasks'); return { tasks: [task] }; },
-    task: async () => { calls.push('task'); if (options.failTask) throw new Error('task unavailable'); return structuredClone(view); },
+    skill: async () => { calls.push('task'); if (options.failTask) throw new Error('task unavailable'); return structuredClone(view); },
     executionStatus: async () => { if (options.failStatus) throw new Error('connection lost'); return structuredClone(currentStatus); },
-    startExecution: async (request: unknown) => { starts.push(request); currentStatus = { phase: 'preparing', scene: 'orders', task: 'query', mode: 'task', startsAt: new Date(Date.now() + 5000).toISOString() }; return currentStatus; },
+    startSkillExecution: async (request: unknown) => { starts.push(request); currentStatus = { phase: 'preparing', skillName: 'query', mode: 'task', startsAt: new Date(Date.now() + 5000).toISOString() }; return currentStatus; },
     stopExecution: async () => { currentStatus = { phase: 'idle' }; return currentStatus; },
     openExecutionReport: async (url: string) => {
       calls.push(`openReport:${url}`);
@@ -113,8 +112,7 @@ async function mountWorkspace(options: { withInputs?: boolean; status?: TaskExec
   });
   const root = node('root');
   const app = renderer.createApp(exports.default!, {
-    scenes: [{ schemaVersion: '0.1', scene: 'orders', title: '订单管理', description: '', status: 'ready', origins: ['user'], writable: true, sceneRoots: [] }],
-    initialScene: 'orders', initialTask: 'query',
+    skills: [task], initialSkillName: 'query',
   });
   app.mount(root);
   await settle();
@@ -128,6 +126,7 @@ test('实际页面展示参数、复制指令并仅将本次输入传给执行�
     const input = nodes(mounted.root).find(item => item.props['aria-label'] === '订单号')!;
     input.props['onUpdate:modelValue']('ORDER-2');
     const select = nodes(mounted.root).find(item => item.tag === 'review-select')!;
+    assert.equal(select.props.modelValue, 'act');
     select.props['onUpdate:modelValue']('act');
     await settle();
     await nodes(mounted.root).find(item => item.props['aria-label'] === '复制运行指令')!.props.onClick();
@@ -135,7 +134,7 @@ test('实际页面展示参数、复制指令并仅将本次输入传给执行�
     assert.match(text(mounted.root), /指令已复制/);
     await nodes(mounted.root).find(item => String(item.props.class).includes('execution-start'))!.props.onClick();
     await settle();
-    assert.deepEqual(mounted.starts[0], { scene: 'orders', task: 'query', mode: 'act', inputs: { 'step-002-input': 'ORDER-2' } });
+    assert.deepEqual(mounted.starts[0], { skillName: 'query', mode: 'act', inputs: { 'step-002-input': 'ORDER-2' } });
     assert.equal(mounted.view.manifest.inputs['step-002-input'].default, 'ORDER-1');
     assert.match(text(mounted.root), /取消准备/);
     assert.equal(nodes(mounted.root).find(item => item.tag === 'task-catalog')!.props.busy, true);
@@ -158,9 +157,11 @@ test('无参数页面使用插画，允许直接准备，复制失败显示手�
 });
 
 test('失败结果通过本地服务打开报告，不展示 Agent 思考或自动创建定时任务', async () => {
-  const mounted = await mountWorkspace({ status: { phase: 'failed', scene: 'orders', task: 'query', mode: 'task', error: 'TimeoutError', result: { reportUrl: '/api/execution/runs/run-id/report' } } });
+  const mounted = await mountWorkspace({ status: { phase: 'failed', skillName: 'query', mode: 'task', error: 'TimeoutError', result: { reportUrl: '/api/execution/runs/run-id/report' } } });
   try {
     assert.match(text(mounted.root), /运行等待超时/);
+    const facts = nodes(mounted.root).find(item => item.tag === 'dl' && item.props.class === 'execution-run-facts')!;
+    assert.match(text(facts), /Skill.*query/s);
     const reportButton = nodes(mounted.root).find(item => item.tag === 'button' && item.props.class === 'execution-report-link')!;
     assert.ok(reportButton);
     assert.ok(!nodes(mounted.root).some(item => item.tag === 'a' && item.props.href));
@@ -189,12 +190,13 @@ test('成功和失败结果均可打开报告，打开失败时保留运行结�
 });
 
 test('运行中恢复任务身份和模式，不接受切换任务', async () => {
-  const mounted = await mountWorkspace({ status: { phase: 'running', scene: 'orders', task: 'query', mode: 'act' } });
+  const mounted = await mountWorkspace({ status: { phase: 'running', skillName: 'query', mode: 'act' } });
   try {
     assert.equal(nodes(mounted.root).find(item => item.tag === 'review-select')!.props.modelValue, 'act');
+    assert.ok(nodes(mounted.root).some(item => item.tag === 'dl' && item.props.class === 'execution-run-facts'));
     const catalog = nodes(mounted.root).find(item => item.tag === 'task-catalog')!;
     const count = mounted.calls.length;
-    await catalog.props.onSelect({ scene: 'other', task: 'other' });
+    await catalog.props.onSelect('other');
     assert.equal(mounted.calls.length, count);
     assert.equal(catalog.props.busy, true);
     assert.match(text(mounted.root), /停止任务/);
@@ -202,7 +204,7 @@ test('运行中恢复任务身份和模式，不接受切换任务', async () =>
 });
 
 test('任务详情不可读时仍能停止活动运行，状态连接异常时禁止新运行', async () => {
-  const running = await mountWorkspace({ failTask: true, status: { phase: 'running', scene: 'orders', task: 'query', mode: 'task' } });
+  const running = await mountWorkspace({ failTask: true, status: { phase: 'running', skillName: 'query', mode: 'task' } });
   try {
     const stop = nodes(running.root).find(item => String(item.props.class).includes('execution-stop'))!;
     assert.ok(stop);

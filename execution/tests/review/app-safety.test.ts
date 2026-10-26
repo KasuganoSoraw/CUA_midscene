@@ -11,7 +11,7 @@ import * as referenceUpload from '../../review/shared/reference-upload.js';
 import { ApiError } from '../../review/web/src/api.js';
 import { ReviewDraftStorage } from '../../review/web/src/draft-storage.js';
 import { translate, type MessageKey, type TranslationParams } from '../../review/web/src/i18n.js';
-import type { ReviewMutation, ReviewTaskView } from '../../review/shared/types.js';
+import type { ReviewMutation, ReviewSkillView } from '../../review/shared/types.js';
 import { applyReviewMutation } from '../../review/service/task-mutations.js';
 
 const appFile = new URL('../../review/web/src/App.vue', import.meta.url);
@@ -27,12 +27,12 @@ async function setupApp() {
   let failMutation = true;
   const mutations: ReviewMutation[] = [];
   const api = {
-    mutate: async (_scene: string, _task: string, draft: any, mutation: ReviewMutation) => {
+    mutateSkill: async (_name: string, draft: any, mutation: ReviewMutation) => {
       mutations.push(mutation);
       if (failMutation) throw new Error('mutation failed');
       return applyReviewMutation(JSON.parse(JSON.stringify(draft)), mutation);
     },
-    uploadReferenceImage: async () => { uploadCalls++; throw new Error('upload should not run'); },
+    uploadSkillReferenceImage: async () => { uploadCalls++; throw new Error('upload should not run'); },
   };
   const require = createRequire(appFile);
   const load = (id: string) => {
@@ -53,18 +53,17 @@ async function setupApp() {
   const scope = vue.effectScope();
   const app = scope.run(() => exports.default!.setup({}, { expose() {} }))!;
   const manifest = {
-    schemaVersion: '0.2', scene: 'demo', task: 'task', title: '任务', description: '', goal: '',
+    schemaVersion: '0.3', skillName: 'task', title: '任务', description: '', goal: '',
     source: { tracePath: 'source/trace.json', processedLogPath: 'source/processed.json', conversionCommand: '' }, inputs: {},
   };
   const view = {
-    scene: 'demo', task: 'task', title: '任务', description: '', origin: 'user', writable: true, revision: 'revision',
+    skillName: 'task', title: '任务', description: '', origin: 'user', writable: true, revision: 'revision',
     manifest, document: { tasks: [
       { name: 'step-001 | click', flow: [{ aiTap: '第一个按钮' }] },
       { name: 'step-002 | click', flow: [{ aiTap: '第二个按钮' }] },
     ] }, steps: [],
-  } as unknown as ReviewTaskView;
-  app.scene.value = 'demo';
-  app.task.value = 'task';
+  } as unknown as ReviewSkillView;
+  app.skillName.value = 'task';
   app.view.value = view;
   app.draft.value = structuredClone({ manifest, document: view.document });
   app.rebuildSteps();
