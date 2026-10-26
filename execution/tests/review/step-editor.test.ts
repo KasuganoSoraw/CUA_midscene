@@ -6,7 +6,24 @@ import {
   inputPreview,
   parseInputPreview,
   parseStepEditor,
+  referenceImagesFromFlow,
 } from '../../review/shared/step-editor.js';
+
+test('自然语言操作在复核表单中保留指令和参考图', () => {
+  const flow = [{ ai: {
+    prompt: '向下滚动，找到告警图标并点击',
+    images: [{ name: 'step-001-target', url: 'source/screenshots/target.png' }],
+  } }];
+  const editor = parseStepEditor({ id: 'step-001', operation: 'aiAct', flow });
+  assert.equal(editor.custom, false);
+  assert.equal(editor.target, '向下滚动，找到告警图标并点击');
+  assert.deepEqual(referenceImagesFromFlow(flow, 'aiAct'), editor.referenceImages);
+  editor.target = '向下滚动，找到目标图标并点击';
+  assert.deepEqual(buildStepContent(editor, 'step-001').flow, [{ ai: {
+    prompt: '向下滚动，找到目标图标并点击',
+    images: [{ name: 'step-001-target', url: 'source/screenshots/target.png' }],
+  } }]);
+});
 
 test('动作构建保留双击、按键、等待边界和自定义参数语义', () => {
   const doubleClick = defaultStepEditor('doubleClick', 10.6);

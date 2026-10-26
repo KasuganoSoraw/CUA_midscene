@@ -157,6 +157,9 @@ function actionFromOperation(
   if (operation.type === 'keyboard') {
     return { actions: [{ KeyboardPress: { keyName: requiredOperationText(operation.key, 'key', step) } }] };
   }
+  if (operation.type === 'aiAct') {
+    return { actions: [{ ai: requiredOperationText(operation.prompt, 'prompt', step) }] };
+  }
   const condition = requiredOperationText(operation.condition, 'condition', step);
   return {
     actions: [{
@@ -164,6 +167,51 @@ function actionFromOperation(
       timeout: 15_000,
     }],
   };
+}
+
+function isRecordedScroll(step: ProcessedLogStep): boolean {
+  return /^Scroll(?:Up|Down)\b/i.test(step.action ?? '');
+}
+
+function scrollInstruction(operation: ShowuiTraceOperation, source: ProcessedLogStep, step: number): string {
+  if (operation.type !== 'aiAct') throw new Error(`trace step ${step} 的滚动必须使用 aiAct operation`);
+  const direction = /^ScrollDown\b/i.test(source.action ?? '') ? '向下' : '向上';
+  const count = Number.isInteger(source.scroll_count) && Number(source.scroll_count) > 0
+    ? `约 ${source.scroll_count} 次滚轮` : '一段';
+  return `${direction}滚动${count}。滚动区域和目的：${requiredOperationText(operation.prompt, 'prompt', step)}`;
+}
+
+function followingInstruction(
+  operation: ShowuiTraceOperation,
+  source: ProcessedLogStep,
+  step: number,
+): { prompt: string; images: JsonObject[] } {
+  if (operation.type === 'click' || operation.type === 'doubleClick' || operation.type === 'rightClick') {
+    const action = actionFromOperation(operation, step, source).actions[0];
+    const locate = action.locate as JsonObject | undefined;
+    return {
+      prompt: locate ? String(locate.prompt) : requiredOperationText(operation.prompt, 'prompt', step),
+      images: locate ? locate.images as JsonObject[] : [],
+    };
+  }
+  if (operation.type === 'input') {
+    const locate = requiredOperationText(operation.locatePrompt, 'locatePrompt', step);
+    const value = source.action === 'Paste text'
+      ? source.clipboard_text
+      : requiredOperationText(operation.value, 'value', step);
+    if (typeof value !== 'string' || !value.length) throw new Error(`trace step ${step} 的输入文本不能为空`);
+    const instruction = source.action === 'Paste text'
+      ? `在${locate}中将${JSON.stringify(value)}追加到现有内容末尾`
+      : `在${locate}中输入${JSON.stringify(value)}`;
+    return { prompt: instruction, images: [] };
+  }
+  if (operation.type === 'keyboard') {
+    return { prompt: `按下 ${requiredOperationText(operation.key, 'key', step)} 键`, images: [] };
+  }
+  if (operation.type === 'wait') {
+    return { prompt: `等待${requiredOperationText(operation.condition, 'condition', step)}`, images: [] };
+  }
+  return { prompt: requiredOperationText(operation.prompt, 'prompt', step), images: [] };
 }
 
 export function buildTaskAssets(
@@ -178,24 +226,60 @@ export function buildTaskAssets(
   const tasks: JsonObject[] = [];
   const inputs: Record<string, TaskInputDefinition> = {};
   let previousTimestamp: number | undefined;
-  let previousStep = 0;
+  const stepBindings: Record<string, number | number[]> = {};
+  let previousSourceStep = 0;
+  for (const [sourceIndex, traceStep] of trace.trajectory.entries()) {
+    if (traceStep.step_idx <= previousSourceStep) {
+      throw new Error('trace step_idx 必须为正整数、唯一且按轨迹顺序严格递增');
+    }
+    if (traceStep.step_idx !== sourceIndex + 1) {
+      throw new Error('trace step_idx 必须从 1 开始连续编号');
+    }
+    previousSourceStep = traceStep.step_idx;
+  }
 
-  trace.trajectory.forEach((traceStep, index) => {
-    const step = traceStep.step_idx;
-    if (step <= previousStep) throw new Error('trace step_idx 必须为正整数、唯一且按轨迹顺序严格递增');
+  for (let index = 0; index < trace.trajectory.length;) {
+    const step = tasks.length + 1;
+    const stepId = `step-${String(step).padStart(3, '0')}`;
     const flow: JsonObject[] = [];
     if (previousTimestamp !== undefined) {
       const gap = Math.max(0, Math.floor((processedSteps[index].timestamp - previousTimestamp) * 1000 + 0.5));
       const wait = clampRecordedWaitMs(gap);
       if (wait) flow.push({ sleep: wait });
     }
-    const mapped = actionFromOperation(traceStep.caption.operation, step, processedSteps[index]);
-    flow.push(...mapped.actions);
-    tasks.push({ name: `step-${String(step).padStart(3, '0')} | ${traceStep.caption.operation.type}`, flow });
-    if (mapped.input) inputs[mapped.input[0]] = mapped.input[1];
-    previousTimestamp = processedSteps[index].timestamp;
-    previousStep = step;
-  });
+    if (isRecordedScroll(processedSteps[index])) {
+      const sources: number[] = [];
+      const instructions: string[] = [];
+      while (index < trace.trajectory.length && isRecordedScroll(processedSteps[index])) {
+        const sourceStep = trace.trajectory[index];
+        sources.push(sourceStep.step_idx);
+        instructions.push(scrollInstruction(sourceStep.caption.operation, processedSteps[index], sourceStep.step_idx));
+        index += 1;
+      }
+      let images: JsonObject[] = [];
+      if (index < trace.trajectory.length) {
+        const next = trace.trajectory[index];
+        const action = followingInstruction(next.caption.operation, processedSteps[index], step);
+        instructions.push(action.prompt);
+        images = action.images;
+        sources.push(next.step_idx);
+        index += 1;
+      }
+      const prompt = `按顺序完成以下电脑操作，完成后停止，不要重复执行：${instructions.map((item, itemIndex) => `${itemIndex + 1}. ${item}`).join('；')}`;
+      flow.push({ ai: images.length ? { prompt, images } : prompt });
+      tasks.push({ name: `${stepId} | aiAct`, flow });
+      stepBindings[stepId] = sources.length === 1 ? sources[0] : sources;
+    } else {
+      const sourceStep = trace.trajectory[index];
+      const mapped = actionFromOperation(sourceStep.caption.operation, step, processedSteps[index]);
+      flow.push(...mapped.actions);
+      tasks.push({ name: `${stepId} | ${sourceStep.caption.operation.type}`, flow });
+      if (mapped.input) inputs[mapped.input[0]] = mapped.input[1];
+      stepBindings[stepId] = sourceStep.step_idx;
+      index += 1;
+    }
+    previousTimestamp = processedSteps[index - 1].timestamp;
+  }
 
   return {
     document: {
@@ -214,12 +298,7 @@ export function buildTaskAssets(
         tracePath: 'source/showui-trace.json',
         processedLogPath: 'source/processed-log-sc.json',
         conversionCommand: options.conversionCommand,
-        stepBindings: Object.fromEntries(
-          trace.trajectory.map((item) => [
-            `step-${String(item.step_idx).padStart(3, '0')}`,
-            item.step_idx,
-          ]),
-        ),
+        stepBindings,
         ...(options.recordingPreparationCommand
           ? { recordingPreparationCommand: options.recordingPreparationCommand }
           : {}),
@@ -283,21 +362,22 @@ async function sourceSceneManifest(options: ConvertOptions, scene: string): Prom
 async function validateReferenceImages(document: JsonObject, taskRoot: string): Promise<void> {
   for (const task of document.tasks as JsonObject[]) {
     for (const action of task.flow as JsonObject[]) {
-      const locate = action.locate;
-      if (!locate || typeof locate !== 'object' || Array.isArray(locate)) continue;
-      const images = (locate as JsonObject).images;
-      if (!Array.isArray(images)) continue;
-      for (const image of images) {
-        if (!image || typeof image !== 'object' || Array.isArray(image) || typeof image.url !== 'string') {
-          throw new Error(`${String(task.name)} 包含非法参考图定义`);
-        }
-        const absoluteImagePath = path.resolve(taskRoot, image.url);
-        const relative = path.relative(taskRoot, absoluteImagePath);
-        if (relative.startsWith('..') || path.isAbsolute(relative)) {
-          throw new Error(`${String(task.name)} 的参考图越出任务目录：${image.url}`);
-        }
-        if (!(await pathExists(absoluteImagePath)) || !(await stat(absoluteImagePath)).isFile()) {
-          throw new Error(`${String(task.name)} 的参考图不存在：${absoluteImagePath}`);
+      for (const prompt of [action.locate, action.ai]) {
+        if (!prompt || typeof prompt !== 'object' || Array.isArray(prompt)) continue;
+        const images = (prompt as JsonObject).images;
+        if (!Array.isArray(images)) continue;
+        for (const image of images) {
+          if (!image || typeof image !== 'object' || Array.isArray(image) || typeof image.url !== 'string') {
+            throw new Error(`${String(task.name)} 包含非法参考图定义`);
+          }
+          const absoluteImagePath = path.resolve(taskRoot, image.url);
+          const relative = path.relative(taskRoot, absoluteImagePath);
+          if (relative.startsWith('..') || path.isAbsolute(relative)) {
+            throw new Error(`${String(task.name)} 的参考图越出任务目录：${image.url}`);
+          }
+          if (!(await pathExists(absoluteImagePath)) || !(await stat(absoluteImagePath)).isFile()) {
+            throw new Error(`${String(task.name)} 的参考图不存在：${absoluteImagePath}`);
+          }
         }
       }
     }

@@ -125,6 +125,8 @@ node dist/cli/main.js review --no-open
 
 参考图步骤使用 Midscene 原生图片 prompt：canonical `task.yaml` 的 `images[].url` 保存相对任务根目录的路径（通常位于 `source/screenshots/`），resolver 验证文件和目录边界后在 resolved YAML 中改为绝对路径。HTTP(S) 与 data URL 保持不变。图片只用于语义定位，Midscene 仍结合文字 prompt、参考图和当前屏幕寻找目标，并点击定位结果；系统不执行像素模板匹配或录制坐标回放。
 
+录制轨迹中的连续滚动与下一操作由 converter 合成为一个 Midscene `ai` 步骤；没有下一操作时，滚动单独执行。合并步骤在 `task.json` 的 `source.stepBindings` 中保存多个来源编号，Workbench 将其显示为可编辑的自然语言操作，并提供各来源画面。被合并的输入使用录制文本，不提供单独的运行时输入参数。未合并的步骤沿用原有动作与参数契约。
+
 ### 定位参考图
 
 任务检查页的单击和双击动作支持上传或更换一张定位参考图，并通过开关启用或停用。上传支持 PNG、JPEG、WebP，大小不超过 5 MB，像素数不超过 1600 万，边长不超过 6000 像素；不接收 SVG 或多帧图片。应选择不带点击标记的目标局部图。

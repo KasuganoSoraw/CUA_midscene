@@ -7,7 +7,7 @@ import type {
   ReviewTaskDraft,
 } from '../shared/types.js';
 
-const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait)$/;
+const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct)$/;
 
 interface Entry {
   task: JsonObject;
@@ -15,7 +15,7 @@ interface Entry {
   oldStepId?: string;
   oldInputId?: string;
   input?: TaskInputDefinition;
-  binding: number | null;
+  binding: number | number[] | null;
   inserted?: boolean;
 }
 
@@ -124,7 +124,7 @@ export function applyReviewMutation(draft: ReviewTaskDraft, mutation: ReviewMuta
   if (!entries.length) throw new Error('任务必须至少保留一个步骤');
   const replacements = new Map<string, string>();
   const inputs: Record<string, TaskInputDefinition> = {};
-  const stepBindings: Record<string, number | null> = {};
+  const stepBindings: Record<string, number | number[] | null> = {};
   entries.forEach((entry, index) => {
     const stepId = `step-${String(index + 1).padStart(3, '0')}`;
     const inputId = `${stepId}-input`;

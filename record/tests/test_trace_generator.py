@@ -103,7 +103,39 @@ class DoubleClickRetryTraceGenerator(TraceGenerator):
         )
 
 
+class ScrollRetryTraceGenerator(TraceGenerator):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.calls = 0
+
+    def _call_openai(self, prompt, crop_b64, full_b64):
+        self.calls += 1
+        operation = (
+            {"type": "wait", "condition": "页面加载"}
+            if self.calls == 1
+            else {"type": "aiAct", "prompt": "在结果列表中向下滚动"}
+        )
+        return json.dumps({
+            "Observation": "全屏图显示结果列表。",
+            "Think": "需要在列表中滚动。",
+            "Action": "向下滚动结果列表。",
+            "Expectation": "下方内容进入视野。",
+            "Operation": operation,
+        }, ensure_ascii=False)
+
+
 class TraceGeneratorOperationTest(unittest.TestCase):
+    def test_scroll_requires_ai_act_instead_of_wait(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = ScrollRetryTraceGenerator(api_provider="openai")
+            item = {"action": "ScrollDown at", "timestamp": 1.0}
+            with patch.object(generator, "_step_images", return_value=(None, None)):
+                result = generator._trace_step(item, item, "unused", "", [], 1, 1.0, item["action"])
+            self.assertEqual(2, generator.calls)
+            self.assertEqual("aiAct", result["operation"]["type"])
+            self.assertEqual("aiAct", generator._recorded_operation_type("ScrollUp at"))
+            self.assertIn("向下滚动", generator._prompt(item, "", 1, []))
+
     def test_recorded_input_and_press_actions_mandate_operation_types(self):
         previous_key = os.environ.get("OPENAI_API_KEY")
         os.environ["OPENAI_API_KEY"] = "test-key"

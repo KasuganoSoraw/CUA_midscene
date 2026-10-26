@@ -60,7 +60,7 @@ processor 接收一个录制目录，生成 trace 时不接收业务 goal，避�
 
 点击类步骤的 processed log 还会记录 `screenshot_reference`，指向 `screenshots/*.reference.png`。带红叉 crop 供 trace 模型理解点击点；干净 reference patch 保留目标真实外观，供 Midscene 图片 prompt 使用。两者不能互相替代。
 
-这些产物用于分析和任务初始化，不作为执行入口。trace 包含面向 Midscene 的最小 `operation` 动作结构，由 `execution` 据此初始化任务根目录的 `task.yaml` 和 `task.json`。双击使用 `operation.type=doubleClick`，右键点击使用 `operation.type=rightClick`；input 的 `operation.prompt` 表示完整输入动作，`operation.locatePrompt` 表示目标输入框。文本粘贴作为追加输入步骤，复制及其紧邻的源文本拖选不进入执行步骤。剪贴板没有可用文本时，任务生成会报错。
+这些产物用于分析和任务初始化，不作为执行入口。trace 包含面向 Midscene 的最小 `operation` 动作结构，由 `execution` 据此初始化任务根目录的 `task.yaml` 和 `task.json`。双击使用 `operation.type=doubleClick`，右键点击使用 `operation.type=rightClick`；录制滚动使用 `operation.type=aiAct`，由 execution 与后续操作组合，没有后续操作时独立执行。input 的 `operation.prompt` 表示完整输入动作，`operation.locatePrompt` 表示目标输入框。文本粘贴作为追加输入步骤，复制及其紧邻的源文本拖选不进入执行步骤。剪贴板没有可用文本时，任务生成会报错。
 
 包内的 `resources/default_prompt.json` 要求模型为 Midscene prompt 提供足量定位信息：目标视觉特征、所在区域、相对锚点和动作意图。对于列表项、下拉候选、表格行、多个相似输入框等场景，prompt 应明确可见文本、所在容器和相对位置。
 

@@ -153,6 +153,7 @@ class TraceGenerator:
             "input": "input",
             "keyboard": "keyboard",
             "wait": "wait",
+            "aiact": "aiAct",
         }
         op_type = operation_types.get(raw_type)
         if op_type is None:
@@ -184,6 +185,8 @@ class TraceGenerator:
             return "input"
         if event_name == "press":
             return "keyboard"
+        if event_name.startswith("scroll"):
+            return "aiAct"
         return None
 
     def _operation_error(
@@ -201,9 +204,10 @@ class TraceGenerator:
             "input": ("prompt", "locatePrompt", "value"),
             "keyboard": ("key",),
             "wait": ("condition",),
+            "aiAct": ("prompt",),
         }
         if operation_type not in required_fields:
-            return "Operation.type 必须是 click、doubleClick、rightClick、input、keyboard 或 wait"
+            return "Operation.type 必须是 click、doubleClick、rightClick、input、keyboard、wait 或 aiAct"
         if expected_type is not None and operation_type != expected_type:
             return (
                 f"录制事件要求 Operation.type 为 {expected_type}，"
@@ -278,6 +282,14 @@ class TraceGenerator:
         recent_json = json.dumps(recent_steps, ensure_ascii=False, indent=2)
 
         delta = self._action_delta(act, action, deltas_cfg, modifier_guide)
+        scroll_guide = ""
+        if act.lower().startswith("scroll"):
+            direction = "向下" if act.lower().startswith("scrolldown") else "向上"
+            scroll_guide = (
+                f"\n本步是录制的{direction}滚动。Operation.type 必须为 aiAct；"
+                "Operation.prompt 只描述在可见区域中按该方向滚动的动作与区域，"
+                "不猜测下一步，也不改写为等待。\n"
+            )
 
         return f"""{base}
 
@@ -294,6 +306,7 @@ Overall Task: {overall_task}
 
 {reference_image_guide}
 {paste_guide}
+{scroll_guide}
 
 只输出 JSON。JSON 字段名必须保持为 Observation、Think、Action、Expectation、Operation。
 前四个字段的字段值必须使用中文；Operation.prompt 也应使用中文，只有界面原文、品牌名、按钮名、机场名、URL、快捷键和专有名词可以保留英文。
@@ -456,7 +469,7 @@ Overall Task: {overall_task}
                 f"{prompt}\n\n"
                 f"上一次输出缺少有效 Action 或 Operation：{operation_error or 'Action 为空'}。"
                 "请重新输出完整 JSON，必须包含非空 Action，"
-                "并且 Operation.type 必须是 click、doubleClick、rightClick、input、keyboard 或 wait；"
+                "并且 Operation.type 必须是 click、doubleClick、rightClick、input、keyboard、wait 或 aiAct；"
                 "各类型的必需字段必须完整。"
             )
             cap = self._request_caption(retry_prompt, crop_b64, full_b64)

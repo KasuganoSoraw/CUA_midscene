@@ -14,7 +14,7 @@ import type {
   ReviewTaskView,
 } from '../shared/types.js';
 
-const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait)$/;
+const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct)$/;
 
 export function reviewRevision(taskJson: string | Buffer, taskYaml: string | Buffer): string {
   return `sha256:${createHash('sha256').update(taskJson).update('\0').update(taskYaml).digest('hex')}`;
@@ -84,7 +84,7 @@ async function readRecording(taskRoot: string, manifest: TaskManifest): Promise<
   }
 }
 
-function effectiveBindings(manifest: TaskManifest, tasks: JsonObject[], trace?: ShowuiTrace): Record<string, number | null> {
+function effectiveBindings(manifest: TaskManifest, tasks: JsonObject[], trace?: ShowuiTrace): Record<string, number | number[] | null> {
   if (manifest.source.stepBindings) return { ...manifest.source.stepBindings };
   if (!trace || trace.trajectory.length !== tasks.length) return {};
   return Object.fromEntries(tasks.map((task, index) => {
@@ -122,9 +122,13 @@ export async function loadReviewTask(
     const reviewOperation = operation as ReviewOperation;
     const flow = structuredClone(item.flow as JsonObject[]);
     const sourceStep = bindings[id];
-    const evidence = typeof sourceStep === 'number'
-      ? evidenceFor(sourceStep, processedByStep, taskRoot, recording.sourceRoot)
-      : undefined;
+    const sourceSteps = sourceStep === null || sourceStep === undefined
+      ? [] : Array.isArray(sourceStep) ? sourceStep : [sourceStep];
+    const sourceEvidence = sourceSteps.flatMap((value) => {
+      const found = evidenceFor(value, processedByStep, taskRoot, recording.sourceRoot);
+      return found ? [found] : [];
+    });
+    const evidence = sourceEvidence.at(-1);
     const referenceImages = referenceImagesFor(flow, reviewOperation, taskRoot, recording.sourceRoot);
     return {
       id,
@@ -133,6 +137,7 @@ export async function loadReviewTask(
       flow,
       ...(manifest.inputs[`${id}-input`] ? { input: structuredClone(manifest.inputs[`${id}-input`]) } : {}),
       ...(evidence ? { evidence } : {}),
+      ...(sourceEvidence.length > 1 ? { sourceEvidence } : {}),
       ...(referenceImages.length ? { referenceImages } : {}),
     };
   });

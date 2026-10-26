@@ -7,7 +7,7 @@ import type {
 } from '../../cua/contracts/types.js';
 
 export type ReviewOrigin = 'builtin' | 'user';
-export type ReviewOperation = 'click' | 'doubleClick' | 'rightClick' | 'input' | 'keyboard' | 'wait';
+export type ReviewOperation = 'click' | 'doubleClick' | 'rightClick' | 'input' | 'keyboard' | 'wait' | 'aiAct';
 
 export interface ReviewServerIdentity {
   service: string;
@@ -36,6 +36,7 @@ export interface ReviewStep {
   flow: JsonObject[];
   input?: TaskInputDefinition;
   evidence?: ReviewEvidence;
+  sourceEvidence?: ReviewEvidence[];
   referenceImages?: ReviewReferenceImage[];
 }
 

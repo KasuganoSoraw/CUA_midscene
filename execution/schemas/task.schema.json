@@ -69,6 +69,12 @@
                 "type": "integer"
               },
               {
+                "type": "array",
+                "items": { "minimum": 1, "type": "integer" },
+                "minItems": 2,
+                "uniqueItems": true
+              },
+              {
                 "type": "null"
               }
             ]

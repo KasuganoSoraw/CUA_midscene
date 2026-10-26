@@ -78,7 +78,7 @@ export function defaultStepEditor(operation: ReviewOperation, delayMs = 0): Step
   return {
     operation,
     delayMs,
-    target: operation === 'input' ? '描述输入框位置' : '描述要点击的目标',
+    target: operation === 'input' ? '描述输入框位置' : operation === 'aiAct' ? '描述要完成的电脑操作' : '描述要点击的目标',
     inputValue: '',
     inputMode: 'replace',
     inputAction: 'KeyboardTypeText',
@@ -140,6 +140,10 @@ export function referenceImagesFromFlow(
   flow: JsonObject[],
   operation: ReviewOperation,
 ): ReviewReferenceImage[] {
+  if (operation === 'aiAct') {
+    const { action, standard } = splitFlow(flow);
+    return standard && action ? clone(referenceImageList(objectValue(action.ai)?.images) ?? []) : [];
+  }
   if (operation !== 'click' && operation !== 'doubleClick' && operation !== 'rightClick') return [];
   const { action, standard } = splitFlow(flow);
   if (!standard || !action) return [];
@@ -167,6 +171,24 @@ export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flo
   }
   if (step.operation === 'keyboard') {
     return parseKeyboardEditor(result, action, step.flow);
+  }
+  if (step.operation === 'aiAct') {
+    if (typeof action.ai === 'string' && Object.keys(action).length === 1) {
+      result.target = action.ai;
+      return result;
+    }
+    const prompt = objectValue(action.ai);
+    const images = referenceImageList(prompt?.images);
+    if (!prompt || typeof prompt.prompt !== 'string' || !images
+      || !Object.keys(action).every((key) => key === 'ai')
+      || !Object.keys(prompt).every((key) => ['prompt', 'images', 'convertHttpImage2Base64'].includes(key))
+      || (prompt.convertHttpImage2Base64 !== undefined && typeof prompt.convertHttpImage2Base64 !== 'boolean')) {
+      return customStepEditor(result, step.flow);
+    }
+    result.target = prompt.prompt;
+    result.referenceImages = images;
+    result.convertHttpImage2Base64 = prompt.convertHttpImage2Base64 === true;
+    return result;
   }
   if (typeof action.aiWaitFor !== 'string' || !Object.keys(action).every((key) => key === 'aiWaitFor' || key === 'timeout')) {
     return customStepEditor(result, step.flow);
@@ -285,6 +307,13 @@ function buildStepAction(model: StepEditorModel, stepId: string): JsonObject {
     };
   }
   if (model.operation === 'keyboard') return { KeyboardPress: { keyName: model.keyName } };
+  if (model.operation === 'aiAct') return {
+    ai: model.referenceImages.length ? {
+      prompt: model.target,
+      images: clone(model.referenceImages),
+      ...(model.convertHttpImage2Base64 ? { convertHttpImage2Base64: true } : {}),
+    } : model.target,
+  };
   return { aiWaitFor: model.waitCondition, timeout: Math.max(1, Math.round(model.timeoutMs || 15_000)) };
 }
 

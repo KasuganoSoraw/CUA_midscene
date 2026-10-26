@@ -7,11 +7,11 @@ export function resolveEvidenceMode(
   operation: ReviewOperation,
   evidence?: ReviewEvidence,
 ): EvidenceMode {
-  const supportsReference = operation === 'click' || operation === 'doubleClick' || operation === 'rightClick';
+  const supportsReference = operation === 'click' || operation === 'doubleClick' || operation === 'rightClick' || operation === 'aiAct';
   if (requested === 'reference' && supportsReference) return 'reference';
   if (requested === 'crop' && evidence?.crop) return 'crop';
   if (requested === 'full' && evidence?.full) return 'full';
   if (evidence?.crop) return 'crop';
   if (evidence?.full) return 'full';
-  return supportsReference ? 'reference' : 'placeholder';
+  return supportsReference && operation !== 'aiAct' ? 'reference' : 'placeholder';
 }

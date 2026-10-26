@@ -27,4 +27,6 @@ test('截图视图仅选择当前步骤可用的录制图片', () => {
   assert.equal(resolveEvidenceMode('crop', 'input', { ...evidence, crop: undefined }), 'full');
   assert.equal(resolveEvidenceMode('full', 'input'), 'placeholder');
   assert.equal(resolveEvidenceMode('crop', 'click'), 'reference');
+  assert.equal(resolveEvidenceMode('full', 'aiAct'), 'placeholder');
+  assert.equal(resolveEvidenceMode('reference', 'aiAct', evidence), 'reference');
 });

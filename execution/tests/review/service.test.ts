@@ -14,6 +14,7 @@ import {
   ReviewReadonlyError,
   saveReviewTask,
 } from '../../review/service/task-save.js';
+import { validateReviewDraft } from '../../review/service/task-save.js';
 import { createTaskFixture } from '../helpers/task-fixture.js';
 
 const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -32,6 +33,42 @@ test('复核视图组合 builtin 任务与录制证据', async () => {
     url: 'source/screenshots/26.861s.reference.png',
   }]);
   assert.equal(view.manifest.source.stepBindings?.['step-016'], 16);
+});
+
+test('合并自然语言步骤保留两条录制证据并可重编号', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-ai-act-'));
+  const taskRoot = await createTaskFixture(root);
+  const manifestPath = path.join(taskRoot, 'task.json');
+  const yamlPath = path.join(taskRoot, 'task.yaml');
+  const manifest = await readTaskManifest(manifestPath);
+  manifest.inputs = {};
+  manifest.source.stepBindings = { 'step-001': [1, 2] };
+  const document = await readYamlDocument(yamlPath);
+  document.tasks = [{ name: 'step-001 | aiAct', flow: [{ ai: '向下滚动，找到搜索框并输入文本' }] }];
+  await Promise.all([writeJsonFile(manifestPath, manifest), writeYamlDocument(yamlPath, document)]);
+  const screenshotsRoot = path.join(taskRoot, 'source', 'screenshots');
+  await mkdir(screenshotsRoot, { recursive: true });
+  await Promise.all([
+    writeJsonFile(path.join(taskRoot, 'source', 'showui-trace.json'), { trajectory: [
+      { step_idx: 1, caption: { operation: { type: 'aiAct', prompt: '向下滚动' } } },
+      { step_idx: 2, caption: { operation: { type: 'input', prompt: '输入文本' } } },
+    ] }),
+    writeJsonFile(path.join(taskRoot, 'source', 'processed-log-sc.json'), [
+      { timestamp: 1, screenshot_full: 'screenshots/scroll.png' },
+      { timestamp: 2, screenshot_full: 'screenshots/input.png' },
+    ]),
+    writeFile(path.join(screenshotsRoot, 'scroll.png'), 'scroll'),
+    writeFile(path.join(screenshotsRoot, 'input.png'), 'input'),
+  ]);
+
+  const view = await loadReviewTask('browser-demo', 'search-demo', { builtinProjectsRoot: root });
+  assert.deepEqual(view.steps[0].sourceEvidence?.map((item) => item.sourceStep), [1, 2]);
+  assert.equal(view.steps[0].evidence?.sourceStep, 2);
+  const result = applyReviewMutation({ manifest: view.manifest, document: view.document }, {
+    type: 'insert', index: 0, step: { operation: 'click', flow: [{ aiTap: '点击入口' }] },
+  });
+  assert.deepEqual(result.draft.manifest.source.stepBindings?.['step-002'], [1, 2]);
+  await validateReviewDraft(result.draft);
 });
 
 test('复核视图拒绝越出 source 的本地参考图', async () => {
