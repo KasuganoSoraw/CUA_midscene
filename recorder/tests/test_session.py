@@ -5,6 +5,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from cua_recorder.media import MediaCapabilities
 from cua_recorder.models import DisplayInfo
@@ -96,7 +97,129 @@ def display() -> DisplayInfo:
     return DisplayInfo("display-0", "DISPLAY0", 0, 0, 0, 1920, 1080, 1.0, True)
 
 
+class AbortOverlay(FakeOverlay):
+    def update(self, phase: str, started_ns: int | None = None) -> None:
+        if phase == "armed":
+            self.command("toggle")
+        if phase == "recording":
+            self.command("abort")
+
+
+class DiscardProbe(RecordingSession):
+    def discard_recording(self, root: Path) -> dict[str, object]:
+        return self._discard_recording(root, lambda *_args, **_payload: None)
+
+
 class RecordingSessionTest(unittest.TestCase):
+    def test_aborting_recording_discards_directory_and_releases_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            existing = root / "existing-recording"
+            existing.mkdir()
+            sentinel = existing / "keep.txt"
+            sentinel.write_text("existing assets", encoding="utf-8")
+            events = []
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=root,
+                video_factory=SuccessfulVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=AbortOverlay,
+            )
+            with (
+                patch("cua_recorder.session._read_control"),
+                patch.object(SuccessfulVideo, "stop") as stop_video,
+                patch.object(FakeHook, "stop") as stop_hook,
+                patch.object(WaitingHotkey, "stop") as stop_hotkey,
+                patch.object(AbortOverlay, "stop") as stop_overlay,
+            ):
+                result = session.run(
+                    io.StringIO(""), lambda event, **_payload: events.append(event),
+                )
+            stop_video.assert_called_once()
+            stop_hook.assert_called_once()
+            stop_hotkey.assert_called_once()
+            stop_overlay.assert_called_once()
+            self.assertTrue(result["cancelled"])
+            self.assertEqual("cancelled", events[-1])
+            self.assertNotIn("completed", events)
+            self.assertEqual([existing], list(root.iterdir()))
+            self.assertEqual("existing assets", sentinel.read_text(encoding="utf-8"))
+
+    def test_discard_rejects_output_root_and_paths_outside_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = root / "recordings"
+            outside = root / "outside"
+            output.mkdir()
+            outside.mkdir()
+            sentinel = outside / "keep.txt"
+            sentinel.write_text("outside assets", encoding="utf-8")
+            session = DiscardProbe(
+                capabilities=capabilities(), display=display(), output_root=output,
+            )
+            with patch("cua_recorder.session.shutil.rmtree") as remove:
+                for target in (output, outside, output / ".." / "outside"):
+                    with self.subTest(target=target):
+                        with self.assertRaisesRegex(RecorderError, "清理目录越界"):
+                            session.discard_recording(target)
+                remove.assert_not_called()
+            self.assertTrue(output.is_dir())
+            self.assertEqual("outside assets", sentinel.read_text(encoding="utf-8"))
+
+    def test_abort_reports_cleanup_failure_without_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            events: list[str] = []
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=Path(temporary),
+                video_factory=SuccessfulVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=AbortOverlay,
+            )
+            with (
+                patch("cua_recorder.session._read_control"),
+                patch("cua_recorder.session.shutil.rmtree", side_effect=OSError("目录被占用")),
+                self.assertRaisesRegex(OSError, "目录被占用"),
+            ):
+                session.run(io.StringIO(""), lambda event, **_payload: events.append(event))
+            self.assertNotIn("cancelled", events)
+            self.assertNotIn("completed", events)
+
+    def test_abort_preserves_video_failure_when_cleanup_also_fails(self) -> None:
+        class FailedStopVideo(SuccessfulVideo):
+            def stop(self, timeout: float = 15.0) -> None:
+                raise RecorderError("视频关闭失败")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=Path(temporary),
+                video_factory=FailedStopVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=AbortOverlay,
+            )
+            with (
+                patch("cua_recorder.session._read_control"),
+                patch("cua_recorder.session.shutil.rmtree", side_effect=OSError("目录被占用")),
+                self.assertRaisesRegex(RecorderError, "视频关闭失败") as caught,
+            ):
+                session.run(io.StringIO(""), lambda *_args, **_payload: None)
+            self.assertIn("目录被占用", caught.exception.__notes__[0])
+
+    def test_abort_cleans_assets_when_video_shutdown_fails(self) -> None:
+        class FailedStopVideo(SuccessfulVideo):
+            def stop(self, timeout: float = 15.0) -> None:
+                raise RecorderError("视频关闭失败")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            session = RecordingSession(
+                capabilities=capabilities(), display=display(), output_root=root,
+                video_factory=FailedStopVideo, hook_factory=FakeHook,
+                hotkey_factory=WaitingHotkey, overlay_factory=AbortOverlay,
+            )
+            with (
+                patch("cua_recorder.session._read_control"),
+                self.assertRaisesRegex(RecorderError, "视频关闭失败"),
+            ):
+                session.run(io.StringIO(""), lambda *_args, **_payload: None)
+            self.assertEqual([], list(root.iterdir()))
+
     def test_toolbar_startup_failure_closes_window_without_creating_assets(self) -> None:
         overlays: list[FakeOverlay] = []
 

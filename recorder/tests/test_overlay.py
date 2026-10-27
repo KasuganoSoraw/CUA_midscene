@@ -36,11 +36,23 @@ class ToolbarStateTest(unittest.TestCase):
         state.update("stopping", 1_000_000_000)
         self.assertEqual("01:00", state.snapshot().elapsed)
 
-    def test_cancel_only_applies_to_armed_session(self) -> None:
+    def test_cancel_armed_session_does_not_start_recording(self) -> None:
         state = ToolbarState()
         state.update("armed")
         self.assertEqual("stop", state.request("cancel"))
         self.assertIsNone(state.request("cancel"))
+
+    def test_discard_recording_freezes_elapsed_and_prevents_duplicate_commands(self) -> None:
+        now = [61_500_000_000]
+        state = ToolbarState(lambda: now[0])
+        state.update("recording", 1_000_000_000)
+        self.assertEqual("abort", state.request("cancel"))
+        self.assertEqual("stopping", state.snapshot().phase)
+        self.assertIsNone(state.request("cancel"))
+        self.assertIsNone(state.request("stop"))
+        now[0] += 20_000_000_000
+        state.update("cancelled")
+        self.assertEqual("01:00", state.snapshot().elapsed)
 
 
 class MouseGestureExclusionTest(unittest.TestCase):

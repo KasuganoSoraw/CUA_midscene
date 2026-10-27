@@ -218,3 +218,32 @@ test('WindowsRecorderManager 可在 armed 阶段取消且不产生录制', async
   assert.equal((await manager.stop()).phase, 'idle');
   await manager.close();
 });
+
+test('WindowsRecorderManager 在录制中放弃后回到 idle，不报告正常保存', async () => {
+  const fixture = await recorderFixture();
+  const outputRoot = path.join(fixture.root, 'recordings');
+  await mkdir(outputRoot);
+  const child = childProcess();
+  const manager = new WindowsRecorderManager({
+    executionRoot: fixture.executionRoot,
+    pythonExecutable: fixture.pythonExecutable,
+    recordingsRoot: outputRoot,
+    spawnProcess: (() => {
+      queueMicrotask(() => child.stdout.write(`${JSON.stringify({ event: 'armed' })}\n`));
+      return child;
+    }) as any,
+  });
+  try {
+    await manager.start('display-0');
+    child.stdout.write(`${JSON.stringify({ event: 'recording', recording_id: 'Recording_test' })}\n`);
+    assert.equal(manager.status().phase, 'recording');
+    child.stdout.write(`${JSON.stringify({ event: 'stopping' })}\n`);
+    child.stdout.write(`${JSON.stringify({ event: 'cancelled', reason: 'user_aborted' })}\n`);
+    child.emit('close', 0, null);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(manager.status(), { phase: 'idle', outputRoot });
+    assert.equal(child.killed, false);
+  } finally {
+    await manager.close();
+  }
+});
