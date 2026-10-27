@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import queue
+import shutil
 import threading
 import time
 from collections.abc import Callable
@@ -121,29 +122,20 @@ class RecordingSession:
         temporary_video = inputs / f"{recording_id}.mp4.partial"
         temporary_log = inputs / f"{recording_id}.txt.partial"
         self._emit(status, "starting", recording_id=recording_id)
-        self._video = self._video_factory(
-            self._capabilities,
-            self._display,
-            temporary_video,
-            framerate=self._framerate,
-        )
-        try:
-            started_ns = self._video.start()
-            self._started_ns = started_ns
-        except BaseException:
-            self._stop_video_after_failure()
-            raise
+        started_ns = self._start_video(temporary_video)
 
         started_at = datetime.now() - timedelta(
             seconds=max(0, time.perf_counter_ns() - started_ns) / 1_000_000_000,
         )
         try:
-            self._capture_log(
+            signal = self._capture_log(
                 temporary_log, started_at, started_ns, recording_id, final_video, final_log,
                 signals, status,
             )
 
             self._emit(status, "stopping", recording_id=recording_id)
+            if signal == "abort":
+                return self._discard_recording(recording_root, status)
             self._finish_video()
             result = self._publish_recording(
                 recording_id, recording_root, temporary_video, temporary_log,
@@ -157,6 +149,33 @@ class RecordingSession:
                 self._hook = None
             self._stop_video_after_failure()
             raise
+
+    def _start_video(self, temporary_video: Path) -> int:
+        self._video = self._video_factory(
+            self._capabilities, self._display, temporary_video, framerate=self._framerate,
+        )
+        try:
+            self._started_ns = self._video.start()
+            return self._started_ns
+        except BaseException:
+            self._stop_video_after_failure()
+            raise
+
+    def _discard_recording(self, root: Path, status: Callable[..., None]) -> dict[str, object]:
+        root = root.resolve()
+        if root.parent != self._output_root.resolve():
+            raise RecorderError("录制清理目录越界")
+        try:
+            self._finish_video()
+        except BaseException as error:
+            try:
+                shutil.rmtree(root)
+            except OSError as cleanup_error:
+                error.add_note(f"录制资产清理失败：{cleanup_error}")
+            raise
+        shutil.rmtree(root)
+        self._emit(status, "cancelled", reason="user_aborted")
+        return {"cancelled": True}
 
     def _publish_recording(
         self, recording_id: str, recording_root: Path,
@@ -181,7 +200,7 @@ class RecordingSession:
         self, temporary_log: Path, started_at: datetime, started_ns: int,
         recording_id: str, final_video: Path, final_log: Path,
         signals: queue.Queue[str], status: Callable[..., None],
-    ) -> None:
+    ) -> str:
         with temporary_log.open("w", encoding="utf-8", newline="\n") as log_stream:
             write_log_header(log_stream, started_at=started_at, display=self._display)
             thresholds = input_thresholds()
@@ -208,7 +227,7 @@ class RecordingSession:
                 started_at=started_at.isoformat(timespec="milliseconds"),
             )
             try:
-                self._next_signal(signals)
+                return self._next_signal(signals)
             finally:
                 self._hook.stop()
                 self._hook = None
