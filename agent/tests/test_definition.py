@@ -1,3 +1,5 @@
+from importlib.resources import files
+
 from cua_agent import CUA_AGENT_DEFINITION, load_agent_definition
 
 
@@ -37,8 +39,8 @@ def test_freeform_only_definition_describes_available_capabilities() -> None:
     assert "最终回复必须原样包含该执行报告路径" in definition.instructions
 
 
-def test_discovery_is_an_explicit_separate_profile() -> None:
-    definition = load_agent_definition(tool_mode="discover")
-    assert "可使用 `cua_catalog`" in definition.instructions
-    assert "不提供打开、录制、复核、校准或调试 Workbench" in definition.instructions
-    assert "cua_workbench" not in definition.instructions
+def test_packaged_definitions_only_include_execution_instructions() -> None:
+    resources = files("cua_agent.definition")
+    assert {item.name for item in resources.iterdir() if item.name.endswith(".md")} == {
+        "description.md", "instructions.md", "freeform-instructions.md",
+    }

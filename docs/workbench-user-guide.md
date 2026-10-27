@@ -10,7 +10,6 @@
 CUA_SKILLS_ROOT=D:\GDEClaw\skills
 CUA_DATA_ROOT=D:\CUA\data
 CUA_RECORDINGS_ROOT=D:\CUA\recordings
-CUA_AGENT_TOOL_MODE=execute
 CUA_AGENT_FREEFORM_ONLY=false
 # 由宿主注入实际地址，本地调试填写真实运行端口：
 GDECLAW_API_BASE_URL=http://127.0.0.1:<实际端口>

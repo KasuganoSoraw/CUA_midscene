@@ -10,7 +10,6 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Literal, TypeAlias, cast
 from uuid import uuid4
 
-from .configuration import ToolMode, resolve_tool_mode
 from .contracts import (
     InvocationRequest,
     InvocationResult,
@@ -110,7 +109,6 @@ class CuaAgent:
         max_turns: int = 8,
         create_invocation_id: Callable[[], str] | None = None,
         freeform_only: bool = False,
-        tool_mode: ToolMode | None = None,
     ) -> None:
         if max_turns <= 0:
             raise ValueError("max_turns 必须大于 0")
@@ -118,7 +116,6 @@ class CuaAgent:
         self._runtime_client_factory = runtime_client_factory
         self._data_root = data_root
         self._freeform_only = freeform_only
-        self._tool_mode = resolve_tool_mode(tool_mode)
         self._max_turns = max_turns
         self._create_invocation_id = create_invocation_id or (lambda: str(uuid4()))
 
@@ -164,23 +161,20 @@ class CuaAgent:
     def _invocation_context(
         self, request: InvocationRequest, runtime: RuntimeClientProtocol,
     ) -> tuple[str, CuaToolRegistry, str]:
-        mode = "execute" if request.execution is not None else self._tool_mode
         expected = request.execution
-        if expected is None and (mode == "execute" or self._freeform_only):
+        if expected is None:
             expected = {"strategy": "freeform", "goal": request.task}
-        if self._freeform_only and expected is not None and expected["strategy"] != "freeform":
+        if self._freeform_only and expected["strategy"] != "freeform":
             raise ValueError("freeform_only=True 不接受结构化任务绑定")
-        task = request.task
-        if expected is not None:
-            task += "\n\n调用方确认的 cua_execute 参数，必须原样使用：\n" + json.dumps(
-                expected, ensure_ascii=False,
-            )
+        task = request.task + "\n\n调用方确认的 cua_execute 参数，必须原样使用：\n" + json.dumps(
+            expected, ensure_ascii=False,
+        )
         tools = create_cua_tool_registry(
             runtime, data_root=self._data_root, freeform_only=self._freeform_only,
-            tool_mode=mode, expected_execution=expected,
+            expected_execution=expected,
         )
         instructions = load_agent_definition(
-            freeform_only=self._freeform_only, tool_mode=mode,
+            freeform_only=self._freeform_only,
         ).instructions
         return task, tools, instructions
 

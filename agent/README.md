@@ -15,7 +15,7 @@ GDEClaw Main Agent
   -> invoke({ task })
   -> Python CUA Agent
        -> model Tool Calling
-       -> private cua_execute（执行专用）；独立 discover 配置可增加 cua_catalog
+       -> private cua_execute（执行指定 Skill 或完整自然语言目标）
   -> TypeScript JSONL Runtime bridge
   -> Midscene
 ```
@@ -45,9 +45,9 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 完整变量契约位于仓库根 `.env.example`。Python CLI 本身不查找环境文件；源码直接调用使用 `uv --env-file` 注入根 `.env.local`，`review --dev` 继承 Review Server 已加载的根环境配置，产品调用由 Host 注入进程环境。
 
-`CUA_AGENT_TOOL_MODE=execute` 为默认执行专用配置，只暴露 `cua_execute`，支持 replay、guided、freeform；宿主选择 Skill，SubAgent 不再次发现任务。独立调用方可显式使用 discover 配置获得 `cua_catalog` 和 `cua_execute`。任何配置都不暴露 `cua_workbench` 模型 Tool；底层 Workbench Runtime 方法保留给宿主设置入口。
+Agent 只向模型暴露 `cua_execute`，支持 replay、guided、freeform；宿主选择 Skill，SubAgent 不再次发现任务。`cua_catalog` 和 `cua_workbench` 不属于模型 Tool；底层 Catalog 与 Workbench Runtime 方法保留给非模型调用方。
 
-GDEClaw 使用 `CuaAgent(..., tool_mode="execute")` 和 `load_agent_definition(tool_mode="execute")`。结构化请求通过 `InvocationRequest.execution` 传入 skillName、inputs 与可选 strategy（默认 guided）；无绑定时将完整 task 直接作为 freeform 目标。本次调用会拒绝模型更换绑定参数，不接受任意 Skill 路径。现有 `freeform_only=True` 和环境变量 `CUA_AGENT_FREEFORM_ONLY=true` 仍只允许 freeform，不支持结构化绑定。完整资产契约、宿主 Workbench 调用及集成边界见 [执行专用集成](../docs/execution-only-subagent.md)。
+GDEClaw 使用 `CuaAgent(...)` 和 `load_agent_definition()`。结构化请求通过 `InvocationRequest.execution` 传入 skillName、inputs 与可选 strategy（默认 guided）；无绑定时将完整 task 直接作为 freeform 目标。每次调用均拒绝模型更换绑定参数，不接受任意 Skill 路径。`freeform_only=True` 和环境变量 `CUA_AGENT_FREEFORM_ONLY=true` 只允许 freeform，不支持结构化绑定。完整资产契约、宿主 Workbench 调用及集成边界见 [执行专用集成](../docs/execution-only-subagent.md)。
 
 ## 调用结果与取消
 

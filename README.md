@@ -28,7 +28,7 @@ CUA/
 
 `recorder` 是 Windows-only 采集进程，生成 MP4 与键鼠 TXT；`record` 基于 ShowUI-Aloha Learn，负责录制后处理，不包含 Act、Actor、Executor 或回放能力。`execution` 使用 TypeScript，在 Runtime worker 自身进程内直接调用 Midscene，并通过 JSONL Runtime bridge 服务 Python Agent。`execution` 可作为底层 Skill/CLI 独立发布，不安装为本机 Codex Skill。
 
-顶层 `agent/` 是唯一 canonical CUA Subagent。GDEClaw Main Agent 选择原生 Skill，CUA 默认仅通过私有 `cua_execute` 执行明确绑定的结构化任务或完整自然语言目标，不重新选择 Skill。独立 discover 配置可启用 Catalog；Workbench 始终由宿主设置入口调用底层 Runtime 方法，不暴露为模型 Tool。GDEClaw 不注册内部 Tool，CUA Subagent 不保存跨调用上下文或 Memory。正式任务从 CUA_SKILLS_ROOT 中按合法 CUA 标记和 skillName 解析，默认 guided，集成契约见 [CUA Skill 集成](docs/gdeclaw-skill-integration.md)。
+顶层 `agent/` 是唯一 canonical CUA Subagent。GDEClaw Main Agent 选择原生 Skill，CUA 仅通过私有 `cua_execute` 执行明确绑定的结构化任务或完整自然语言目标，不重新选择 Skill。Catalog 保留为 Runtime 与 CLI 的查询能力；Workbench 始终由宿主设置入口调用底层 Runtime 方法，不暴露为模型 Tool。GDEClaw 不注册内部 Tool，CUA Subagent 不保存跨调用上下文或 Memory。正式任务从 CUA_SKILLS_ROOT 中按合法 CUA 标记和 skillName 解析，默认 guided，集成契约见 [CUA Skill 集成](docs/gdeclaw-skill-integration.md)。
 
 Workbench 的“Agent 调试”页签只在使用 `review --dev` 启动时出现，直接调用 Python Agent invocation 并实时展示通用事件。它是薄的开发调试入口，不承载聊天产品、跨调用上下文或 Agent 决策逻辑。Host Adapter 使用相同的高层请求、事件与结果语义。
 

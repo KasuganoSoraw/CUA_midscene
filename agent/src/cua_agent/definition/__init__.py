@@ -4,7 +4,6 @@ __all__ = ["CUA_AGENT_DEFINITION", "load_agent_definition"]
 
 from importlib.resources import files
 
-from ..configuration import ToolMode, resolve_tool_mode
 from ..contracts import AgentDefinition
 
 
@@ -12,21 +11,11 @@ def _read_text(name: str) -> str:
     return files(__package__).joinpath(name).read_text(encoding="utf-8").strip()
 
 
-def load_agent_definition(
-    *, freeform_only: bool = False, tool_mode: ToolMode | None = None,
-) -> AgentDefinition:
+def load_agent_definition(*, freeform_only: bool = False) -> AgentDefinition:
     """创建一个不含可变运行状态的新 definition 值。"""
 
-    mode = resolve_tool_mode(tool_mode)
-    instructions = "instructions.md" if mode == "execute" else "discovery-instructions.md"
-    if freeform_only:
-        instructions = "freeform-instructions.md"
+    instructions = "freeform-instructions.md" if freeform_only else "instructions.md"
     description = _read_text("description.md")
-    if mode == "discover":
-        description = (
-            "独立电脑操作 Agent，可发现项目任务并执行 replay、guided 或 freeform；"
-            "不提供工作台工具。"
-        )
     return AgentDefinition(
         name="Computer-Use",
         invocation_mode="stateless-task",
@@ -38,4 +27,4 @@ def load_agent_definition(
     )
 
 
-CUA_AGENT_DEFINITION = load_agent_definition(tool_mode="execute")
+CUA_AGENT_DEFINITION = load_agent_definition()

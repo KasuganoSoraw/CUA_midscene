@@ -12,7 +12,6 @@ CUA 在独立临时目录生成并校验单个 Skill ZIP，通过 GDEClaw 原生
 CUA_SKILLS_ROOT=D:\GDEClaw\skills
 CUA_DATA_ROOT=D:\CUA\data
 CUA_RECORDINGS_ROOT=D:\CUA\recordings
-CUA_AGENT_TOOL_MODE=execute
 CUA_AGENT_FREEFORM_ONLY=false
 # 由宿主注入实际运行时 API 地址，端口不固定：
 GDECLAW_API_BASE_URL=http://127.0.0.1:<实际端口>
@@ -181,7 +180,7 @@ npm.cmd run cua -- skill run --skill-name network-alarm-search --strategy replay
 
 ## 迁移与兼容
 
-旧资产位于 CUA_DATA_ROOT/projects/<scene>/<task>，使用 0.2 task.json 和 scene/task。显式 scene/task CLI、独立 discover 配置与兼容接口仍针对这套目录，不能把它们当作新的 GDEClaw 工作流。新 Workbench 不读取这些目录，不提供场景选择或发布流程。
+旧资产位于 CUA_DATA_ROOT/projects/<scene>/<task>，使用 0.2 task.json 和 scene/task。显式 scene/task CLI 与非模型查询接口针对这套目录，不能把它们当作 GDEClaw Skill 工作流。Workbench 不读取这些目录，不提供场景选择或发布流程。
 
 没有自动移动旧资产。可使用保留的原始录制生成完整 Skill，人工复核后使用规范 skillName；不要只复制旧 task.json 或添加空 Manifest 来冒充合法 Skill。原任务及运行历史不删除。宿主结构化请求必须改用 skillName；Python execution 绑定拒绝旧 scene/task，避免字段被忽略。CLI 兼容入口不会扫描正式 Skill 根。
 

@@ -85,9 +85,9 @@ CUA Skill 是位于 CUA_SKILLS_ROOT/<skill-name> 的独立录制任务资产；S
 
 ### 3.3 Agent 任务执行
 
-CUA Agent 每次接收一项完整 GUI 任务，在一次调用内执行模型 Tool Calling。内部工具包括：
+CUA Agent 每次接收一项完整 GUI 任务，在一次调用内执行模型 Tool Calling。模型执行工具与非模型宿主方法的职责如下：
 
-- `cua_catalog`：仅在独立 discover 模型配置中发现场景、任务及其输入要求；执行专用配置不暴露此工具。
+- `catalog` Runtime 方法：供非模型调用方查询任务及其输入要求；不属于 SubAgent 的模型工具。
 - `cua_execute`：按明确选定的策略执行完整目标。
 - Workbench 的 workbench Runtime 方法：由宿主设置入口经 Keeper 直接启动或复用服务，不暴露为模型工具。
 

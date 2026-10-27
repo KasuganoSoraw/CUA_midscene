@@ -72,7 +72,6 @@ Host 向 Agent 提供模型变量、可信 Skill 根、数据根、JavaScript ex
 ```powershell
 $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 $env:CUA_SKILLS_ROOT = 'C:\path\to\gdeclaw-skills'
-$env:CUA_AGENT_TOOL_MODE = 'execute'
 # Skill 创建需要宿主的真实动态端口：
 $env:GDECLAW_API_BASE_URL = 'http://127.0.0.1:<实际端口>'
 $env:CUA_AGENT_JS_RUNTIME_EXECUTABLE = 'C:\Program Files\nodejs\node.exe'

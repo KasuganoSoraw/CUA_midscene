@@ -24,53 +24,30 @@ class FakeRuntimeClient:
         return {"ok": True, "method": method}
 
 
-def test_discovery_registry_maps_catalog_and_execute_without_workbench() -> None:
+def test_registry_exposes_only_skill_and_freeform_execution() -> None:
     async def scenario() -> None:
         client = FakeRuntimeClient()
         registry = create_cua_tool_registry(
-            client, data_root="C:/cua-data", tool_mode="discover",  # type: ignore[arg-type]
+            client, data_root="C:/cua-data",  # type: ignore[arg-type]
         )
 
-        assert [tool.name for tool in registry.definitions] == [
-            "cua_catalog",
-            "cua_execute",
-        ]
-        assert all(tool.input_schema["type"] == "object" for tool in registry.definitions)
-        catalog, execute = registry.definitions
-        catalog_actions = {
-            branch["properties"]["action"]["const"]: branch  # type: ignore[index]
-            for branch in catalog.input_schema["oneOf"]  # type: ignore[union-attr]
-        }
-        assert set(catalog_actions) == {
-            "list-scenes",
-            "list-tasks",
-            "find-task",
-            "describe-task",
-        }
-        assert "明确提供 task 标识但未提供 scene" in catalog.description
-        find_action = catalog_actions["find-task"]["properties"]["action"]  # type: ignore[index]
-        assert "跨场景精确查找" in find_action["description"]  # type: ignore[index]
-        assert "不向调用方请求策略确认" in catalog.description
-        assert "真实桌面副作用" in execute.description
-        assert "成功后不得再次" in execute.description
-        freeform_schema = execute.input_schema["oneOf"][2]["properties"]["strategy"]  # type: ignore[index]
-        assert "不需要调用方再次确认" in freeform_schema["description"]  # type: ignore[index]
-
-        await registry.call("cua_catalog", {"action": "list-scenes"})
+        assert [tool.name for tool in registry.definitions] == ["cua_execute"]
+        execute = registry.definitions[0]
+        assert execute.input_schema["type"] == "object"
+        branches = execute.input_schema["oneOf"]
+        for branch in branches[:2]:  # type: ignore[index]
+            assert set(branch["properties"]) == {"strategy", "skillName", "inputs"}
+            assert branch["required"] == ["strategy", "skillName"]
         await registry.call(
             "cua_execute",
-            {"strategy": "freeform", "goal": "打开 Chrome", "dataRoot": "D:/override"},
+            {"strategy": "freeform", "goal": "打开 Chrome"},
         )
-        with pytest.raises(ValueError, match="无法识别"):
-            await registry.call("cua_workbench", {"mode": "recording"})
-
-        assert client.calls == [
-            ("catalog", {"action": "list-scenes", "dataRoot": "C:/cua-data"}),
-            (
-                "execute",
-                {"strategy": "freeform", "goal": "打开 Chrome", "dataRoot": "D:/override"},
-            ),
-        ]
+        for tool in ("cua_catalog", "cua_workbench"):
+            with pytest.raises(ValueError, match="无法识别"):
+                await registry.call(tool, {})
+        assert client.calls == [("execute", {
+            "strategy": "freeform", "goal": "打开 Chrome", "dataRoot": "C:/cua-data",
+        })]
 
     asyncio.run(scenario())
 

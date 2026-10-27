@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import io
 import json
 
@@ -7,13 +8,13 @@ from test_runner import FakeModelClient, FakeRuntimeClient
 
 from cua_agent import CuaAgent, InvocationRequest, InvocationStatus, ModelResponse, ModelToolCall
 from cua_agent.cli import invoke_from_stream
-from cua_agent.configuration import resolve_tool_mode
 from cua_agent.contracts import JsonValue
+from cua_agent.definition import load_agent_definition
 from cua_agent.tools import create_cua_tool_registry
 
 
 def test_execution_schema_preserves_all_strategies_without_catalog_or_workbench() -> None:
-    registry = create_cua_tool_registry(None, tool_mode="execute")
+    registry = create_cua_tool_registry(None)
     assert [tool.name for tool in registry.definitions] == ["cua_execute"]
     branches = registry.definitions[0].input_schema["oneOf"]
     assert [branch["properties"]["strategy"]["const"] for branch in branches] == [
@@ -104,7 +105,7 @@ def test_execution_mode_rejects_unavailable_model_tools(tool: str) -> None:
 
 
 def test_execution_registry_checks_fields_without_relying_on_model_schema() -> None:
-    registry = create_cua_tool_registry(None, tool_mode="execute")
+    registry = create_cua_tool_registry(None)
     with pytest.raises(ValueError, match="不支持的字段"):
         asyncio.run(registry.call("cua_execute", {
             "strategy": "freeform", "goal": "打开系统", "skillRoot": "C:/skills",
@@ -143,19 +144,17 @@ def test_binding_is_copied_and_cli_forwards_it_without_task_discovery() -> None:
     assert runtime.calls == [("execute", request.execution)]
 
 
-def test_tool_mode_environment_and_explicit_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CUA_AGENT_TOOL_MODE", raising=False)
-    assert resolve_tool_mode() == "execute"
+def test_model_tools_ignore_unrecognized_environment_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CUA_AGENT_TOOL_MODE", "discover")
-    assert resolve_tool_mode() == "discover"
-    assert resolve_tool_mode("execute") == "execute"
-    monkeypatch.setenv("CUA_AGENT_TOOL_MODE", "unknown")
-    with pytest.raises(ValueError):
-        resolve_tool_mode()
+    registry = create_cua_tool_registry(None)
+    assert [tool.name for tool in registry.definitions] == ["cua_execute"]
+    assert "仅提供 `cua_execute`" in load_agent_definition().instructions
+    for factory in (CuaAgent, create_cua_tool_registry, load_agent_definition):
+        assert "tool_mode" not in inspect.signature(factory).parameters
 
 
-def test_explicit_binding_disables_discovery_even_in_discovery_profile() -> None:
-    registry = create_cua_tool_registry(None, tool_mode="discover", expected_execution={
+def test_explicit_binding_exposes_only_execution() -> None:
+    registry = create_cua_tool_registry(None, expected_execution={
         "strategy": "replay", "skillName": "bound-skill",
     })
     assert [tool.name for tool in registry.definitions] == ["cua_execute"]
@@ -171,9 +170,8 @@ def test_execution_can_request_required_business_inputs_without_running_tools() 
     assert runtime.calls == []
 
 
-@pytest.mark.parametrize("mode", ["execute", "discover"])
-def test_freeform_only_remains_restricted_for_each_tool_mode(mode) -> None:
-    registry = create_cua_tool_registry(None, tool_mode=mode, freeform_only=True)
+def test_freeform_only_rejects_structured_binding() -> None:
+    registry = create_cua_tool_registry(None, freeform_only=True)
     assert [tool.name for tool in registry.definitions] == ["cua_execute"]
     assert registry.definitions[0].input_schema["properties"]["strategy"] == {"const": "freeform"}
     model = FakeModelClient([])

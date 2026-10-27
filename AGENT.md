@@ -16,7 +16,7 @@
 6. `task.yaml` 是唯一长期执行事实源，不维护自定义 flow、route、overrides、proposal 或 history。`task.json` 保存输入定义和录制默认值；本次参数只进入运行快照。
 7. 正式任务位于 `<CUA_SKILLS_ROOT>/<skill-name>`。SKILL.md frontmatter name、目录、cua-manifest.json 与 task.json 的身份必须一致。只管理合法 CUA 标记的完整资产，普通宿主 Skill 不进入 CUA 的编辑、删除或执行范围。运行快照、结果、报告和截图只写入 `<CUA_DATA_ROOT>/runs/<run-id>`。旧 projects 仅供显式兼容 CLI 使用，不是新工作流的资产目录。
 8. 每个 trace step 对应一个 `step-NNN | <operation-type>` Midscene task；输入 ID 为 `step-NNN-input`。结构编辑统一重编号并迁移输入及证据绑定，不得丢失引用或启用 continueOnError。
-9. GDEClaw Main Agent 选择 Skill 并提交完整任务。CUA 执行专用配置只暴露 cua_execute，使用 skillName、inputs 和确定的策略，缺省 guided，明确严格回放时 replay；无绑定则 freeform，不重新发现或选择 Skill。独立 discover 是旧项目兼容配置。失败后不得自动切换、修改任务或重试，成功后不继续 GUI 操作或业务分析。
+9. GDEClaw Main Agent 选择 Skill 并提交完整任务。CUA 只向模型暴露 cua_execute，使用 skillName、inputs 和确定的策略，缺省 guided，明确严格回放时 replay；无绑定则 freeform，不重新发现或选择 Skill。Catalog 仅供非模型调用方查询。失败后不得自动切换、修改任务或重试，成功后不继续 GUI 操作或业务分析。
 10. Runtime 不提供跨进程 computer use 并发锁。上层调用方必须保证真实桌面操作串行执行，不得把执行器描述为并发安全。
 11. 单个函数或方法不得超过 50 行，应按职责组织代码，不通过压缩语句或机械转发规避限制。TypeScript 主流程应保持可顺读；抽象应服务于复用、隔离 I/O/第三方边界、独立业务规则或复杂度控制。
 12. Agent 到 Runtime 的依赖方向固定为 `agent (Python) -> execution/runtime-bridge (TypeScript) -> Midscene`。`execution` 不得导入 Python Agent、模型 SDK、Agent prompt 或 GDEClaw；GDEClaw 不得注册 CUA 内部 Tool。Agent invocation 不保存跨调用 Session，依赖只在安装/部署阶段准备。

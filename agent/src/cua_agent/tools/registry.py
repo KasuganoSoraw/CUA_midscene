@@ -8,7 +8,6 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import cast
 
-from ..configuration import ToolMode, resolve_tool_mode
 from ..contracts import JsonValue, normalize_execution
 from ..runtime_client import (
     CancellationCheck,
@@ -32,74 +31,12 @@ class ToolDefinition:
         }
 
 
-CATALOG_TOOL = ToolDefinition(
-    name="cua_catalog",
-    description=(
-        "发现 Recorded Skill。调用方明确提供 task 标识但未提供 scene 时，优先使用 "
-        "find-task；只有自然语言目标、尚不知道 task 时，使用 list-scenes 和 list-tasks "
-        "浏览；已知 scene 和 task 时，使用 describe-task 获取详情。未发现匹配任务时，"
-        "直接改用 cua_execute 的 freeform 策略继续完成原始目标，不向调用方请求策略确认。"
-    ),
-    input_schema={
-        "type": "object",
-        "oneOf": [
-            {
-                "properties": {
-                    "action": {
-                        "const": "list-scenes",
-                        "description": "尚不知道明确 scene 或 task 时，从场景开始浏览。",
-                    }
-                },
-                "required": ["action"],
-                "additionalProperties": False,
-            },
-            {
-                "properties": {
-                    "action": {
-                        "const": "list-tasks",
-                        "description": "已知 scene、尚不知道明确 task 时，列出该场景的任务。",
-                    },
-                    "scene": {"type": "string", "minLength": 1},
-                },
-                "required": ["action", "scene"],
-                "additionalProperties": False,
-            },
-            {
-                "properties": {
-                    "action": {
-                        "const": "find-task",
-                        "description": (
-                            "调用方给出明确 task 标识但未知 scene 时，按 task ID 跨场景精确查找；"
-                            "不用于自然语言语义搜索。"
-                        ),
-                    },
-                    "task": {"type": "string", "minLength": 1},
-                },
-                "required": ["action", "task"],
-                "additionalProperties": False,
-            },
-            {
-                "properties": {
-                    "action": {
-                        "const": "describe-task",
-                        "description": "scene 和 task 均已确定时，读取任务详情与输入要求。",
-                    },
-                    "scene": {"type": "string", "minLength": 1},
-                    "task": {"type": "string", "minLength": 1},
-                },
-                "required": ["action", "scene", "task"],
-                "additionalProperties": False,
-            },
-        ],
-    },
-)
-
 EXECUTE_TOOL = ToolDefinition(
     name="cua_execute",
     description=(
-        "执行一次具有真实桌面副作用的完整 Computer-Use 任务。调用时传入完整目标，"
-        "不得用于探测或确认。返回 status=succeeded 表示目标已经完成；成功后不得再次"
-        "执行相同或相似 GUI 操作来验证结果，应直接生成最终回复。"
+        "执行调用方绑定的完整电脑操作任务。结构化任务使用 skillName 和 inputs，"
+        "默认 guided；明确严格回放时使用 replay。无 Skill 绑定时使用 freeform 和完整 goal。"
+        "不得自行发现或更换 Skill，成功后停止。"
     ),
     input_schema={
         "type": "object",
@@ -107,21 +44,27 @@ EXECUTE_TOOL = ToolDefinition(
             {
                 "properties": {
                     "strategy": {"const": "replay"},
-                    "scene": {"type": "string", "minLength": 1},
-                    "task": {"type": "string", "minLength": 1},
+                    "skillName": {
+                        "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+                        "maxLength": 64,
+                        "description": "调用方已经选定的 CUA Skill 名称，不是文件路径。",
+                    },
                     "inputs": {"type": "object", "additionalProperties": {"type": "string"}},
                 },
-                "required": ["strategy", "scene", "task"],
+                "required": ["strategy", "skillName"],
                 "additionalProperties": False,
             },
             {
                 "properties": {
                     "strategy": {"const": "guided"},
-                    "scene": {"type": "string", "minLength": 1},
-                    "task": {"type": "string", "minLength": 1},
+                    "skillName": {
+                        "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+                        "maxLength": 64,
+                        "description": "调用方已经选定的 CUA Skill 名称，不是文件路径。",
+                    },
                     "inputs": {"type": "object", "additionalProperties": {"type": "string"}},
                 },
-                "required": ["strategy", "scene", "task"],
+                "required": ["strategy", "skillName"],
                 "additionalProperties": False,
             },
             {
@@ -129,8 +72,7 @@ EXECUTE_TOOL = ToolDefinition(
                     "strategy": {
                         "const": "freeform",
                         "description": (
-                            "没有合适 Recorded Skill 时直接执行完整目标；"
-                            "不需要调用方再次确认此策略。"
+                            "调用方未绑定结构化 Skill 时直接执行完整目标，不要求选择执行策略。"
                         ),
                     },
                     "goal": {"type": "string", "minLength": 1},
@@ -143,30 +85,6 @@ EXECUTE_TOOL = ToolDefinition(
     },
 )
 
-def _skill_execute_tool() -> ToolDefinition:
-    schema = deepcopy(EXECUTE_TOOL.input_schema)
-    branches = cast(list[dict[str, JsonValue]], schema["oneOf"])
-    for branch in branches[:2]:
-        properties = cast(dict[str, JsonValue], branch["properties"])
-        properties.pop("scene", None)
-        properties.pop("task", None)
-        properties["skillName"] = {
-            "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 64,
-            "description": "调用方已经选定的 CUA Skill 名称，不是文件路径。",
-        }
-        branch["required"] = ["strategy", "skillName"]
-    return ToolDefinition(
-        name="cua_execute", description=(
-            "执行调用方绑定的完整电脑操作任务。结构化任务使用 skillName 和 inputs，"
-            "默认 guided；明确严格回放时使用 replay。无 Skill 绑定时使用 freeform 和完整 goal。"
-            "不得自行发现或更换 Skill，成功后停止。"
-        ), input_schema=schema,
-    )
-
-
-SKILL_EXECUTE_TOOL = _skill_execute_tool()
-
-
 class CuaToolRegistry:
     """把模型可见的私有 Tool 名称映射到 Runtime bridge method。"""
 
@@ -176,25 +94,17 @@ class CuaToolRegistry:
         *,
         data_root: str | None = None,
         freeform_only: bool = False,
-        tool_mode: ToolMode | None = None,
         expected_execution: Mapping[str, JsonValue] | None = None,
     ) -> None:
         self._client = client
         self._data_root = data_root
         self._freeform_only = freeform_only
-        mode = resolve_tool_mode(tool_mode)
-        self._execute_only = mode == "execute" or freeform_only or expected_execution is not None
         self._expected_execution = (
             normalize_execution(expected_execution) if expected_execution is not None else None
         )
         self._tools: dict[str, tuple[ToolDefinition, RuntimeMethod]] = {
-            SKILL_EXECUTE_TOOL.name: (SKILL_EXECUTE_TOOL, "execute"),
+            EXECUTE_TOOL.name: (EXECUTE_TOOL, "execute"),
         }
-        if mode == "discover" and expected_execution is None and not freeform_only:
-            self._tools = {
-                CATALOG_TOOL.name: (CATALOG_TOOL, "catalog"),
-                EXECUTE_TOOL.name: (EXECUTE_TOOL, "execute"),
-            }
         if freeform_only:
             branches = cast(list[dict[str, JsonValue]], EXECUTE_TOOL.input_schema["oneOf"])
             execute = ToolDefinition(
@@ -225,9 +135,7 @@ class CuaToolRegistry:
         if self._freeform_only:
             _validate_freeform_arguments(arguments)
         _definition, method = entry
-        payload = _normalize_tool_arguments(name, arguments)
-        if self._execute_only:
-            payload = normalize_execution(payload)
+        payload = normalize_execution(_normalize_execution_arguments(arguments))
         if self._expected_execution is not None:
             _require_bound_execution(payload, self._expected_execution)
         if self._data_root is not None and "dataRoot" not in payload:
@@ -264,29 +172,11 @@ def _validate_freeform_arguments(arguments: Mapping[str, JsonValue]) -> None:
             raise ValueError(f"{name} 必须是非空字符串")
 
 
-def _normalize_tool_arguments(
-    name: str,
+def _normalize_execution_arguments(
     arguments: Mapping[str, JsonValue],
 ) -> dict[str, JsonValue]:
     payload = dict(arguments)
-    if name == "cua_catalog":
-        # 模型（如 GTSLLM-Pro-Moe）有时把 const 枚举值输出为数组
-        # （["list-tasks"]）、带引号的字符串（"list-tasks"）或带噪声字符
-        # （list-tasks>），导致 Node 侧 includes 严格匹配失败。
-        # 从原始值中提取已知 action 关键字。
-        raw_action = payload.get("action")
-        text: str
-        if isinstance(raw_action, list) and raw_action:
-            text = str(raw_action[0])
-        elif isinstance(raw_action, str):
-            text = raw_action
-        else:
-            text = str(raw_action or "")
-        catalog_action = _extract_catalog_action(text)
-        if catalog_action is not None:
-            payload["action"] = catalog_action
-        return payload
-    if name != "cua_execute" or "inputs" not in payload:
+    if "inputs" not in payload:
         return payload
 
     raw_inputs = payload["inputs"]
@@ -310,37 +200,14 @@ def _normalize_tool_arguments(
     return payload
 
 
-_CATALOG_ACTIONS: tuple[str, ...] = (
-    "list-scenes",
-    "list-tasks",
-    "find-task",
-    "describe-task",
-)
-
-
-def _extract_catalog_action(text: str) -> str | None:
-    """从可能带噪声的文本中提取已知的 catalog action 关键字。
-
-    模型（如 GTSLLM-Pro-Moe）可能把 const 枚举值输出为带引号、带空白、
-    带噪声字符（如 `list-scenes>`）甚至数组形式。这里用子串匹配提取
-    已知 action，避免严格 includes 误报"无法识别"。
-    """
-    lowered = text.lower()
-    for action in _CATALOG_ACTIONS:
-        if action in lowered:
-            return action
-    return None
-
-
 def create_cua_tool_registry(
     client: RuntimeClientProtocol,
     *,
     data_root: str | None = None,
     freeform_only: bool = False,
-    tool_mode: ToolMode | None = None,
     expected_execution: Mapping[str, JsonValue] | None = None,
 ) -> CuaToolRegistry:
     return CuaToolRegistry(
         client, data_root=data_root, freeform_only=freeform_only,
-        tool_mode=tool_mode, expected_execution=expected_execution,
+        expected_execution=expected_execution,
     )
