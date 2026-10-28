@@ -67,6 +67,7 @@ const operationOptions = computed<ReviewSelectOption[]>(() => [
   { value: 'input', label: operationLabel('input') },
   { value: 'keyboard', label: operationLabel('keyboard') },
   { value: 'wait', label: operationLabel('wait') },
+  { value: 'aiAct', label: operationLabel('aiAct') },
 ]);
 const inputModeOptions = computed<ReviewSelectOption[]>(() => [
   { value: 'replace', label: t('review.inputReplace') },
@@ -91,6 +92,7 @@ const referenceFileInput = ref<HTMLInputElement>();
 const referenceUploading = ref(false);
 const referenceUploadError = ref('');
 const requestedEvidenceMode = ref<EvidenceMode>('full');
+const selectedEvidenceSource = ref<number>();
 const evidenceBySource = new Map<number, ReviewEvidence>();
 let hydratingEditor = false;
 let draftStorage: ReviewDraftStorage<SkillTaskManifest> | undefined;
@@ -128,8 +130,10 @@ function clone<T>(value: T): T {
 }
 
 const current = computed(() => steps.value[selected.value]);
+const currentEvidence = computed(() => current.value?.evidences?.find(item => item.sourceStep === selectedEvidenceSource.value)
+  ?? current.value?.evidence);
 const evidenceMode = computed({
-  get: () => resolveEvidenceMode(requestedEvidenceMode.value, editor.operation, current.value?.evidence),
+  get: () => resolveEvidenceMode(requestedEvidenceMode.value, editor.operation, currentEvidence.value),
   set: (value: EvidenceMode) => { requestedEvidenceMode.value = value; },
 });
 const currentTitle = computed(() => current.value
@@ -149,6 +153,7 @@ const displayedReferenceImages = computed<ReviewReferenceImage[]>(() => {
 });
 const referenceImagesBound = computed(() => editor.referenceImages.length > 0);
 const multipleReferenceImages = computed(() => editor.referenceImages.length > 1);
+const referenceCapable = computed(() => ['click', 'doubleClick', 'rightClick', 'aiAct'].includes(editor.operation));
 const referenceBindingStatus = computed(() => {
   if (multipleReferenceImages.value) return t('review.referenceMultiple', { count: editor.referenceImages.length });
   return referenceImagesBound.value ? t('review.referenceBound') : t('review.referenceAvailableStatus');
@@ -159,7 +164,7 @@ const referenceBindingDisabledReason = computed<string | undefined>(() => {
   if (busy.value) return t('review.referenceBusy');
   if (advancedEditing.value) return t('review.referenceAdvanced');
   if (editor.custom) return t('review.referenceCustom');
-  if (editor.operation !== 'click' && editor.operation !== 'doubleClick' && editor.operation !== 'rightClick') {
+  if (!referenceCapable.value) {
     return t('review.referenceOperation');
   }
   if (multipleReferenceImages.value) {
@@ -171,7 +176,7 @@ const referenceBindingDisabledReason = computed<string | undefined>(() => {
   return undefined;
 });
 const referenceUploadDisabled = computed(() => !writable.value || busy.value || conflict.value || advancedEditing.value
-  || editor.custom || multipleReferenceImages.value || (editor.operation !== 'click' && editor.operation !== 'doubleClick' && editor.operation !== 'rightClick'));
+  || editor.custom || multipleReferenceImages.value || !referenceCapable.value);
 const dirty = computed(() => changes.value.length > 0);
 const builtContent = computed(() => buildStepContent(editor, current.value?.id ?? 'step-001'));
 const flowPreview = computed(() => JSON.stringify(builtContent.value.flow, null, 2));
@@ -186,13 +191,18 @@ function rebuildSteps(): void {
   const bindings = draft.value.manifest.source.stepBindings ?? {};
   steps.value = (draft.value.document.tasks as JsonObject[]).map((item, index) => {
     const name = String(item.name);
-    const match = /^(step-\d{3,}) \| (click|doubleClick|rightClick|input|keyboard|wait)$/.exec(name);
+    const match = /^(step-\d{3,}) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct)$/.exec(name);
     const id = match?.[1] ?? `step-${String(index + 1).padStart(3, '0')}`;
     const operation = (match?.[2] ?? 'click') as ReviewOperation;
     const flow = clone(item.flow as JsonObject[]);
     const referenceImages = referenceImagesFromFlow(flow, operation);
-    const sourceStep = bindings[id];
-    const evidence = typeof sourceStep === 'number' ? evidenceBySource.get(sourceStep) : undefined;
+    const sourceSteps = bindings[id] === null || bindings[id] === undefined
+      ? [] : Array.isArray(bindings[id]) ? bindings[id] as number[] : [bindings[id] as number];
+    const evidences = sourceSteps.flatMap(sourceStep => {
+      const evidence = evidenceBySource.get(sourceStep);
+      return evidence ? [evidence] : [];
+    });
+    const evidence = evidences.at(-1);
     return {
       id,
       name,
@@ -200,6 +210,7 @@ function rebuildSteps(): void {
       flow,
       ...(draft.value!.manifest.inputs[`${id}-input`] ? { input: clone(draft.value!.manifest.inputs[`${id}-input`]) } : {}),
       ...(evidence ? { evidence } : {}),
+      ...(evidences.length ? { evidences } : {}),
       ...(referenceImages.length ? { referenceImages } : {}),
     };
   });
@@ -209,6 +220,7 @@ function rebuildSteps(): void {
 function populateEditor(): void {
   const step = current.value;
   if (!step) return;
+  selectedEvidenceSource.value = undefined;
   referenceUploadError.value = '';
   hydratingEditor = true;
   delete editor.referenceCandidate;
@@ -307,7 +319,11 @@ async function loadTask(restoreDraft = true): Promise<void> {
     baseRevision.value = loaded.revision;
     draft.value = { manifest: clone(loaded.manifest), document: clone(loaded.document) };
     evidenceBySource.clear();
-    loaded.steps.forEach((item) => { if (item.evidence) evidenceBySource.set(item.evidence.sourceStep, item.evidence); });
+    loaded.steps.forEach((item) => {
+      for (const evidence of item.evidences ?? (item.evidence ? [item.evidence] : [])) {
+        evidenceBySource.set(evidence.sourceStep, evidence);
+      }
+    });
     changes.value = [];
     selected.value = 0;
     rebuildSteps();
@@ -541,7 +557,7 @@ async function confirmTaskDeletion(): Promise<void> {
 }
 
 function evidencePath(step: ReviewStep | undefined): string | undefined {
-  const evidence = step?.evidence;
+  const evidence = step === current.value ? currentEvidence.value : step?.evidence;
   return evidenceMode.value === 'crop' ? evidence?.crop ?? evidence?.full : evidence?.full ?? evidence?.crop;
 }
 
@@ -688,14 +704,17 @@ onMounted(async () => {
       <section class="editor panel">
         <header class="review-editor-heading">
           <h2>{{ currentTitle }}</h2>
-          <div v-if="current" class="step-provenance"><span><i class="evidence-dot" :class="{ manual: !current.evidence }"></i>{{ current.evidence ? t('review.recordedStep') : t('review.manualStep') }}</span><span v-if="editor.operation === 'click' || editor.operation === 'doubleClick' || editor.operation === 'rightClick'"><WorkbenchIcon name="image" />{{ referenceImagesBound ? t('review.referenceEnabled') : t('review.referenceDisabled') }}</span></div>
+          <div v-if="current" class="step-provenance"><span><i class="evidence-dot" :class="{ manual: !current.evidence }"></i>{{ current.evidence ? t('review.recordedStep') : t('review.manualStep') }}</span><span v-if="referenceCapable"><WorkbenchIcon name="image" />{{ referenceImagesBound ? t('review.referenceEnabled') : t('review.referenceDisabled') }}</span></div>
         </header>
         <section v-if="current" class="step-evidence">
           <input ref="referenceFileInput" hidden type="file" tabindex="-1" accept="image/png,image/jpeg,image/webp" :disabled="referenceUploadDisabled" @change="uploadReference" />
+          <div v-if="current.evidences && current.evidences.length > 1" class="evidence-tabs" :aria-label="t('review.sourceEvidence')">
+            <button v-for="evidence in current.evidences" :key="evidence.sourceStep" :class="{ active: currentEvidence?.sourceStep === evidence.sourceStep }" @click="selectedEvidenceSource = evidence.sourceStep">{{ t('review.recordedSourceStep', { index: evidence.sourceStep }) }}</button>
+          </div>
           <div class="evidence-tabs">
-            <button v-if="current.evidence?.full" :class="{ active: evidenceMode === 'full' }" @click="evidenceMode = 'full'">{{ t('review.globalImage') }}</button>
-            <button v-if="current.evidence?.crop" :class="{ active: evidenceMode === 'crop' }" @click="evidenceMode = 'crop'">{{ t('review.cropImage') }}</button>
-            <button v-if="editor.operation === 'click' || editor.operation === 'doubleClick' || editor.operation === 'rightClick'" :class="{ active: evidenceMode === 'reference' }" @click="evidenceMode = 'reference'">{{ t('review.referenceImage') }}</button>
+            <button v-if="currentEvidence?.full" :class="{ active: evidenceMode === 'full' }" @click="evidenceMode = 'full'">{{ t('review.globalImage') }}</button>
+            <button v-if="currentEvidence?.crop" :class="{ active: evidenceMode === 'crop' }" @click="evidenceMode = 'crop'">{{ t('review.cropImage') }}</button>
+            <button v-if="referenceCapable && displayedReferenceImages.length" :class="{ active: evidenceMode === 'reference' }" @click="evidenceMode = 'reference'">{{ t('review.referenceImage') }}</button>
             <span>{{ evidenceMode === 'reference' ? t('review.referenceImage') : t('review.recordedImage') }}</span>
           </div>
           <div v-if="evidenceMode === 'reference'" class="reference-gallery">
@@ -747,8 +766,8 @@ onMounted(async () => {
             {{ t('review.customFlow') }}
           </div>
 
-          <template v-else-if="editor.operation === 'click' || editor.operation === 'doubleClick' || editor.operation === 'rightClick'">
-            <label class="wide">{{ t('review.target') }}
+          <template v-else-if="editor.operation === 'click' || editor.operation === 'doubleClick' || editor.operation === 'rightClick' || editor.operation === 'aiAct'">
+            <label class="wide">{{ editor.operation === 'aiAct' ? t('review.actionPrompt') : t('review.target') }}
               <textarea v-model="editor.target" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.targetPlaceholder')"></textarea>
             </label>
           </template>

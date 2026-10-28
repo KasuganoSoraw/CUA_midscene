@@ -19,7 +19,7 @@
                 "required": ["type"],
                 "properties": {
                   "type": {
-                    "enum": ["click", "doubleClick", "rightClick", "input", "keyboard", "wait"]
+                    "enum": ["click", "doubleClick", "rightClick", "input", "keyboard", "wait", "aiAct"]
                   },
                   "prompt": { "type": ["string", "null"] },
                   "locatePrompt": { "type": ["string", "null"] },

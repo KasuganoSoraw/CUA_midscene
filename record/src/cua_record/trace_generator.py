@@ -153,6 +153,7 @@ class TraceGenerator:
             "input": "input",
             "keyboard": "keyboard",
             "wait": "wait",
+            "aiact": "aiAct",
         }
         op_type = operation_types.get(raw_type)
         if op_type is None:
@@ -184,6 +185,8 @@ class TraceGenerator:
             return "input"
         if event_name == "press":
             return "keyboard"
+        if event_name in {"scrollup", "scrolldown", "dragstart"}:
+            return "aiAct"
         return None
 
     def _operation_error(
@@ -201,9 +204,10 @@ class TraceGenerator:
             "input": ("prompt", "locatePrompt", "value"),
             "keyboard": ("key",),
             "wait": ("condition",),
+            "aiAct": ("prompt",),
         }
         if operation_type not in required_fields:
-            return "Operation.type 必须是 click、doubleClick、rightClick、input、keyboard 或 wait"
+            return "Operation.type 必须是 click、doubleClick、rightClick、input、keyboard、wait 或 aiAct"
         if expected_type is not None and operation_type != expected_type:
             return (
                 f"录制事件要求 Operation.type 为 {expected_type}，"
@@ -278,6 +282,12 @@ class TraceGenerator:
         recent_json = json.dumps(recent_steps, ensure_ascii=False, indent=2)
 
         delta = self._action_delta(act, action, deltas_cfg, modifier_guide)
+        drag_path = action.get("path") if act.startswith("DragStart") else None
+        path_evidence = (
+            f"\nRecorded drag path (仅作动作轨迹证据，不要在输出中写坐标): "
+            f"{json.dumps(drag_path, ensure_ascii=False)}"
+            if isinstance(drag_path, list) and len(drag_path) >= 2 else ""
+        )
 
         return f"""{base}
 
@@ -286,6 +296,7 @@ Recent Steps (most recent first, up to 3):
 
 Step Index: {step_idx}
 Action: {act}
+{path_evidence}
 Software: {sw}
 Timestamp: {ts}s
 Overall Task: {overall_task}
@@ -480,6 +491,10 @@ Overall Task: {overall_task}
         crop_b64, full_b64 = self._step_images(raw, screenshots_dir, ts, act_str)
         act = item.get("action") or ""
         expected_operation_type = self._recorded_operation_type(act)
+        if act.startswith("DragStart") and not (
+            isinstance(item.get("path"), list) and len(item["path"]) >= 2
+        ):
+            raise RuntimeError(f"trace step {step_idx} 缺少完整拖拽路径")
         coords = item.get("coords")
         coord_str = ", ".join(f"({c.get('x')},{c.get('y')})" for c in coords) if coords and isinstance(coords, list) else ""
         print(f"parsing Step {step_idx}: {act} {coord_str}", flush=True)
@@ -493,7 +508,7 @@ Overall Task: {overall_task}
                 f"{prompt}\n\n"
                 f"上一次输出缺少有效 Action 或 Operation：{operation_error or 'Action 为空'}。"
                 "请重新输出完整 JSON，必须包含非空 Action，"
-                "并且 Operation.type 必须是 click、doubleClick、rightClick、input、keyboard 或 wait；"
+                f"并且 Operation.type 必须是 {expected_operation_type or 'click、doubleClick、rightClick、input、keyboard、wait 或 aiAct'}；"
                 "各类型的必需字段必须完整。"
             )
             cap = self._request_caption(retry_prompt, crop_b64, full_b64)
