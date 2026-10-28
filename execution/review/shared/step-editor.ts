@@ -78,7 +78,7 @@ export function defaultStepEditor(operation: ReviewOperation, delayMs = 0): Step
   return {
     operation,
     delayMs,
-    target: operation === 'input' ? '描述输入框位置' : '描述要点击的目标',
+    target: operation === 'input' ? '描述输入框位置' : operation === 'aiAct' ? '描述要完成的电脑操作' : '描述要点击的目标',
     inputValue: '',
     inputMode: 'replace',
     inputAction: 'KeyboardTypeText',
@@ -140,10 +140,26 @@ export function referenceImagesFromFlow(
   flow: JsonObject[],
   operation: ReviewOperation,
 ): ReviewReferenceImage[] {
-  if (operation !== 'click' && operation !== 'doubleClick' && operation !== 'rightClick') return [];
+  if (operation !== 'click' && operation !== 'doubleClick' && operation !== 'rightClick' && operation !== 'aiAct') return [];
   const { action, standard } = splitFlow(flow);
   if (!standard || !action) return [];
+  if (operation === 'aiAct') return clone(parseAiActAction(action)?.referenceImages ?? []);
   return clone(parseClickAction(action, operation)?.referenceImages ?? []);
+}
+
+function parseAiActAction(action: JsonObject): {
+  target: string; referenceImages: ReviewReferenceImage[]; convertHttpImage2Base64: boolean;
+} | undefined {
+  if (Object.keys(action).length !== 1) return undefined;
+  if (typeof action.ai === 'string' && action.ai.trim()) {
+    return { target: action.ai, referenceImages: [], convertHttpImage2Base64: false };
+  }
+  const ai = objectValue(action.ai);
+  const images = referenceImageList(ai?.images);
+  if (!ai || typeof ai.prompt !== 'string' || !ai.prompt.trim() || !images
+    || !Object.keys(ai).every(key => ['prompt', 'images', 'convertHttpImage2Base64'].includes(key))
+    || (ai.convertHttpImage2Base64 !== undefined && typeof ai.convertHttpImage2Base64 !== 'boolean')) return undefined;
+  return { target: ai.prompt, referenceImages: images, convertHttpImage2Base64: ai.convertHttpImage2Base64 === true };
 }
 
 export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flow' | 'input'>): StepEditorModel {
@@ -164,6 +180,14 @@ export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flo
   }
   if (step.operation === 'input') {
     return parseInputEditor(result, action, step);
+  }
+  if (step.operation === 'aiAct') {
+    const parsed = parseAiActAction(action);
+    if (!parsed) return customStepEditor(result, step.flow);
+    result.target = parsed.target;
+    result.referenceImages = clone(parsed.referenceImages);
+    result.convertHttpImage2Base64 = parsed.convertHttpImage2Base64;
+    return result;
   }
   if (step.operation === 'keyboard') {
     return parseKeyboardEditor(result, action, step.flow);
@@ -267,6 +291,11 @@ function buildClickAction(model: StepEditorModel): JsonObject {
 
 function buildStepAction(model: StepEditorModel, stepId: string): JsonObject {
   if (model.operation === 'click' || model.operation === 'doubleClick' || model.operation === 'rightClick') return buildClickAction(model);
+  if (model.operation === 'aiAct') return { ai: model.referenceImages.length ? {
+    prompt: model.target,
+    images: clone(model.referenceImages),
+    ...(model.convertHttpImage2Base64 ? { convertHttpImage2Base64: true } : {}),
+  } : model.target };
   if (model.operation === 'input') {
     if (model.inputAction === 'aiInput') {
       return {

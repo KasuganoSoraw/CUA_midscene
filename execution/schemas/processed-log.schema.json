@@ -1,11 +1,12 @@
 {
-  "$comment": "只约束任务等待时间计算所需的 timestamp。",
+  "$comment": "约束录制动作时间和滚动结束时间，其他录制证据允许扩展字段。",
   "type": "array",
   "items": {
     "type": "object",
     "required": ["timestamp"],
     "properties": {
       "timestamp": { "type": "number" },
+      "scroll_end_timestamp": { "type": "number" },
       "screenshot_reference": { "type": "string", "minLength": 1 }
     },
     "additionalProperties": true

@@ -6,7 +6,26 @@ import {
   inputPreview,
   parseInputPreview,
   parseStepEditor,
+  referenceImagesFromFlow,
 } from '../../review/shared/step-editor.js';
+
+test('自然语言动作可在复核表单中往返编辑并保留参考图', () => {
+  const flow = [{ sleep: 500 }, { ai: {
+    prompt: '在列表中找到 NE-001 并单击',
+    images: [{ name: 'target', url: 'source/screenshots/target.png' }],
+  } }];
+  const editor = parseStepEditor({ id: 'step-001', operation: 'aiAct', flow });
+  assert.equal(editor.custom, false);
+  assert.equal(editor.target, '在列表中找到 NE-001 并单击');
+  assert.deepEqual(referenceImagesFromFlow(flow, 'aiAct'), editor.referenceImages);
+  editor.target = '在列表中找到 NE-002 并单击';
+  assert.deepEqual(buildStepContent(editor, 'step-001').flow, [{ sleep: 500 }, { ai: {
+    prompt: '在列表中找到 NE-002 并单击', images: [{ name: 'target', url: 'source/screenshots/target.png' }],
+  } }]);
+  const drag = parseStepEditor({ id: 'step-002', operation: 'aiAct', flow: [{ ai: '按住对象拖动到目标区域并释放' }] });
+  assert.equal(drag.custom, false);
+  assert.deepEqual(buildStepContent(drag, 'step-002').flow, [{ ai: '按住对象拖动到目标区域并释放' }]);
+});
 
 test('动作构建保留双击、按键、等待边界和自定义参数语义', () => {
   const doubleClick = defaultStepEditor('doubleClick', 10.6);

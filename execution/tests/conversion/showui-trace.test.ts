@@ -4,13 +4,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { parseYamlScript } from '@midscene/core/yaml';
 import {
   clampRecordedWaitMs,
   convertTrace,
+  buildRecordedSteps,
   type ConvertOptions,
 } from '../../cua/conversion/showui-trace.js';
-import { readShowuiTrace, readTaskManifest } from '../../cua/contracts/validation.js';
-import { readYamlDocument } from '../../cua/task/yaml-task.js';
+import { readShowuiTrace, readTaskManifest, validateContract } from '../../cua/contracts/validation.js';
+import { dumpYamlDocument, readYamlDocument, validateRecordedTaskDocument } from '../../cua/task/yaml-task.js';
+import { buildRecordedTaskAiActPrompt } from '../../cua/task/execution.js';
 
 const executionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const airTask = path.join(executionRoot, 'tests', 'fixtures', 'recorded-projects', 'browser-demo', 'air-tickets-demo');
@@ -213,4 +216,113 @@ test('已有任务资产和内置任务均拒绝覆盖', async () => {
     recursive: true,
   });
   await assert.rejects(convertTrace(builtin.options), /内置任务不可覆盖/);
+});
+
+function recordedActions(
+  items: Array<{ action: string; type: string; prompt: string; timestamp?: number; scrollEnd?: number; app?: string; reference?: string; path?: unknown[] }>,
+) {
+  return {
+    trace: { trajectory: items.map((item, index) => ({
+      step_idx: index + 1, caption: { operation: { type: item.type, prompt: item.prompt,
+        ...(item.reference ? { useReferenceImage: true } : {}) } },
+    })) } as any,
+    processed: items.map((item, index) => ({
+      timestamp: item.timestamp ?? index + 1, action: item.action, current_software: item.app ?? 'Browser',
+      ...(item.scrollEnd === undefined ? {} : { scroll_end_timestamp: item.scrollEnd }),
+      ...(item.reference ? { screenshot_reference: item.reference } : {}),
+      ...(item.path ? { path: item.path } : {}),
+      scroll_count: 7,
+    })),
+  };
+}
+
+test('连续滚动与点击合并为目标驱动 aiAct，滚轮次数不进入 Replay 或 Guided', async () => {
+  const { trace, processed } = recordedActions([
+    { action: 'ScrollDown at', type: 'aiAct', prompt: '网元列表下方区域向下滚动约 7 次' },
+    { action: 'ScrollDown at', type: 'aiAct', prompt: '网元列表下方区域向下滚动' },
+    { action: 'LClick at', type: 'click', prompt: '单击名称为 NE-001 的网元', reference: 'screenshots/target.png' },
+  ]);
+  const built = buildRecordedSteps(trace, processed);
+  assert.equal(built.tasks.length, 1);
+  assert.deepEqual(built.stepBindings['step-001'], [1, 2, 3]);
+  const ai = (built.tasks[0].flow as any[])[0].ai;
+  assert.match(ai.prompt, /NE-001/);
+  assert.match(ai.prompt, /目标已可见时直接完成目标操作/);
+  assert.doesNotMatch(ai.prompt, /7\s*次|scroll_count/);
+  assert.deepEqual(ai.images, [{ name: 'step-001-target', url: 'source/screenshots/target.png' }]);
+  const document = { computer: {}, agent: { groupName: 'demo', groupDescription: '查找网元' }, tasks: built.tasks };
+  assert.doesNotThrow(() => parseYamlScript(dumpYamlDocument(document)));
+  const guided = buildRecordedTaskAiActPrompt(document);
+  assert.match(guided.prompt, /NE-001/);
+  assert.doesNotMatch(guided.prompt, /7\s*次/);
+  assert.deepEqual(guided.images, ai.images);
+  const manifest = { schemaVersion: '0.3', skillName: 'demo', title: 'demo', description: 'demo', goal: '查找网元',
+    source: { tracePath: 'source/showui-trace.json', processedLogPath: 'source/processed-log-sc.json', conversionCommand: '', stepBindings: built.stepBindings },
+    inputs: built.inputs } as any;
+  await validateContract(manifest, 'skill-task.schema.json', 'test');
+  validateRecordedTaskDocument(document, manifest, 'test');
+});
+
+test('滚动与点击的合并间隔从最后一次滚动结束时计算', async () => {
+  const actions = [
+    { action: 'ScrollDown at', type: 'aiAct', prompt: '在列表中向下滚动', timestamp: 1, scrollEnd: 9 },
+    { action: 'LClick at', type: 'click', prompt: '点击目标行', timestamp: 10 },
+  ];
+  const { trace, processed } = recordedActions(actions);
+  await validateContract(processed, 'processed-log.schema.json', 'test');
+  assert.equal(buildRecordedSteps(trace, processed).tasks.length, 1);
+  delete (processed[0] as { scroll_end_timestamp?: number }).scroll_end_timestamp;
+  assert.equal(buildRecordedSteps(trace, processed).tasks.length, 2);
+  processed[0].scroll_end_timestamp = 4;
+  assert.equal(buildRecordedSteps(trace, processed).tasks.length, 2);
+  processed[0].scroll_end_timestamp = 11;
+  assert.equal(buildRecordedSteps(trace, processed).tasks.length, 2);
+});
+
+test('滚动可合并双击和右键，但不吞并输入、按键、等待或拖拽', () => {
+  for (const [action, type] of [['LDoubleClick at', 'doubleClick'], ['RClick at', 'rightClick']] as const) {
+    const { trace, processed } = recordedActions([
+      { action: 'ScrollUp at', type: 'aiAct', prompt: '文件列表向上滚动' },
+      { action, type, prompt: '目标文件行' },
+    ]);
+    const built = buildRecordedSteps(trace, processed);
+    assert.equal(built.tasks.length, 1);
+    assert.match(String((built.tasks[0].flow as any[])[0].ai), type === 'doubleClick' ? /双击目标/ : /右键点击目标/);
+  }
+  for (const [action, type, prompt, pathValue] of [
+    ['Type: abc', 'input', '在搜索框输入 abc'],
+    ['Press ENTER', 'keyboard', '按 Enter'],
+    ['Wait', 'wait', '等待完成'],
+    ['DragStart at', 'aiAct', '按住对象拖到目标位置并释放', [{ x: 1, y: 2 }, { x: 9, y: 8 }]],
+  ] as const) {
+    const { trace, processed } = recordedActions([
+      { action: 'ScrollDown at', type: 'aiAct', prompt: '在列表区域向下滚动' },
+      { action, type, prompt, path: pathValue as unknown[] | undefined },
+    ]);
+    if (type === 'input') Object.assign(trace.trajectory[1].caption.operation, { locatePrompt: '搜索框', value: 'abc' });
+    if (type === 'keyboard') Object.assign(trace.trajectory[1].caption.operation, { key: 'Enter' });
+    if (type === 'wait') Object.assign(trace.trajectory[1].caption.operation, { condition: '完成' });
+    const built = buildRecordedSteps(trace, processed);
+    assert.equal(built.tasks.length, 2);
+    assert.equal(built.tasks[1].name, `step-002 | ${type}`);
+    if (type === 'input') assert.equal(built.inputs['step-002-input'].default, 'abc');
+  }
+});
+
+test('独立滚动和完整拖拽分别生成 aiAct；跨应用与长时间间隔不合并', () => {
+  const { trace, processed } = recordedActions([
+    { action: 'ScrollDown at', type: 'aiAct', prompt: '在列表中向下滚动', app: 'Browser' },
+    { action: 'LClick at', type: 'click', prompt: '点击另一个应用的按钮', app: 'Editor' },
+    { action: 'DragStart at', type: 'aiAct', prompt: '按住矩形拖动至右侧区域并释放', path: [{ x: 1, y: 1 }, { x: 8, y: 2 }] },
+    { action: 'LClick at', type: 'click', prompt: '点击保存按钮', timestamp: 20 },
+  ]);
+  const built = buildRecordedSteps(trace, processed);
+  assert.equal(built.tasks.length, 4);
+  assert.equal(built.tasks[0].name, 'step-001 | aiAct');
+  assert.equal(built.tasks[2].name, 'step-003 | aiAct');
+  assert.deepEqual((built.tasks[2].flow as any[]).at(-1), { ai: '按住矩形拖动至右侧区域并释放' });
+  assert.equal(built.tasks[3].name, 'step-004 | click');
+  assert.deepEqual(Object.values(built.stepBindings), [1, 2, 3, 4]);
+  processed[2].path = [{ x: 1, y: 1 }];
+  assert.throws(() => buildRecordedSteps(trace, processed), /缺少完整拖拽路径/);
 });

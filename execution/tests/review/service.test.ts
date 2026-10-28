@@ -34,6 +34,39 @@ test('复核视图组合 builtin 任务与录制证据', async () => {
   assert.equal(view.manifest.source.stepBindings?.['step-016'], 16);
 });
 
+test('合并动作的多条录制证据在复核与步骤重排后保持绑定', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-merged-evidence-'));
+  const taskRoot = await createTaskFixture(root);
+  const manifestPath = path.join(taskRoot, 'task.json');
+  const manifest = await readTaskManifest(manifestPath);
+  manifest.inputs = {};
+  manifest.source.stepBindings = { 'step-001': [1, 2], 'step-002': null };
+  await writeJsonFile(manifestPath, manifest);
+  const document = await readYamlDocument(path.join(taskRoot, 'task.yaml'));
+  (document.tasks as JsonObject[])[0].name = 'step-001 | aiAct';
+  (document.tasks as JsonObject[])[0].flow = [{ ai: '在列表中找到目标并单击' }];
+  (document.tasks as JsonObject[])[1].flow = [{ aiTap: '点击后续目标' }];
+  await writeYamlDocument(path.join(taskRoot, 'task.yaml'), document);
+  const sourceRoot = path.join(taskRoot, 'source');
+  await mkdir(sourceRoot, { recursive: true });
+  await writeJsonFile(path.join(sourceRoot, 'showui-trace.json'), {
+    trajectory: [
+      { step_idx: 1, caption: { operation: { type: 'aiAct', prompt: '滚动列表' } } },
+      { step_idx: 2, caption: { operation: { type: 'click', locatePrompt: '目标' } } },
+    ],
+  });
+  await writeJsonFile(path.join(sourceRoot, 'processed-log-sc.json'), [
+    { timestamp: 1, screenshot_full: 'screenshots/first.png' },
+    { timestamp: 2, screenshot_full: 'screenshots/second.png' },
+  ]);
+  const view = await loadReviewTask('browser-demo', 'search-demo', { builtinProjectsRoot: root });
+  assert.deepEqual(view.steps[0].evidences?.map(item => item.sourceStep), [1, 2]);
+  assert.equal(view.steps[0].evidence?.sourceStep, 2);
+  assert.equal(view.steps[0].operation, 'aiAct');
+  const changed = applyReviewMutation({ manifest: view.manifest, document: view.document }, { type: 'move', from: 0, to: 1 });
+  assert.deepEqual(changed.draft.manifest.source.stepBindings?.['step-002'], [1, 2]);
+});
+
 test('复核视图拒绝越出 source 的本地参考图', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-reference-boundary-'));
   const taskRoot = await createTaskFixture(root);
