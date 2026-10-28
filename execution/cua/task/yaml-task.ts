@@ -5,11 +5,16 @@ import { parse, stringify } from 'yaml';
 import type { JsonObject, TaskAssetManifest } from '../contracts/types.js';
 
 const placeholderPattern = /\{\{([a-z][a-z0-9-]*)\}\}/g;
-const recordedTaskNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait)$/;
+const recordedTaskNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct)$/;
 const recordedInputIdPattern = /^(step-(\d{3,}))-input$/;
 
 function isRecord(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function boundSourceSteps(value: number | number[] | null): number[] {
+  if (value === null) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 export function validateYamlDocument(document: JsonObject, source: string): void {
@@ -114,7 +119,7 @@ export function validateRecordedTaskDocument(
     if (missing.length || extra.length) {
       throw new Error(`录制证据绑定必须与 YAML 步骤一致：missing=${missing.join(',') || '-'} extra=${extra.join(',') || '-'}`);
     }
-    const recorded = Object.values(manifest.source.stepBindings).filter((value): value is number => value !== null);
+    const recorded = Object.values(manifest.source.stepBindings).flatMap(boundSourceSteps);
     if (new Set(recorded).size !== recorded.length) throw new Error('录制证据绑定中的 trace step 不得重复');
   }
 }

@@ -588,5 +588,49 @@ class TraceGeneratorOperationTest(unittest.TestCase):
                 os.environ["OPENAI_API_KEY"] = previous_key
 
 
+class AiActTraceTest(unittest.TestCase):
+    def setUp(self):
+        self.generator = object.__new__(TraceGenerator)
+        self.generator._load_default_prompt(None)
+        self.generator._step_images = Mock(return_value=("crop", "full"))
+
+    def test_scroll_and_drag_require_ai_act(self):
+        base_prompt = self.generator.default_prompt["Base Prompt"]
+        self.assertIn('• 滚动：{"type":"aiAct"', base_prompt)
+        self.assertIn('• 拖拽：{"type":"aiAct"', base_prompt)
+        for action in ("ScrollDown at", "ScrollUp at", "DragStart at"):
+            self.assertEqual(self.generator._recorded_operation_type(action), "aiAct")
+            self.assertIn("要求 Operation.type 为 aiAct", self.generator._operation_error(
+                {"type": "wait", "condition": "滚动完成"}, "aiAct"))
+        self.assertIsNone(self.generator._operation_error(
+            {"type": "aiAct", "prompt": "在文件列表中向下滚动"}, "aiAct"))
+        self.assertIn("prompt", self.generator._operation_error({"type": "aiAct"}, "aiAct"))
+
+    def test_drag_path_is_in_prompt_and_incomplete_drag_is_rejected(self):
+        drag = {"timestamp": 1.0, "action": "DragStart at", "current_software": "Editor",
+                "path": [{"x": 10, "y": 20}, {"x": 80, "y": 20}]}
+        prompt = self.generator._prompt(drag, "移动矩形", 1, [])
+        self.assertIn("Recorded drag path", prompt)
+        self.assertIn('"x": 80', prompt)
+        self.assertIn("Operation.type 必须是 aiAct", prompt)
+        self.generator._request_caption = Mock(return_value={
+            "action": "拖动矩形", "operation": {"type": "aiAct", "prompt": "按住矩形拖到右侧并释放"}})
+        caption = self.generator._trace_step(drag, drag, "shots", "移动矩形", [], 1, 1.0, "DragStart at")
+        self.assertEqual(caption["operation"]["type"], "aiAct")
+        with self.assertRaisesRegex(RuntimeError, "缺少完整拖拽路径"):
+            self.generator._trace_step({**drag, "path": [drag["path"][0]]}, drag,
+                                       "shots", "移动矩形", [], 1, 1.0, "DragStart at")
+
+    def test_scroll_model_wait_response_retries_as_ai_act(self):
+        scroll = {"timestamp": 1.0, "action": "ScrollDown at", "scroll_count": 8}
+        self.generator._request_caption = Mock(side_effect=[
+            {"action": "向下滚动", "operation": {"type": "wait", "condition": "滚动完成"}},
+            {"action": "向下滚动", "operation": {"type": "aiAct", "prompt": "在网元列表区域向下滚动"}},
+        ])
+        caption = self.generator._trace_step(scroll, scroll, "shots", "查找网元", [], 1, 1.0, "ScrollDown at")
+        self.assertEqual(caption["operation"]["type"], "aiAct")
+        self.assertEqual(self.generator._request_caption.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

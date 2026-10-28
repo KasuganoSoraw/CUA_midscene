@@ -87,6 +87,16 @@ class LogProcessorKeyboardMergeTest(unittest.TestCase):
 
 
 class LogProcessorDoubleClickTest(unittest.TestCase):
+    def test_drag_keeps_one_action_after_nearby_click_cleanup(self):
+        actions = [
+            {"timestamp": 1.0, "action": "LClick at", "coords": [{"x": 10, "y": 20}]},
+            {"timestamp": 1.1, "action": "DragStart at", "coords": [{"x": 10, "y": 20}],
+             "path": [{"x": 10, "y": 20}, {"x": 80, "y": 20}]},
+        ]
+        cleaned = LogProcessor().cleanup_click_before_drag(actions)
+        self.assertEqual(["DragStart at"], [item["action"] for item in cleaned])
+        self.assertEqual(actions[1]["path"], cleaned[0]["path"])
+
     def test_right_click_keeps_right_button_semantics(self):
         actions = [
             {"timestamp": 1.0, "action": "RClick at", "coords": [{"x": 10, "y": 20}], "current_software": "Explorer"},

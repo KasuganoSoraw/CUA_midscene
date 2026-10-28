@@ -42,7 +42,7 @@ export interface TaskSource {
   conversionCommand: string;
   recordingPreparationCommand?: string | null;
   traceGenerationCommand?: string | null;
-  stepBindings?: Record<string, number | null>;
+  stepBindings?: Record<string, number | number[] | null>;
 }
 
 export interface TaskManifest {
@@ -138,7 +138,7 @@ export interface NativeAiActExecutorResult {
   error?: string | null;
 }
 
-export type TraceOperationType = 'click' | 'doubleClick' | 'rightClick' | 'input' | 'keyboard' | 'wait';
+export type TraceOperationType = 'click' | 'doubleClick' | 'rightClick' | 'input' | 'keyboard' | 'wait' | 'aiAct';
 
 export interface ShowuiTraceOperation {
   type: TraceOperationType;

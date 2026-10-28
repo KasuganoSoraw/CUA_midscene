@@ -157,12 +157,86 @@ function actionFromOperation(
   if (operation.type === 'keyboard') {
     return { actions: [{ KeyboardPress: { keyName: requiredOperationText(operation.key, 'key', step) } }] };
   }
+  if (operation.type === 'aiAct') {
+    return { actions: [{ ai: requiredOperationText(operation.prompt, 'prompt', step) }] };
+  }
   const condition = requiredOperationText(operation.condition, 'condition', step);
   return {
     actions: [{
       aiWaitFor: operation.prompt?.trim() || condition,
       timeout: 15_000,
     }],
+  };
+}
+
+function isScroll(source: ProcessedLogStep): boolean {
+  return /^Scroll(?:Up|Down)\b/i.test(source.action ?? '');
+}
+
+function isDrag(source: ProcessedLogStep): boolean {
+  return /^DragStart\b/i.test(source.action ?? '');
+}
+
+function sameContext(first: ProcessedLogStep, second: ProcessedLogStep): boolean {
+  const gap = second.timestamp - first.timestamp;
+  const firstApp = first.current_software;
+  const secondApp = second.current_software;
+  return gap >= 0 && gap <= 5 && !(firstApp && secondApp && firstApp !== secondApp);
+}
+
+function canMergeClick(operation: ShowuiTraceOperation, source: ProcessedLogStep): boolean {
+  if (!['click', 'doubleClick', 'rightClick'].includes(operation.type)) return false;
+  return /^(?:LClick|LDoubleClick|LDblClick|DoubleClick|DblClick|RClick|RightClick|RDoubleClick)\b/i.test(source.action ?? '')
+    && Boolean(operation.prompt?.trim());
+}
+
+function scrollPrompt(operation: ShowuiTraceOperation, source: ProcessedLogStep, step: number): string {
+  if (operation.type !== 'aiAct') throw new Error(`trace step ${step} 的滚动必须使用 aiAct operation`);
+  const area = requiredOperationText(operation.prompt, 'prompt', step)
+    .replace(/(?:向上|向下)?滚动\s*(?:约|大约)?\s*\d+\s*次(?:滚轮)?/g, '按画面需要滚动')
+    .replace(/(?:约|大约)?\s*\d+\s*次滚轮/g, '按画面需要滚动');
+  const direction = /^ScrollDown\b/i.test(source.action ?? '') ? '向下' : '向上';
+  return `滚动区域及作用对象：${area}；录制方向：${direction}`;
+}
+
+function recordedStepId(step: number): string {
+  return `step-${String(step).padStart(3, '0')}`;
+}
+
+function scrollGroupEnd(trace: ShowuiTrace, sources: ProcessedLogStep[], start: number): number {
+  let end = start + 1;
+  const direction = /^ScrollDown\b/i.test(sources[start].action ?? '');
+  while (end < trace.trajectory.length && isScroll(sources[end])
+    && /^ScrollDown\b/i.test(sources[end].action ?? '') === direction
+    && sameContext(sources[end - 1], sources[end])) end += 1;
+  return end;
+}
+
+function scrollStep(
+  trace: ShowuiTrace, sources: ProcessedLogStep[], start: number, step: number,
+): { task: JsonObject; binding: number | number[]; next: number } {
+  const end = scrollGroupEnd(trace, sources, start);
+  const scroll = trace.trajectory.slice(start, end).map((item, offset) =>
+    scrollPrompt(item.caption.operation, sources[start + offset], item.step_idx));
+  const nextOperation = trace.trajectory[end]?.caption.operation;
+  const merge = nextOperation && sameContext(sources[end - 1], sources[end]) && canMergeClick(nextOperation, sources[end]);
+  const consumed = merge ? end + 1 : end;
+  const bindings = trace.trajectory.slice(start, consumed).map(item => item.step_idx);
+  const direction = /^ScrollDown\b/i.test(sources[start].action ?? '') ? '向下' : '向上';
+  let prompt = `按当前画面在录制区域${direction}滚动。${scroll[0]}`;
+  let images: JsonObject[] = [];
+  if (merge) {
+    const action = actionFromOperation(nextOperation, step, sources[end]).actions[0];
+    const locate = action.locate as JsonObject | undefined;
+    const target = locate ? String(locate.prompt) : requiredOperationText(nextOperation.prompt, 'prompt', step);
+    const verb = { click: '单击', doubleClick: '双击', rightClick: '右键点击' }[nextOperation.type as 'click' | 'doubleClick' | 'rightClick'];
+    prompt = `查找目标；若目标未出现，可依据画面在录制区域${direction}滚动。${scroll[0]}。找到后${verb}目标：${target}；目标已可见时直接完成目标操作，不必滚动，也不要重复操作`;
+    images = locate ? locate.images as JsonObject[] : [];
+  }
+  return {
+    task: { name: `${recordedStepId(step)} | aiAct`, flow: [{ ai: images.length ? { prompt, images } : prompt }] },
+    binding: bindings.length === 1 ? bindings[0] : bindings,
+    next: consumed,
   };
 }
 
@@ -193,7 +267,7 @@ export function buildTaskAssets(
 }
 
 export function buildRecordedSteps(trace: ShowuiTrace, processedSteps: ProcessedLogStep[]): {
-  tasks: JsonObject[]; inputs: Record<string, TaskInputDefinition>; stepBindings: Record<string, number>;
+  tasks: JsonObject[]; inputs: Record<string, TaskInputDefinition>; stepBindings: Record<string, number | number[]>;
 } {
   if (!trace.trajectory.length) throw new Error('trace trajectory 不能为空');
   if (trace.trajectory.length !== processedSteps.length) {
@@ -201,29 +275,46 @@ export function buildRecordedSteps(trace: ShowuiTrace, processedSteps: Processed
   }
   const tasks: JsonObject[] = [];
   const inputs: Record<string, TaskInputDefinition> = {};
+  const stepBindings: Record<string, number | number[]> = {};
   let previousTimestamp: number | undefined;
   let previousStep = 0;
 
-  trace.trajectory.forEach((traceStep, index) => {
-    const step = traceStep.step_idx;
-    if (step <= previousStep) throw new Error('trace step_idx 必须为正整数、唯一且按轨迹顺序严格递增');
+  for (const traceStep of trace.trajectory) {
+    if (traceStep.step_idx <= previousStep) throw new Error('trace step_idx 必须为正整数、唯一且按轨迹顺序严格递增');
+    previousStep = traceStep.step_idx;
+  }
+  for (let index = 0; index < trace.trajectory.length;) {
+    const step = tasks.length + 1;
+    const stepId = recordedStepId(step);
     const flow: JsonObject[] = [];
     if (previousTimestamp !== undefined) {
       const gap = Math.max(0, Math.floor((processedSteps[index].timestamp - previousTimestamp) * 1000 + 0.5));
       const wait = clampRecordedWaitMs(gap);
       if (wait) flow.push({ sleep: wait });
     }
-    const mapped = actionFromOperation(traceStep.caption.operation, step, processedSteps[index]);
-    flow.push(...mapped.actions);
-    tasks.push({ name: `step-${String(step).padStart(3, '0')} | ${traceStep.caption.operation.type}`, flow });
-    if (mapped.input) inputs[mapped.input[0]] = mapped.input[1];
-    previousTimestamp = processedSteps[index].timestamp;
-    previousStep = step;
-  });
-
-  return { tasks, inputs, stepBindings: Object.fromEntries(trace.trajectory.map(item => [
-    `step-${String(item.step_idx).padStart(3, '0')}`, item.step_idx,
-  ])) };
+    const source = processedSteps[index];
+    if (isScroll(source)) {
+      const merged = scrollStep(trace, processedSteps, index, step);
+      tasks.push({ ...merged.task, flow: [...flow, ...(merged.task.flow as JsonObject[])] });
+      stepBindings[stepId] = merged.binding;
+      index = merged.next;
+    } else {
+      const traceStep = trace.trajectory[index];
+      if (isDrag(source) && (!Array.isArray(source.path) || source.path.length < 2)) {
+        throw new Error(`trace step ${traceStep.step_idx} 缺少完整拖拽路径`);
+      }
+      if (isDrag(source) && traceStep.caption.operation.type !== 'aiAct') {
+        throw new Error(`trace step ${traceStep.step_idx} 的拖拽必须使用 aiAct operation`);
+      }
+      const mapped = actionFromOperation(traceStep.caption.operation, step, source);
+      tasks.push({ name: `${stepId} | ${traceStep.caption.operation.type}`, flow: [...flow, ...mapped.actions] });
+      if (mapped.input) inputs[mapped.input[0]] = mapped.input[1];
+      stepBindings[stepId] = traceStep.step_idx;
+      index += 1;
+    }
+    previousTimestamp = processedSteps[index - 1].timestamp;
+  }
+  return { tasks, inputs, stepBindings };
 }
 
 export async function convertTrace(options: ConvertOptions): Promise<string> {
