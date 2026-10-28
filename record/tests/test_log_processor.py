@@ -171,5 +171,21 @@ class LogProcessorDoubleClickTest(unittest.TestCase):
         self.assertEqual(2.544, cleaned[0]["evidence_timestamp"])
 
 
+class LogProcessorScrollTest(unittest.TestCase):
+    def test_group_retains_evidence_time_and_last_scroll_time(self):
+        actions = [
+            {"timestamp": 1.0, "action": "ScrollDown at", "coords": [{"x": 10, "y": 20}],
+             "current_software": "Browser"},
+            {"timestamp": 4.0, "action": "ScrollDown at", "coords": [{"x": 10, "y": 20}],
+             "current_software": "Browser"},
+            {"timestamp": 8.0, "action": "ScrollDown at", "coords": [{"x": 10, "y": 20}],
+             "current_software": "Browser"},
+        ]
+        merged = LogProcessor().process_scroll_events(actions)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["timestamp"], 1.0)
+        self.assertEqual(merged[0]["scroll_end_timestamp"], 8.0)
+
+
 if __name__ == "__main__":
     unittest.main()

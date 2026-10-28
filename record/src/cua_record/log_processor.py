@@ -399,6 +399,7 @@ class LogProcessor:
             scroll_count = scroll_up_count - scroll_down_count
         return {
             "timestamp": best_timestamp,
+            "scroll_end_timestamp": scroll_actions[-1]["timestamp"],
             "action": f"{scroll_action} at",
             "coords": [best_coord] if best_coord else None,
             "current_software": current_action["current_software"],

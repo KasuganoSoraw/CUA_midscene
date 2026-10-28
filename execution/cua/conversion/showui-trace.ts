@@ -190,7 +190,8 @@ function isDrag(source: ProcessedLogStep): boolean {
 }
 
 function sameContext(first: ProcessedLogStep, second: ProcessedLogStep): boolean {
-  const gap = second.timestamp - first.timestamp;
+  const firstEnd = isScroll(first) ? first.scroll_end_timestamp ?? first.timestamp : first.timestamp;
+  const gap = second.timestamp - firstEnd;
   const firstApp = first.current_software;
   const secondApp = second.current_software;
   return gap >= 0 && gap <= 5 && !(firstApp && secondApp && firstApp !== secondApp);

@@ -219,7 +219,7 @@ test('已有任务资产和内置任务均拒绝覆盖', async () => {
 });
 
 function recordedActions(
-  items: Array<{ action: string; type: string; prompt: string; timestamp?: number; app?: string; reference?: string; path?: unknown[] }>,
+  items: Array<{ action: string; type: string; prompt: string; timestamp?: number; scrollEnd?: number; app?: string; reference?: string; path?: unknown[] }>,
 ) {
   return {
     trace: { trajectory: items.map((item, index) => ({
@@ -228,6 +228,7 @@ function recordedActions(
     })) } as any,
     processed: items.map((item, index) => ({
       timestamp: item.timestamp ?? index + 1, action: item.action, current_software: item.app ?? 'Browser',
+      ...(item.scrollEnd === undefined ? {} : { scroll_end_timestamp: item.scrollEnd }),
       ...(item.reference ? { screenshot_reference: item.reference } : {}),
       ...(item.path ? { path: item.path } : {}),
       scroll_count: 7,
@@ -260,6 +261,22 @@ test('连续滚动与点击合并为目标驱动 aiAct，滚轮次数不进入 R
     inputs: built.inputs } as any;
   await validateContract(manifest, 'skill-task.schema.json', 'test');
   validateRecordedTaskDocument(document, manifest, 'test');
+});
+
+test('滚动与点击的合并间隔从最后一次滚动结束时计算', async () => {
+  const actions = [
+    { action: 'ScrollDown at', type: 'aiAct', prompt: '在列表中向下滚动', timestamp: 1, scrollEnd: 9 },
+    { action: 'LClick at', type: 'click', prompt: '点击目标行', timestamp: 10 },
+  ];
+  const { trace, processed } = recordedActions(actions);
+  await validateContract(processed, 'processed-log.schema.json', 'test');
+  assert.equal(buildRecordedSteps(trace, processed).tasks.length, 1);
+  delete (processed[0] as { scroll_end_timestamp?: number }).scroll_end_timestamp;
+  assert.equal(buildRecordedSteps(trace, processed).tasks.length, 2);
+  processed[0].scroll_end_timestamp = 4;
+  assert.equal(buildRecordedSteps(trace, processed).tasks.length, 2);
+  processed[0].scroll_end_timestamp = 11;
+  assert.equal(buildRecordedSteps(trace, processed).tasks.length, 2);
 });
 
 test('滚动可合并双击和右键，但不吞并输入、按键、等待或拖拽', () => {

@@ -166,6 +166,7 @@ export interface ShowuiTrace {
 
 export interface ProcessedLogStep {
   timestamp: number;
+  scroll_end_timestamp?: number;
   action?: string;
   clipboard_text?: string;
   screenshot_reference?: string;
