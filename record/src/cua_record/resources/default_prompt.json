@@ -4,8 +4,8 @@
     "Click": "ActionTypeDelta (Click)：当出现半透明红色 X 时，目标就是 X 下方的元素。判断该点击是落在 UI 控件、画布对象、空白区域还是控制点/拖拽柄上。说明点击后的直接 UI 反应，例如选中、打开菜单/弹窗、进入编辑态或切换工具模式。字段值必须用中文。",
     "RClick": "ActionTypeDelta (Right Click)：判断右键点击位置是对象、特殊区域还是空白区域。如果出现上下文菜单，需要概括菜单类型，例如编辑、视图或对象操作。字段值必须用中文。 原始 RClick 事件必须生成 rightClick operation，不能生成普通 click。",
     "DblClick": "ActionTypeDelta (Double Click)：原始 action 为 LDoubleClick、LDblClick、DoubleClick 或 DblClick 时，Operation.type 必须是 doubleClick，不得降级为 click。判断双击目标类型，例如文本、图形对象或空白区域。Operation.prompt 必须明确使用双击动作，并说明可能进入文本编辑、属性面板、特殊动作或创建新对象。字段值必须用中文。",
-    "MouseWheel": "ActionTypeDelta (Scroll)：Operation.type 必须是 aiAct。依据当前截图描述滚动方向、滚动区域和作用对象，生成独立可执行的滚动说明。不要猜测后续操作，不写滚轮次数。若有 Ctrl/Shift/Alt 等修饰键，应仅根据可见证据判断缩放或横向滚动。字段值必须用中文。",
-    "Drag": "ActionTypeDelta (Drag)：Operation.type 必须是 aiAct。结合半透明红色路径、录制轨迹与全屏画面，描述拖拽对象、起点、方向、终点区域及可确认的操作目的。Action 和 Operation.prompt 均须表达按住目标、拖动并释放的完整动作；不要输出精确坐标或虚构对象。字段值必须用中文。",
+    "MouseWheel": "ActionTypeDelta (Scroll)：Operation.type 必须是 aiAct。依据原始滚动事件和当前画面，简洁描述滚动区域、作用对象与方向，使 Operation.prompt 本身可独立执行。无需凑齐点击定位所需的视觉特征与相对锚点。只描述本步滚动，不猜测后续操作，不写滚轮次数，不加入录制过程说明或重复的结束条件。若有 Ctrl/Shift/Alt 等修饰键，应仅根据可见证据判断缩放或横向滚动。字段值必须用中文。",
+    "Drag": "ActionTypeDelta (Drag)：Operation.type 必须是 aiAct。结合半透明红色路径、录制轨迹与全屏画面，简洁描述拖拽对象、起点、目标位置，以及按住、拖动和释放的操作。无需凑齐点击定位所需的视觉特征与相对锚点。Operation.prompt 应独立可执行，不复述精确坐标、路径点或录制过程，不虚构无法确认的目的，不重复说明动作。字段值必须用中文。",
     "Type": "ActionTypeDelta (Type)：描述可见文本输入区域和正在输入的内容。如果文字只部分可见，应推断输入框用途，例如搜索框或表单字段。说明是替换已有内容还是追加内容。即使红色 X 标记了字段，也不要把 Type 改写为 click；该操作是输入。字段值必须用中文。"
   },
   "Modifier_Guide": "修饰键说明（仅在确实涉及修饰键时使用）：Shift 表示追加选择、约束比例或约束方向；Ctrl 表示多选、特殊功能或精确控制；Alt 表示替代模式、临时工具或特殊功能。字段值必须用中文。",

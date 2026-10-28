@@ -205,11 +205,11 @@ function canMergeClick(operation: ShowuiTraceOperation, source: ProcessedLogStep
 
 function scrollPrompt(operation: ShowuiTraceOperation, source: ProcessedLogStep, step: number): string {
   if (operation.type !== 'aiAct') throw new Error(`trace step ${step} 的滚动必须使用 aiAct operation`);
-  const area = requiredOperationText(operation.prompt, 'prompt', step)
-    .replace(/(?:向上|向下)?滚动\s*(?:约|大约)?\s*\d+\s*次(?:滚轮)?/g, '按画面需要滚动')
-    .replace(/(?:约|大约)?\s*\d+\s*次滚轮/g, '按画面需要滚动');
   const direction = /^ScrollDown\b/i.test(source.action ?? '') ? '向下' : '向上';
-  return `滚动区域及作用对象：${area}；录制方向：${direction}`;
+  return requiredOperationText(operation.prompt, 'prompt', step)
+    .replace(/(?:向上|向下)?滚动\s*(?:约|大约)?\s*\d+\s*次(?:滚轮)?/g, `${direction}滚动`)
+    .replace(/(?:约|大约)?\s*\d+\s*次滚轮/g, '按画面需要滚动')
+    .replace(/[。；;.!?]+$/u, '');
 }
 
 function recordedStepId(step: number): string {
@@ -229,21 +229,18 @@ function scrollStep(
   trace: ShowuiTrace, sources: ProcessedLogStep[], start: number, step: number,
 ): { task: JsonObject; binding: number | number[]; next: number } {
   const end = scrollGroupEnd(trace, sources, start);
-  const scroll = trace.trajectory.slice(start, end).map((item, offset) =>
-    scrollPrompt(item.caption.operation, sources[start + offset], item.step_idx));
+  const scroll = scrollPrompt(trace.trajectory[end - 1].caption.operation, sources[end - 1], trace.trajectory[end - 1].step_idx);
   const nextOperation = trace.trajectory[end]?.caption.operation;
   const merge = nextOperation && sameContext(sources[end - 1], sources[end]) && canMergeClick(nextOperation, sources[end]);
   const consumed = merge ? end + 1 : end;
   const bindings = trace.trajectory.slice(start, consumed).map(item => item.step_idx);
-  const direction = /^ScrollDown\b/i.test(sources[start].action ?? '') ? '向下' : '向上';
-  let prompt = `按当前画面在录制区域${direction}滚动。${scroll[0]}`;
+  let prompt = scroll;
   let images: JsonObject[] = [];
   if (merge) {
     const action = actionFromOperation(nextOperation, step, sources[end]).actions[0];
     const locate = action.locate as JsonObject | undefined;
     const target = locate ? String(locate.prompt) : requiredOperationText(nextOperation.prompt, 'prompt', step);
-    const verb = { click: '单击', doubleClick: '双击', rightClick: '右键点击' }[nextOperation.type as 'click' | 'doubleClick' | 'rightClick'];
-    prompt = `查找目标；若目标未出现，可依据画面在录制区域${direction}滚动。${scroll[0]}。找到后${verb}目标：${target}；目标已可见时直接完成目标操作，不必滚动，也不要重复操作`;
+    prompt = `若目标不可见，${scroll}；${target}`;
     images = locate ? locate.images as JsonObject[] : [];
   }
   return {
