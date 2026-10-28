@@ -95,65 +95,77 @@ export function clampRecordedWaitMs(recordedGapMs: number): number {
   return Math.min(recordedGapMs, maxRecordedWaitMs);
 }
 
+type RecordedAction = { actions: JsonObject[]; input?: [string, TaskInputDefinition] };
+
+function clickAction(
+  operation: ShowuiTraceOperation,
+  step: number,
+  processedStep: ProcessedLogStep,
+): RecordedAction {
+  const prompt = requiredOperationText(operation.prompt, 'prompt', step);
+  const actionName = { click: 'aiTap', doubleClick: 'aiDoubleClick', rightClick: 'aiRightClick' }[operation.type as 'click' | 'doubleClick' | 'rightClick'];
+  if (operation.useReferenceImage) {
+    const rawReferencePath = processedStep.screenshot_reference?.trim();
+    if (!rawReferencePath) {
+      throw new Error(`trace step ${step} 请求视觉参考，但 processed log 缺少 screenshot_reference`);
+    }
+    const normalized = rawReferencePath.replaceAll('\\', '/');
+    if (path.win32.isAbsolute(rawReferencePath) || path.posix.isAbsolute(normalized)) {
+      throw new Error(`trace step ${step} 的 screenshot_reference 必须是 source 内相对路径：${rawReferencePath}`);
+    }
+    const referenceUrl = path.posix.normalize(`source/${normalized}`);
+    if (!referenceUrl.startsWith('source/') || referenceUrl === 'source') {
+      throw new Error(`trace step ${step} 的 screenshot_reference 越出 source：${rawReferencePath}`);
+    }
+    const stepId = `step-${String(step).padStart(3, '0')}`;
+    const imageName = `${stepId}-target`;
+    return {
+      actions: [{
+        [actionName]: null,
+        locate: {
+          prompt: `${prompt}。目标外观应匹配参考图“${imageName}”正中央的主要图标，参考图周边仅用于辅助理解`,
+          images: [{ name: imageName, url: referenceUrl }],
+        },
+      }],
+    };
+  }
+  return { actions: [{ [actionName]: prompt }] };
+}
+
+function inputAction(operation: ShowuiTraceOperation, step: number, processedStep: ProcessedLogStep): RecordedAction {
+  const prompt = requiredOperationText(operation.prompt, 'prompt', step);
+  const locate = requiredOperationText(operation.locatePrompt, 'locatePrompt', step);
+  const isPaste = processedStep.action === 'Paste text';
+  const value = isPaste
+    ? processedStep.clipboard_text
+    : requiredOperationText(operation.value, 'value', step);
+  if (typeof value !== 'string' || !value.length) {
+    throw new Error(`trace step ${step} 的粘贴文本不能为空`);
+  }
+  const inputId = `step-${String(step).padStart(3, '0')}-input`;
+  return {
+    actions: isPaste
+      ? [
+        { KeyboardPress: { keyName: 'End', locate: { prompt: locate } } },
+        { aiInput: null, value: `{{${inputId}}}`, mode: 'typeOnly' },
+      ]
+      : [{ KeyboardTypeText: { locate, value: `{{${inputId}}}`, mode: 'replace' } }],
+    input: [inputId, { type: 'string', label: locate, description: prompt, default: value }],
+  };
+}
+
 function actionFromOperation(
   operation: ShowuiTraceOperation,
   step: number,
   processedStep: ProcessedLogStep,
-): { actions: JsonObject[]; input?: [string, TaskInputDefinition] } {
+): RecordedAction {
   if (operation.type === 'click' || operation.type === 'doubleClick' || operation.type === 'rightClick') {
-    const prompt = requiredOperationText(operation.prompt, 'prompt', step);
-    const actionName = { click: 'aiTap', doubleClick: 'aiDoubleClick', rightClick: 'aiRightClick' }[operation.type];
-    if (operation.useReferenceImage) {
-      const rawReferencePath = processedStep.screenshot_reference?.trim();
-      if (!rawReferencePath) {
-        throw new Error(`trace step ${step} 请求视觉参考，但 processed log 缺少 screenshot_reference`);
-      }
-      const normalized = rawReferencePath.replaceAll('\\', '/');
-      if (path.win32.isAbsolute(rawReferencePath) || path.posix.isAbsolute(normalized)) {
-        throw new Error(`trace step ${step} 的 screenshot_reference 必须是 source 内相对路径：${rawReferencePath}`);
-      }
-      const referenceUrl = path.posix.normalize(`source/${normalized}`);
-      if (!referenceUrl.startsWith('source/') || referenceUrl === 'source') {
-        throw new Error(`trace step ${step} 的 screenshot_reference 越出 source：${rawReferencePath}`);
-      }
-      const stepId = `step-${String(step).padStart(3, '0')}`;
-      const imageName = `${stepId}-target`;
-      return {
-        actions: [{
-          [actionName]: null,
-          locate: {
-            prompt: `${prompt}。目标外观应匹配参考图“${imageName}”正中央的主要图标，参考图周边仅用于辅助理解`,
-            images: [{ name: imageName, url: referenceUrl }],
-          },
-        }],
-      };
-    }
-    return { actions: [{ [actionName]: prompt }] };
+    return clickAction(operation, step, processedStep);
   }
   if (operation.useReferenceImage) {
     throw new Error(`trace step ${step} 只有点击动作可以使用视觉参考`);
   }
-  if (operation.type === 'input') {
-    const prompt = requiredOperationText(operation.prompt, 'prompt', step);
-    const locate = requiredOperationText(operation.locatePrompt, 'locatePrompt', step);
-    const isPaste = processedStep.action === 'Paste text';
-    const value = isPaste
-      ? processedStep.clipboard_text
-      : requiredOperationText(operation.value, 'value', step);
-    if (typeof value !== 'string' || !value.length) {
-      throw new Error(`trace step ${step} 的粘贴文本不能为空`);
-    }
-    const inputId = `step-${String(step).padStart(3, '0')}-input`;
-    return {
-      actions: isPaste
-        ? [
-          { KeyboardPress: { keyName: 'End', locate: { prompt: locate } } },
-          { aiInput: null, value: `{{${inputId}}}`, mode: 'typeOnly' },
-        ]
-        : [{ KeyboardTypeText: { locate, value: `{{${inputId}}}`, mode: 'replace' } }],
-      input: [inputId, { type: 'string', label: locate, description: prompt, default: value }],
-    };
-  }
+  if (operation.type === 'input') return inputAction(operation, step, processedStep);
   if (operation.type === 'keyboard') {
     return { actions: [{ KeyboardPress: { keyName: requiredOperationText(operation.key, 'key', step) } }] };
   }
