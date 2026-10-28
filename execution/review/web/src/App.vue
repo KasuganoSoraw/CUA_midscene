@@ -130,8 +130,9 @@ function clone<T>(value: T): T {
 }
 
 const current = computed(() => steps.value[selected.value]);
-const currentEvidence = computed(() => current.value?.evidences?.find(item => item.sourceStep === selectedEvidenceSource.value)
-  ?? current.value?.evidence);
+const currentEvidence = computed(() => devMode.value
+  ? current.value?.evidences?.find(item => item.sourceStep === selectedEvidenceSource.value) ?? current.value?.evidence
+  : current.value?.evidence);
 const evidenceMode = computed({
   get: () => resolveEvidenceMode(requestedEvidenceMode.value, editor.operation, currentEvidence.value),
   set: (value: EvidenceMode) => { requestedEvidenceMode.value = value; },
@@ -708,7 +709,7 @@ onMounted(async () => {
         </header>
         <section v-if="current" class="step-evidence">
           <input ref="referenceFileInput" hidden type="file" tabindex="-1" accept="image/png,image/jpeg,image/webp" :disabled="referenceUploadDisabled" @change="uploadReference" />
-          <div v-if="current.evidences && current.evidences.length > 1" class="evidence-tabs" :aria-label="t('review.sourceEvidence')">
+          <div v-if="devMode && current.evidences && current.evidences.length > 1" class="evidence-tabs" :aria-label="t('review.sourceEvidence')">
             <button v-for="evidence in current.evidences" :key="evidence.sourceStep" :class="{ active: currentEvidence?.sourceStep === evidence.sourceStep }" @click="selectedEvidenceSource = evidence.sourceStep">{{ t('review.recordedSourceStep', { index: evidence.sourceStep }) }}</button>
           </div>
           <div class="evidence-tabs">

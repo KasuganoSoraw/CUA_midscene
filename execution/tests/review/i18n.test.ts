@@ -30,6 +30,8 @@ test('workbench locale catalogs stay aligned and interpolate parameters', () => 
   assert.equal(translate('en-US', 'recording.deleted', { recording: 'Recording_1' }), 'Deleted recording Recording_1');
   assert.equal(translate('zh-CN', 'recording.firstStart'), '点击准备录制开始第一次录制');
   assert.equal(translate('en-US', 'recording.firstStart'), 'Select Prepare recording to start your first recording');
+  assert.equal(translate('zh-CN', 'review.operation.aiAct'), '复合操作');
+  assert.equal(translate('en-US', 'review.operation.aiAct'), 'Composite action');
 });
 
 test('recording workflow detects displays only while the recorder is inactive', () => {
@@ -53,6 +55,7 @@ test('ordinary workbench copy hides implementation names and gates developer ass
   assert.doesNotMatch(app, /本地自动化工作台|Local Automation Workspace/);
   assert.match(index, /<title>桌面任务中心<\/title>/);
   assert.match(app, /<details v-if="devMode" class="advanced wide"/);
+  assert.match(app, /v-if="devMode && current\.evidences && current\.evidences\.length > 1" class="evidence-tabs"/);
   assert.match(app, /<code v-if="devMode">\{\{ view\?\.revision \}\}<\/code>/);
   assert.match(app, /setLocale\('zh-CN'\)/);
   assert.match(app, /setLocale\('en-US'\)/);

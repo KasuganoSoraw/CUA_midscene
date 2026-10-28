@@ -75,6 +75,24 @@ function snapshot(app: any) {
   return structuredClone(JSON.parse(JSON.stringify({ draft: app.draft.value, steps: app.steps.value, selected: app.selected.value, changes: app.changes.value })));
 }
 
+test('普通模式只展示合并步骤的目标截图，开发模式可切换原始证据', async () => {
+  const setup = await setupApp();
+  try {
+    const { app } = setup;
+    const scrollEvidence = { sourceStep: 1, full: 'source/scroll.png' };
+    const targetEvidence = { sourceStep: 2, full: 'source/target.png' };
+    app.steps.value[0].evidences = [scrollEvidence, targetEvidence];
+    app.steps.value[0].evidence = targetEvidence;
+    app.selectedEvidenceSource.value = 1;
+    assert.equal(app.currentEvidence.value.sourceStep, 2);
+    app.devMode.value = true;
+    assert.equal(app.currentEvidence.value.sourceStep, 1);
+    app.devMode.value = false;
+    assert.equal(app.currentEvidence.value.sourceStep, 2);
+    assert.deepEqual(app.steps.value[0].evidences, [scrollEvidence, targetEvidence]);
+  } finally { setup.stop(); }
+});
+
 test('冲突时禁用参考图上传和绑定，并且直接调用操作不能修改编辑状态', async () => {
   const setup = await setupApp();
   try {

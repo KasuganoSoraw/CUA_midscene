@@ -238,22 +238,23 @@ function recordedActions(
 
 test('连续滚动与点击合并为目标驱动 aiAct，滚轮次数不进入 Replay 或 Guided', async () => {
   const { trace, processed } = recordedActions([
-    { action: 'ScrollDown at', type: 'aiAct', prompt: '网元列表下方区域向下滚动约 7 次' },
-    { action: 'ScrollDown at', type: 'aiAct', prompt: '网元列表下方区域向下滚动' },
-    { action: 'LClick at', type: 'click', prompt: '单击名称为 NE-001 的网元', reference: 'screenshots/target.png' },
+    { action: 'ScrollDown at', type: 'aiAct', prompt: '在列表顶部向下滚动' },
+    { action: 'ScrollDown at', type: 'aiAct', prompt: '在列表内容区域向下滚动。' },
+    { action: 'LClick at', type: 'click', prompt: '单击名称为项目甲的条目', reference: 'screenshots/target.png' },
   ]);
   const built = buildRecordedSteps(trace, processed);
   assert.equal(built.tasks.length, 1);
   assert.deepEqual(built.stepBindings['step-001'], [1, 2, 3]);
   const ai = (built.tasks[0].flow as any[])[0].ai;
-  assert.match(ai.prompt, /NE-001/);
-  assert.match(ai.prompt, /目标已可见时直接完成目标操作/);
-  assert.doesNotMatch(ai.prompt, /7\s*次|scroll_count/);
+  assert.match(ai.prompt, /项目甲/);
+  assert.match(ai.prompt, /若目标不可见，在列表内容区域向下滚动；单击/);
+  assert.doesNotMatch(ai.prompt, /录制方向|滚动区域及作用对象|按当前画面|7\s*次|scroll_count/);
+  assert.equal((ai.prompt.match(/向下滚动/g) ?? []).length, 1);
   assert.deepEqual(ai.images, [{ name: 'step-001-target', url: 'source/screenshots/target.png' }]);
   const document = { computer: {}, agent: { groupName: 'demo', groupDescription: '查找网元' }, tasks: built.tasks };
   assert.doesNotThrow(() => parseYamlScript(dumpYamlDocument(document)));
   const guided = buildRecordedTaskAiActPrompt(document);
-  assert.match(guided.prompt, /NE-001/);
+  assert.match(guided.prompt, /项目甲/);
   assert.doesNotMatch(guided.prompt, /7\s*次/);
   assert.deepEqual(guided.images, ai.images);
   const manifest = { schemaVersion: '0.3', skillName: 'demo', title: 'demo', description: 'demo', goal: '查找网元',
@@ -261,6 +262,37 @@ test('连续滚动与点击合并为目标驱动 aiAct，滚轮次数不进入 R
     inputs: built.inputs } as any;
   await validateContract(manifest, 'skill-task.schema.json', 'test');
   validateRecordedTaskDocument(document, manifest, 'test');
+});
+
+test('不同方向和目标操作组合仅保留一次滚动与目标动作语义', () => {
+  for (const [scrollAction, scrollText, targetAction, targetType, targetText] of [
+    ['ScrollDown at', '在侧栏目录向下滚动', 'LClick at', 'click', '点击目录中的目标项'],
+    ['ScrollUp at', '在表格内容区向上滚动', 'LDoubleClick at', 'doubleClick', '双击目标文件行'],
+    ['ScrollDown at', '在画布列表向下滚动', 'RClick at', 'rightClick', '右键点击目标图层'],
+  ] as const) {
+    const { trace, processed } = recordedActions([
+      { action: scrollAction, type: 'aiAct', prompt: scrollText },
+      { action: targetAction, type: targetType, prompt: targetText },
+    ]);
+    const built = buildRecordedSteps(trace, processed);
+    const prompt = String((built.tasks[0].flow as any[])[0].ai);
+    assert.equal(built.tasks.length, 1);
+    assert.equal((prompt.split(scrollText).length - 1), 1);
+    assert.equal((prompt.split(targetText).length - 1), 1);
+    assert.match(prompt, /若目标不可见/);
+    assert.doesNotMatch(prompt, /录制方向|滚动区域及作用对象|找到后|不要重复操作/);
+  }
+});
+
+test('滚动提示中的次数不进入复合操作', () => {
+  const { trace, processed } = recordedActions([
+    { action: 'ScrollUp at', type: 'aiAct', prompt: '在内容列表向上滚动约 4 次' },
+    { action: 'LClick at', type: 'click', prompt: '点击列表顶部的目标项' },
+  ]);
+  const prompt = String((buildRecordedSteps(trace, processed).tasks[0].flow as any[])[0].ai);
+  assert.match(prompt, /内容列表向上滚动/);
+  assert.match(prompt, /点击列表顶部的目标项/);
+  assert.doesNotMatch(prompt, /4\s*次|录制方向/);
 });
 
 test('滚动与点击的合并间隔从最后一次滚动结束时计算', async () => {
@@ -283,7 +315,7 @@ test('滚动可合并双击和右键，但不吞并输入、按键、等待或�
   for (const [action, type] of [['LDoubleClick at', 'doubleClick'], ['RClick at', 'rightClick']] as const) {
     const { trace, processed } = recordedActions([
       { action: 'ScrollUp at', type: 'aiAct', prompt: '文件列表向上滚动' },
-      { action, type, prompt: '目标文件行' },
+      { action, type, prompt: type === 'doubleClick' ? '双击目标文件行' : '右键点击目标文件行' },
     ]);
     const built = buildRecordedSteps(trace, processed);
     assert.equal(built.tasks.length, 1);
@@ -319,6 +351,7 @@ test('独立滚动和完整拖拽分别生成 aiAct；跨应用与长时间间�
   const built = buildRecordedSteps(trace, processed);
   assert.equal(built.tasks.length, 4);
   assert.equal(built.tasks[0].name, 'step-001 | aiAct');
+  assert.deepEqual((built.tasks[0].flow as any[])[0], { ai: '在列表中向下滚动' });
   assert.equal(built.tasks[2].name, 'step-003 | aiAct');
   assert.deepEqual((built.tasks[2].flow as any[]).at(-1), { ai: '按住矩形拖动至右侧区域并释放' });
   assert.equal(built.tasks[3].name, 'step-004 | click');
