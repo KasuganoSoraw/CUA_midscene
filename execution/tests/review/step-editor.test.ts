@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { sourceStepsForBinding } from '../../review/shared/step-bindings.js';
 import {
   buildStepContent,
   defaultStepEditor,
@@ -8,6 +9,19 @@ import {
   parseStepEditor,
   referenceImagesFromFlow,
 } from '../../review/shared/step-editor.js';
+
+test('步骤证据绑定支持缺省、单步和多步来源', () => {
+  assert.deepEqual(sourceStepsForBinding(undefined), []);
+  assert.deepEqual(sourceStepsForBinding(null), []);
+  assert.deepEqual(sourceStepsForBinding(3), [3]);
+  assert.deepEqual(sourceStepsForBinding([2, 3]), [2, 3]);
+});
+
+test('默认编辑提示区分输入、复合操作和其他动作', () => {
+  assert.equal(defaultStepEditor('input').target, '描述输入框位置');
+  assert.equal(defaultStepEditor('aiAct').target, '描述要完成的电脑操作');
+  assert.equal(defaultStepEditor('click').target, '描述要点击的目标');
+});
 
 test('自然语言动作可在复核表单中往返编辑并保留参考图', () => {
   const flow = [{ sleep: 500 }, { ai: {

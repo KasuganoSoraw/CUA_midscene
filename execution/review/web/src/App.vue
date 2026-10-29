@@ -20,6 +20,7 @@ import {
   referenceImagesFromFlow,
   type StepEditorModel,
 } from '../../shared/step-editor';
+import { sourceStepsForBinding } from '../../shared/step-bindings';
 import { ApiError, api } from './api';
 import { ReviewDraftStorage } from './draft-storage';
 import { resolveEvidenceMode, type EvidenceMode } from './evidence-mode';
@@ -197,8 +198,7 @@ function rebuildSteps(): void {
     const operation = (match?.[2] ?? 'click') as ReviewOperation;
     const flow = clone(item.flow as JsonObject[]);
     const referenceImages = referenceImagesFromFlow(flow, operation);
-    const sourceSteps = bindings[id] === null || bindings[id] === undefined
-      ? [] : Array.isArray(bindings[id]) ? bindings[id] as number[] : [bindings[id] as number];
+    const sourceSteps = sourceStepsForBinding(bindings[id]);
     const evidences = sourceSteps.flatMap(sourceStep => {
       const evidence = evidenceBySource.get(sourceStep);
       return evidence ? [evidence] : [];

@@ -5,6 +5,7 @@ import type { JsonObject, ProcessedLogStep, ShowuiTrace, TaskAssetManifest, Task
 import { readProcessedLog, readShowuiTrace, readTaskManifest } from '../../cua/contracts/validation.js';
 import { describeTask } from '../../cua/task/tasks.js';
 import { readYamlDocument } from '../../cua/task/yaml-task.js';
+import { sourceStepsForBinding } from '../shared/step-bindings.js';
 import { referenceImagesFromFlow } from '../shared/step-editor.js';
 import type {
   ReviewEvidence,
@@ -133,8 +134,7 @@ export async function buildReviewSteps(taskRoot: string, manifest: TaskAssetMani
     const [, id, , operation] = match;
     const reviewOperation = operation as ReviewOperation;
     const flow = structuredClone(item.flow as JsonObject[]);
-    const sourceSteps = bindings[id] === null || bindings[id] === undefined
-      ? [] : Array.isArray(bindings[id]) ? bindings[id] as number[] : [bindings[id] as number];
+    const sourceSteps = sourceStepsForBinding(bindings[id]);
     const evidences = sourceSteps.flatMap(sourceStep => {
       const evidence = evidenceFor(sourceStep, processedByStep, taskRoot, recording.sourceRoot);
       return evidence ? [evidence] : [];
