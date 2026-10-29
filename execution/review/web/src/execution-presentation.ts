@@ -2,9 +2,11 @@ import type { TaskInputDefinition } from '../../../cua/contracts/types.js';
 import type { ReviewTaskView, ReviewSkillView, TaskExecutionMode } from '../../shared/types.js';
 import { parseStepEditor } from '../../shared/step-editor.js';
 
-export function executionInstruction(task: string, mode: TaskExecutionMode): string {
-  if (!task) return '';
-  return `[电脑操控](plugin://computer-use@buildin_extension) 执行 Skill ${task}（skillName=${task}，strategy=${mode === 'act' ? 'guided' : 'replay'}）`;
+export function executionInstruction(skillName: string, mode: TaskExecutionMode): string {
+  if (!skillName) return '';
+  const reference = `[${skillName}](skill://${skillName})`;
+  if (mode === 'task') return `${reference} 请使用严格回放模式执行该任务`;
+  return `${reference} 请执行该任务`;
 }
 
 export interface ExecutionParameter {

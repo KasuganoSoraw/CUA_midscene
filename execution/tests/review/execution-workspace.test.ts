@@ -27,9 +27,9 @@ function fixture(withInputs = true): ReviewSkillView {
   };
 }
 
-test('复制指令保留插件链接，随任务和运行方式变化，不包含运行输入', () => {
-  assert.equal(executionInstruction('air-tickets-demo', 'act'), '[电脑操控](plugin://computer-use@buildin_extension) 执行 Skill air-tickets-demo（skillName=air-tickets-demo，strategy=guided）');
-  assert.equal(executionInstruction('query', 'task'), '[电脑操控](plugin://computer-use@buildin_extension) 执行 Skill query（skillName=query，strategy=replay）');
+test('复制指令使用 Skill 链接，并随运行方式变化', () => {
+  assert.equal(executionInstruction('sample-task', 'act'), '[sample-task](skill://sample-task) 请执行该任务');
+  assert.equal(executionInstruction('query', 'task'), '[query](skill://query) 请使用严格回放模式执行该任务');
   assert.equal(executionInstruction('', 'task'), '');
 });
 
@@ -130,7 +130,7 @@ test('实际页面展示参数、复制指令并仅将本次输入传给执行�
     select.props['onUpdate:modelValue']('act');
     await settle();
     await nodes(mounted.root).find(item => item.props['aria-label'] === '复制运行指令')!.props.onClick();
-    assert.equal(mounted.copies[0], executionInstruction('query', 'act'));
+    assert.equal(mounted.copies[0], '[query](skill://query) 请执行该任务');
     assert.match(text(mounted.root), /指令已复制/);
     await nodes(mounted.root).find(item => String(item.props.class).includes('execution-start'))!.props.onClick();
     await settle();
@@ -139,6 +139,18 @@ test('实际页面展示参数、复制指令并仅将本次输入传给执行�
     assert.match(text(mounted.root), /取消准备/);
     assert.equal(nodes(mounted.root).find(item => item.tag === 'task-catalog')!.props.busy, true);
     assert.equal(nodes(mounted.root).find(item => item.props['aria-label'] === '订单号')!.props.disabled, true);
+  } finally { mounted.unmount(); }
+});
+
+test('手动选择按步骤运行时复制严格回放指令', async () => {
+  const mounted = await mountWorkspace();
+  try {
+    const select = nodes(mounted.root).find(item => item.tag === 'review-select')!;
+    assert.equal(select.props.modelValue, 'act');
+    select.props['onUpdate:modelValue']('task');
+    await settle();
+    await nodes(mounted.root).find(item => item.props['aria-label'] === '复制运行指令')!.props.onClick();
+    assert.equal(mounted.copies[0], '[query](skill://query) 请使用严格回放模式执行该任务');
   } finally { mounted.unmount(); }
 });
 
