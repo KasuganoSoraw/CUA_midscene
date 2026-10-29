@@ -260,7 +260,7 @@ async function loadSkills(): Promise<void> {
     if (skillName.value) await loadTask();
     else {
       clearTaskView();
-      status.value = result.error ? () => result.error! : () => t('review.noTasks');
+      status.value = () => result.error ?? '';
     }
   } catch (error) {
     skills.value = [];
@@ -904,6 +904,6 @@ onMounted(async () => {
       @cancel="taskDeleteOpen = false"
     />
 
-    <footer v-if="mode === 'review'"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
+    <footer v-if="mode === 'review' && skills.length"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
   </div>
 </template>
