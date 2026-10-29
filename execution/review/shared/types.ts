@@ -1,5 +1,6 @@
 import type {
   JsonObject,
+  GenerationLanguage,
   SceneCatalogItem,
   TaskCatalogItem,
   TaskInputDefinition,
@@ -8,6 +9,7 @@ import type {
   SkillTaskManifest,
   SkillCatalogItem,
 } from '../../cua/contracts/types.js';
+export type { GenerationLanguage } from '../../cua/contracts/types.js';
 
 export type ReviewOrigin = 'builtin' | 'user';
 export type ReviewOperation = 'click' | 'doubleClick' | 'rightClick' | 'input' | 'keyboard' | 'wait' | 'aiAct';
@@ -167,7 +169,7 @@ export interface CreateRecordingSkillResult {
   zipPath?: string;
 }
 
-export type SkillGenerationStatus = RecordingGenerationStatus<Record<string, never>, CreateRecordingSkillResult>;
+export type SkillGenerationStatus = RecordingGenerationStatus<{ language: GenerationLanguage }, CreateRecordingSkillResult>;
 
 export interface RecordingGenerationStatus<Request = CreateRecordingTaskRequest, Result = CreateRecordingTaskResult> {
   phase: 'idle' | 'running' | 'succeeded' | 'failed';

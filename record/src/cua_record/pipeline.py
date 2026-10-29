@@ -38,7 +38,7 @@ def _find_single_log(inputs_dir: Path) -> Path:
     return hits[0]
 
 
-def run_pipeline(project_name: str) -> Path:
+def run_pipeline(project_name: str, *, language: str = "zh-CN") -> Path:
     """
     Orchestrate the 3-step pipeline:
       1) parse & merge events -> {project}_processed_log.json
@@ -66,7 +66,7 @@ def run_pipeline(project_name: str) -> Path:
     # It will discover the video and create {project}_processed_log_sc.json and /screenshots.
     _, screenshots_dir, meta = vse.process_project(str(project_dir))
 
-    out_trace = _generate_skill_trace(project_dir, screenshots_dir)
+    out_trace = _generate_skill_trace(project_dir, screenshots_dir, language)
 
     print("=== Pipeline Complete ===")
     print(f"Project: {project_dir.name}")
@@ -77,7 +77,7 @@ def run_pipeline(project_name: str) -> Path:
     return out_trace
 
 
-def _generate_skill_trace(project_dir: Path, screenshots_dir: str) -> Path:
+def _generate_skill_trace(project_dir: Path, screenshots_dir: str, language: str) -> Path:
     """生成逐步轨迹及用于 Skill 正式资产的任务摘要。"""
     log_sc = project_dir / f"{project_dir.name}_processed_log_sc.json"
     if not log_sc.exists():
@@ -86,7 +86,8 @@ def _generate_skill_trace(project_dir: Path, screenshots_dir: str) -> Path:
     out_trace = project_dir / f"{project_dir.name}_trace.json"
 
     tg = TraceGenerator(
-        default_prompt_path=str(default_prompt_path()),
+        default_prompt_path=str(default_prompt_path(language)),
+        language=language,
         api_provider="openai",
         openai_model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
         claude_model="claude-sonnet-4-20250514",

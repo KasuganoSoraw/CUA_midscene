@@ -2,6 +2,7 @@ import type {
   ReviewSkillCatalogResponse,
   ReviewSkillView,
   SkillGenerationStatus,
+  GenerationLanguage,
   StartSkillExecutionRequest,
   CreateRecordingTaskRequest,
   RecordingGenerationStatus,
@@ -108,8 +109,8 @@ export const api = {
   skills: () => request<ReviewSkillCatalogResponse>('/api/skills'),
   skill: (name: string) => request<ReviewSkillView>(`/api/skills/${encodeURIComponent(name)}`),
   skillGeneration: () => request<SkillGenerationStatus>('/api/skill-generation'),
-  createRecordingSkill: (recording: string) => request<SkillGenerationStatus>(
-    `/api/recordings/${encodeURIComponent(recording)}/skills`, { method: 'POST', body: '{}' },
+  createRecordingSkill: (recording: string, language: GenerationLanguage) => request<SkillGenerationStatus>(
+    `/api/recordings/${encodeURIComponent(recording)}/skills`, { method: 'POST', body: JSON.stringify({ language }) },
   ),
   deleteSkill: (name: string) => request<{ deleted: true; skillName: string }>(
     `/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' },

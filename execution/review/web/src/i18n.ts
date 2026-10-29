@@ -1,6 +1,7 @@
 import { readonly, ref } from 'vue';
+import type { GenerationLanguage } from '../../shared/types.js';
 
-export type WorkbenchLocale = 'zh-CN' | 'en-US';
+export type WorkbenchLocale = GenerationLanguage;
 export type TranslationParams = Record<string, string | number>;
 
 const zhCN = {
