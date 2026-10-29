@@ -36,12 +36,13 @@ async function recordingSetup() {
 }
 
 test('实际录制页面无需命名表单发起生成，完成时导航到新 Skill', async () => {
+  useI18n().setLocale('zh-CN');
   const setup = await recordingSetup();
   try {
     assert.equal(setup.app.canCreate.value, true);
     assert.doesNotMatch(setup.source, /sceneId|taskId|v-model="goal"|createRecordingTask/);
     await setup.app.createTask();
-    assert.deepEqual(setup.calls, [['Recording_1']]);
+    assert.deepEqual(setup.calls, [['Recording_1', 'zh-CN']]);
     assert.equal(setup.app.generation.value.phase, 'running');
     const result = { created: true, valid: true, skillName: 'alarm-query', goal: '查询告警' };
     setup.app.applyGeneration({ phase: 'succeeded', recording: 'Recording_1', result });
@@ -49,6 +50,19 @@ test('实际录制页面无需命名表单发起生成，完成时导航到新 S
     setup.app.applyGeneration({ phase: 'succeeded', recording: 'Recording_1', result }, true);
     assert.equal(setup.events.length, 1);
   } finally { setup.stop(); }
+});
+
+test('录制页面按点击生成时选中的界面语言发起请求', async () => {
+  const language = useI18n();
+  const setup = await recordingSetup();
+  try {
+    language.setLocale('en-US');
+    await setup.app.createTask();
+    assert.deepEqual(setup.calls, [['Recording_1', 'en-US']]);
+  } finally {
+    language.setLocale('zh-CN');
+    setup.stop();
+  }
 });
 
 test('任务目录使用 Skill 身份平铺，不读取场景目录 API', async () => {

@@ -9,6 +9,7 @@ import type { Writable } from 'node:stream';
 import { convertTrace } from '../conversion/showui-trace.js';
 import type {
   ExecutorResult,
+  GenerationLanguage,
   ProcessedLogStep,
   TaskCatalogRoots,
 } from '../contracts/types.js';
@@ -25,6 +26,7 @@ export interface RecordProcessorRunRequest {
   pythonExecutable: string;
   recordingPath: string;
   progress: Writable;
+  language?: GenerationLanguage;
 }
 
 export interface CreateTaskFromRecordingOptions {
@@ -81,7 +83,7 @@ export async function runRecordingParser(
   await runPythonWorker({
     pythonExecutable: request.pythonExecutable,
     module: 'cua_record',
-    args: ['process', request.recordingPath],
+    args: ['process', request.recordingPath, ...(request.language ? ['--language', request.language] : [])],
     progress: request.progress,
   }, spawnProcess);
 }

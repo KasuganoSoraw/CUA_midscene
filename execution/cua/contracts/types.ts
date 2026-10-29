@@ -1,4 +1,5 @@
 export type JsonObject = Record<string, unknown>;
+export type GenerationLanguage = 'zh-CN' | 'en-US';
 
 export interface SceneManifest {
   schemaVersion: '0.1';

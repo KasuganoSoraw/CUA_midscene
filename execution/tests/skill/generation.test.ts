@@ -69,6 +69,30 @@ test('录制生成在独立目录打包，经宿主导入后读取正式资产�
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('英文生成语言贯穿解析器、步骤和新 Skill 资产', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-skill-english-'));
+  try {
+    const options = await recordingSkillFixture(root);
+    const tracePath = path.join(options.recording, 'Recording_1_trace.json');
+    const trace = JSON.parse(await readFile(tracePath, 'utf8'));
+    trace.skill = { name: 'network-alarm-search', description: 'Search network alarms', goal: 'Show matching alarms' };
+    trace.trajectory[0].caption.operation.prompt = 'Click the search control';
+    await writeFile(tracePath, JSON.stringify(trace));
+    const result = await createSkillFromRecording({ ...options, language: 'en-US' }, {
+      runRecorder: async request => { assert.equal(request.language, 'en-US'); },
+      fetch: async (_url, init) => {
+        await installImportedFixture(init!.body as FormData, options.skillsRoot);
+        return Response.json({ success: true });
+      },
+    });
+    const asset = await readSkill(options.skillsRoot, result.skillName);
+    assert.equal(asset.manifest.goal, 'Show matching alarms');
+    assert.match(asset.manifest.description, /Search network alarms.*Computer-Use SubAgent/);
+    assert.equal((asset.document.tasks as any[])[0].flow[0].aiTap, 'Click the search control');
+    assert.doesNotMatch(await readFile(path.join(asset.root, 'SKILL.md'), 'utf8'), /[\u3400-\u9fff]/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('普通 Skill 重名自动追加后缀，所有权威身份一致且原始证据不变', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-generation-conflict-'));
   try {

@@ -2,6 +2,7 @@ import { mkdir, open, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   JsonObject,
+  GenerationLanguage,
   ProcessedLogStep,
   SceneManifest,
   ShowuiTrace,
@@ -101,6 +102,7 @@ function clickAction(
   operation: ShowuiTraceOperation,
   step: number,
   processedStep: ProcessedLogStep,
+  language: GenerationLanguage,
 ): RecordedAction {
   const prompt = requiredOperationText(operation.prompt, 'prompt', step);
   const actionName = { click: 'aiTap', doubleClick: 'aiDoubleClick', rightClick: 'aiRightClick' }[operation.type as 'click' | 'doubleClick' | 'rightClick'];
@@ -123,7 +125,9 @@ function clickAction(
       actions: [{
         [actionName]: null,
         locate: {
-          prompt: `${prompt}。目标外观应匹配参考图“${imageName}”正中央的主要图标，参考图周边仅用于辅助理解`,
+          prompt: language === 'en-US'
+            ? `${prompt}. Match the target to the primary icon centered in reference image "${imageName}"; surrounding pixels provide context only.`
+            : `${prompt}。目标外观应匹配参考图“${imageName}”正中央的主要图标，参考图周边仅用于辅助理解`,
           images: [{ name: imageName, url: referenceUrl }],
         },
       }],
@@ -158,9 +162,10 @@ function actionFromOperation(
   operation: ShowuiTraceOperation,
   step: number,
   processedStep: ProcessedLogStep,
+  language: GenerationLanguage,
 ): RecordedAction {
   if (operation.type === 'click' || operation.type === 'doubleClick' || operation.type === 'rightClick') {
-    return clickAction(operation, step, processedStep);
+    return clickAction(operation, step, processedStep, language);
   }
   if (operation.useReferenceImage) {
     throw new Error(`trace step ${step} 只有点击动作可以使用视觉参考`);
@@ -203,10 +208,19 @@ function canMergeClick(operation: ShowuiTraceOperation, source: ProcessedLogStep
     && Boolean(operation.prompt?.trim());
 }
 
-function scrollPrompt(operation: ShowuiTraceOperation, source: ProcessedLogStep, step: number): string {
+function scrollPrompt(
+  operation: ShowuiTraceOperation, source: ProcessedLogStep, step: number, language: GenerationLanguage,
+): string {
   if (operation.type !== 'aiAct') throw new Error(`trace step ${step} 的滚动必须使用 aiAct operation`);
-  const direction = /^ScrollDown\b/i.test(source.action ?? '') ? '向下' : '向上';
-  return requiredOperationText(operation.prompt, 'prompt', step)
+  const down = /^ScrollDown\b/i.test(source.action ?? '');
+  const prompt = requiredOperationText(operation.prompt, 'prompt', step);
+  if (language === 'en-US') {
+    const direction = down ? 'down' : 'up';
+    return prompt.replace(/\bscroll(?:ing)?\s+(?:up|down)\s+(?:about\s+)?\d+\s+(?:times?|notches?)\b/gi,
+      `scroll ${direction}`).replace(/[。；;.!?]+$/u, '');
+  }
+  const direction = down ? '向下' : '向上';
+  return prompt
     .replace(/(?:向上|向下)?滚动\s*(?:约|大约)?\s*\d+\s*次(?:滚轮)?/g, `${direction}滚动`)
     .replace(/(?:约|大约)?\s*\d+\s*次滚轮/g, '按画面需要滚动')
     .replace(/[。；;.!?]+$/u, '');
@@ -226,10 +240,10 @@ function scrollGroupEnd(trace: ShowuiTrace, sources: ProcessedLogStep[], start: 
 }
 
 function scrollStep(
-  trace: ShowuiTrace, sources: ProcessedLogStep[], start: number, step: number,
+  trace: ShowuiTrace, sources: ProcessedLogStep[], start: number, step: number, language: GenerationLanguage,
 ): { task: JsonObject; binding: number | number[]; next: number } {
   const end = scrollGroupEnd(trace, sources, start);
-  const scroll = scrollPrompt(trace.trajectory[end - 1].caption.operation, sources[end - 1], trace.trajectory[end - 1].step_idx);
+  const scroll = scrollPrompt(trace.trajectory[end - 1].caption.operation, sources[end - 1], trace.trajectory[end - 1].step_idx, language);
   const nextOperation = trace.trajectory[end]?.caption.operation;
   const merge = nextOperation && sameContext(sources[end - 1], sources[end]) && canMergeClick(nextOperation, sources[end]);
   const consumed = merge ? end + 1 : end;
@@ -237,10 +251,12 @@ function scrollStep(
   let prompt = scroll;
   let images: JsonObject[] = [];
   if (merge) {
-    const action = actionFromOperation(nextOperation, step, sources[end]).actions[0];
+    const action = actionFromOperation(nextOperation, step, sources[end], language).actions[0];
     const locate = action.locate as JsonObject | undefined;
     const target = locate ? String(locate.prompt) : requiredOperationText(nextOperation.prompt, 'prompt', step);
-    prompt = `若目标不可见，${scroll}；${target}`;
+    prompt = language === 'en-US'
+      ? `If the target is not visible, ${scroll}; then ${target}`
+      : `若目标不可见，${scroll}；${target}`;
     images = locate ? locate.images as JsonObject[] : [];
   }
   return {
@@ -276,7 +292,7 @@ export function buildTaskAssets(
   };
 }
 
-export function buildRecordedSteps(trace: ShowuiTrace, processedSteps: ProcessedLogStep[]): {
+export function buildRecordedSteps(trace: ShowuiTrace, processedSteps: ProcessedLogStep[], language: GenerationLanguage = 'zh-CN'): {
   tasks: JsonObject[]; inputs: Record<string, TaskInputDefinition>; stepBindings: Record<string, number | number[]>;
 } {
   if (!trace.trajectory.length) throw new Error('trace trajectory 不能为空');
@@ -304,7 +320,7 @@ export function buildRecordedSteps(trace: ShowuiTrace, processedSteps: Processed
     }
     const source = processedSteps[index];
     if (isScroll(source)) {
-      const merged = scrollStep(trace, processedSteps, index, step);
+      const merged = scrollStep(trace, processedSteps, index, step, language);
       tasks.push({ ...merged.task, flow: [...flow, ...(merged.task.flow as JsonObject[])] });
       stepBindings[stepId] = merged.binding;
       index = merged.next;
@@ -316,7 +332,7 @@ export function buildRecordedSteps(trace: ShowuiTrace, processedSteps: Processed
       if (isDrag(source) && traceStep.caption.operation.type !== 'aiAct') {
         throw new Error(`trace step ${traceStep.step_idx} 的拖拽必须使用 aiAct operation`);
       }
-      const mapped = actionFromOperation(traceStep.caption.operation, step, source);
+      const mapped = actionFromOperation(traceStep.caption.operation, step, source, language);
       tasks.push({ name: `${stepId} | ${traceStep.caption.operation.type}`, flow: [...flow, ...mapped.actions] });
       if (mapped.input) inputs[mapped.input[0]] = mapped.input[1];
       stepBindings[stepId] = traceStep.step_idx;

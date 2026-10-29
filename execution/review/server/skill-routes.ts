@@ -11,7 +11,7 @@ import { deleteReviewSkill, loadReviewSkill, saveReviewSkill } from '../service/
 import { applyReviewMutation } from '../service/task-mutations.js';
 import { uploadSkillReferenceImage } from '../service/reference-images.js';
 import { referenceImageMaxBytes } from '../shared/reference-upload.js';
-import type { CreateRecordingSkillResult, ReviewMutation, ReviewTaskDraft, SaveReviewTaskRequest, TaskExecutionStatus } from '../shared/types.js';
+import type { CreateRecordingSkillResult, GenerationLanguage, ReviewMutation, ReviewTaskDraft, SaveReviewTaskRequest, TaskExecutionStatus } from '../shared/types.js';
 
 interface SkillParams { skillName: string }
 interface Options {
@@ -101,16 +101,16 @@ function registerSkillAssets(app: FastifyInstance, options: Options): void {
   });
 }
 
-export function registerSkillRoutes(app: FastifyInstance, options: Options): RecordingGenerationManager<Record<string, never>, CreateRecordingSkillResult> {
+export function registerSkillRoutes(app: FastifyInstance, options: Options): RecordingGenerationManager<{ language: GenerationLanguage }, CreateRecordingSkillResult> {
   registerSkillReads(app, options);
   registerSkillEdits(app, options);
   registerSkillAssets(app, options);
-  const generation = new RecordingGenerationManager<Record<string, never>, CreateRecordingSkillResult>();
+  const generation = new RecordingGenerationManager<{ language: GenerationLanguage }, CreateRecordingSkillResult>();
   app.get('/api/skill-generation', async () => generation.status());
-  app.post<{ Params: { recording: string } }>('/api/recordings/:recording/skills', {
+  app.post<{ Params: { recording: string }; Body: { language?: GenerationLanguage } }>('/api/recordings/:recording/skills', {
     schema: {
       params: { type: 'object', required: ['recording'], properties: { recording: { type: 'string', minLength: 1 } } },
-      body: { type: 'object', additionalProperties: false },
+      body: { type: 'object', properties: { language: { type: 'string', enum: ['zh-CN', 'en-US'] } }, additionalProperties: false },
     },
   }, async (request, reply) => {
     const skillsRoot = requireSkillsRoot(options.layout);
@@ -118,8 +118,9 @@ export function registerSkillRoutes(app: FastifyInstance, options: Options): Rec
     const entry = await describeRecording(request.params.recording, recordingOptions);
     if (!entry.ready) throw new Error(`录制不可生成：${entry.errors.join('\n')}`);
     const recording = await resolveRecordingDirectory(entry.id, recordingOptions);
-    const status = generation.start(entry.id, {}, () => (options.create ?? createSkillFromRecording)({
-      recording, skillsRoot, executionRoot: options.executionRoot,
+    const language = request.body.language ?? 'zh-CN';
+    const status = generation.start(entry.id, { language }, () => (options.create ?? createSkillFromRecording)({
+      recording, skillsRoot, executionRoot: options.executionRoot, language,
     }));
     return reply.code(202).send(status);
   });

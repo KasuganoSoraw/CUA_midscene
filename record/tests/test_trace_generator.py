@@ -104,6 +104,23 @@ class DoubleClickRetryTraceGenerator(TraceGenerator):
 
 
 class TraceGeneratorOperationTest(unittest.TestCase):
+    def test_english_generation_uses_english_prompt_and_summary(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = TraceGenerator(language="en-US")
+        prompt = generator._prompt(
+            {"action": "ScrollDown at", "timestamp": 1.0}, "", 1, [],
+        )
+        self.assertIn("Write explanatory values", prompt)
+        self.assertIn("Operation.type must be aiAct", prompt)
+        self.assertNotIn("字段值必须使用中文", prompt)
+        with patch.object(generator, "_call_openai", return_value=json.dumps({
+            "name": "sample-search", "description": "Search records", "goal": "Show matching records",
+        })) as call:
+            result = generator.summarize_skill([])
+        self.assertEqual(result["goal"], "Show matching records")
+        self.assertIn("Write description and goal in English", call.call_args.args[0])
+        self.assertNotIn("description 用中文", call.call_args.args[0])
+
     def test_recorded_input_and_press_actions_mandate_operation_types(self):
         previous_key = os.environ.get("OPENAI_API_KEY")
         os.environ["OPENAI_API_KEY"] = "test-key"

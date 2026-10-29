@@ -52,6 +52,8 @@ uv run --locked --env-file ..\.env.local python -m cua_record process C:\path\to
 
 processor 接收一个录制目录，生成 trace 时不接收业务 goal，避免高层目标干扰逐步视觉证据判断。该 Python 命令用于独立调试 record；开发者、Review 和维护型调用方通过 execution 的单一创建命令生成可执行任务。execution 的可选 `--goal` 只在 trace 生成后写入任务描述。
 
+步骤描述默认使用中文；传入 `--language en-US` 时，新增 trace 的步骤描述和任务摘要使用英文。该参数不改写已有 Skill。
+
 生成物会落在对应 project 目录下，主要包括：
 
 - `{project}_processed_log.json`

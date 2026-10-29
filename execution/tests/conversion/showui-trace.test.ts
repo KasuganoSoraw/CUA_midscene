@@ -264,6 +264,18 @@ test('连续滚动与点击合并为目标驱动 aiAct，滚轮次数不进入 R
   validateRecordedTaskDocument(document, manifest, 'test');
 });
 
+test('英文录制步骤保持英文复合操作和参考图定位说明', () => {
+  const { trace, processed } = recordedActions([
+    { action: 'ScrollDown at', type: 'aiAct', prompt: 'Scroll down 4 times in the results list' },
+    { action: 'LClick at', type: 'click', prompt: 'Click the matching result', reference: 'screenshots/target.png' },
+  ]);
+  const built = buildRecordedSteps(trace, processed, 'en-US');
+  const ai = (built.tasks[0].flow as any[])[0].ai;
+  assert.match(ai.prompt, /If the target is not visible, scroll down in the results list; then Click the matching result/);
+  assert.match(ai.prompt, /Match the target to the primary icon centered in reference image/);
+  assert.doesNotMatch(ai.prompt, /4 times|[\u3400-\u9fff]/u);
+});
+
 test('不同方向和目标操作组合仅保留一次滚动与目标动作语义', () => {
   for (const [scrollAction, scrollText, targetAction, targetType, targetText] of [
     ['ScrollDown at', '在侧栏目录向下滚动', 'LClick at', 'click', '点击目录中的目标项'],

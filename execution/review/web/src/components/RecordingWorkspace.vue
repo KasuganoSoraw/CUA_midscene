@@ -16,7 +16,7 @@ import videoIcon from '../assets/ucd/video.svg';
 import logIcon from '../assets/ucd/event-log.svg';
 import refreshIcon from '../assets/ucd/refresh.svg';
 
-const { t, formatDateTime } = useI18n();
+const { locale, t, formatDateTime } = useI18n();
 
 const props = defineProps<{
   skillsConfigured: boolean;
@@ -219,7 +219,7 @@ async function createTask(): Promise<void> {
   error.value = '';
   message.value = () => t('recording.creating');
   try {
-    applyGeneration(await api.createRecordingSkill(selected.value.id));
+    applyGeneration(await api.createRecordingSkill(selected.value.id, locale.value));
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
     message.value = () => t('recording.createFailed');

@@ -16,6 +16,7 @@ class RecordCliTest(unittest.TestCase):
 
         self.assertEqual(0, result)
         self.assertTrue(default_prompt_path().is_file())
+        self.assertTrue(default_prompt_path("en-US").is_file())
         self.assertIn("cua_record ready", stdout.getvalue())
 
     def test_process_uses_pipeline(self):
@@ -23,4 +24,11 @@ class RecordCliTest(unittest.TestCase):
             result = main(["process", "C:/recording-demo"])
 
         self.assertEqual(0, result)
-        run_pipeline.assert_called_once_with("C:/recording-demo")
+        run_pipeline.assert_called_once_with("C:/recording-demo", language="zh-CN")
+
+    def test_process_accepts_english_generation_language(self):
+        with patch("cua_record.cli.run_pipeline") as run_pipeline:
+            result = main(["process", "C:/recording-demo", "--language", "en-US"])
+
+        self.assertEqual(0, result)
+        run_pipeline.assert_called_once_with("C:/recording-demo", language="en-US")

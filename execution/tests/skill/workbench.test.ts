@@ -22,6 +22,7 @@ async function setup(configured = true) {
   await mkdir(path.join(skillsRoot, 'ordinary'));
   await writeFile(path.join(skillsRoot, 'ordinary', 'SKILL.md'), 'ordinary skill');
   const starts: unknown[] = [];
+  const generatedRequests: Array<{ language?: string }> = [];
   const recorder: RecorderControl = {
     status: () => ({ phase: 'idle' }), close: async () => {},
     refreshDisplays: async () => ({ displays: [], revision: 'test' }),
@@ -35,13 +36,15 @@ async function setup(configured = true) {
       recorder, execution: { status: () => ({ phase: 'idle' }), close: async () => {},
         stop: async () => ({ phase: 'idle' }), start: async request => { starts.push(request); return { phase: 'preparing' }; } },
       createSkill: async options => {
+        generatedRequests.push(options);
         assert.equal(options.skillsRoot, skillsRoot);
         await createSkillFixture(options.skillsRoot, 'generated-alarm-query');
         return { created: true, valid: true, skillName: 'generated-alarm-query', goal: '查询', zipPath: path.join(root, 'generated-alarm-query.zip') };
       },
     },
   });
-  return { app, root, skillsRoot, starts, close: async () => { await app.close(); await rm(root, { recursive: true, force: true }); } };
+  return { app, root, skillsRoot, starts, generatedRequests,
+    close: async () => { await app.close(); await rm(root, { recursive: true, force: true }); } };
 }
 
 test('Skill Workbench 平铺发现、直接保存与重新加载，不管理普通 Skill', async () => {
@@ -89,6 +92,8 @@ test('录制生成请求无需 scene/task/goal，完成后返回正式 Skill 身
   try {
     const response = await setupValue.app.inject({ method: 'POST', url: '/api/recordings/Recording_1/skills', payload: {} });
     assert.equal(response.statusCode, 202, response.body);
+    assert.equal(response.json().request.language, 'zh-CN');
+    assert.equal(setupValue.generatedRequests[0].language, 'zh-CN');
     for (let attempt = 0; attempt < 50; attempt += 1) {
       const status = (await setupValue.app.inject('/api/skill-generation')).json();
       if (status.phase !== 'running') {
@@ -100,6 +105,31 @@ test('录制生成请求无需 scene/task/goal，完成后返回正式 Skill 身
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     assert.fail('generation did not finish');
+  } finally { await setupValue.close(); }
+});
+
+test('录制生成接受英文语言并拒绝不支持的值', async () => {
+  const setupValue = await setup();
+  try {
+    const invalid = await setupValue.app.inject({
+      method: 'POST', url: '/api/recordings/Recording_1/skills', payload: { language: 'fr-FR' },
+    });
+    assert.equal(invalid.statusCode, 400);
+    const response = await setupValue.app.inject({
+      method: 'POST', url: '/api/recordings/Recording_1/skills', payload: { language: 'en-US' },
+    });
+    assert.equal(response.statusCode, 202, response.body);
+    assert.equal(response.json().request.language, 'en-US');
+    assert.equal(setupValue.generatedRequests[0].language, 'en-US');
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const status = (await setupValue.app.inject('/api/skill-generation')).json();
+      if (status.phase !== 'running') {
+        assert.equal(status.phase, 'succeeded', JSON.stringify(status));
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal((await setupValue.app.inject('/api/skill-generation')).json().phase, 'succeeded');
   } finally { await setupValue.close(); }
 });
 
