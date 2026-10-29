@@ -74,11 +74,17 @@ function splitFlow(flow: JsonObject[]): { delayMs: number; action?: JsonObject; 
   return { delayMs, action: copied[0], standard: copied.length === 1 };
 }
 
+function defaultTarget(operation: ReviewOperation): string {
+  if (operation === 'input') return '描述输入框位置';
+  if (operation === 'aiAct') return '描述要完成的电脑操作';
+  return '描述要点击的目标';
+}
+
 export function defaultStepEditor(operation: ReviewOperation, delayMs = 0): StepEditorModel {
   return {
     operation,
     delayMs,
-    target: operation === 'input' ? '描述输入框位置' : operation === 'aiAct' ? '描述要完成的电脑操作' : '描述要点击的目标',
+    target: defaultTarget(operation),
     inputValue: '',
     inputMode: 'replace',
     inputAction: 'KeyboardTypeText',
@@ -182,18 +188,26 @@ export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flo
     return parseInputEditor(result, action, step);
   }
   if (step.operation === 'aiAct') {
-    const parsed = parseAiActAction(action);
-    if (!parsed) return customStepEditor(result, step.flow);
-    result.target = parsed.target;
-    result.referenceImages = clone(parsed.referenceImages);
-    result.convertHttpImage2Base64 = parsed.convertHttpImage2Base64;
-    return result;
+    return parseAiActEditor(result, action, step.flow);
   }
   if (step.operation === 'keyboard') {
     return parseKeyboardEditor(result, action, step.flow);
   }
+  return parseWaitEditor(result, action, step.flow);
+}
+
+function parseAiActEditor(result: StepEditorModel, action: JsonObject, flow: JsonObject[]): StepEditorModel {
+  const parsed = parseAiActAction(action);
+  if (!parsed) return customStepEditor(result, flow);
+  result.target = parsed.target;
+  result.referenceImages = clone(parsed.referenceImages);
+  result.convertHttpImage2Base64 = parsed.convertHttpImage2Base64;
+  return result;
+}
+
+function parseWaitEditor(result: StepEditorModel, action: JsonObject, flow: JsonObject[]): StepEditorModel {
   if (typeof action.aiWaitFor !== 'string' || !Object.keys(action).every((key) => key === 'aiWaitFor' || key === 'timeout')) {
-    return customStepEditor(result, step.flow);
+    return customStepEditor(result, flow);
   }
   result.waitCondition = action.aiWaitFor;
   result.timeoutMs = numberValue(action.timeout, 15_000);
