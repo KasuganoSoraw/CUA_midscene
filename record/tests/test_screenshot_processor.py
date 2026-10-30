@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -227,6 +228,34 @@ class ScreenshotProcessorConfigTest(unittest.TestCase):
         extractor = VideoScreenshotExtractor()
 
         self.assertEqual((2560, 1440), extractor._parse_config_resolution(actions))
+
+    def test_high_dpi_recording_scales_pointer_from_video_pixels(self):
+        extractor = VideoScreenshotExtractor()
+        actions = [
+            {"timestamp": 0.0, "action": "CONFIG", "coords": {
+                "0": {"width": 2880, "height": 1800, "scale_factor": 1.5},
+            }},
+            {"timestamp": 1.0, "action": "LClick at", "coords": [{"x": 2700, "y": 600}]},
+        ]
+        frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        frame[350:370, 1790:1810] = (20, 80, 200)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "dpi-recording"
+            inputs = project / "inputs"
+            inputs.mkdir(parents=True)
+            (inputs / "dpi-recording.mp4").touch()
+            (project / "dpi-recording_processed_log.json").write_text(
+                json.dumps(actions), encoding="utf-8",
+            )
+            with patch.object(extractor, "_get_frame_at", return_value=frame):
+                processed, screenshots, metadata = extractor.process_project(project)
+
+            self.assertEqual("2880x1800", metadata["original_resolution"])
+            self.assertEqual({"x": 1800.0, "y": 360.0}, processed[0]["coords"][0])
+            data = np.frombuffer((screenshots / "0.900s.reference.png").read_bytes(), dtype=np.uint8)
+            reference = cv2.imdecode(data, cv2.IMREAD_COLOR)
+            self.assertTrue(np.array_equal(reference[48, 48], frame[360, 1800]))
 
 
 if __name__ == "__main__":
