@@ -120,16 +120,12 @@ class VideoScreenshotExtractor:
 
                 width = selected.get("width")
                 height = selected.get("height")
-                sf = selected.get("scale_factor", 1.0) or 1.0
 
                 if width is None or height is None:
                     return None, None
 
-                # Use *logical* resolution as base for coords / video
-                logical_w = int(round(width / sf))
-                logical_h = int(round(height / sf))
-
-                return logical_w, logical_h
+                # The recorded video and pointer coordinates share display-pixel dimensions.
+                return int(width), int(height)
 
         return None, None
 
