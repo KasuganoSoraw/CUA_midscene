@@ -47,6 +47,22 @@ class ScreenshotProcessorReferenceImageTest(unittest.TestCase):
             self.assertTrue(np.array_equal(reference[48, 48], self.frame[500, 500]))
             self.assertFalse(np.array_equal(marked[128, 128], self.frame[500, 500]))
 
+    def test_double_click_saves_all_images_in_unicode_directory(self):
+        actions = [{"timestamp": 1.0, "action": "LDoubleClick at", "coords": [{"x": 500, "y": 500}]}]
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "新建文件夹" / "screenshots"
+            with patch.object(self.extractor, "_get_frame_at", return_value=self.frame.copy()):
+                processed = self.extractor.process_actions(
+                    actions, "recording.mp4", output, False, 1.0, 1.0,
+                )
+
+            self.assertEqual("screenshots/0.900s.jpg", processed[0]["screenshot_full"])
+            self.assertEqual("screenshots/0.900s.crop.jpg", processed[0]["screenshot_crop"])
+            self.assertEqual("screenshots/0.900s.reference.png", processed[0]["screenshot_reference"])
+            for name in ("0.900s.jpg", "0.900s.crop.jpg", "0.900s.reference.png"):
+                data = np.frombuffer((output / name).read_bytes(), dtype=np.uint8)
+                self.assertIsNotNone(cv2.imdecode(data, cv2.IMREAD_COLOR))
+
     def test_paste_uses_full_frame_without_click_coordinates(self):
         actions = [{"timestamp": 1.0, "action": "Paste text", "coords": None, "clipboard_text": "中文"}]
         with tempfile.TemporaryDirectory() as tmp:

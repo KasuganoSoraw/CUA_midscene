@@ -1,4 +1,3 @@
-import os
 import cv2
 import json
 from pathlib import Path
@@ -66,12 +65,22 @@ class VideoScreenshotExtractor:
             cap.release()
 
     def _save_jpg(self, path, img):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        return cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
+        return self._save_encoded(path, img, ".jpg", [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
 
     def _save_png(self, path, img):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        return cv2.imwrite(path, img, [cv2.IMWRITE_PNG_COMPRESSION, 3])
+        return self._save_encoded(path, img, ".png", [cv2.IMWRITE_PNG_COMPRESSION, 3])
+
+    def _save_encoded(self, path, img, extension, options):
+        output = Path(path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        encoded_ok, encoded = cv2.imencode(extension, img, options)
+        if not encoded_ok:
+            return False
+        try:
+            output.write_bytes(encoded.tobytes())
+        except OSError:
+            return False
+        return True
 
     def _safe_crop(self, frame, x, y, crop_size=256):
         if x is None or y is None:
