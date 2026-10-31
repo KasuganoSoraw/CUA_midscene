@@ -208,22 +208,9 @@ function canMergeClick(operation: ShowuiTraceOperation, source: ProcessedLogStep
     && Boolean(operation.prompt?.trim());
 }
 
-function scrollPrompt(
-  operation: ShowuiTraceOperation, source: ProcessedLogStep, step: number, language: GenerationLanguage,
-): string {
+function scrollPrompt(operation: ShowuiTraceOperation, step: number): string {
   if (operation.type !== 'aiAct') throw new Error(`trace step ${step} 的滚动必须使用 aiAct operation`);
-  const down = /^ScrollDown\b/i.test(source.action ?? '');
-  const prompt = requiredOperationText(operation.prompt, 'prompt', step);
-  if (language === 'en-US') {
-    const direction = down ? 'down' : 'up';
-    return prompt.replace(/\bscroll(?:ing)?\s+(?:up|down)\s+(?:about\s+)?\d+\s+(?:times?|notches?)\b/gi,
-      `scroll ${direction}`).replace(/[。；;.!?]+$/u, '');
-  }
-  const direction = down ? '向下' : '向上';
-  return prompt
-    .replace(/(?:向上|向下)?滚动\s*(?:约|大约)?\s*\d+\s*次(?:滚轮)?/g, `${direction}滚动`)
-    .replace(/(?:约|大约)?\s*\d+\s*次滚轮/g, '按画面需要滚动')
-    .replace(/[。；;.!?]+$/u, '');
+  return requiredOperationText(operation.prompt, 'prompt', step);
 }
 
 function recordedStepId(step: number): string {
@@ -243,7 +230,7 @@ function scrollStep(
   trace: ShowuiTrace, sources: ProcessedLogStep[], start: number, step: number, language: GenerationLanguage,
 ): { task: JsonObject; binding: number | number[]; next: number } {
   const end = scrollGroupEnd(trace, sources, start);
-  const scroll = scrollPrompt(trace.trajectory[end - 1].caption.operation, sources[end - 1], trace.trajectory[end - 1].step_idx, language);
+  const scroll = scrollPrompt(trace.trajectory[end - 1].caption.operation, trace.trajectory[end - 1].step_idx);
   const nextOperation = trace.trajectory[end]?.caption.operation;
   const merge = nextOperation && sameContext(sources[end - 1], sources[end]) && canMergeClick(nextOperation, sources[end]);
   const consumed = merge ? end + 1 : end;
@@ -254,9 +241,10 @@ function scrollStep(
     const action = actionFromOperation(nextOperation, step, sources[end], language).actions[0];
     const locate = action.locate as JsonObject | undefined;
     const target = locate ? String(locate.prompt) : requiredOperationText(nextOperation.prompt, 'prompt', step);
+    const scrollClause = scroll.replace(/[。；;.!?]+$/u, '');
     prompt = language === 'en-US'
-      ? `If the target is not visible, ${scroll}; then ${target}`
-      : `若目标不可见，${scroll}；${target}`;
+      ? `If the target is not visible, ${scrollClause}; then ${target}`
+      : `若目标不可见，${scrollClause}；${target}`;
     images = locate ? locate.images as JsonObject[] : [];
   }
   return {
