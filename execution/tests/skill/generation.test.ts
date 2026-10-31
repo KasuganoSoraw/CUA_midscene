@@ -3,10 +3,31 @@ import { access, mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, write
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { createSkillFromRecording } from '../../cua/skills/create.js';
+import { createSkillFromRecording, skillMarkdown } from '../../cua/skills/create.js';
 import { readSkill } from '../../cua/skills/assets.js';
 import { requireSkillsRoot, resolveRuntimeLayout, resolveSkillsRoot } from '../../cua/data-paths.js';
 import { installImportedFixture, recordingSkillFixture } from '../helpers/skill-import-fixture.js';
+
+test('生成的 Skill 说明按 task.json 当前参数委派，并提供对象形式的绑定示例', () => {
+  const metadata = { name: 'alarm-query', description: '查询告警', goal: '展示告警结果' };
+  const chinese = skillMarkdown(metadata);
+  const english = skillMarkdown({ ...metadata, description: 'Search alarms', goal: 'Show alarms' }, 'en-US');
+  assert.match(chinese, /每次执行前先读取同目录的 `task\.json`/);
+  assert.match(chinese, /默认值为空且用户未提供时，先向用户询问/);
+  assert.match(chinese, /不是序列化后的 JSON 字符串/);
+  assert.match(english, /Before each execution, read the adjacent `task\.json`/);
+  assert.match(english, /If a default is empty and the user has not supplied a value, ask the user/);
+  assert.doesNotMatch(english, /[\u3400-\u9fff]/u);
+  for (const markdown of [chinese, english]) {
+    const example = /```json\n([\s\S]*?)\n```/.exec(markdown);
+    assert.ok(example);
+    const binding = JSON.parse(example[1]);
+    assert.equal(binding.execution.skillName, 'alarm-query');
+    assert.equal(binding.execution.strategy, 'guided');
+    assert.equal(typeof binding.execution.inputs, 'object');
+    assert.equal(Object.keys(binding.execution.inputs).length, 1);
+  }
+});
 
 test('Skill 根配置遵循进程、env.local、env 顺序且不回退到 projects', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-skill-env-'));

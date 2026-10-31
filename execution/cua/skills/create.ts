@@ -32,9 +32,46 @@ function skillDescription(metadata: GeneratedSkillMetadata, language: Generation
 
 export function skillMarkdown(metadata: GeneratedSkillMetadata, language: GenerationLanguage = 'zh-CN'): string {
   const description = skillDescription(metadata, language);
+  const exampleInput = language === 'en-US'
+    ? ['<parameter-id-from-task.json>', '<user-value-or-nonempty-default>']
+    : ['<task.json 中的参数 ID>', '<用户提供值或非空默认值>'];
+  const example = JSON.stringify({ execution: {
+    skillName: metadata.name, strategy: 'guided', inputs: { [exampleInput[0]]: exampleInput[1] },
+  } }, null, 2);
   const instructions = language === 'en-US'
-    ? `Delegate the complete task and its inputs to the Computer-Use SubAgent with skillName: ${metadata.name}. Use guided by default; use replay only when strict replay is explicitly requested. Do not search for another task or pass file paths to the model.\n`
-    : `将完整任务与业务参数委派给 Computer-Use SubAgent，execution 使用 skillName: ${metadata.name}，默认 strategy: guided。仅在明确要求严格回放时指定 replay。不要重新搜索任务或把文件路径交给模型。\n`;
+    ? `Before each execution, read the adjacent \`task.json\`. Its \`inputs\` object defines the current
+parameter IDs, labels, descriptions, and defaults. Use values supplied by the user; otherwise use a
+non-empty default. If a default is empty and the user has not supplied a value, ask the user before
+delegating. Do not guess a value or treat the example as the parameter list.
+
+Delegate the complete task and resolved inputs to the Computer-Use SubAgent. Bind
+\`execution.skillName\` to \`${metadata.name}\` and pass \`execution.inputs\` as an object mapping
+parameter IDs to string values, not as a serialized JSON string. Use \`guided\` by default; use
+\`replay\` only when strict replay is explicitly requested. Do not search for another task or pass
+file paths to the SubAgent.
+
+Example binding (replace the placeholders using \`task.json.inputs\`; use \`{}\` when there are no inputs):
+
+\`\`\`json
+${example}
+\`\`\`
+`
+    : `每次执行前先读取同目录的 \`task.json\`。其中 \`inputs\` 的键是当前参数 ID，
+\`label\`、\`description\` 用于理解参数，\`default\` 是当前默认值。优先使用用户提供的值；
+未提供时可使用非空默认值；默认值为空且用户未提供时，先向用户询问，得到答复后再委派。
+不要猜测参数值，也不要把下方示例当作实际参数清单。
+
+将完整任务和确定的参数委派给 Computer-Use SubAgent。\`execution.skillName\` 使用
+\`${metadata.name}\`，\`execution.inputs\` 是以参数 ID 为键、字符串值为值的对象，
+不是序列化后的 JSON 字符串。默认使用 \`guided\`；仅在明确要求严格回放时使用 \`replay\`。
+不要重新搜索任务或把文件路径交给子 Agent。
+
+调用绑定示例（参数 ID 和值以执行前读取的 \`task.json.inputs\` 为准；无参数时使用 \`{}\`）：
+
+\`\`\`json
+${example}
+\`\`\`
+`;
   return `---\n${stringify({ name: metadata.name, description }).trim()}\n---\n\n# ${metadata.name}\n\n${metadata.goal}\n\n`
     + instructions;
 }
