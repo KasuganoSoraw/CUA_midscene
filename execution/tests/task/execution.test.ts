@@ -58,6 +58,23 @@ test('整体 aiAct prompt 保留步骤和动作并忽略 sleep', () => {
   assert.deepEqual(result.images, []);
 });
 
+test('Guided 按原步骤位置读取信息并在最终回答中保留各次结果', () => {
+  const result = buildRecordedTaskAiActPrompt({ tasks: [
+    { name: 'step-001 | click', flow: [{ aiTap: '打开列表' }] },
+    { name: 'step-002 | read', flow: [{ aiAsk: '读取列表中的名称', name: 'read-step-002' }] },
+    { name: 'step-003 | click', flow: [{ aiTap: '打开详情' }] },
+    { name: 'step-004 | read', flow: [{ aiAsk: '读取详情中的数值和单位', name: 'read-step-004' }] },
+  ] });
+  const prompt = result.prompt;
+  assert.ok(prompt.indexOf('step-001') < prompt.indexOf('step-002'));
+  assert.ok(prompt.indexOf('step-002') < prompt.indexOf('step-003'));
+  assert.ok(prompt.indexOf('step-003') < prompt.indexOf('step-004'));
+  assert.match(prompt, /获取信息：读取列表中的名称/);
+  assert.match(prompt, /获取信息：读取详情中的数值和单位/);
+  assert.match(prompt, /最终回答中分别返回/);
+  assert.match(prompt, /仅观察当前界面/);
+});
+
 test('逐 task 执行与 inspect 使用相同 resolved YAML', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-run-task-'));
   const run = await runTask({

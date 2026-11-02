@@ -77,6 +77,7 @@ function splitFlow(flow: JsonObject[]): { delayMs: number; action?: JsonObject; 
 function defaultTarget(operation: ReviewOperation): string {
   if (operation === 'input') return '描述输入框位置';
   if (operation === 'aiAct') return '描述要完成的电脑操作';
+  if (operation === 'read') return '';
   return '描述要点击的目标';
 }
 
@@ -181,6 +182,13 @@ export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flo
     return customStepEditor(result, step.flow);
   }
 
+  return parseActionEditor(result, action, step);
+}
+
+function parseActionEditor(
+  result: StepEditorModel, action: JsonObject,
+  step: Pick<ReviewStep, 'id' | 'operation' | 'flow' | 'input'>,
+): StepEditorModel {
   if (step.operation === 'click' || step.operation === 'doubleClick' || step.operation === 'rightClick') {
     return parseClickEditor(result, action, step);
   }
@@ -190,10 +198,24 @@ export function parseStepEditor(step: Pick<ReviewStep, 'id' | 'operation' | 'flo
   if (step.operation === 'aiAct') {
     return parseAiActEditor(result, action, step.flow);
   }
+  if (step.operation === 'read') {
+    return parseReadEditor(result, action, step);
+  }
   if (step.operation === 'keyboard') {
     return parseKeyboardEditor(result, action, step.flow);
   }
   return parseWaitEditor(result, action, step.flow);
+}
+
+function parseReadEditor(
+  result: StepEditorModel, action: JsonObject, step: Pick<ReviewStep, 'id' | 'flow'>,
+): StepEditorModel {
+  if (typeof action.aiAsk !== 'string' || action.name !== `read-${step.id}`
+    || !Object.keys(action).every(key => key === 'aiAsk' || key === 'name')) {
+    return customStepEditor(result, step.flow);
+  }
+  result.target = action.aiAsk;
+  return result;
 }
 
 function parseAiActEditor(result: StepEditorModel, action: JsonObject, flow: JsonObject[]): StepEditorModel {
@@ -305,6 +327,7 @@ function buildClickAction(model: StepEditorModel): JsonObject {
 
 function buildStepAction(model: StepEditorModel, stepId: string): JsonObject {
   if (model.operation === 'click' || model.operation === 'doubleClick' || model.operation === 'rightClick') return buildClickAction(model);
+  if (model.operation === 'read') return { aiAsk: model.target.trim(), name: `read-${stepId}` };
   if (model.operation === 'aiAct') return { ai: model.referenceImages.length ? {
     prompt: model.target,
     images: clone(model.referenceImages),

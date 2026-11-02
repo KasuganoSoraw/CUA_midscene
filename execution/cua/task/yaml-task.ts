@@ -5,7 +5,7 @@ import { parse, stringify } from 'yaml';
 import type { JsonObject, TaskAssetManifest } from '../contracts/types.js';
 
 const placeholderPattern = /\{\{([a-z][a-z0-9-]*)\}\}/g;
-const recordedTaskNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct)$/;
+const recordedTaskNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct|read)$/;
 const recordedInputIdPattern = /^(step-(\d{3,}))-input$/;
 
 function isRecord(value: unknown): value is JsonObject {
@@ -15,6 +15,17 @@ function isRecord(value: unknown): value is JsonObject {
 function boundSourceSteps(value: number | number[] | null): number[] {
   if (value === null) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+function validateReadStep(stepId: string, flow: JsonObject[]): void {
+  if (!Array.isArray(flow)) throw new Error(`录制任务 YAML ${stepId} 的 flow 必须是数组`);
+  const actions = flow.filter(action => !Object.hasOwn(action, 'sleep'));
+  const read = actions[0];
+  if (actions.length !== 1 || !isRecord(read) || typeof read.aiAsk !== 'string'
+    || !read.aiAsk.trim() || read.name !== `read-${stepId}`
+    || Object.keys(read).some(key => key !== 'aiAsk' && key !== 'name')) {
+    throw new Error(`录制任务 YAML ${stepId} 必须包含非空 aiAsk 和唯一结果名 read-${stepId}`);
+  }
 }
 
 export function validateYamlDocument(document: JsonObject, source: string): void {
@@ -95,6 +106,7 @@ export function validateRecordedTaskDocument(
     if (number !== index + 1) throw new Error(`录制任务 YAML step ID 必须从 step-001 开始连续编号：${source}`);
     if (task.continueOnError === true) throw new Error(`录制任务 YAML 不允许启用 continueOnError：${source}`);
     operationByStep.set(stepId, operationType);
+    if (operationType === 'read') validateReadStep(stepId, task.flow as JsonObject[]);
     previous = number;
   });
 

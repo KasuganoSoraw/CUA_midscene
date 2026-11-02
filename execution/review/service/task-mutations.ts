@@ -7,7 +7,7 @@ import type {
   ReviewTaskDraft,
 } from '../shared/types.js';
 
-const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct)$/;
+const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct|read)$/;
 
 interface Entry {
   task: JsonObject;
@@ -130,6 +130,11 @@ export function applyReviewMutation<M extends TaskAssetManifest>(draft: ReviewTa
     const inputId = `${stepId}-input`;
     if (entry.oldInputId && entry.input) replacements.set(entry.oldInputId, inputId);
     entry.task.name = `${stepId} | ${entry.operation}`;
+    if (entry.operation === 'read') {
+      const flow = entry.task.flow as JsonObject[];
+      const readAction = flow.find(action => Object.hasOwn(action, 'aiAsk'));
+      if (readAction) readAction.name = `read-${stepId}`;
+    }
     if (entry.input) {
       inputs[inputId] = structuredClone(entry.input);
       if (entry.inserted || !entry.oldInputId) entry.task.flow = setInputPlaceholder(entry.task.flow as JsonObject[], inputId);

@@ -7,6 +7,7 @@ import test from 'node:test';
 import type { JsonObject, TaskManifest } from '../../cua/contracts/types.js';
 import { readTaskManifest, writeJsonFile } from '../../cua/contracts/validation.js';
 import { readYamlDocument, writeYamlDocument } from '../../cua/task/yaml-task.js';
+import { buildStepContent, defaultStepEditor, parseStepEditor } from '../../review/shared/step-editor.js';
 import { loadReviewTask } from '../../review/service/review-task.js';
 import { applyReviewMutation } from '../../review/service/task-mutations.js';
 import {
@@ -141,6 +142,42 @@ test('插入步骤统一重编号并迁移输入与证据绑定', async () => {
     'step-002': 1,
     'step-003': 2,
   });
+});
+
+test('获取信息步骤在插入、移动、删除和保存后保持具名结果与无证据绑定', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-read-'));
+  const user = path.join(root, 'projects');
+  await createTaskFixture(user);
+  const catalog = { userProjectsRoot: user };
+  const view = await loadReviewTask('browser-demo', 'search-demo', catalog);
+  const editor = defaultStepEditor('read');
+  editor.target = '读取当前页面中的选项';
+  const step = { operation: 'read' as const, flow: buildStepContent(editor, 'step-002').flow };
+  const inserted = applyReviewMutation(view, { type: 'insert', index: 1, step });
+  assert.equal(inserted.draft.manifest.source.stepBindings?.['step-002'], null);
+  const moved = applyReviewMutation(inserted.draft, { type: 'move', from: 1, to: 2 });
+  const twice = applyReviewMutation(moved.draft, { type: 'insert', index: 1, step });
+  const removed = applyReviewMutation(twice.draft, { type: 'remove', index: 2 });
+  const tasks = removed.draft.document.tasks as JsonObject[];
+  const reads = tasks.filter(task => String(task.name).endsWith('| read'));
+  assert.deepEqual(reads.map(task => (task.flow as JsonObject[])[0].name), [
+    'read-step-002', 'read-step-003',
+  ]);
+  assert.equal(removed.draft.manifest.source.stepBindings?.['step-002'], null);
+  assert.equal(removed.draft.manifest.source.stepBindings?.['step-003'], null);
+  const invalid = structuredClone(removed.draft);
+  ((invalid.document.tasks as JsonObject[])[1].flow as JsonObject[])[0].aiAsk = '  ';
+  await assert.rejects(saveReviewTask('browser-demo', 'search-demo', catalog, {
+    ...invalid, expectedRevision: view.revision,
+  }), /非空 aiAsk/);
+  await saveReviewTask('browser-demo', 'search-demo', catalog, {
+    ...removed.draft, expectedRevision: view.revision,
+  });
+  const reopened = await loadReviewTask('browser-demo', 'search-demo', catalog);
+  assert.deepEqual(reopened.steps.filter(item => item.operation === 'read').map(item =>
+    parseStepEditor(item).target), [editor.target, editor.target]);
+  assert.deepEqual(reopened.steps.filter(item => item.operation === 'read').map(item =>
+    (item.flow[0].name)), ['read-step-002', 'read-step-003']);
 });
 
 test('保存用户任务校验 revision，builtin 任务保持只读', async () => {

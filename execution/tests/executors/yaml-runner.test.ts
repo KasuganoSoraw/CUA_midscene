@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import type { ExecutionDump } from '@midscene/core';
+import type { Agent } from '@midscene/core';
+import { ScriptPlayer, parseYamlScript } from '@midscene/core/yaml';
 import { executeMidsceneYaml } from '../../executors/midscene-yaml.js';
 
 async function yamlFixture(content: string) {
@@ -229,6 +231,79 @@ test('guided 的空 aiAct 回答不生成 aiActOutput', async () => {
       },
     });
     assert.deepEqual(result.midsceneResult, {});
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test('Replay 通过 Midscene YAML Player 按执行位置保存多个 aiAsk 结果', async () => {
+  const fixture = await yamlFixture(`
+computer: {}
+tasks:
+  - name: step-001 | click
+    flow:
+      - aiTap: 打开列表
+  - name: step-002 | read
+    flow:
+      - aiAsk: 读取列表选项
+        name: read-step-002
+  - name: step-003 | click
+    flow:
+      - aiTap: 打开详情
+  - name: step-004 | read
+    flow:
+      - aiAsk: 读取详情数值
+        name: read-step-004
+`);
+  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY'];
+  const previous = Object.fromEntries(required.map(key => [key, process.env[key]]));
+  for (const key of required) process.env[key] = 'test';
+  const order: string[] = [];
+  let screen = '';
+  try {
+    const result = await executeMidsceneYaml({
+      ...fixture,
+      dryRun: false,
+      agentFactory: async () => {
+        const agent = {
+          getActionSpace: async () => [],
+          aiTap: async (prompt: string) => {
+            order.push(`tap:${prompt}`);
+            screen = prompt === '打开列表' ? '列表' : '详情';
+          },
+          aiAsk: async (prompt: string) => {
+            order.push(`ask:${prompt}`);
+            return screen === '列表' ? '选项 A、选项 B' : '带宽 100 Mbit/s';
+          },
+          runYaml: async (content: string) => {
+            const player = new ScriptPlayer(parseYamlScript(content), async () => ({
+              agent: agent as unknown as Agent, freeFn: [],
+            }));
+            await player.run();
+            assert.equal(player.status, 'done');
+            return { result: player.result };
+          },
+          destroy: async () => undefined,
+        };
+        return agent;
+      },
+    });
+    assert.deepEqual(order, [
+      'tap:打开列表', 'ask:读取列表选项', 'tap:打开详情', 'ask:读取详情数值',
+    ]);
+    assert.deepEqual(result.midsceneResult, {
+      'read-step-002': '选项 A、选项 B',
+      'read-step-004': '带宽 100 Mbit/s',
+      readQuestions: {
+        'read-step-002': '读取列表选项',
+        'read-step-004': '读取详情数值',
+      },
+    });
+    assert.deepEqual(JSON.parse(await readFile(fixture.resultPath, 'utf8')).midsceneResult,
+      result.midsceneResult);
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];

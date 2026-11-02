@@ -285,6 +285,56 @@ def test_finalization_receives_guided_reading_result() -> None:
     asyncio.run(scenario())
 
 
+def test_finalization_receives_replay_named_reading_results() -> None:
+    class ReplayRuntimeClient(FakeRuntimeClient):
+        async def request(
+            self,
+            method: str,
+            payload: Mapping[str, JsonValue],
+            *,
+            cancelled: CancellationCheck | None = None,
+            on_event: RuntimeEventSink | None = None,
+        ) -> dict[str, JsonValue]:
+            result = await super().request(
+                method, payload, cancelled=cancelled, on_event=on_event
+            )
+            if method == "execute":
+                result["executor"] = {"midsceneResult": {
+                    "read-step-002": "选项 A、选项 B",
+                    "read-step-004": "带宽 100 Mbit/s",
+                    "readQuestions": {
+                        "read-step-002": "读取列表选项",
+                        "read-step-004": "读取详情数值",
+                    },
+                }}
+            return result
+
+    async def scenario() -> None:
+        model = FakeModelClient([
+            ModelResponse(tool_calls=(ModelToolCall(
+                "execute-1", "cua_execute", {"strategy": "replay", "skillName": "query"},
+            ),)),
+            ModelResponse(
+                content="选项 A、选项 B；带宽 100 Mbit/s。执行报告：C:/runs/execution-report.html"
+            ),
+        ])
+        runtime = ReplayRuntimeClient()
+        agent = CuaAgent(model, lambda: runtime)  # type: ignore[arg-type]
+        result = await agent.invoke(InvocationRequest(
+            "读取选项和带宽", execution={"strategy": "replay", "skillName": "query"},
+        ))
+
+        assert result.status is InvocationStatus.COMPLETED
+        assert model.tool_sets[1] == ()
+        assert "read-step-002" in (model.calls[1][-1].content or "")
+        assert "read-step-004" in (model.calls[1][-1].content or "")
+        assert "读取详情数值" in (model.calls[1][-1].content or "")
+        assert "带宽 100 Mbit/s" in (model.calls[1][-1].content or "")
+        assert "准确、完整地返回" in (model.calls[1][0].content or "")
+
+    asyncio.run(scenario())
+
+
 def test_finalization_tool_call_never_reaches_runtime() -> None:
     async def scenario() -> None:
         model = FakeModelClient(

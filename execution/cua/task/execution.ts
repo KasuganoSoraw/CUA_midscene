@@ -100,7 +100,7 @@ function renderAction(action: JsonObject, context: string): RecordedTaskAiActPro
         : `${name === 'aiRightClick' ? '右键点击' : '双击'}以下描述对应的目标：${JSON.stringify(locatedPrompt.prompt)}`,
     };
   }
-  if (name === 'ai') return readUserPrompt(value, name, context);
+  if (name === 'ai' || name === 'aiAsk') return renderAiAction(name, value, context);
   if (name === 'aiWaitFor') return { prompt: requiredString(value, name, context), images: [] };
   if (name === 'aiInput') return renderInput(action, context);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${context} 的 ${name} 必须是对象`);
@@ -120,20 +120,29 @@ function renderAction(action: JsonObject, context: string): RecordedTaskAiActPro
   return renderKeyboardTypeText(parameters, context);
 }
 
+function renderAiAction(name: 'ai' | 'aiAsk', value: unknown, context: string): RecordedTaskAiActPrompt {
+  if (name === 'ai') return readUserPrompt(value, name, context);
+  return {
+    prompt: `获取信息：${requiredString(value, name, context)}。仅观察当前界面，不执行点击、输入或页面切换`,
+    images: [],
+  };
+}
+
 function validatedActionName(action: JsonObject, context: string): string {
   if (Object.hasOwn(action, 'sleep')) {
     if (Object.keys(action).length !== 1) throw new Error(`${context} 的 sleep 不能与其他字段组合`);
     if (!Number.isInteger(action.sleep)) throw new Error(`${context} 的 sleep 必须是整数`);
     return 'sleep';
   }
-  const supported = ['ai', 'aiDoubleClick', 'aiRightClick', 'aiTap', 'aiInput', 'aiWaitFor', 'KeyboardPress', 'KeyboardTypeText'];
+  const supported = ['ai', 'aiAsk', 'aiDoubleClick', 'aiRightClick', 'aiTap', 'aiInput', 'aiWaitFor', 'KeyboardPress', 'KeyboardTypeText'];
   const names = supported.filter((name) => Object.hasOwn(action, name));
   if (names.length !== 1) {
     throw new Error(`${context} 必须且只能包含一个受支持动作，当前字段：${Object.keys(action).sort().join(', ') || '空动作'}`);
   }
   const name = names[0];
   const allowed = new Set([name]);
-  if (name === 'aiWaitFor') allowed.add('timeout');
+  const extraFields: Record<string, string> = { aiWaitFor: 'timeout', aiAsk: 'name' };
+  if (extraFields[name]) allowed.add(extraFields[name]);
   if (name === 'aiTap' || name === 'aiDoubleClick') allowed.add('locate');
   if (name === 'aiRightClick') allowed.add('locate');
   if (name === 'aiInput') for (const field of ['locate', 'value', 'mode']) allowed.add(field);
@@ -174,6 +183,10 @@ function renderKeyboardTypeText(parameters: JsonObject, context: string): Record
 export function buildRecordedTaskAiActPrompt(document: JsonObject): RecordedTaskAiActPrompt {
   validateYamlDocument(document, 'recorded task aiAct prompt');
   const lines = ['请严格按以下步骤顺序完成电脑操作：'];
+  if ((document.tasks as JsonObject[]).some(task => (task.flow as JsonObject[])
+    .some(action => Object.hasOwn(action, 'aiAsk')))) {
+    lines.push('获取信息步骤须在对应位置读取当时的界面；保留每次读取的结果及对应步骤，继续完成后续操作，并在最终回答中分别返回。无法确认的信息须说明，不得猜测。');
+  }
   const images = new Map<string, string>();
   let convertHttpImage2Base64 = false;
   for (const task of document.tasks as JsonObject[]) {

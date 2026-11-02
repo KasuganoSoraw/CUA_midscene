@@ -41,6 +41,20 @@ test('自然语言动作可在复核表单中往返编辑并保留参考图', ()
   assert.deepEqual(buildStepContent(drag, 'step-002').flow, [{ ai: '按住对象拖动到目标区域并释放' }]);
 });
 
+test('获取信息动作以具名 aiAsk 保存并可重新编辑', () => {
+  const editor = defaultStepEditor('read', 500);
+  editor.target = '读取当前界面的全部选项';
+  const content = buildStepContent(editor, 'step-023');
+  assert.deepEqual(content, {
+    flow: [{ sleep: 500 }, { aiAsk: '读取当前界面的全部选项', name: 'read-step-023' }],
+    input: null,
+  });
+  const reopened = parseStepEditor({ id: 'step-023', operation: 'read', flow: content.flow });
+  assert.equal(reopened.custom, false);
+  assert.equal(reopened.target, editor.target);
+  assert.deepEqual(buildStepContent(reopened, 'step-023'), content);
+});
+
 test('动作构建保留双击、按键、等待边界和自定义参数语义', () => {
   const doubleClick = defaultStepEditor('doubleClick', 10.6);
   doubleClick.target = '双击 target';

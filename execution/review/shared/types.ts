@@ -12,7 +12,7 @@ import type {
 export type { GenerationLanguage } from '../../cua/contracts/types.js';
 
 export type ReviewOrigin = 'builtin' | 'user';
-export type ReviewOperation = 'click' | 'doubleClick' | 'rightClick' | 'input' | 'keyboard' | 'wait' | 'aiAct';
+export type ReviewOperation = 'click' | 'doubleClick' | 'rightClick' | 'input' | 'keyboard' | 'wait' | 'aiAct' | 'read';
 
 export interface ReviewServerIdentity {
   service: string;

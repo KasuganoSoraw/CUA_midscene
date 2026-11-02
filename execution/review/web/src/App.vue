@@ -69,6 +69,7 @@ const operationOptions = computed<ReviewSelectOption[]>(() => [
   { value: 'keyboard', label: operationLabel('keyboard') },
   { value: 'wait', label: operationLabel('wait') },
   { value: 'aiAct', label: operationLabel('aiAct') },
+  { value: 'read', label: operationLabel('read') },
 ]);
 const inputModeOptions = computed<ReviewSelectOption[]>(() => [
   { value: 'replace', label: t('review.inputReplace') },
@@ -193,7 +194,7 @@ function rebuildSteps(): void {
   const bindings = draft.value.manifest.source.stepBindings ?? {};
   steps.value = (draft.value.document.tasks as JsonObject[]).map((item, index) => {
     const name = String(item.name);
-    const match = /^(step-\d{3,}) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct)$/.exec(name);
+    const match = /^(step-\d{3,}) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct|read)$/.exec(name);
     const id = match?.[1] ?? `step-${String(index + 1).padStart(3, '0')}`;
     const operation = (match?.[2] ?? 'click') as ReviewOperation;
     const flow = clone(item.flow as JsonObject[]);
@@ -770,6 +771,12 @@ onMounted(async () => {
           <template v-else-if="editor.operation === 'click' || editor.operation === 'doubleClick' || editor.operation === 'rightClick' || editor.operation === 'aiAct'">
             <label class="wide">{{ editor.operation === 'aiAct' ? t('review.actionPrompt') : t('review.target') }}
               <textarea v-model="editor.target" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.targetPlaceholder')"></textarea>
+            </label>
+          </template>
+
+          <template v-else-if="editor.operation === 'read'">
+            <label class="wide">{{ t('review.readQuestion') }}
+              <textarea v-model="editor.target" rows="3" :readonly="busy || !writable || advancedEditing" :placeholder="t('review.readPlaceholder')" required></textarea>
             </label>
           </template>
 

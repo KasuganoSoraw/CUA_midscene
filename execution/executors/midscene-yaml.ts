@@ -49,6 +49,23 @@ function captureAiActOutput(agent: AgentLike): () => string | undefined {
   return () => captured;
 }
 
+function readQuestions(
+  script: ReturnType<typeof parseYamlScript>, result: Record<string, unknown>,
+): Record<string, string> {
+  const questions: Record<string, string> = {};
+  for (const task of script.tasks) {
+    if (!String(task.name).endsWith(' | read')) continue;
+    for (const flowItem of task.flow) {
+      const action = flowItem as Record<string, unknown>;
+      if (typeof action.name === 'string' && typeof action.aiAsk === 'string'
+        && typeof result[action.name] === 'string') {
+        questions[action.name] = action.aiAsk;
+      }
+    }
+  }
+  return questions;
+}
+
 async function runMidsceneScript(
   content: string, script: ReturnType<typeof parseYamlScript>, options: MidsceneYamlExecutionOptions,
   artifacts: Pick<ExecutorResult, 'midsceneResult' | 'reportPath' | 'finalScreenshotPath'>,
@@ -87,7 +104,12 @@ async function runMidsceneScript(
     const capturedOutput = options.captureAiActOutput ? captureAiActOutput(agent) : () => undefined;
     const yamlResult = (await agent.runYaml(content)).result;
     const aiActOutput = capturedOutput();
-    artifacts.midsceneResult = aiActOutput === undefined ? yamlResult : { ...yamlResult, aiActOutput };
+    const questions = readQuestions(script, yamlResult);
+    artifacts.midsceneResult = {
+      ...yamlResult,
+      ...(Object.keys(questions).length ? { readQuestions: questions } : {}),
+      ...(aiActOutput === undefined ? {} : { aiActOutput }),
+    };
     artifacts.finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
   } finally {
     try {

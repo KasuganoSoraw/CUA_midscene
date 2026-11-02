@@ -63,6 +63,17 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
     midsceneResult: { aiActOutput: '实际读取的选项' },
     finishedAt: '2026-08-27T00:00:00.000Z',
   } as const;
+  const replayExecutor = {
+    ...yamlExecutor,
+    midsceneResult: {
+      'read-step-002': '选项 A、选项 B',
+      'read-step-004': '带宽 100 Mbit/s',
+      readQuestions: {
+        'read-step-002': '读取列表选项',
+        'read-step-004': '读取详情数值',
+      },
+    },
+  };
   const nativeExecutor: NativeAiActExecutorResult = {
     schemaVersion: '0.1',
     status: 'succeeded',
@@ -87,7 +98,7 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
       return {
         resolved: {},
         resolvedTaskPath: 'C:\\cua-data\\runs\\1\\resolved-task.yaml',
-        executorResult: yamlExecutor,
+        executorResult: replayExecutor,
       };
     },
     runRecordedTaskAiAct: async (options: { onProgress?: ExecutionProgressSink }) => {
@@ -128,6 +139,7 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
   assert.equal(replay.strategy, 'replay');
   assert.equal(replay.reportPath, yamlExecutor.reportPath);
   assert.equal(replay.finalScreenshotPath, yamlExecutor.finalScreenshotPath);
+  assert.deepEqual(replay.executor?.midsceneResult, replayExecutor.midsceneResult);
   assert.equal(guided.promptPath, 'C:\\cua-data\\runs\\2\\ai-act-prompt.txt');
   assert.equal(guided.reportPath, yamlExecutor.reportPath);
   assert.equal(guided.finalScreenshotPath, yamlExecutor.finalScreenshotPath);
