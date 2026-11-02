@@ -125,6 +125,118 @@ test('实际执行设置本次报告目录并在成功后销毁 Agent 和恢复�
   }
 });
 
+test('guided 保留 YAML 执行并采集 aiAct 回答', async () => {
+  const fixture = await yamlFixture(`
+computer: {}
+agent:
+  aiActContext: 读取界面信息时返回结果
+tasks:
+  - name: guided
+    flow:
+      - ai:
+          prompt: 读取选项后继续操作
+          images:
+            - name: reference
+              url: C:/reference.png
+`);
+  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY'];
+  const previous = Object.fromEntries(required.map((key) => [key, process.env[key]]));
+  for (const key of required) process.env[key] = 'test';
+  const events: string[] = [];
+  const screenshotContent = Buffer.from('guided screenshot');
+  const reportPath = path.join(fixture.runDirectory, 'midscene', 'report', 'execution-report.html');
+  let destroyed = false;
+  try {
+    const result = await executeMidsceneYaml({
+      ...fixture,
+      dryRun: false,
+      captureAiActOutput: true,
+      onProgress: (event) => { events.push(event.data.status); },
+      agentFactory: async (options) => {
+        assert.equal(options.aiActContext, '读取界面信息时返回结果');
+        let listener: ((dump: string, executionDump?: ExecutionDump) => void) | undefined;
+        const agent = {
+          reportFile: reportPath,
+          addDumpUpdateListener: (callback: typeof listener) => {
+            listener = callback;
+            return () => undefined;
+          },
+          aiAct: async (prompt: unknown) => {
+            assert.deepEqual(prompt, {
+              prompt: '读取选项后继续操作',
+              images: [{ name: 'reference', url: 'C:/reference.png' }],
+            });
+            listener?.('', { id: 'exec', tasks: [{
+              taskId: 'task-1', status: 'finished', type: 'Action Space', subType: 'Tap',
+              recorder: [{
+                type: 'screenshot', ts: 1, timing: 'after-calling',
+                screenshot: { format: 'png', rawBase64: screenshotContent.toString('base64') },
+              }],
+            }] } as unknown as ExecutionDump);
+            return '选项 A；选项 B';
+          },
+          runYaml: async () => {
+            await agent.aiAct({
+              prompt: '读取选项后继续操作',
+              images: [{ name: 'reference', url: 'C:/reference.png' }],
+            });
+            return { result: { existing: true } };
+          },
+          destroy: async () => {
+            destroyed = true;
+            await mkdir(path.dirname(reportPath), { recursive: true });
+            await writeFile(reportPath, '<html></html>', 'utf8');
+          },
+        };
+        return agent;
+      },
+    });
+    assert.deepEqual(result.midsceneResult, { existing: true, aiActOutput: '选项 A；选项 B' });
+    assert.deepEqual(events, ['succeeded']);
+    assert.equal(result.reportPath, reportPath);
+    assert.equal(result.finalScreenshotPath, path.join(fixture.runDirectory, 'final-screenshot.png'));
+    assert.deepEqual(await readFile(result.finalScreenshotPath), screenshotContent);
+    assert.equal(destroyed, true);
+    assert.deepEqual(JSON.parse(await readFile(fixture.resultPath, 'utf8')).midsceneResult, result.midsceneResult);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test('guided 的空 aiAct 回答不生成 aiActOutput', async () => {
+  const fixture = await yamlFixture('tasks:\n  - name: guided\n    flow:\n      - ai: 执行操作\n');
+  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY'];
+  const previous = Object.fromEntries(required.map((key) => [key, process.env[key]]));
+  for (const key of required) process.env[key] = 'test';
+  try {
+    const result = await executeMidsceneYaml({
+      ...fixture,
+      dryRun: false,
+      captureAiActOutput: true,
+      agentFactory: async () => {
+        const agent = {
+          aiAct: async () => undefined,
+          runYaml: async () => {
+            await agent.aiAct();
+            return { result: {} };
+          },
+          destroy: async () => undefined,
+        };
+        return agent;
+      },
+    });
+    assert.deepEqual(result.midsceneResult, {});
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test('实际执行未生成报告文件时保持成功且不返回 reportPath', async () => {
   const fixture = await yamlFixture('tasks:\n  - name: test\n    flow:\n      - sleep: 1\n');
   const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_API_KEY', 'MIDSCENE_MODEL_FAMILY'];

@@ -238,6 +238,53 @@ def test_terminal_execute_stops_remaining_calls_and_finalizes_without_tools() ->
     asyncio.run(scenario())
 
 
+def test_finalization_receives_guided_reading_result() -> None:
+    class GuidedRuntimeClient(FakeRuntimeClient):
+        async def request(
+            self,
+            method: str,
+            payload: Mapping[str, JsonValue],
+            *,
+            cancelled: CancellationCheck | None = None,
+            on_event: RuntimeEventSink | None = None,
+        ) -> dict[str, JsonValue]:
+            result = await super().request(
+                method, payload, cancelled=cancelled, on_event=on_event
+            )
+            if method == "execute":
+                result["executor"] = {
+                    "midsceneResult": {"aiActOutput": "选项 A；选项 B"}
+                }
+            return result
+
+    async def scenario() -> None:
+        model = FakeModelClient([
+            ModelResponse(tool_calls=(ModelToolCall(
+                "execute-1", "cua_execute", {"strategy": "guided", "skillName": "query"},
+            ),)),
+            ModelResponse(
+                content="查询结果：选项 A；选项 B。执行报告：C:/runs/execution-report.html"
+            ),
+        ])
+        runtime = GuidedRuntimeClient()
+        agent = CuaAgent(model, lambda: runtime)  # type: ignore[arg-type]
+        result = await agent.invoke(InvocationRequest(
+            "查询界面中的所有选项",
+            execution={"strategy": "guided", "skillName": "query"},
+        ))
+
+        assert result.status is InvocationStatus.COMPLETED
+        assert "选项 A；选项 B" in result.reply
+        assert len(model.calls) == 2
+        assert model.tool_sets[1] == ()
+        assert "aiActOutput" in (model.calls[1][-1].content or "")
+        assert "选项 A；选项 B" in (model.calls[1][-1].content or "")
+        assert "准确、完整地返回" in (model.calls[1][0].content or "")
+        assert "密码、Token" in (model.calls[1][0].content or "")
+
+    asyncio.run(scenario())
+
+
 def test_finalization_tool_call_never_reaches_runtime() -> None:
     async def scenario() -> None:
         model = FakeModelClient(

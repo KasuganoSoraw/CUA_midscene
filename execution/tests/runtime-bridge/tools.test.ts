@@ -60,6 +60,7 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
     dryRun: true,
     reportPath: 'C:\\cua-data\\runs\\1\\midscene\\report\\execution-report.html',
     finalScreenshotPath: 'C:\\cua-data\\runs\\1\\final-screenshot.png',
+    midsceneResult: { aiActOutput: '实际读取的选项' },
     finishedAt: '2026-08-27T00:00:00.000Z',
   } as const;
   const nativeExecutor: NativeAiActExecutorResult = {
@@ -130,6 +131,7 @@ test('Runtime execute 将三种策略映射到唯一底层 API', async () => {
   assert.equal(guided.promptPath, 'C:\\cua-data\\runs\\2\\ai-act-prompt.txt');
   assert.equal(guided.reportPath, yamlExecutor.reportPath);
   assert.equal(guided.finalScreenshotPath, yamlExecutor.finalScreenshotPath);
+  assert.deepEqual(guided.executor?.midsceneResult, { aiActOutput: '实际读取的选项' });
   assert.equal(freeform.runDir, 'C:\\cua-data\\runs\\3');
   assert.equal(freeform.reportPath, nativeExecutor.reportPath);
   assert.equal(freeform.finalScreenshotPath, nativeExecutor.finalScreenshotPath);

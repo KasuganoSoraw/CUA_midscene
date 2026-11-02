@@ -220,12 +220,14 @@ async function execute(
   dryRun: boolean,
   executor: typeof executeMidsceneYaml,
   onProgress?: ExecutionProgressSink,
+  captureAiActOutput = false,
 ): Promise<ExecutorResult> {
   const options: MidsceneYamlExecutionOptions = {
     yamlPath,
     resultPath: path.join(runDirectory, 'execution-result.json'),
     runDirectory,
     dryRun,
+    ...(captureAiActOutput ? { captureAiActOutput: true } : {}),
     ...(onProgress === undefined ? {} : { onProgress }),
   };
   return executor(options);
@@ -271,6 +273,7 @@ export async function runRecordedTaskAiAct(options: ExecutionOptions): Promise<R
       options.dryRun ?? false,
       options.executor ?? executeMidsceneYaml,
       options.onProgress,
+      true,
     );
     return { resolved, resolvedTaskPath, promptPath, aiActYamlPath, executorResult };
   });

@@ -77,6 +77,7 @@ test('逐 task 执行与 inspect 使用相同 resolved YAML', async () => {
 
 test('录制任务整体 aiAct 复用 resolved 输入并保存临时投影', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-run-act-'));
+  let captureAiActOutput = false;
   const run = await runRecordedTaskAiAct({
     scene: 'browser-demo',
     task: 'air-tickets-demo',
@@ -84,7 +85,10 @@ test('录制任务整体 aiAct 复用 resolved 输入并保存临时投影', asy
     runsRoot: root,
     inputs: { 'step-002-input': 'GOOGLE' },
     dryRun: true,
-    executor: fakeExecutor,
+    executor: async (options) => {
+      captureAiActOutput = options.captureAiActOutput === true;
+      return fakeExecutor(options);
+    },
   });
   const prompt = await readFile(run.promptPath, 'utf8');
   const aiAct = await readYamlDocument(run.aiActYamlPath);
@@ -94,6 +98,7 @@ test('录制任务整体 aiAct 复用 resolved 输入并保存临时投影', asy
   const actionPrompt = (aiAct.tasks as Array<Record<string, any>>)[0].flow[0].ai;
   assert.equal(typeof actionPrompt === 'string' ? actionPrompt : actionPrompt.prompt, prompt);
   assert.equal(run.executorResult.taskCount, 1);
+  assert.equal(captureAiActOutput, true);
 });
 
 test('录制任务整体 aiAct 保留 resolved 参考图片 prompt', async () => {

@@ -6,6 +6,7 @@ import { createMidsceneExecutionObserver } from './midscene-final-screenshot.js'
 import type { ExecutionProgressSink } from './midscene-progress.js';
 import {
   createKeyboardEnabledComputerAgent,
+  type ComputerAgent,
   type ComputerAgentOptions,
 } from './computer-agent.js';
 import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
@@ -13,6 +14,7 @@ import { existingMidsceneHtmlReport, midsceneReportFileName } from './midscene-r
 
 interface AgentLike {
   runYaml(content: string): Promise<{ result: Record<string, unknown> }>;
+  aiAct?: ComputerAgent['aiAct'];
   addDumpUpdateListener?: (
     listener: ReturnType<typeof createMidsceneExecutionObserver>['listener'],
   ) => () => void;
@@ -25,6 +27,7 @@ export interface MidsceneYamlExecutionOptions {
   resultPath: string;
   runDirectory: string;
   dryRun: boolean;
+  captureAiActOutput?: boolean;
   onProgress?: ExecutionProgressSink;
   agentFactory?: (options: ComputerAgentOptions) => Promise<AgentLike>;
 }
@@ -32,6 +35,18 @@ export interface MidsceneYamlExecutionOptions {
 async function writeResult(resultPath: string, result: ExecutorResult): Promise<void> {
   await mkdir(path.dirname(resultPath), { recursive: true });
   await writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+}
+
+function captureAiActOutput(agent: AgentLike): () => string | undefined {
+  if (!agent.aiAct) throw new Error('Midscene Agent 不支持捕获 aiAct 返回值');
+  const executeAiAct = agent.aiAct.bind(agent);
+  let captured: string | undefined;
+  agent.aiAct = async (...args) => {
+    const output = await executeAiAct(...args);
+    if (typeof output === 'string' && output.trim()) captured = output;
+    return output;
+  };
+  return () => captured;
 }
 
 async function runMidsceneScript(
@@ -69,7 +84,10 @@ async function runMidsceneScript(
     } else if (options.onProgress) {
       throw new Error('Midscene Agent 不支持过程事件');
     }
-    artifacts.midsceneResult = (await agent.runYaml(content)).result;
+    const capturedOutput = options.captureAiActOutput ? captureAiActOutput(agent) : () => undefined;
+    const yamlResult = (await agent.runYaml(content)).result;
+    const aiActOutput = capturedOutput();
+    artifacts.midsceneResult = aiActOutput === undefined ? yamlResult : { ...yamlResult, aiActOutput };
     artifacts.finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
   } finally {
     try {
