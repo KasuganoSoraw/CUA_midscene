@@ -93,6 +93,27 @@ test('普通模式只展示合并步骤的目标截图，开发模式可切换�
   } finally { setup.stop(); }
 });
 
+test('录制步骤切换为获取信息后立即解除证据绑定且不自动恢复', async () => {
+  const setup = await setupApp();
+  try {
+    const { app } = setup;
+    const evidence = { sourceStep: 1, full: 'source/click.png' };
+    app.draft.value.manifest.source.stepBindings = { 'step-001': 1, 'step-002': 2 };
+    app.steps.value[0].evidence = evidence;
+    app.steps.value[0].evidences = [evidence];
+    app.changeOperation('read');
+    assert.equal(app.editor.target, '读取当前屏幕可见的主要信息，并简要概述。');
+    assert.equal(app.draft.value.manifest.source.stepBindings['step-001'], null);
+    assert.equal(app.draft.value.manifest.source.stepBindings['step-002'], 2);
+    assert.equal(app.steps.value[0].evidence, undefined);
+    assert.equal(app.steps.value[0].evidences, undefined);
+    app.editor.target = '';
+    assert.equal(app.draft.value.document.tasks[0].flow[0].aiAsk, '');
+    app.changeOperation('click');
+    assert.equal(app.draft.value.manifest.source.stepBindings['step-001'], null);
+  } finally { setup.stop(); }
+});
+
 test('冲突时禁用参考图上传和绑定，并且直接调用操作不能修改编辑状态', async () => {
   const setup = await setupApp();
   try {

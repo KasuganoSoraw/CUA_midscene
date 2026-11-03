@@ -9,6 +9,7 @@ import { dataPaths } from '../../cua/data-paths.js';
 import { createSkillFixture } from '../helpers/skill-fixture.js';
 import type { RecorderControl } from '../../review/service/windows-recorder.js';
 import { startReviewServer } from '../../review/server/main.js';
+import { buildStepContent, defaultStepEditor } from '../../review/shared/step-editor.js';
 
 async function setup(configured = true) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-skill-review-'));
@@ -66,6 +67,50 @@ test('Skill Workbench 平铺发现、直接保存与重新加载，不管理普�
     assert.equal(await readFile(path.join(skillsRoot, 'ordinary', 'SKILL.md'), 'utf8'), 'ordinary skill');
     assert.equal((await app.inject({ method: 'DELETE', url: '/api/skills/alarm-query' })).statusCode, 200);
   } finally { await setupValue.close(); }
+});
+
+test('获取信息可清空后删除，保存仍拒绝空问题且保留其他步骤绑定', async () => {
+  const fixture = await setup();
+  const { app } = fixture;
+  const url = '/api/skills/alarm-query';
+  try {
+    const loaded = (await app.inject(url)).json();
+    const insert = await app.inject({ method: 'POST', url: `${url}/mutate`, payload: {
+      draft: { manifest: loaded.manifest, document: loaded.document },
+      mutation: { type: 'insert', index: 1, step: { operation: 'click', flow: [{ aiTap: '点击另一个目标' }] } },
+    } });
+    assert.equal(insert.statusCode, 200, insert.body);
+    const update = await app.inject({ method: 'POST', url: `${url}/mutate`, payload: {
+      draft: insert.json().draft,
+      mutation: { type: 'update', index: 0, step: { operation: 'read', flow: buildStepContent(defaultStepEditor('read'), 'step-001').flow } },
+    } });
+    assert.equal(update.statusCode, 200, update.body);
+    const changed = update.json().draft;
+    assert.equal(changed.manifest.source.stepBindings['step-001'], null);
+    assert.equal(changed.manifest.source.stepBindings['step-002'], null);
+    changed.document.tasks[0].flow[0].aiAsk = '';
+    const invalidSave = await app.inject({ method: 'PUT', url, payload: { ...changed, expectedRevision: loaded.revision } });
+    assert.equal(invalidSave.statusCode, 400);
+    const invalidValidation = await app.inject({ method: 'POST', url: `${url}/validate`, payload: changed });
+    assert.equal(invalidValidation.statusCode, 400);
+    const unrelatedInvalid = structuredClone(changed);
+    unrelatedInvalid.document.tasks[1].name = 'invalid';
+    const rejectedDelete = await app.inject({ method: 'POST', url: `${url}/mutate`, payload: {
+      draft: unrelatedInvalid, mutation: { type: 'remove', index: 0 },
+    } });
+    assert.equal(rejectedDelete.statusCode, 400);
+    const remove = await app.inject({ method: 'POST', url: `${url}/mutate`, payload: {
+      draft: changed, mutation: { type: 'remove', index: 0 },
+    } });
+    assert.equal(remove.statusCode, 200, remove.body);
+    assert.equal(remove.json().draft.document.tasks[0].name, 'step-001 | click');
+    const saved = await app.inject({ method: 'PUT', url, payload: { ...remove.json().draft, expectedRevision: loaded.revision } });
+    assert.equal(saved.statusCode, 200, saved.body);
+    const reopened = (await app.inject(url)).json();
+    assert.equal(reopened.document.tasks[0].name, 'step-001 | click');
+    assert.equal(reopened.manifest.source.stepBindings['step-001'], null);
+    assert.equal(reopened.steps[0].evidence, undefined);
+  } finally { await fixture.close(); }
 });
 
 test('Skill 参考图上传、绑定和证据路径均使用正式目录，冲突时拒绝', async () => {

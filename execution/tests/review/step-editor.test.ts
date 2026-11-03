@@ -21,6 +21,7 @@ test('默认编辑提示区分输入、复合操作和其他动作', () => {
   assert.equal(defaultStepEditor('input').target, '描述输入框位置');
   assert.equal(defaultStepEditor('aiAct').target, '描述要完成的电脑操作');
   assert.equal(defaultStepEditor('click').target, '描述要点击的目标');
+  assert.equal(defaultStepEditor('read').target, '读取当前屏幕可见的主要信息，并简要概述。');
 });
 
 test('自然语言动作可在复核表单中往返编辑并保留参考图', () => {
@@ -43,6 +44,7 @@ test('自然语言动作可在复核表单中往返编辑并保留参考图', ()
 
 test('获取信息动作以具名 aiAsk 保存并可重新编辑', () => {
   const editor = defaultStepEditor('read', 500);
+  assert.equal(buildStepContent(editor, 'step-023').flow[1].aiAsk, '读取当前屏幕可见的主要信息，并简要概述。');
   editor.target = '读取当前界面的全部选项';
   const content = buildStepContent(editor, 'step-023');
   assert.deepEqual(content, {

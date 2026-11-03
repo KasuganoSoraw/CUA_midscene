@@ -107,6 +107,7 @@ export function applyReviewMutation<M extends TaskAssetManifest>(draft: ReviewTa
     const entry = entries[mutation.index];
     if (mutation.step.operation) {
       entry.operation = mutation.step.operation;
+      if (mutation.step.operation === 'read') entry.binding = null;
       if (mutation.step.operation !== 'input' && mutation.step.input === undefined) {
         delete entry.input;
         delete entry.oldInputId;

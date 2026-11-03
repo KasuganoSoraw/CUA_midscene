@@ -180,6 +180,40 @@ test('获取信息步骤在插入、移动、删除和保存后保持具名结�
     (item.flow[0].name)), ['read-step-002', 'read-step-003']);
 });
 
+test('录制点击或输入改为获取信息后解除绑定，重排和保存不影响其他录制步骤', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-read-binding-'));
+  const user = path.join(root, 'projects');
+  const taskRoot = await createTaskFixture(user);
+  const catalog = { userProjectsRoot: user };
+  const original = await loadReviewTask('browser-demo', 'search-demo', catalog);
+  const bindings = { 'step-001': 1, 'step-002': 2 };
+  const manifest = structuredClone(original.manifest);
+  manifest.source.stepBindings = bindings;
+  const read = buildStepContent(defaultStepEditor('read'), 'step-002').flow;
+  const changed = applyReviewMutation({ manifest, document: original.document }, {
+    type: 'update', index: 1, step: { operation: 'read', flow: read },
+  });
+  assert.deepEqual(changed.draft.manifest.source.stepBindings, { 'step-001': 1, 'step-002': null });
+  const restoredAction = applyReviewMutation(changed.draft, {
+    type: 'update', index: 1, step: { operation: 'click', flow: [{ aiTap: '点击目标' }] },
+  });
+  assert.equal(restoredAction.draft.manifest.source.stepBindings?.['step-002'], null);
+  const inputRead = applyReviewMutation({ manifest, document: original.document }, {
+    type: 'update', index: 0, step: { operation: 'read', flow: buildStepContent(defaultStepEditor('read'), 'step-001').flow, input: null },
+  });
+  assert.equal(inputRead.draft.manifest.source.stepBindings?.['step-001'], null);
+  assert.deepEqual(inputRead.draft.manifest.inputs, {});
+  const moved = applyReviewMutation(changed.draft, { type: 'move', from: 1, to: 0 });
+  assert.deepEqual(moved.draft.manifest.source.stepBindings, { 'step-001': null, 'step-002': 1 });
+  await saveReviewTask('browser-demo', 'search-demo', catalog, { ...moved.draft, expectedRevision: original.revision });
+  const reopened = await loadReviewTask('browser-demo', 'search-demo', catalog);
+  assert.deepEqual(reopened.manifest.source.stepBindings, { 'step-001': null, 'step-002': 1 });
+  assert.equal(reopened.steps[0].evidence, undefined);
+  assert.equal(reopened.steps[0].operation, 'read');
+  assert.equal(parseStepEditor(reopened.steps[0]).target, '读取当前屏幕可见的主要信息，并简要概述。');
+  assert.equal((await readTaskManifest(path.join(taskRoot, 'task.json'))).source.stepBindings?.['step-001'], null);
+});
+
 test('保存用户任务校验 revision，builtin 任务保持只读', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-review-save-'));
   const user = path.join(root, 'projects');

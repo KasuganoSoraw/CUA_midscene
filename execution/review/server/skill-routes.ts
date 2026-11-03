@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
-import type { RuntimeLayout, SkillTaskManifest } from '../../cua/contracts/types.js';
+import type { JsonObject, RuntimeLayout, SkillTaskManifest } from '../../cua/contracts/types.js';
 import { requireSkillsRoot } from '../../cua/data-paths.js';
 import { listSkills, readSkill, validateSkillDraft } from '../../cua/skills/assets.js';
 import { createSkillFromRecording } from '../../cua/skills/create.js';
@@ -11,6 +11,7 @@ import { deleteReviewSkill, loadReviewSkill, saveReviewSkill } from '../service/
 import { applyReviewMutation } from '../service/task-mutations.js';
 import { uploadSkillReferenceImage } from '../service/reference-images.js';
 import { referenceImageMaxBytes } from '../shared/reference-upload.js';
+import { defaultStepEditor } from '../shared/step-editor.js';
 import type { CreateRecordingSkillResult, GenerationLanguage, ReviewMutation, ReviewTaskDraft, SaveReviewTaskRequest, TaskExecutionStatus } from '../shared/types.js';
 
 interface SkillParams { skillName: string }
@@ -30,6 +31,23 @@ const draftProperties = {
   manifest: { type: 'object', additionalProperties: true }, document: { type: 'object', additionalProperties: true },
 } as const;
 const draftSchema = { type: 'object', required: ['manifest', 'document'], properties: draftProperties, additionalProperties: false } as const;
+
+function draftForMutationValidation(
+  draft: ReviewTaskDraft<SkillTaskManifest>, mutation: ReviewMutation,
+): ReviewTaskDraft<SkillTaskManifest> {
+  if (mutation.type !== 'remove') return draft;
+  const tasks = draft.document.tasks;
+  if (!Array.isArray(tasks) || !Number.isInteger(mutation.index)) return draft;
+  const task = tasks[mutation.index];
+  if (!task || !/^step-\d{3,} \| read$/.test(String(task.name)) || !Array.isArray(task.flow)) return draft;
+  const action = task.flow.find((item: unknown) => item && typeof item === 'object' && Object.hasOwn(item, 'aiAsk'));
+  if (!action || typeof action.aiAsk !== 'string' || action.aiAsk.trim()) return draft;
+  const copy = structuredClone(draft);
+  const copiedTask = (copy.document.tasks as JsonObject[])[mutation.index];
+  const copiedAction = (copiedTask.flow as JsonObject[]).find(item => Object.hasOwn(item, 'aiAsk'))!;
+  copiedAction.aiAsk = defaultStepEditor('read').target;
+  return copy;
+}
 
 function registerSkillReads(app: FastifyInstance, options: Options): void {
   app.get('/api/skills', async () => {
@@ -65,7 +83,8 @@ function registerSkillEdits(app: FastifyInstance, options: Options): void {
       properties: { draft: draftSchema, mutation: { type: 'object', additionalProperties: true } } } },
   }, async request => {
     const asset = await readSkill(requireSkillsRoot(options.layout), request.params.skillName);
-    await validateSkillDraft(asset, request.body.draft.manifest, request.body.draft.document);
+    const source = draftForMutationValidation(request.body.draft, request.body.mutation);
+    await validateSkillDraft(asset, source.manifest, source.document);
     const result = applyReviewMutation(request.body.draft, request.body.mutation);
     await validateSkillDraft(asset, result.draft.manifest, result.draft.document);
     return result;
