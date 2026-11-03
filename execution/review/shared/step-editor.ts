@@ -77,7 +77,7 @@ function splitFlow(flow: JsonObject[]): { delayMs: number; action?: JsonObject; 
 function defaultTarget(operation: ReviewOperation): string {
   if (operation === 'input') return '描述输入框位置';
   if (operation === 'aiAct') return '描述要完成的电脑操作';
-  if (operation === 'read') return '';
+  if (operation === 'read') return '读取当前屏幕可见的主要信息，并简要概述。';
   return '描述要点击的目标';
 }
 

@@ -387,6 +387,11 @@ function syncSemanticDraft(): void {
   const inputId = `${step.id}-input`;
   if (content.input) draft.value.manifest.inputs[inputId] = clone(content.input);
   else delete draft.value.manifest.inputs[inputId];
+  if (editor.operation === 'read') {
+    draft.value.manifest.source.stepBindings ??= {};
+    draft.value.manifest.source.stepBindings[step.id] = null;
+    selectedEvidenceSource.value = undefined;
+  }
   steps.value[selected.value] = {
     ...step,
     name: String(taskItem.name),
@@ -394,6 +399,7 @@ function syncSemanticDraft(): void {
     flow: clone(content.flow),
     ...(content.input ? { input: clone(content.input) } : { input: undefined }),
     ...(referenceImages.length ? { referenceImages } : { referenceImages: undefined }),
+    ...(editor.operation === 'read' ? { evidence: undefined, evidences: undefined } : {}),
   };
   const summary = t('review.updateStep', { index: selected.value + 1 });
   const existing = changes.value.find((item) => item.kind === 'update' && item.summary === summary);
