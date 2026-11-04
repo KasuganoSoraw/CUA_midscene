@@ -133,7 +133,7 @@ node dist/cli/main.js review --no-open
 
 `task create-from-recording` 是旧项目兼容创建入口。可用 `--python-executable` 显式选择已经安装 `cua_record` 的 Python，否则按 `CUA_PYTHON_EXECUTABLE` 和源码开发环境解析。record processor 不接收 goal；命令在 trace 生成后将可选 `--goal` 写入任务 goal/description 和 YAML groupDescription。省略时这些字段保存空字符串。Python 进度写入 stderr，stdout 只输出最终 JSON。`task init-from-trace` 仅用于已经准备好标准化 source 的高级场景。
 
-`review` 只启动监听 `127.0.0.1` 的“桌面任务中心”，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT`、相同规范化 `CUA_SKILLS_ROOT` 与兼容开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。
+`review` 只启动监听 `127.0.0.1` 的“GDE Claw Record & Replay”，不提供步骤编辑 CLI。默认使用固定端口 `47831`；再次使用相同 `CUA_DATA_ROOT`、相同规范化 `CUA_SKILLS_ROOT` 与兼容开发模式调用时会识别并复用已有服务，不创建新的 Node 监听进程。普通模式和 `--dev` 身份不同，不能在同一端口互相复用。若该端口由其他程序、不同数据目录或不同开发模式的 review 服务占用，启动会明确失败而不会自动递增端口；测试或嵌入调用仍可通过 `startReviewServer({ port: 0 })` 使用随机端口。
 
 页面提供中文与英文即时切换并在本机保存选择；`lang=zh-CN|en-US` 查询参数可指定初始语言。普通模式只展示任务检查、录制流程和运行任务所需的信息；`--dev` 额外启用高级任务数据、revision、运行诊断和 Python Agent 调试入口。“任务检查”平铺展示 CUA_SKILLS_ROOT 中通过标记及身份校验的 Skill；空目录提供从录制创建的入口。用户任务保存前校验 revision、`task.json`、`task.yaml` 与 Midscene YAML，也可在页面内确认后删除整个用户任务目录，普通宿主 Skill 和其他任务保持不变。
 
