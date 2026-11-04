@@ -10,7 +10,11 @@ import {
   type ComputerAgentOptions,
 } from './computer-agent.js';
 import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
-import { existingMidsceneHtmlReport, midsceneReportFileName } from './midscene-report.js';
+import {
+  existingMidsceneHtmlReport,
+  injectShrinkBannerIntoReport,
+  midsceneReportFileName,
+} from './midscene-report.js';
 
 interface AgentLike {
   runYaml(content: string): Promise<{ result: Record<string, unknown> }>;
@@ -73,48 +77,9 @@ function readQuestions(
   return questions;
 }
 
-type YamlArtifacts = Pick<ExecutorResult, 'midsceneResult' | 'reportPath' | 'finalScreenshotPath'>;
-
-function yamlAgentOptions(script: ReturnType<typeof parseYamlScript>): ComputerAgentOptions {
-  return {
-    ...(script.agent ?? {}),
-    ...(script.computer?.displayId ? { displayId: script.computer.displayId } : {}),
-    generateReport: script.agent?.generateReport ?? true,
-    reportFileName: midsceneReportFileName,
-    groupName: script.agent?.groupName ?? 'midscene-yaml-task',
-    groupDescription: script.agent?.groupDescription ?? '执行 Midscene YAML 电脑操作任务',
-  };
-}
-
-function restoreYamlEnvironment(runDirectory?: string, cacheDirectory?: string): void {
-  if (runDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
-  else process.env.MIDSCENE_RUN_DIR = runDirectory;
-  if (cacheDirectory === undefined) delete process.env.MIDSCENE_CACHE_DIR;
-  else process.env.MIDSCENE_CACHE_DIR = cacheDirectory;
-}
-
-async function cleanupYamlAgent(
-  agent: AgentLike | undefined, removeDumpListener: (() => void) | undefined,
-  previousRunDirectory: string | undefined, previousCacheDirectory: string | undefined,
-  artifacts: YamlArtifacts,
-): Promise<void> {
-  try {
-    removeDumpListener?.();
-  } finally {
-    try {
-      if (agent) {
-        try { await agent.destroy(); }
-        finally { artifacts.reportPath = await existingMidsceneHtmlReport(agent.reportFile); }
-      }
-    } finally {
-      restoreYamlEnvironment(previousRunDirectory, previousCacheDirectory);
-    }
-  }
-}
-
 async function runMidsceneScript(
   content: string, script: ReturnType<typeof parseYamlScript>, options: MidsceneYamlExecutionOptions,
-  artifacts: YamlArtifacts,
+  artifacts: Pick<ExecutorResult, 'midsceneResult' | 'reportPath' | 'finalScreenshotPath'>,
 ): Promise<void> {
   warnIfNodeVersionIsOld();
   checkRequiredModelEnv();
@@ -133,7 +98,15 @@ async function runMidsceneScript(
       '..',
       'midscene-cache',
     );
-    agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)(yamlAgentOptions(script));
+    const agentOptions: ComputerAgentOptions = {
+      ...(script.agent ?? {}),
+      ...(script.computer?.displayId ? { displayId: script.computer.displayId } : {}),
+      generateReport: script.agent?.generateReport ?? true,
+      reportFileName: midsceneReportFileName,
+      groupName: script.agent?.groupName ?? 'midscene-yaml-task',
+      groupDescription: script.agent?.groupDescription ?? '执行 Midscene YAML 电脑操作任务',
+    };
+    agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)(agentOptions);
     if (agent.addDumpUpdateListener) {
       removeDumpListener = agent.addDumpUpdateListener(observer.listener);
     } else if (options.onProgress) {
@@ -151,7 +124,32 @@ async function runMidsceneScript(
     };
     artifacts.finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
   } finally {
-    await cleanupYamlAgent(agent, removeDumpListener, previousRunDirectory, previousCacheDirectory, artifacts);
+    try {
+      removeDumpListener?.();
+    } finally {
+      try {
+        if (agent) {
+          try { await agent.destroy(); }
+          finally {
+            artifacts.reportPath = await existingMidsceneHtmlReport(agent.reportFile);
+            if (artifacts.reportPath) {
+              const shrinkFactor = Number(
+                process.env.MIDSCENE_SCREENSHOT_SHRINK_FACTOR || '1',
+              );
+              await injectShrinkBannerIntoReport(
+                artifacts.reportPath,
+                Number.isFinite(shrinkFactor) ? shrinkFactor : 1,
+              );
+            }
+          }
+        }
+      } finally {
+        if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
+        else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
+        if (previousCacheDirectory === undefined) delete process.env.MIDSCENE_CACHE_DIR;
+        else process.env.MIDSCENE_CACHE_DIR = previousCacheDirectory;
+      }
+    }
   }
 }
 

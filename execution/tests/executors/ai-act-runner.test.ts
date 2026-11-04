@@ -158,6 +158,38 @@ test('原生 aiAct 未生成报告文件时保持成功且不返回 reportPath',
   }
 });
 
+test('原生 aiAct 在保留执行结果的同时展示截图缩放信息', async () => {
+  const fixture = await executionFixture();
+  const reportPath = path.join(fixture.runDirectory, 'midscene', 'report', 'execution-report.html');
+  const required = [
+    'MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY',
+    'MIDSCENE_SCREENSHOT_SHRINK_FACTOR',
+  ];
+  const previous = Object.fromEntries(required.map(key => [key, process.env[key]]));
+  for (const key of required) process.env[key] = key === 'MIDSCENE_SCREENSHOT_SHRINK_FACTOR' ? '2' : 'test';
+  try {
+    const result = await executeMidsceneAiAct({
+      ...fixture, prompt: '查看当前页面', dryRun: false,
+      agentFactory: async () => ({
+        reportFile: reportPath,
+        aiAct: async () => '已查看',
+        destroy: async () => {
+          await mkdir(path.dirname(reportPath), { recursive: true });
+          await writeFile(reportPath, '<html><body><script>"shotSize":{"width":960,"height":540}</script></body></html>');
+        },
+      }),
+    });
+    assert.equal(result.midsceneResult, '已查看');
+    assert.equal(result.reportPath, reportPath);
+    assert.match(await readFile(reportPath, 'utf8'), /1920 &times; 1080/);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test('原生 aiAct 失败时保留错误并销毁 Agent', async () => {
   const fixture = await executionFixture();
   const required = [
