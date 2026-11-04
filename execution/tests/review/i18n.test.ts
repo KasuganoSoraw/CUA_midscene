@@ -11,6 +11,7 @@ import { shouldDetectDisplays } from '../../review/web/src/recording-display.js'
 
 const appPath = fileURLToPath(new URL('../../review/web/src/App.vue', import.meta.url));
 const indexPath = fileURLToPath(new URL('../../review/web/index.html', import.meta.url));
+const logoPath = fileURLToPath(new URL('../../review/web/public/gde-claw-logo.svg', import.meta.url));
 const recordingPath = fileURLToPath(new URL('../../review/web/src/components/RecordingWorkspace.vue', import.meta.url));
 const confirmDialogPath = fileURLToPath(new URL('../../review/web/src/components/ConfirmDialog.vue', import.meta.url));
 
@@ -23,6 +24,8 @@ test('workbench locale resolution follows query, storage, then browser language'
 
 test('workbench locale catalogs stay aligned and interpolate parameters', () => {
   assert.deepEqual(Object.keys(messages['en-US']).sort(), Object.keys(messages['zh-CN']).sort());
+  assert.equal(translate('zh-CN', 'app.title'), 'GDE Claw Record & Replay');
+  assert.equal(translate('en-US', 'app.title'), 'GDE Claw Record & Replay');
   assert.equal(translate('zh-CN', 'common.steps', { count: 3 }), '3 个步骤');
   assert.equal(translate('en-US', 'common.steps', { count: 3 }), '3 steps');
   assert.equal(translate('en-US', 'recording.created', { scene: 'mail', task: 'send' }), 'Created task mail/send');
@@ -43,17 +46,23 @@ test('recording workflow detects displays only while the recorder is inactive', 
 });
 
 test('ordinary workbench copy hides implementation names and gates developer assets', async () => {
-  const [app, index, recording, confirmDialog] = await Promise.all([
+  const [app, index, recording, confirmDialog, logo] = await Promise.all([
     readFile(appPath, 'utf8'),
     readFile(indexPath, 'utf8'),
     readFile(recordingPath, 'utf8'),
     readFile(confirmDialogPath, 'utf8'),
+    readFile(logoPath, 'utf8'),
   ]);
 
   assert.doesNotMatch(app, /Midscene|CUA 本地任务工作台|canonical 资产|TASK\.YAML/);
   assert.doesNotMatch(index, /Midscene|CUA/);
   assert.doesNotMatch(app, /本地自动化工作台|Local Automation Workspace/);
-  assert.match(index, /<title>桌面任务中心<\/title>/);
+  assert.match(index, /<title>GDE Claw Record &amp; Replay<\/title>/);
+  assert.match(index, /rel="icon" type="image\/svg\+xml" href="\/gde-claw-logo\.svg"/);
+  assert.match(app, /<h1>\{\{ t\('app\.title'\) \}\}<\/h1>/);
+  assert.match(app, /class="workbench-logo" src="\/gde-claw-logo\.svg"/);
+  assert.match(logo, /^<svg\b/);
+  assert.doesNotMatch(logo, /<script\b/i);
   assert.match(app, /<details v-if="devMode" class="advanced wide"/);
   assert.match(app, /v-if="devMode && current\.evidences && current\.evidences\.length > 1" class="evidence-tabs"/);
   assert.match(app, /<code v-if="devMode">\{\{ view\?\.revision \}\}<\/code>/);
