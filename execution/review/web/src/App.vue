@@ -651,8 +651,11 @@ onMounted(async () => {
 <template>
   <div class="shell">
     <header class="topbar">
-      <h1 class="sr-only">{{ t('app.title') }}</h1>
-    <nav class="mode-tabs" :aria-label="t('app.navLabel')">
+      <div class="workbench-brand">
+        <img class="workbench-logo" src="/gde-claw-logo.svg" alt="" width="36" height="36" />
+        <h1>{{ t('app.title') }}</h1>
+      </div>
+      <nav class="mode-tabs" :aria-label="t('app.navLabel')">
       <button :class="{ active: mode === 'recordings' }" @click="mode = 'recordings'">{{ t('app.mode.recordings') }}</button>
       <button :class="{ active: mode === 'review' }" @click="mode = 'review'">{{ t('app.mode.review') }}</button>
       <button :class="{ active: mode === 'execution' }" @click="mode = 'execution'">{{ t('app.mode.execution') }}</button>
