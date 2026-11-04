@@ -95,6 +95,7 @@ class RuntimeProcessConfig:
     env: Mapping[str, str] | None = None
     request_timeout_seconds: float = 1800.0
     shutdown_timeout_seconds: float = 5.0
+    cancel_grace_seconds: float = 0.5
 
     def __post_init__(self) -> None:
         if not self.command or any(not item.strip() for item in self.command):
@@ -103,6 +104,8 @@ class RuntimeProcessConfig:
             raise RuntimeConfigurationError("request timeout 必须大于 0")
         if self.shutdown_timeout_seconds <= 0:
             raise RuntimeConfigurationError("shutdown timeout 必须大于 0")
+        if self.cancel_grace_seconds <= 0:
+            raise RuntimeConfigurationError("cancel grace period 必须大于 0")
 
     @classmethod
     def from_runtime(
@@ -193,33 +196,90 @@ class JsonlRuntimeClient:
             ) from error
         self._stderr_task = asyncio.create_task(self._drain_stderr())
 
-    async def close(self) -> None:
+    async def close(
+        self, *, cancel_request_id: str | None = None, native_cancel: bool = False
+    ) -> None:
         process = self._process
         if process is None:
             return
         if process.returncode is None:
-            if process.stdin is not None:
-                process.stdin.close()
-                try:
-                    await process.stdin.wait_closed()
-                except (BrokenPipeError, ConnectionResetError):
-                    pass
+            if cancel_request_id is None:
+                await self._close_normally(process)
+            else:
+                await self._close_cancelled(process, cancel_request_id, native_cancel)
+        if self._stderr_task is not None:
+            await asyncio.gather(self._stderr_task, return_exceptions=True)
+            self._stderr_task = None
+
+    async def _close_normally(self, process: asyncio.subprocess.Process) -> None:
+        if process.stdin is not None:
+            process.stdin.close()
+            try:
+                await process.stdin.wait_closed()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+        try:
+            await asyncio.wait_for(process.wait(), timeout=self._config.shutdown_timeout_seconds)
+        except TimeoutError:
+            process.terminate()
             try:
                 await asyncio.wait_for(
                     process.wait(), timeout=self._config.shutdown_timeout_seconds
                 )
             except TimeoutError:
-                process.terminate()
+                process.kill()
+                await process.wait()
+
+    async def _close_cancelled(
+        self, process: asyncio.subprocess.Process, request_id: str, native_cancel: bool
+    ) -> None:
+        drain_task = asyncio.create_task(self._discard_stdout(process))
+        try:
+            if process.stdin is not None:
+                if native_cancel:
+                    frame = {"schemaVersion": "1.0", "type": "cancel", "requestId": request_id}
+                    process.stdin.write((json.dumps(frame) + "\n").encode("utf-8"))
+                    try:
+                        await asyncio.wait_for(process.stdin.drain(), timeout=0.1)
+                    except (TimeoutError, BrokenPipeError, ConnectionResetError):
+                        pass
+                process.stdin.close()
+                try:
+                    await asyncio.wait_for(process.stdin.wait_closed(), timeout=0.1)
+                except (TimeoutError, BrokenPipeError, ConnectionResetError):
+                    pass
+            if native_cancel:
                 try:
                     await asyncio.wait_for(
-                        process.wait(), timeout=self._config.shutdown_timeout_seconds
+                        process.wait(), timeout=self._config.cancel_grace_seconds
                     )
+                    return
                 except TimeoutError:
-                    process.kill()
-                    await process.wait()
-        if self._stderr_task is not None:
-            await asyncio.gather(self._stderr_task, return_exceptions=True)
-            self._stderr_task = None
+                    pass
+            if process.returncode is None:
+                try:
+                    process.terminate()
+                except ProcessLookupError:
+                    pass
+            try:
+                await asyncio.wait_for(process.wait(), timeout=self._config.cancel_grace_seconds)
+            except TimeoutError:
+                if process.returncode is None:
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+                await process.wait()
+        finally:
+            if not drain_task.done():
+                drain_task.cancel()
+            await asyncio.gather(drain_task, return_exceptions=True)
+
+    @staticmethod
+    async def _discard_stdout(process: asyncio.subprocess.Process) -> None:
+        if process.stdout is not None:
+            while await process.stdout.read(65_536):
+                pass
 
     async def request(
         self,
@@ -264,6 +324,18 @@ class JsonlRuntimeClient:
                     if response.get("type") not in (None, "response"):
                         raise RuntimeProtocolError("Runtime frame type 不受支持")
                     break
+            except RuntimeCancelledError:
+                await self.close(
+                    cancel_request_id=request_id,
+                    native_cancel=method == "execute" and payload.get("strategy") != "replay",
+                )
+                raise
+            except asyncio.CancelledError:
+                await self.close(
+                    cancel_request_id=request_id,
+                    native_cancel=method == "execute" and payload.get("strategy") != "replay",
+                )
+                raise
             except BaseException:
                 await self.close()
                 raise
@@ -304,7 +376,6 @@ class JsonlRuntimeClient:
         try:
             while True:
                 if cancelled is not None and cancelled():
-                    await self.close()
                     raise RuntimeCancelledError("Runtime request 已取消")
                 remaining = deadline - asyncio.get_running_loop().time()
                 if remaining <= 0:
@@ -314,7 +385,6 @@ class JsonlRuntimeClient:
                     )
                 done, _ = await asyncio.wait((read_task,), timeout=min(0.1, remaining))
                 if cancelled is not None and cancelled():
-                    await self.close()
                     raise RuntimeCancelledError("Runtime request 已取消")
                 if read_task in done:
                     line = read_task.result()

@@ -15,13 +15,13 @@ import { failedExecutionReport } from './failure-report.js';
 
 export interface RuntimeBridgeHandlers {
   catalog(payload: CuaCatalogRequest): Promise<unknown>;
-  execute(payload: CuaExecuteRequest, onProgress?: ExecutionProgressSink): Promise<unknown>;
+  execute(payload: CuaExecuteRequest, onProgress?: ExecutionProgressSink, abortSignal?: AbortSignal): Promise<unknown>;
   workbench(payload: CuaWorkbenchRequest): Promise<unknown>;
 }
 
 const defaultHandlers: RuntimeBridgeHandlers = {
   catalog: cuaCatalog,
-  execute: (payload, onProgress) => cuaExecute(payload, {}, onProgress),
+  execute: (payload, onProgress, abortSignal) => cuaExecute(payload, {}, onProgress, abortSignal),
   workbench: cuaWorkbench,
 };
 
@@ -94,6 +94,7 @@ export async function dispatchRuntimeBridgeRequest(
   value: unknown,
   handlers: RuntimeBridgeHandlers = defaultHandlers,
   onEvent?: (frame: RuntimeBridgeEventFrame) => void,
+  abortSignal?: AbortSignal,
 ): Promise<RuntimeBridgeResponse> {
   let request: RuntimeBridgeRequest;
   try {
@@ -124,6 +125,7 @@ export async function dispatchRuntimeBridgeRequest(
             type: 'event',
             event,
           }),
+          abortSignal,
         );
     } else {
       result = await handlers.workbench(request.payload as unknown as CuaWorkbenchRequest);
@@ -152,6 +154,7 @@ export async function dispatchRuntimeBridgeLine(
   line: string,
   handlers: RuntimeBridgeHandlers = defaultHandlers,
   onEvent?: (frame: RuntimeBridgeEventFrame) => void,
+  abortSignal?: AbortSignal,
 ): Promise<string> {
   let value: unknown;
   try {
@@ -159,5 +162,5 @@ export async function dispatchRuntimeBridgeLine(
   } catch (error) {
     value = { parseError: error instanceof Error ? error.message : String(error) };
   }
-  return JSON.stringify(await dispatchRuntimeBridgeRequest(value, handlers, onEvent));
+  return JSON.stringify(await dispatchRuntimeBridgeRequest(value, handlers, onEvent, abortSignal));
 }

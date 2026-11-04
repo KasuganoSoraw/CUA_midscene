@@ -90,6 +90,7 @@ export async function executeMidsceneAiAct(
         } else if (options.onProgress) {
           throw new Error('Midscene Agent 不支持过程事件');
         }
+        if (options.abortSignal?.aborted) throw new Error('电脑操作已取消');
         midsceneResult = await agent.aiAct(
           prompt,
           options.abortSignal ? { abortSignal: options.abortSignal } : undefined,
