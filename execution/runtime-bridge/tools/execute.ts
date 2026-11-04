@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { requireSkillsRoot } from '../../cua/data-paths.js';
 import { requireSkillName } from '../../cua/skills/paths.js';
+import type { TaskCatalogRoots } from '../../cua/contracts/types.js';
 import type { ExecutionOptions } from '../../cua/task/execution.js';
 import {
   requireDataPaths,
@@ -63,35 +64,50 @@ export async function cuaExecute(
   const api = { ...defaultDependencies, ...dependencies };
   const layout = await api.resolveRuntimeLayout(request.dataRoot);
   const data = await api.requireDataPaths(layout);
-
   if (request.strategy === 'freeform') {
-    const run = await api.runNaturalLanguageAiAct({
-      prompt: requiredString(request.goal, 'goal'),
-      runsRoot: data.runsRoot,
-      dryRun: request.dryRun,
-      ...(request.displayId === undefined ? {} : { displayId: request.displayId }),
-      ...(onProgress === undefined ? {} : { onProgress }),
-      ...(abortSignal === undefined ? {} : { abortSignal }),
-    });
-    return {
-      strategy: request.strategy,
-      status: run.executorResult.status,
-      runDir: run.runDirectory,
-      promptPath: run.promptPath,
-      resultPath: run.resultPath,
-      ...(run.executorResult.reportPath == null ? {} : { reportPath: run.executorResult.reportPath }),
-      ...(run.executorResult.finalScreenshotPath == null
-        ? {}
-        : { finalScreenshotPath: run.executorResult.finalScreenshotPath }),
-      executor: run.executorResult,
-    };
+    return executeFreeform(request, api, data.runsRoot, onProgress, abortSignal);
   }
+  return executeRecorded(request, inputs, api, layout.catalog, data.runsRoot, onProgress, abortSignal);
+}
 
+async function executeFreeform(
+  request: Extract<CuaExecuteRequest, { strategy: 'freeform' }>,
+  api: CuaExecuteDependencies, runsRoot: string,
+  onProgress?: ExecutionProgressSink, abortSignal?: AbortSignal,
+): Promise<CuaExecuteResult> {
+  const run = await api.runNaturalLanguageAiAct({
+    prompt: requiredString(request.goal, 'goal'),
+    runsRoot,
+    dryRun: request.dryRun,
+    ...(request.displayId === undefined ? {} : { displayId: request.displayId }),
+    ...(onProgress === undefined ? {} : { onProgress }),
+    ...(abortSignal === undefined ? {} : { abortSignal }),
+  });
+  return {
+    strategy: request.strategy,
+    status: run.executorResult.status,
+    runDir: run.runDirectory,
+    promptPath: run.promptPath,
+    resultPath: run.resultPath,
+    ...(run.executorResult.reportPath == null ? {} : { reportPath: run.executorResult.reportPath }),
+    ...(run.executorResult.finalScreenshotPath == null
+      ? {}
+      : { finalScreenshotPath: run.executorResult.finalScreenshotPath }),
+    executor: run.executorResult,
+  };
+}
+
+async function executeRecorded(
+  request: Extract<CuaExecuteRequest, { strategy: 'replay' | 'guided' }>,
+  inputs: Record<string, string> | undefined, api: CuaExecuteDependencies,
+  catalog: TaskCatalogRoots, runsRoot: string,
+  onProgress?: ExecutionProgressSink, abortSignal?: AbortSignal,
+): Promise<CuaExecuteResult> {
   const options = {
     scene: requiredString(request.scene, 'scene'),
     task: requiredString(request.task, 'task'),
-    catalog: layout.catalog,
-    runsRoot: data.runsRoot,
+    catalog,
+    runsRoot,
     ...(inputs === undefined ? {} : { inputs }),
     dryRun: request.dryRun,
     ...(onProgress === undefined ? {} : { onProgress }),

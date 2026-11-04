@@ -76,11 +76,7 @@ export async function writeYamlDocument(sourcePath: string, document: JsonObject
   await writeFile(absolutePath, dumpYamlDocument(document), 'utf8');
 }
 
-export function validateRecordedTaskDocument(
-  document: JsonObject,
-  manifest: TaskAssetManifest,
-  source: string,
-): void {
+function validateRecordedTaskAgent(document: JsonObject, manifest: TaskAssetManifest, source: string): void {
   if (!isRecord(document.agent)) throw new Error(`录制任务 YAML agent 必须是对象：${source}`);
   const identity = manifest.schemaVersion === '0.3' ? manifest.skillName : manifest.task;
   if (document.agent.groupName !== identity) {
@@ -89,7 +85,9 @@ export function validateRecordedTaskDocument(
   if (document.agent.groupDescription !== manifest.goal) {
     throw new Error(`录制任务 YAML agent.groupDescription 必须等于 task.json 的 goal：${source}`);
   }
+}
 
+function recordedStepOperations(document: JsonObject, source: string): Map<string, string> {
   let previous = 0;
   const operationByStep = new Map<string, string>();
   (document.tasks as JsonObject[]).forEach((task, index) => {
@@ -109,7 +107,10 @@ export function validateRecordedTaskDocument(
     if (operationType === 'read') validateReadStep(stepId, task.flow as JsonObject[]);
     previous = number;
   });
+  return operationByStep;
+}
 
+function validateRecordedInputIds(manifest: TaskAssetManifest, operationByStep: Map<string, string>): void {
   for (const inputId of Object.keys(manifest.inputs)) {
     const match = recordedInputIdPattern.exec(inputId);
     if (!match) throw new Error(`录制任务输入 ID 必须符合 step-NNN-input：${inputId}`);
@@ -122,7 +123,9 @@ export function validateRecordedTaskDocument(
       throw new Error(`录制任务输入 ${inputId} 未对应 input 类型步骤`);
     }
   }
+}
 
+function validateRecordedBindings(manifest: TaskAssetManifest, operationByStep: Map<string, string>): void {
   if (manifest.source.stepBindings) {
     const taskStepIds = [...operationByStep.keys()];
     const bindingStepIds = Object.keys(manifest.source.stepBindings);
@@ -134,6 +137,17 @@ export function validateRecordedTaskDocument(
     const recorded = Object.values(manifest.source.stepBindings).flatMap(boundSourceSteps);
     if (new Set(recorded).size !== recorded.length) throw new Error('录制证据绑定中的 trace step 不得重复');
   }
+}
+
+export function validateRecordedTaskDocument(
+  document: JsonObject,
+  manifest: TaskAssetManifest,
+  source: string,
+): void {
+  validateRecordedTaskAgent(document, manifest, source);
+  const operationByStep = recordedStepOperations(document, source);
+  validateRecordedInputIds(manifest, operationByStep);
+  validateRecordedBindings(manifest, operationByStep);
 }
 
 function collectPlaceholders(value: unknown): Set<string> {
