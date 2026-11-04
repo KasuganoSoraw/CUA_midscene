@@ -36,6 +36,7 @@ test('原生 aiAct dry-run 校验 prompt 且不创建 Agent', async () => {
 
 test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', async () => {
   const fixture = await executionFixture();
+  const controller = new AbortController();
   const reportPath = path.join(fixture.runDirectory, 'midscene', 'report', 'execution-report.html');
   const required = [
     'MIDSCENE_MODEL_BASE_URL',
@@ -57,6 +58,7 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
       ...fixture,
       prompt: '打开 Chrome',
       dryRun: false,
+      abortSignal: controller.signal,
       displayId: '1',
       onProgress: (event) => { progress.push(event.data.status); },
       agentFactory: async (options) => {
@@ -76,8 +78,9 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
             listener = callback;
             return () => { listenerRemoved = true; };
           },
-          aiAct: async (prompt) => {
+          aiAct: async (prompt, options) => {
             assert.equal(prompt, '打开 Chrome');
+            assert.equal(options?.abortSignal, controller.signal);
             listener?.('', { id: 'exec', tasks: [{
               taskId: 'task-1', status: 'finished', type: 'Planning', subType: 'Act',
               recorder: [{

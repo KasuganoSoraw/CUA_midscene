@@ -3,11 +3,19 @@ from __future__ import annotations
 import json
 import sys
 import time
+from pathlib import Path
 
 for raw_line in sys.stdin:
     request = json.loads(raw_line)
     payload = request["payload"]
     action = payload.get("action")
+    if action == "cancel-aware":
+        for control_line in sys.stdin:
+            control = json.loads(control_line)
+            if control.get("type") == "cancel" and control.get("requestId") == request["requestId"]:
+                Path(payload["stopMarker"]).write_text(str(time.time()), encoding="utf-8")
+                break
+        continue
     if action == "crash":
         print("fake worker crashed", file=sys.stderr, flush=True)
         raise SystemExit(7)

@@ -16,6 +16,7 @@ interface ExecutionOptionsBase {
   inputs?: Record<string, string>;
   dryRun?: boolean;
   onProgress?: ExecutionProgressSink;
+  abortSignal?: AbortSignal;
   executor?: typeof executeMidsceneYaml;
 }
 
@@ -234,6 +235,7 @@ async function execute(
   executor: typeof executeMidsceneYaml,
   onProgress?: ExecutionProgressSink,
   captureAiActOutput = false,
+  abortSignal?: AbortSignal,
 ): Promise<ExecutorResult> {
   const options: MidsceneYamlExecutionOptions = {
     yamlPath,
@@ -242,6 +244,7 @@ async function execute(
     dryRun,
     ...(captureAiActOutput ? { captureAiActOutput: true } : {}),
     ...(onProgress === undefined ? {} : { onProgress }),
+    ...(abortSignal === undefined ? {} : { abortSignal }),
   };
   return executor(options);
 }
@@ -257,6 +260,8 @@ export async function runTask(options: ExecutionOptions): Promise<TaskRun> {
       options.dryRun ?? false,
       options.executor ?? executeMidsceneYaml,
       options.onProgress,
+      false,
+      options.abortSignal,
     );
     return { resolved, resolvedTaskPath, executorResult };
   });
@@ -287,6 +292,7 @@ export async function runRecordedTaskAiAct(options: ExecutionOptions): Promise<R
       options.executor ?? executeMidsceneYaml,
       options.onProgress,
       true,
+      options.abortSignal,
     );
     return { resolved, resolvedTaskPath, promptPath, aiActYamlPath, executorResult };
   });

@@ -239,6 +239,54 @@ test('guided 的空 aiAct 回答不生成 aiActOutput', async () => {
   }
 });
 
+test('Guided 与 Replay 中的 aiAct 接收取消信号并停止后续动作', async () => {
+  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY'];
+  const previous = Object.fromEntries(required.map(key => [key, process.env[key]]));
+  for (const key of required) process.env[key] = 'test';
+  try {
+    for (const captureAiActOutput of [true, false]) {
+      const fixture = await yamlFixture('tasks:\n  - name: action\n    flow:\n      - ai: 执行当前操作\n');
+      const controller = new AbortController();
+      let started: () => void = () => {};
+      const entered = new Promise<void>(resolve => { started = resolve; });
+      let laterActions = 0;
+      let destroyed = false;
+      const execution = executeMidsceneYaml({
+        ...fixture, dryRun: false, captureAiActOutput, abortSignal: controller.signal,
+        agentFactory: async () => {
+          const agent = {
+            aiAct: async (_prompt: unknown, options?: { abortSignal?: AbortSignal }) => {
+              assert.equal(options?.abortSignal, controller.signal);
+              started();
+              await new Promise<void>((_resolve, reject) => {
+                options?.abortSignal?.addEventListener('abort', () => reject(new Error('action cancelled')), { once: true });
+              });
+              return 'unused';
+            },
+            runYaml: async () => {
+              await agent.aiAct('执行当前操作');
+              laterActions += 1;
+              return { result: {} };
+            },
+            destroy: async () => { destroyed = true; },
+          };
+          return agent;
+        },
+      });
+      await entered;
+      controller.abort();
+      await assert.rejects(execution, /action cancelled/);
+      assert.equal(laterActions, 0);
+      assert.equal(destroyed, true);
+    }
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test('Replay 通过 Midscene YAML Player 按执行位置保存多个 aiAsk 结果', async () => {
   const fixture = await yamlFixture(`
 computer: {}

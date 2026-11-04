@@ -28,6 +28,7 @@ export interface MidsceneYamlExecutionOptions {
   runDirectory: string;
   dryRun: boolean;
   captureAiActOutput?: boolean;
+  abortSignal?: AbortSignal;
   onProgress?: ExecutionProgressSink;
   agentFactory?: (options: ComputerAgentOptions) => Promise<AgentLike>;
 }
@@ -37,13 +38,19 @@ async function writeResult(resultPath: string, result: ExecutorResult): Promise<
   await writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 }
 
-function captureAiActOutput(agent: AgentLike): () => string | undefined {
-  if (!agent.aiAct) throw new Error('Midscene Agent 不支持捕获 aiAct 返回值');
+function prepareAiAct(agent: AgentLike, capture: boolean, abortSignal?: AbortSignal): () => string | undefined {
+  if (!agent.aiAct) {
+    if (capture) throw new Error('Midscene Agent 不支持捕获 aiAct 返回值');
+    return () => undefined;
+  }
+  if (!capture && !abortSignal) return () => undefined;
   const executeAiAct = agent.aiAct.bind(agent);
   let captured: string | undefined;
   agent.aiAct = async (...args) => {
-    const output = await executeAiAct(...args);
-    if (typeof output === 'string' && output.trim()) captured = output;
+    if (abortSignal?.aborted) throw new Error('电脑操作已取消');
+    const options = abortSignal ? { ...args[1], abortSignal } : args[1];
+    const output = await executeAiAct(args[0], options);
+    if (capture && typeof output === 'string' && output.trim()) captured = output;
     return output;
   };
   return () => captured;
@@ -101,7 +108,8 @@ async function runMidsceneScript(
     } else if (options.onProgress) {
       throw new Error('Midscene Agent 不支持过程事件');
     }
-    const capturedOutput = options.captureAiActOutput ? captureAiActOutput(agent) : () => undefined;
+    const capturedOutput = prepareAiAct(agent, options.captureAiActOutput === true, options.abortSignal);
+    if (options.abortSignal?.aborted) throw new Error('电脑操作已取消');
     const yamlResult = (await agent.runYaml(content)).result;
     const aiActOutput = capturedOutput();
     const questions = readQuestions(script, yamlResult);

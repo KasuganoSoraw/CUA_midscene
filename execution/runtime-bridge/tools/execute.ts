@@ -48,8 +48,10 @@ export async function cuaExecute(
   request: CuaExecuteRequest,
   dependencies: Partial<CuaExecuteDependencies> = {},
   onProgress?: ExecutionProgressSink,
+  abortSignal?: AbortSignal,
 ): Promise<CuaExecuteResult> {
-  if ('skillName' in request) return executeSkillRequest(request, dependencies, onProgress);
+  if (abortSignal?.aborted) throw new Error('电脑操作已取消');
+  if ('skillName' in request) return executeSkillRequest(request, dependencies, onProgress, abortSignal);
   if (!['replay', 'guided', 'freeform'].includes(request.strategy)) {
     throw new Error(`无法识别 cua_execute strategy：${String((request as { strategy?: unknown }).strategy)}`);
   }
@@ -69,6 +71,7 @@ export async function cuaExecute(
       dryRun: request.dryRun,
       ...(request.displayId === undefined ? {} : { displayId: request.displayId }),
       ...(onProgress === undefined ? {} : { onProgress }),
+      ...(abortSignal === undefined ? {} : { abortSignal }),
     });
     return {
       strategy: request.strategy,
@@ -92,6 +95,7 @@ export async function cuaExecute(
     ...(inputs === undefined ? {} : { inputs }),
     dryRun: request.dryRun,
     ...(onProgress === undefined ? {} : { onProgress }),
+    ...(abortSignal === undefined ? {} : { abortSignal }),
   };
   if (request.strategy === 'replay') {
     const run = await api.runTask(options);
@@ -128,6 +132,7 @@ export async function cuaExecute(
 async function executeSkillRequest(
   request: Extract<CuaExecuteRequest, { skillName: string }>,
   dependencies: Partial<CuaExecuteDependencies>, onProgress?: ExecutionProgressSink,
+  abortSignal?: AbortSignal,
 ): Promise<CuaExecuteResult> {
   const allowed = new Set(['skillName', 'strategy', 'inputs', 'dryRun', 'dataRoot']);
   if (Object.keys(request).some(key => !allowed.has(key))) throw new Error('Skill 执行包含不支持的字段或任意路径');
@@ -140,6 +145,7 @@ async function executeSkillRequest(
   const options: ExecutionOptions = {
     skillName, skillsRoot: requireSkillsRoot(layout), runsRoot: data.runsRoot,
     inputs: optionalStringRecord(request.inputs, 'inputs'), dryRun: request.dryRun, onProgress,
+    abortSignal,
   };
   const run = strategy === 'guided' ? await api.runRecordedTaskAiAct(options) : await api.runTask(options);
   return {

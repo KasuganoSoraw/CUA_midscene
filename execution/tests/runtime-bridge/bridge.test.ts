@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { Readable, Writable } from 'node:stream';
+import { PassThrough, Readable, Writable } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
@@ -130,6 +130,51 @@ test('Runtime bridge 在 execute 结束前发送关联进度并继续处理下�
   assert.deepEqual(frames.map((frame) => frame.requestId), ['execute-1', 'execute-1', 'catalog-2']);
   assert.equal(frames[1].ok, true);
   assert.equal(frames[2].ok, true);
+});
+
+test('JSONL worker 在执行中接收定向取消并阻止后续动作，随后仍可处理请求', async () => {
+  const input = new PassThrough();
+  let output = '';
+  const sink = new Writable({ write(chunk, _encoding, callback) { output += chunk.toString(); callback(); } });
+  const handlers = fakeHandlers([]);
+  let started: () => void = () => {};
+  const entered = new Promise<void>(resolve => { started = resolve; });
+  let stoppedAt = 0;
+  let actionCount = 0;
+  handlers.execute = async (_payload, _onProgress, signal) => {
+    started();
+    const timer = setInterval(() => { actionCount += 1; }, 5);
+    try {
+      await new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => {
+          stoppedAt = performance.now();
+          reject(new Error('execution cancelled'));
+        }, { once: true });
+      });
+    } finally {
+      clearInterval(timer);
+    }
+  };
+  const running = runRuntimeBridgeWorker(input, sink, handlers);
+  input.write(`${JSON.stringify({ schemaVersion: '1.0', requestId: 'execute-1', method: 'execute', payload: { strategy: 'freeform', goal: '打开窗口' } })}\n`);
+  await entered;
+  await new Promise(resolve => setTimeout(resolve, 15));
+  input.write(`${JSON.stringify({ schemaVersion: '1.0', type: 'cancel', requestId: 'other-request' })}\n`);
+  await new Promise(resolve => setTimeout(resolve, 15));
+  assert.equal(stoppedAt, 0);
+  const cancelledAt = performance.now();
+  input.write(`${JSON.stringify({ schemaVersion: '1.0', type: 'cancel', requestId: 'execute-1' })}\n`);
+  input.write(`${JSON.stringify({ schemaVersion: '1.0', requestId: 'catalog-2', method: 'catalog', payload: { action: 'list-scenes' } })}\n`);
+  input.end();
+  await running;
+  assert.ok(stoppedAt >= cancelledAt);
+  const countAtStop = actionCount;
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(actionCount, countAtStop);
+  const frames = output.trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(frames.map(frame => frame.requestId), ['execute-1', 'catalog-2']);
+  assert.equal(frames[0].ok, false);
+  assert.equal(frames[1].ok, true);
 });
 
 test('Runtime bridge 过程失败后仍返回唯一终态错误', async () => {

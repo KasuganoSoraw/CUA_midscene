@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -235,6 +236,99 @@ def test_client_cancels_and_exits_worker_during_continuous_progress(
             assert not client.running
             assert process.returncode is not None
             assert await process.wait() == process.returncode
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("strategy", ["freeform", "guided"])
+def test_client_sends_native_cancel_and_exits_worker(
+    strategy: str, tmp_path: Path
+) -> None:
+    async def scenario() -> None:
+        marker = tmp_path / "stopped.txt"
+        cancelled = False
+        async with JsonlRuntimeClient(
+            config(shutdown_timeout_seconds=5.0, cancel_grace_seconds=0.5)
+        ) as client:
+            process = client._process
+            assert process is not None
+            loop = asyncio.get_running_loop()
+            loop.call_later(0.05, lambda: request_cancel())
+
+            def request_cancel() -> None:
+                nonlocal cancelled
+                cancelled = True
+
+            started = time.time()
+            with pytest.raises(RuntimeCancelledError):
+                await asyncio.wait_for(
+                    client.request(
+                        "execute",
+                        {"action": "cancel-aware", "strategy": strategy, "stopMarker": str(marker)},
+                        cancelled=lambda: cancelled,
+                    ),
+                    timeout=2.0,
+                )
+            assert marker.exists()
+            assert started <= float(marker.read_text(encoding="utf-8")) <= time.time()
+            assert process.returncode is not None
+            assert await process.wait() == process.returncode
+        async with JsonlRuntimeClient(config()) as later:
+            response = await later.request("catalog", {"action": "list-scenes"})
+            assert response["method"] == "catalog"
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("strategy", ["freeform", "guided", "replay"])
+def test_client_cancel_fallback_exits_unresponsive_worker_quickly(strategy: str) -> None:
+    async def scenario() -> None:
+        requested_at: float | None = None
+
+        def on_event(_event: RuntimeProgressEvent) -> None:
+            nonlocal requested_at
+            if requested_at is None:
+                requested_at = time.perf_counter()
+
+        async with JsonlRuntimeClient(
+            config(request_timeout_seconds=30.0, shutdown_timeout_seconds=5.0,
+                   cancel_grace_seconds=0.1)
+        ) as client:
+            process = client._process
+            assert process is not None
+            with pytest.raises(RuntimeCancelledError):
+                await asyncio.wait_for(
+                    client.request(
+                        "execute", {"action": "progress-continuous", "strategy": strategy},
+                        on_event=on_event, cancelled=lambda: requested_at is not None,
+                    ),
+                    timeout=2.0,
+                )
+            assert requested_at is not None
+            assert time.perf_counter() - requested_at < 1.5
+            assert process.returncode is not None
+
+    asyncio.run(scenario())
+
+
+def test_client_task_cancellation_uses_fast_worker_cleanup() -> None:
+    async def scenario() -> None:
+        async with JsonlRuntimeClient(
+            config(request_timeout_seconds=30.0, shutdown_timeout_seconds=5.0,
+                   cancel_grace_seconds=0.1)
+        ) as client:
+            process = client._process
+            assert process is not None
+            task = asyncio.create_task(client.request(
+                "execute", {"action": "progress-continuous", "strategy": "replay"},
+            ))
+            await asyncio.sleep(0.1)
+            started = time.perf_counter()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=2.0)
+            assert time.perf_counter() - started < 1.5
+            assert process.returncode is not None
 
     asyncio.run(scenario())
 
