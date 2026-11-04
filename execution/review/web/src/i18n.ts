@@ -5,7 +5,7 @@ export type WorkbenchLocale = GenerationLanguage;
 export type TranslationParams = Record<string, string | number>;
 
 const zhCN = {
-  'app.title': '桌面任务中心',
+  'app.title': 'GDE Claw Record & Replay',
   'app.subtitle': '录制 · 检查 · 运行',
   'app.language': '界面语言',
   'app.navLabel': '工作台功能',
@@ -350,7 +350,7 @@ const zhCN = {
 export type MessageKey = keyof typeof zhCN;
 
 const enUS: Record<MessageKey, string> = {
-  'app.title': 'Desktop Task Center',
+  'app.title': 'GDE Claw Record & Replay',
   'app.subtitle': 'RECORD · REVIEW · RUN',
   'app.language': 'Interface language',
   'app.navLabel': 'Workspace features',
