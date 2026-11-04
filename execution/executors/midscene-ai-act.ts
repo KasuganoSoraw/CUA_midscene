@@ -45,84 +45,88 @@ async function writeResult(
   await writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 }
 
+type AiActArtifacts = Pick<NativeAiActExecutorResult, 'midsceneResult' | 'reportPath' | 'finalScreenshotPath'>;
+
+async function cleanupAiAct(
+  agent: AgentLike | undefined, removeDumpListener: (() => void) | undefined,
+  previousRunDirectory: string | undefined, previousCacheDirectory: string | undefined,
+  artifacts: AiActArtifacts,
+): Promise<void> {
+  try {
+    removeDumpListener?.();
+  } finally {
+    try {
+      if (agent) {
+        try { await agent.destroy(); }
+        finally { artifacts.reportPath = await existingMidsceneHtmlReport(agent.reportFile); }
+      }
+    } finally {
+      if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
+      else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
+      if (previousCacheDirectory === undefined) delete process.env.MIDSCENE_CACHE_DIR;
+      else process.env.MIDSCENE_CACHE_DIR = previousCacheDirectory;
+    }
+  }
+}
+
+async function runAiAct(
+  options: MidsceneAiActExecutionOptions, prompt: TUserPrompt, artifacts: AiActArtifacts,
+): Promise<void> {
+  warnIfNodeVersionIsOld();
+  checkRequiredModelEnv();
+  const previousRunDirectory = process.env.MIDSCENE_RUN_DIR;
+  const previousCacheDirectory = process.env.MIDSCENE_CACHE_DIR;
+  let agent: AgentLike | undefined;
+  let removeDumpListener: (() => void) | undefined;
+  const observer = createMidsceneExecutionObserver(options.onProgress);
+  try {
+    process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(options.runDirectory), 'midscene');
+    // 缓存目录固定到 runsRoot 同级（dataRoot/midscene-cache），保证跨运行 plan 缓存可命中。
+    process.env.MIDSCENE_CACHE_DIR = path.join(path.resolve(options.runDirectory), '..', '..', 'midscene-cache');
+    agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)({
+      ...(options.displayId === undefined ? {} : { displayId: options.displayId }),
+      generateReport: true,
+      reportFileName: midsceneReportFileName,
+      groupName: 'native-ai-act',
+      groupDescription: '执行原生 Midscene aiAct 电脑操作',
+      aiActContext: keyboardInputAiActContext,
+    });
+    if (agent.addDumpUpdateListener) {
+      removeDumpListener = agent.addDumpUpdateListener(observer.listener);
+    } else if (options.onProgress) {
+      throw new Error('Midscene Agent 不支持过程事件');
+    }
+    if (options.abortSignal?.aborted) throw new Error('电脑操作已取消');
+    artifacts.midsceneResult = await agent.aiAct(
+      prompt, options.abortSignal ? { abortSignal: options.abortSignal } : undefined,
+    );
+    artifacts.finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
+  } finally {
+    await cleanupAiAct(agent, removeDumpListener, previousRunDirectory, previousCacheDirectory, artifacts);
+  }
+}
+
 export async function executeMidsceneAiAct(
   options: MidsceneAiActExecutionOptions,
 ): Promise<NativeAiActExecutorResult> {
   const sourcePromptPath = path.resolve(options.sourcePromptPath);
   const resultPath = path.resolve(options.resultPath);
-  let reportPath: string | undefined;
+  const artifacts: AiActArtifacts = {};
 
   try {
     const prompt = TUserPromptSchema.parse(options.prompt);
     const promptText = typeof prompt === 'string' ? prompt : prompt.prompt;
     if (!promptText.trim()) throw new Error('Midscene aiAct prompt 不能为空');
-    let midsceneResult: string | undefined;
-    let finalScreenshotPath: string | undefined;
-
-    if (!options.dryRun) {
-      warnIfNodeVersionIsOld();
-      checkRequiredModelEnv();
-      const previousRunDirectory = process.env.MIDSCENE_RUN_DIR;
-      const previousCacheDirectory = process.env.MIDSCENE_CACHE_DIR;
-      let agent: AgentLike | undefined;
-      let removeDumpListener: (() => void) | undefined;
-      const observer = createMidsceneExecutionObserver(options.onProgress);
-      try {
-        process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(options.runDirectory), 'midscene');
-        // 缓存目录固定到 runsRoot 同级（dataRoot/midscene-cache），避免随每次
-        // 运行的随机 run 目录漂移，保证跨运行 plan 缓存可命中。
-        process.env.MIDSCENE_CACHE_DIR = path.join(
-          path.resolve(options.runDirectory),
-          '..',
-          '..',
-          'midscene-cache',
-        );
-        agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)({
-          ...(options.displayId === undefined ? {} : { displayId: options.displayId }),
-          generateReport: true,
-          reportFileName: midsceneReportFileName,
-          groupName: 'native-ai-act',
-          groupDescription: '执行原生 Midscene aiAct 电脑操作',
-          aiActContext: keyboardInputAiActContext,
-        });
-        if (agent.addDumpUpdateListener) {
-          removeDumpListener = agent.addDumpUpdateListener(observer.listener);
-        } else if (options.onProgress) {
-          throw new Error('Midscene Agent 不支持过程事件');
-        }
-        if (options.abortSignal?.aborted) throw new Error('电脑操作已取消');
-        midsceneResult = await agent.aiAct(
-          prompt,
-          options.abortSignal ? { abortSignal: options.abortSignal } : undefined,
-        );
-        finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
-      } finally {
-        try {
-          removeDumpListener?.();
-        } finally {
-          try {
-            if (agent) {
-              try { await agent.destroy(); }
-              finally { reportPath = await existingMidsceneHtmlReport(agent.reportFile); }
-            }
-          } finally {
-            if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
-            else process.env.MIDSCENE_RUN_DIR = previousRunDirectory;
-            if (previousCacheDirectory === undefined) delete process.env.MIDSCENE_CACHE_DIR;
-            else process.env.MIDSCENE_CACHE_DIR = previousCacheDirectory;
-          }
-        }
-      }
-    }
+    if (!options.dryRun) await runAiAct(options, prompt, artifacts);
 
     const result: NativeAiActExecutorResult = {
       schemaVersion: '0.1',
       status: 'succeeded',
       sourcePromptPath,
       dryRun: options.dryRun,
-      ...(midsceneResult === undefined ? {} : { midsceneResult }),
-      ...(reportPath === undefined ? {} : { reportPath }),
-      ...(finalScreenshotPath === undefined ? {} : { finalScreenshotPath }),
+      ...(artifacts.midsceneResult === undefined ? {} : { midsceneResult: artifacts.midsceneResult }),
+      ...(artifacts.reportPath === undefined ? {} : { reportPath: artifacts.reportPath }),
+      ...(artifacts.finalScreenshotPath === undefined ? {} : { finalScreenshotPath: artifacts.finalScreenshotPath }),
       finishedAt: new Date().toISOString(),
     };
     await writeResult(resultPath, result);
@@ -136,7 +140,7 @@ export async function executeMidsceneAiAct(
       dryRun: options.dryRun,
       finishedAt: new Date().toISOString(),
       error: message,
-      ...(reportPath === undefined ? {} : { reportPath }),
+      ...(artifacts.reportPath === undefined ? {} : { reportPath: artifacts.reportPath }),
     });
     throw error;
   }

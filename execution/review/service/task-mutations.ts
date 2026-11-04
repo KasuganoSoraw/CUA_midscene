@@ -83,8 +83,25 @@ function changeFor(mutation: ReviewMutation, affected: number): ReviewChange {
   return { kind: 'update', summary: `修改第 ${mutation.index + 1} 个步骤`, details: ['步骤内容已更新'] };
 }
 
-export function applyReviewMutation<M extends TaskAssetManifest>(draft: ReviewTaskDraft<M>, mutation: ReviewMutation): ReviewMutationResult<M> {
-  const entries = entriesFromDraft(draft);
+function updateEntry(entry: Entry, mutation: Extract<ReviewMutation, { type: 'update' }>): void {
+  if (mutation.step.operation) {
+    entry.operation = mutation.step.operation;
+    if (mutation.step.operation === 'read') entry.binding = null;
+    if (mutation.step.operation !== 'input' && mutation.step.input === undefined) {
+      delete entry.input;
+      delete entry.oldInputId;
+    }
+  }
+  if (mutation.step.flow) entry.task.flow = structuredClone(mutation.step.flow);
+  if (mutation.step.input === null) {
+    delete entry.input;
+    delete entry.oldInputId;
+  } else if (mutation.step.input) {
+    entry.input = structuredClone(mutation.step.input);
+  }
+}
+
+function mutateEntries(entries: Entry[], mutation: ReviewMutation): void {
   if (mutation.type === 'insert') {
     assertIndex(mutation.index, entries.length, true);
     entries.splice(mutation.index, 0, {
@@ -104,25 +121,15 @@ export function applyReviewMutation<M extends TaskAssetManifest>(draft: ReviewTa
     entries.splice(mutation.to, 0, entry);
   } else {
     assertIndex(mutation.index, entries.length);
-    const entry = entries[mutation.index];
-    if (mutation.step.operation) {
-      entry.operation = mutation.step.operation;
-      if (mutation.step.operation === 'read') entry.binding = null;
-      if (mutation.step.operation !== 'input' && mutation.step.input === undefined) {
-        delete entry.input;
-        delete entry.oldInputId;
-      }
-    }
-    if (mutation.step.flow) entry.task.flow = structuredClone(mutation.step.flow);
-    if (mutation.step.input === null) {
-      delete entry.input;
-      delete entry.oldInputId;
-    } else if (mutation.step.input) {
-      entry.input = structuredClone(mutation.step.input);
-    }
+    updateEntry(entries[mutation.index], mutation);
   }
+}
 
-  if (!entries.length) throw new Error('任务必须至少保留一个步骤');
+function renumberEntries(entries: Entry[]): {
+  tasks: JsonObject[];
+  inputs: Record<string, TaskInputDefinition>;
+  stepBindings: Record<string, number | number[] | null>;
+} {
   const replacements = new Map<string, string>();
   const inputs: Record<string, TaskInputDefinition> = {};
   const stepBindings: Record<string, number | number[] | null> = {};
@@ -143,6 +150,14 @@ export function applyReviewMutation<M extends TaskAssetManifest>(draft: ReviewTa
     stepBindings[stepId] = entry.binding;
   });
   const tasks = entries.map((entry) => replacePlaceholder(entry.task, replacements) as JsonObject);
+  return { tasks, inputs, stepBindings };
+}
+
+export function applyReviewMutation<M extends TaskAssetManifest>(draft: ReviewTaskDraft<M>, mutation: ReviewMutation): ReviewMutationResult<M> {
+  const entries = entriesFromDraft(draft);
+  mutateEntries(entries, mutation);
+  if (!entries.length) throw new Error('任务必须至少保留一个步骤');
+  const { tasks, inputs, stepBindings } = renumberEntries(entries);
   const manifest = structuredClone(draft.manifest);
   manifest.inputs = inputs;
   manifest.source = { ...manifest.source, stepBindings };
