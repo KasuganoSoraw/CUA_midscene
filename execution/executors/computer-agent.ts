@@ -21,13 +21,19 @@ export async function createKeyboardEnabledComputerAgent(
 ): Promise<ComputerAgent> {
   const keyboardTypeText = createKeyboardTypeTextAction();
   const customActions = [...(options.customActions ?? []), keyboardTypeText.action];
-  // 显式传入的 cache 配置优先（例如 YAML agent 段），环境变量兜底
+  // 显式传入的 cache / screenshotShrinkFactor 配置优先（例如 YAML agent 段），
+  // 环境变量兜底
   const cacheOption =
     options.cache !== undefined ? {} : resolveCacheOption();
+  const shrinkOption =
+    options.screenshotShrinkFactor !== undefined
+      ? {}
+      : resolveScreenshotShrinkOption();
   const agent = await agentForComputer({
     ...options,
     customActions,
     ...cacheOption,
+    ...shrinkOption,
   });
   const keyboard = agent.interface.inputPrimitives?.keyboard;
   if (!keyboard?.keyboardPress) {
@@ -42,16 +48,98 @@ export async function createKeyboardEnabledComputerAgent(
 
 /**
  * 读取缓存配置：设置 MIDSCENE_CACHE_ID 后为 Midscene agent 启用 plan/locate 缓存
- * （read-write，缓存文件落在 midscene_run/cache/<id>.cache.yaml）。
+ * （缓存文件落在 midscene_run/cache/<id>.cache.yaml）。
  * 可通过 MIDSCENE_CACHE_DIR 指定固定缓存目录（否则随 MIDSCENE_RUN_DIR 落在
  * 每次运行的随机 run 目录下，跨运行无法命中）。
+ * 可通过 MIDSCENE_CACHE_STRATEGY 指定策略：read-write（默认，读写）/ read-only
+ * （只读重放）/ write-only（只写积累，录缓存阶段用）。
  * 不设置该环境变量时保持默认（不开缓存）。
  */
-function resolveCacheOption(): { cache?: { id: string; cacheDir?: string } } {
+type CacheStrategy = 'read-write' | 'read-only' | 'write-only';
+
+const cacheStrategies: readonly CacheStrategy[] = [
+  'read-write',
+  'read-only',
+  'write-only',
+];
+
+function resolveCacheOption(): {
+  cache?: { id: string; cacheDir?: string; strategy?: CacheStrategy };
+} {
   const cacheId = process.env.MIDSCENE_CACHE_ID?.trim();
   if (!cacheId) {
     return {};
   }
   const cacheDir = process.env.MIDSCENE_CACHE_DIR?.trim();
-  return cacheDir ? { cache: { id: cacheId, cacheDir } } : { cache: { id: cacheId } };
+  const strategy = process.env.MIDSCENE_CACHE_STRATEGY?.trim() as
+    | CacheStrategy
+    | undefined;
+  const base = cacheDir ? { id: cacheId, cacheDir } : { id: cacheId };
+  if (strategy && cacheStrategies.includes(strategy)) {
+    return { cache: { ...base, strategy } };
+  }
+  return { cache: base };
+}
+
+/**
+ * 读取截图缩放配置：设置 MIDSCENE_SCREENSHOT_SHRINK_FACTOR 后为 Midscene
+ * agent 等比缩小截图后送模型，降低图像 token 以加速推理。
+ *
+ * 支持的值：
+ * - "auto"：智能缩放到 1080p。读取当前屏幕高度，计算 shrinkFactor = 屏幕高度 / 1080，
+ *   保持原始长宽比。屏幕高度 ≤1080 时不缩放。
+ * - 数字字符串（如 "2"、"4"）：固定倍数缩放，shrinkFactor = 该数字（支持小数）。
+ * - "1" 或未设置：不缩放。
+ */
+function resolveScreenshotShrinkOption(): {
+  screenshotShrinkFactor?: number;
+} {
+  const raw = process.env.MIDSCENE_SCREENSHOT_SHRINK_FACTOR?.trim();
+  if (!raw || raw === '1') {
+    return {};
+  }
+
+  // auto 模式：智能缩放到 1080p
+  if (raw.toLowerCase() === 'auto') {
+    const screenHeight = _readScreenHeight();
+    if (screenHeight <= 0 || screenHeight <= 1080) {
+      return {};
+    }
+    const factor = screenHeight / 1080;
+    if (Number.isFinite(factor) && factor > 1) {
+      // 把实际系数写回 env，供 report banner 注入逻辑读取
+      // （report banner 调用处读 MIDSCENE_SCREENSHOT_SHRINK_FACTOR，
+      // "auto" 字符串无法 Number() 解析，需替换为实际数值）
+      process.env.MIDSCENE_SCREENSHOT_SHRINK_FACTOR = String(factor);
+      return { screenshotShrinkFactor: factor };
+    }
+    return {};
+  }
+
+  // 固定倍数模式（支持小数，如 1.33）
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 1
+    ? { screenshotShrinkFactor: value }
+    : {};
+}
+
+/**
+ * 读取当前主屏幕高度（物理像素）。用于 auto 模式计算智能缩放系数。
+ *
+ * 优先从 MIDSCENE_SCREEN_HEIGHT 环境变量读取（由后端 runtime_env 注入），
+ * 其次尝试 @midscene/computer 的 ComputerDevice.listDisplays()。
+ * 读取失败时返回 0（auto 模式回退为不缩放）。
+ */
+function _readScreenHeight(): number {
+  const fromEnv = process.env.MIDSCENE_SCREEN_HEIGHT?.trim();
+  if (fromEnv) {
+    const h = Number(fromEnv);
+    if (Number.isFinite(h) && h > 0) {
+      return Math.floor(h);
+    }
+  }
+  // @midscene/computer 的 ComputerDevice 可能未加载或 listDisplays 不可用，
+  // 不在此处做异步调用（resolveScreenshotShrinkOption 是同步函数）。
+  // 屏幕高度由后端 runtime_env 通过 MIDSCENE_SCREEN_HEIGHT 注入。
+  return 0;
 }

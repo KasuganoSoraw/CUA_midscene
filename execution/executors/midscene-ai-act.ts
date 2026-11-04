@@ -14,7 +14,11 @@ import {
   type ComputerAgentOptions,
 } from './computer-agent.js';
 import { checkRequiredModelEnv, warnIfNodeVersionIsOld } from './env.js';
-import { existingMidsceneHtmlReport, midsceneReportFileName } from './midscene-report.js';
+import {
+  existingMidsceneHtmlReport,
+  injectShrinkBannerIntoReport,
+  midsceneReportFileName,
+} from './midscene-report.js';
 
 interface AgentLike {
   aiAct(prompt: TUserPrompt, options?: AiActOptions): Promise<string | undefined>;
@@ -58,7 +62,15 @@ async function cleanupAiAct(
     try {
       if (agent) {
         try { await agent.destroy(); }
-        finally { artifacts.reportPath = await existingMidsceneHtmlReport(agent.reportFile); }
+        finally {
+          artifacts.reportPath = await existingMidsceneHtmlReport(agent.reportFile);
+          if (artifacts.reportPath) {
+            const shrinkFactor = Number(process.env.MIDSCENE_SCREENSHOT_SHRINK_FACTOR || '1');
+            await injectShrinkBannerIntoReport(
+              artifacts.reportPath, Number.isFinite(shrinkFactor) ? shrinkFactor : 1,
+            );
+          }
+        }
       }
     } finally {
       if (previousRunDirectory === undefined) delete process.env.MIDSCENE_RUN_DIR;
