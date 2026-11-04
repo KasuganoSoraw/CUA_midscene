@@ -28,7 +28,22 @@ test('workbench locale catalogs stay aligned and interpolate parameters', () => 
   assert.equal(translate('en-US', 'app.title'), 'GDE Claw Record & Replay');
   assert.equal(translate('zh-CN', 'common.steps', { count: 3 }), '3 个步骤');
   assert.equal(translate('en-US', 'common.steps', { count: 3 }), '3 steps');
-  assert.equal(translate('en-US', 'recording.created', { scene: 'mail', task: 'send' }), 'Created task mail/send');
+  assert.equal(translate('en-US', 'recording.created', { scene: 'mail', task: 'send' }), 'Created skill mail/send');
+  const labels = {
+    'app.mode.review': ['技能编辑', 'Skill Editing'],
+    'app.mode.execution': ['技能调测', 'Skill Testing'],
+    'recording.create': ['从录制创建技能', 'Create Skill from Recording'],
+    'recording.generate': ['生成技能', 'Generate skill'],
+    'recording.progressEmpty': [
+      '选择录制并点击生成技能，生成进度将在这里显示。',
+      'Select a recording and generate a skill. Generation progress will appear here.',
+    ],
+    'recording.progress': ['技能生成进度', 'Skill generation progress'],
+  } as const;
+  for (const [key, [zh, en]] of Object.entries(labels)) {
+    assert.equal(translate('zh-CN', key as keyof typeof labels), zh);
+    assert.equal(translate('en-US', key as keyof typeof labels), en);
+  }
   assert.equal(translate('zh-CN', 'review.taskDeleted', { scene: 'mail', task: 'send' }), '任务 mail/send 已删除');
   assert.equal(translate('en-US', 'recording.deleted', { recording: 'Recording_1' }), 'Deleted recording Recording_1');
   assert.equal(translate('zh-CN', 'recording.firstStart'), '点击准备录制开始第一次录制');

@@ -72,11 +72,13 @@ test('任务目录使用 Skill 身份平铺，不读取场景目录 API', async 
   assert.doesNotMatch(source, /SceneCatalogItem|TaskCatalogItem|api\.tasks|scene-group/);
 });
 
-test('中英文任务提示使用 Skill 名称，不添加产品前缀', () => {
+test('生成说明使用 Skill 名称，目录标题使用界面语言', () => {
   for (const locale of ['zh-CN', 'en-US'] as const) {
-    for (const key of ['recording.skillAutoSummary', 'review.emptyHelp', 'review.catalog'] as const) {
+    for (const key of ['recording.skillAutoSummary', 'review.emptyHelp'] as const) {
       assert.match(translate(locale, key), /Skill/);
       assert.doesNotMatch(translate(locale, key), /CUA/);
     }
   }
+  assert.equal(translate('zh-CN', 'review.catalog'), '技能');
+  assert.equal(translate('en-US', 'review.catalog'), 'Skills');
 });
