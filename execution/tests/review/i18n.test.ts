@@ -74,8 +74,8 @@ test('ordinary workbench copy hides implementation names and gates developer ass
   assert.doesNotMatch(app, /本地自动化工作台|Local Automation Workspace/);
   assert.match(index, /<title>GDE Claw Record &amp; Replay<\/title>/);
   assert.match(index, /rel="icon" type="image\/svg\+xml" href="\/gde-claw-logo\.svg"/);
-  assert.match(app, /<h1>\{\{ t\('app\.title'\) \}\}<\/h1>/);
-  assert.match(app, /class="workbench-logo" src="\/gde-claw-logo\.svg"/);
+  assert.match(app, /<h1 class="sr-only">\{\{ t\('app\.title'\) \}\}<\/h1>/);
+  assert.doesNotMatch(app, /class="workbench-logo"/);
   assert.match(logo, /^<svg\b/);
   assert.doesNotMatch(logo, /<script\b/i);
   assert.match(app, /<details v-if="devMode" class="advanced wide"/);
