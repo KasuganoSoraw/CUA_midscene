@@ -67,3 +67,9 @@ git archive --format=zip --output=../cua-integration.zip HEAD
 归档仅含提交中的文件，不包含 Git 元数据或本地环境。宿主以该快照替换其受管理的 CUA vendor 目录并审查差异；导入工具属于宿主仓，不能覆盖 vendor 目录以外的宿主代码。
 
 `record/LICENSE` 随源码保留。录制器依赖固定的 PyAV wheel；宿主的制品审批与 SBOM 需覆盖 wheel 中捆绑的 FFmpeg 等组件。
+
+## 录制控制台
+
+流程卡片和最近访问保存在 `<CUA_DATA_ROOT>/workbench/console.sqlite`。首页支持先创建卡片、修改名称及描述、搜索和分页；录制成功后按实际录制 ID 关联现有资产。改名不重命名录制文件或 Skill；删除卡片会清理访问记录，但保留录制及已生成 Skill。录制、解析和生成流程沿用现有实现。
+
+SQLite 使用 WAL 模式。备份时使用 SQLite 一致性备份，或关闭控制台后复制数据库。组件构建会单独准备并检查 `better-sqlite3` 原生模块，发布包应匹配目标操作系统、CPU 架构和宿主 Node ABI。

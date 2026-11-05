@@ -1,3 +1,4 @@
+import type { RecordingCard, RecordingCardInput, RecordingCardPage, RecentRecordingCard } from '../../shared/recording-cards.js';
 import type {
   ReviewSkillCatalogResponse,
   ReviewSkillView,
@@ -106,6 +107,15 @@ async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> 
 }
 
 export const api = {
+  syncRecordingCards: () => request<{ synced: true }>('/api/recording-cards/sync', { method: 'POST' }),
+  recordingCards: (query = '', page = 1) => request<RecordingCardPage>(`/api/recording-cards?${new URLSearchParams({ query, page: String(page) })}`),
+  recordingCard: (id: string) => request<RecordingCard>(`/api/recording-cards/${encodeURIComponent(id)}`),
+  recentRecordingCards: () => request<{ cards: RecentRecordingCard[] }>('/api/recording-cards/recent'),
+  createRecordingCard: (body: RecordingCardInput) => request<RecordingCard>('/api/recording-cards', { method: 'POST', body: JSON.stringify(body) }),
+  updateRecordingCard: (id: string, body: RecordingCardInput & { version: number }) => request<RecordingCard>(`/api/recording-cards/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteRecordingCard: (id: string) => request<{ deleted: true }>(`/api/recording-cards/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  visitRecordingCard: (id: string) => request<{ visited: true }>(`/api/recording-cards/${encodeURIComponent(id)}/visit`, { method: 'POST' }),
+  startCardRecorder: (id: string, body: StartRecorderRequest) => request<RecorderStatus>(`/api/recording-cards/${encodeURIComponent(id)}/record`, { method: 'POST', body: JSON.stringify(body) }),
   skills: () => request<ReviewSkillCatalogResponse>('/api/skills'),
   skill: (name: string) => request<ReviewSkillView>(`/api/skills/${encodeURIComponent(name)}`),
   skillGeneration: () => request<SkillGenerationStatus>('/api/skill-generation'),

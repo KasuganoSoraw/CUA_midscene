@@ -1,3 +1,5 @@
+import { RecordingCardStore } from '../service/recording-cards.js';
+import { registerRecordingCardRoutes } from './recording-card-routes.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyPluginAsync } from 'fastify';
@@ -228,11 +230,21 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     recordingsRoot: activeRecordingsRoot,
     executionRoot: options.executionRoot,
   });
+  if (!options.layout.data) throw new Error('工作台需要配置 CUA_DATA_ROOT');
+  const cards = new RecordingCardStore(path.join(options.layout.data.root, 'workbench', 'console.sqlite'));
+  cards.clearSession();
   const recorder = options.dependencies?.recorder ?? new WindowsRecorderManager({
     executionRoot: path.resolve(options.executionRoot ?? process.cwd()),
     recordingsRoot: activeRecordingsRoot,
+    onRecordingCompleted: id => cards.completeRecording(id),
+    onRecordingCancelled: () => cards.clearSession(),
   });
-  app.addHook('onClose', async () => recorder.close());
+  registerRecordingCardRoutes(app, cards, recorder, async () => {
+    const catalog = await listRecordings(recordingOptions());
+    const active = recorder.status();
+    return { ...catalog, recordings: catalog.recordings.filter(entry => entry.id !== active.recordingId) };
+  });
+  app.addHook('onClose', async () => { await recorder.close(); cards.close(); });
 
   if (!options.layout.data) throw new Error('任务运行页面需要配置 CUA_DATA_ROOT');
   const execution = options.dependencies?.execution ?? new TaskExecutionManager({

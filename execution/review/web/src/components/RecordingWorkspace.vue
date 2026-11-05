@@ -20,6 +20,8 @@ const { locale, t, formatDateTime } = useI18n();
 
 const props = defineProps<{
   skillsConfigured: boolean;
+  cardId?: string;
+  recordingId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -31,7 +33,7 @@ const catalog = ref<ReviewRecordingCatalog>({
   envName: 'CUA_RECORDINGS_ROOT',
   recordings: [],
 });
-const selectedId = ref('');
+const selectedId = ref(props.recordingId ?? '');
 const actionBusy = ref(false);
 const generation = ref<SkillGenerationStatus>({ phase: 'idle' });
 const busy = computed(() => actionBusy.value || generation.value.phase === 'running');
@@ -50,10 +52,11 @@ let generationPolling = false;
 let disposed = false;
 
 function applyGeneration(next: SkillGenerationStatus, restoreForm = false): void {
+  if (props.cardId && next.recording && next.recording !== selectedId.value) return;
   const wasRunning = generation.value.phase === 'running';
   generation.value = next;
   if (restoreForm && next.request && next.recording) {
-    selectedId.value = next.recording;
+    if (!props.cardId || next.recording === props.recordingId) selectedId.value = next.recording;
   }
   if (next.phase === 'running') message.value = () => t('recording.creating');
   else if (next.phase === 'succeeded' && next.result) {
@@ -120,7 +123,7 @@ function applyCatalog(next: ReviewRecordingCatalog): void {
   }
   selectedId.value = next.recordings.some((item) => item.id === selectedId.value)
     ? selectedId.value
-    : next.recordings[0]?.id ?? '';
+    : props.cardId ? '' : next.recordings[0]?.id ?? '';
   message.value = next.recordings.length
     ? () => t('recording.found', { count: next.recordings.length })
     : () => t('recording.empty');
@@ -129,7 +132,16 @@ function applyCatalog(next: ReviewRecordingCatalog): void {
 async function loadRecordings(): Promise<void> {
   error.value = '';
   try {
-    applyCatalog(await api.recordings());
+    if (props.cardId) {
+      const card = await api.recordingCard(props.cardId);
+      selectedId.value = card.recordingId ?? '';
+    }
+    const next = await api.recordings();
+    const linkedId = selectedId.value;
+    applyCatalog(next);
+    if (props.cardId && linkedId && !next.recordings.some(item => item.id === linkedId)) {
+      error.value = `关联的录制 ${linkedId} 不存在，请检查录制目录或重新录制。`;
+    }
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
   }
@@ -172,9 +184,9 @@ async function startRecorder(): Promise<void> {
     outputRoot: recorderStatus.value.outputRoot,
   };
   try {
-    recorderStatus.value = await api.startRecorder({
-      displayId: selectedDisplayId.value,
-    });
+    recorderStatus.value = props.cardId
+      ? await api.startCardRecorder(props.cardId, { displayId: selectedDisplayId.value })
+      : await api.startRecorder({ displayId: selectedDisplayId.value });
     clock.value = Date.now();
   } catch (caught) {
     recorderError.value = caught instanceof Error ? caught.message : String(caught);
@@ -316,8 +328,8 @@ onUnmounted(() => {
     </template>
   </section>
 
-  <section class="panel recording-browser">
-    <aside class="catalog recording-catalog">
+  <section class="panel recording-browser" :class="{ 'card-recording-browser': cardId }">
+    <aside v-if="!cardId" class="catalog recording-catalog">
       <div class="recording-catalog-heading">
         <h2>{{ t('recording.raw') }}</h2>
         <button class="icon-button" :disabled="actionBusy" :title="t('recording.refreshCatalog')" :aria-label="t('recording.refreshCatalog')" @click="loadRecordings"><img :src="refreshIcon" alt="" /></button>

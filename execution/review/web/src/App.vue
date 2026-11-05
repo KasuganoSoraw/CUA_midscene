@@ -39,6 +39,9 @@ import uploadPlaceholder from './assets/ucd/IllHdEmptyNoRecord.svg';
 import actionInfoIcon from './assets/ucd/action-info.svg';
 import waitInfoIcon from './assets/ucd/wait-info.svg';
 
+import type { RecordingCard } from '../../shared/recording-cards';
+const props = defineProps<{ recordingCard?: RecordingCard }>();
+const emit = defineEmits<{ modeChange: [mode: string] }>();
 const { locale, t, setLocale } = useI18n();
 
 const initialParams = new URLSearchParams(window.location.search);
@@ -122,6 +125,7 @@ function persistDraft(): void {
 }
 
 watch(mode, (next) => {
+  emit('modeChange', next);
   const url = new URL(window.location.href);
   url.searchParams.set('mode', next === 'recordings' ? 'recording' : next);
   window.history.replaceState(null, '', url);
@@ -876,7 +880,7 @@ onMounted(async () => {
     </main>
 
     <main v-else-if="mode === 'recordings'" class="workspace recording-layout">
-      <RecordingWorkspace :skills-configured="skillsConfigured" @created="openCreatedTask" />
+      <RecordingWorkspace :skills-configured="skillsConfigured" :card-id="props.recordingCard?.id" :recording-id="props.recordingCard?.recordingId" @created="openCreatedTask" />
     </main>
 
     <main v-else-if="mode === 'execution'" class="workspace execution-layout">

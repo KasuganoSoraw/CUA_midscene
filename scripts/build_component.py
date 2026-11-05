@@ -95,6 +95,8 @@ def _build_javascript_runtime(
         ),
     )
     _run([npm_executable, "ci", "--ignore-scripts"], cwd=build_root)
+    _run([npm_executable, "rebuild", "better-sqlite3"], cwd=build_root)
+    _run([npm_executable, "run", "check:sqlite"], cwd=build_root)
     _run([npm_executable, "run", "build"], cwd=build_root)
     _run([npm_executable, "prune", "--omit=dev", "--ignore-scripts"], cwd=build_root)
 
