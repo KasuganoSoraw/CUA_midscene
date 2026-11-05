@@ -25,11 +25,12 @@ export function registerRecordingCardRoutes(
   store: RecordingCardStore,
   recorder: RecorderControl,
   recordings: () => Promise<RecordingCatalog>,
+  busy: () => boolean = () => false,
 ): void {
   registerCardQueries(app, store, recordings);
   registerCardWrites(app, store);
-  registerCardVisitsAndDeletion(app, store, recorder);
-  registerCardRecording(app, store, recorder);
+  registerCardVisitsAndDeletion(app, store, recorder, busy);
+  registerCardRecording(app, store, recorder, busy);
 }
 
 function registerCardWrites(
@@ -68,12 +69,14 @@ function registerCardVisitsAndDeletion(
   app: FastifyInstance,
   store: RecordingCardStore,
   recorder: RecorderControl,
+  busy: () => boolean,
 ): void {
   app.delete<{ Params: { id: string } }>(
     '/api/recording-cards/:id',
     { schema: { params } },
     async (request) => {
       if (recorder.status().phase === 'failed') store.clearSession();
+      if (busy()) throw new Error('任务正在处理，不能删除卡片');
       store.remove(request.params.id);
       return { deleted: true };
     },
@@ -92,6 +95,7 @@ function registerCardRecording(
   app: FastifyInstance,
   store: RecordingCardStore,
   recorder: RecorderControl,
+  busy: () => boolean,
 ): void {
   let starting = false;
   app.post<{ Params: { id: string }; Body: { displayId: string } }>(
@@ -108,7 +112,7 @@ function registerCardRecording(
       },
     },
     async (request) => {
-      if (starting || !['idle', 'failed'].includes(recorder.status().phase)) {
+      if (busy() || starting || !['idle', 'failed'].includes(recorder.status().phase)) {
         throw Object.assign(new Error('已有录制正在进行'), { statusCode: 409 });
       }
       store.clearSession();

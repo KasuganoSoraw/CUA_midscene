@@ -6,3 +6,4 @@ import './review.css';
 import './console.css';
 
 createApp(App).mount('#app');
+import './workflow.css';

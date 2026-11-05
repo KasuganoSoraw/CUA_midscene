@@ -158,6 +158,7 @@ export class RecordingCardStore {
           .prepare('INSERT OR IGNORE INTO recording_imports VALUES (?)')
           .run(entry.id);
         if (!imported.changes) continue;
+        if (this.db.prepare('SELECT id FROM recording_cards WHERE recording_id = ?').get(entry.id)) continue;
         const card = this.create({ name: entry.id, description: '' });
         this.db
           .prepare(

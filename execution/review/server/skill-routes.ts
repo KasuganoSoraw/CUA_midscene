@@ -20,6 +20,7 @@ interface Options {
   recordingsRoot?: string;
   executionRoot?: string;
   create?: typeof createSkillFromRecording;
+  beforeCreate?: () => void;
   executionStatus(): TaskExecutionStatus;
 }
 
@@ -132,6 +133,7 @@ export function registerSkillRoutes(app: FastifyInstance, options: Options): Rec
       body: { type: 'object', properties: { language: { type: 'string', enum: ['zh-CN', 'en-US'] } }, additionalProperties: false },
     },
   }, async (request, reply) => {
+    options.beforeCreate?.();
     const skillsRoot = requireSkillsRoot(options.layout);
     const recordingOptions = { recordingsRoot: options.recordingsRoot, executionRoot: options.executionRoot };
     const entry = await describeRecording(request.params.recording, recordingOptions);

@@ -92,7 +92,7 @@ export async function streamAgentInvocation(
   return result;
 }
 
-async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(pathname: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body !== undefined && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
@@ -216,3 +216,14 @@ export const api = {
     return url.toString();
   },
 };
+
+export function draftApi(id: string): typeof api {
+  const root = `/api/recording-cards/${encodeURIComponent(id)}/draft`;
+  return { ...api,
+    skills: () => request(`${root}/catalog`), skill: () => request(root),
+    mutateSkill: (_name, draft, mutation) => request(`${root}/mutate`, { method: 'POST', body: JSON.stringify({ draft, mutation }) }),
+    saveSkill: (_name, revision, draft) => request(root, { method: 'PUT', body: JSON.stringify({ expectedRevision: revision, ...draft }) }),
+    uploadSkillReferenceImage: (_name, revision, file) => request(`${root}/reference-images?${new URLSearchParams({ revision })}`, { method: 'POST', headers: { 'content-type': file.type }, body: file }),
+    skillEvidenceUrl: (_name, reference) => `${root}/evidence?${new URLSearchParams({ path: reference })}`,
+  };
+}

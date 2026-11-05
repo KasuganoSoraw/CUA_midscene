@@ -13,6 +13,7 @@ export interface PythonWorkerLaunch {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   stdio?: SpawnOptions['stdio'];
+  signal?: AbortSignal;
 }
 
 export interface ResolvePythonExecutableOptions {
@@ -83,6 +84,7 @@ export function spawnPythonWorker(
         PYTHONIOENCODING: 'utf-8',
         ...launch.env,
       },
+      signal: launch.signal,
       shell: false,
       windowsHide: true,
       stdio: launch.stdio ?? ['pipe', 'pipe', 'pipe'],
@@ -107,9 +109,11 @@ export async function runPythonWorker(
     child.stdout?.on('data', forward);
     child.stderr?.on('data', forward);
     child.once('error', (error) => {
+      if (launch.signal?.aborted) return;
       reject(new Error(`无法启动 Python Worker：${error.message}`));
     });
     child.once('close', (code, signal) => {
+      if (launch.signal?.aborted) { reject(new Error('任务已停止')); return; }
       if (code === 0) {
         resolve();
         return;

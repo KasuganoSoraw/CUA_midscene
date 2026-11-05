@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import App from '../App.vue';
+import RecordingWorkflowView from './RecordingWorkflowView.vue';
 import { api } from '../api';
 import type {
   RecordingCard,
@@ -287,11 +288,8 @@ onUnmounted(() => {
           <p>{{ card.description }}</p>
         </header>
         <p v-if="error" class="console-error" role="alert">{{ error }}</p>
-        <App
-          :key="workspaceKey"
-          :recording-card="card"
-          @mode-change="activeMode = $event"
-        />
+        <RecordingWorkflowView v-if="card" :key="workspaceKey" :card="card" />
+        <App v-else :key="workspaceKey" @mode-change="activeMode = $event" />
       </template>
     </div>
     <RecordingCardDialog

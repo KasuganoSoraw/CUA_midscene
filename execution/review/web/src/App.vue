@@ -21,7 +21,7 @@ import {
   type StepEditorModel,
 } from '../../shared/step-editor';
 import { sourceStepsForBinding } from '../../shared/step-bindings';
-import { ApiError, api } from './api';
+import { ApiError, api as defaultApi, draftApi } from './api';
 import { ReviewDraftStorage } from './draft-storage';
 import { resolveEvidenceMode, type EvidenceMode } from './evidence-mode';
 import { referenceImageMaxBytes, referenceImageMimeTypes } from '../../shared/reference-upload';
@@ -40,15 +40,17 @@ import actionInfoIcon from './assets/ucd/action-info.svg';
 import waitInfoIcon from './assets/ucd/wait-info.svg';
 
 import type { RecordingCard } from '../../shared/recording-cards';
-const props = defineProps<{ recordingCard?: RecordingCard }>();
-const emit = defineEmits<{ modeChange: [mode: string] }>();
+const props = defineProps<{ recordingCard?: RecordingCard; draftCardId?: string }>();
+const emit = defineEmits<{ modeChange: [mode: string]; publish: [] }>();
+const api = props.draftCardId ? draftApi(props.draftCardId) : defaultApi;
 const { locale, t, setLocale } = useI18n();
 
 const initialParams = new URLSearchParams(window.location.search);
 const requestedMode = initialParams.get('mode');
 const requestedDevMode = initialParams.get('dev') === '1';
 let initialMode: 'review' | 'recordings' | 'execution' = 'review';
-if (requestedMode === 'recording') initialMode = 'recordings';
+if (props.draftCardId) initialMode = 'review';
+else if (requestedMode === 'recording') initialMode = 'recordings';
 else if (requestedMode === 'execution') initialMode = 'execution';
 const initialSkillName = initialParams.get('skillName')?.trim() ?? '';
 
@@ -125,6 +127,7 @@ function persistDraft(): void {
 }
 
 watch(mode, (next) => {
+  if (props.draftCardId) return;
   emit('modeChange', next);
   const url = new URL(window.location.href);
   url.searchParams.set('mode', next === 'recordings' ? 'recording' : next);
@@ -337,7 +340,7 @@ async function loadTask(restoreDraft = true): Promise<void> {
     draftStorageState.value = 'idle';
     draftStorageError.value = '';
     if (loaded.writable && restoreDraft) restoreStoredDraft(loaded);
-    if (mode.value === 'review') {
+    if (mode.value === 'review' && !props.draftCardId) {
       const url = new URL(window.location.href);
       url.searchParams.delete('scene');
       url.searchParams.delete('task');
@@ -520,6 +523,11 @@ async function save(): Promise<boolean> {
   } finally { busy.value = false; }
 }
 
+async function publishDraft(): Promise<void> {
+  syncSemanticDraft();
+  if (await save()) emit('publish');
+}
+
 async function runCurrentTask(): Promise<void> {
   if (!view.value || busy.value) return;
   if (dirty.value && !(await save())) return;
@@ -642,7 +650,7 @@ onMounted(async () => {
   try {
     const identity = await api.reviewIdentity();
     devMode.value = requestedDevMode && identity.devMode;
-    draftStorage = new ReviewDraftStorage<SkillTaskManifest>(window.localStorage, `${identity.dataRootKey}:${identity.skillsRootKey ?? 'unconfigured'}`);
+    draftStorage = new ReviewDraftStorage<SkillTaskManifest>(window.localStorage, `${identity.dataRootKey}:${identity.skillsRootKey ?? 'unconfigured'}:${props.draftCardId ?? 'formal'}`);
   } catch (error) {
     draftStorageState.value = 'error';
     draftStorageError.value = error instanceof Error ? error.message : String(error);
@@ -653,7 +661,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="shell">
+  <div class="shell" :class="{ 'workflow-editor': draftCardId }">
     <header class="topbar">
       <h1 class="sr-only">{{ t('app.title') }}</h1>
     <nav class="mode-tabs" :aria-label="t('app.navLabel')">
@@ -667,7 +675,7 @@ onMounted(async () => {
           <button :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">中文</button>
           <button :class="{ active: locale === 'en-US' }" @click="setLocale('en-US')">EN</button>
         </div>
-        <div v-if="mode === 'review'" class="top-actions">
+        <div v-if="mode === 'review' && !draftCardId" class="top-actions">
           <span v-if="view" class="status-chip" :class="{ readonly: !writable }">{{ writable ? t('review.writable') : t('review.readonly') }}</span>
           <button class="secondary" :disabled="busy || !view" @click="runCurrentTask">{{ dirty && writable ? t('review.saveAndRun') : t('review.runTask') }}</button>
           <button v-if="view?.writable" class="destructive" :disabled="busy" @click="requestTaskDeletion">{{ t('review.deleteTask') }}</button>
@@ -694,7 +702,7 @@ onMounted(async () => {
     </main>
 
     <main v-else-if="mode === 'review'" class="workspace review-layout">
-      <TaskCatalog :skills="skills" :skill-name="skillName" :busy="busy" :current-step-count="steps.length" @select="openCatalogTask" @create="mode = 'recordings'" />
+      <TaskCatalog v-if="!draftCardId" :skills="skills" :skill-name="skillName" :busy="busy" :current-step-count="steps.length" @select="openCatalogTask" @create="mode = 'recordings'" />
       <section class="steps panel">
         <div class="review-steps-heading"><h2>{{ t('review.workflow') }}</h2><div><span>{{ view?.title ?? t('review.selectTask') }}</span><small>{{ t('common.steps', { count: steps.length }) }}</small></div></div>
         <button class="secondary add-step" :disabled="!writable || busy" @click="insertStep"><WorkbenchIcon name="add" />{{ t('review.insert') }}</button>
@@ -921,6 +929,7 @@ onMounted(async () => {
       @cancel="taskDeleteOpen = false"
     />
 
+    <div v-if="draftCardId" class="workflow-footer"><button class="primary" :disabled="busy || conflict || advancedEditing" @click="publishDraft">保存并生成Skill</button></div>
     <footer v-if="mode === 'review' && skills.length"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
   </div>
 </template>

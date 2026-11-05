@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type {
   CreateRecordingSkillResult,
   RecorderDisplay,
@@ -26,6 +26,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   created: [result: CreateRecordingSkillResult];
+  analyze: [];
 }>();
 
 const catalog = ref<ReviewRecordingCatalog>({
@@ -33,6 +34,27 @@ const catalog = ref<ReviewRecordingCatalog>({
   envName: 'CUA_RECORDINGS_ROOT',
   recordings: [],
 });
+const rerecord = ref(false);
+const preview = ref<'video' | 'log'>();
+const logPreview = ref('');
+const previewDialog = ref<HTMLDialogElement>();
+watch(preview, async value => {
+  await nextTick();
+  if (value) previewDialog.value?.showModal(); else previewDialog.value?.close();
+});
+async function previewAsset(kind: 'video' | 'log'): Promise<void> {
+  if (!selected.value) return;
+  error.value = '';
+  try {
+    if (kind === 'log') {
+      const response = await fetch(`/api/recordings/${encodeURIComponent(selected.value.id)}/assets/log`);
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error);
+      logPreview.value = value.text + (value.truncated ? '\n…日志较长，仅预览前2MB' : '');
+    }
+    preview.value = kind;
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause); }
+}
 const selectedId = ref(props.recordingId ?? '');
 const actionBusy = ref(false);
 const generation = ref<SkillGenerationStatus>({ phase: 'idle' });
@@ -152,7 +174,7 @@ async function loadRecorderStatus(): Promise<void> {
     const wasActive = recorderCollapsed.value;
     const next = await api.recorderStatus();
     recorderStatus.value = next;
-    if (wasActive && next.phase === 'idle') await loadRecordings();
+    if (wasActive && next.phase === 'idle') { await loadRecordings(); rerecord.value = false; }
   } catch (caught) {
     recorderError.value = caught instanceof Error ? caught.message : String(caught);
   }
@@ -284,6 +306,24 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <template v-if="cardId">
+    <Teleport to="body"><dialog ref="previewDialog" class="asset-preview" :aria-label="preview === 'video' ? '录制视频' : '事件日志'" @cancel.prevent="preview = undefined"><button autofocus class="secondary" @click="preview = undefined">关闭预览</button><video v-if="preview === 'video' && selected" controls autoplay :src="`/api/recordings/${encodeURIComponent(selected.id)}/assets/video`"></video><pre v-else>{{ logPreview }}</pre></dialog></Teleport>
+    <div v-if="recorderError || error" class="console-error" role="alert">{{ recorderError || error }}</div>
+    <template v-if="recorderCollapsed || rerecord || !selected">
+      <p class="workflow-warning">请将需要录制的窗口放在所选屏幕范围内，并确保后续操作不超出录制范围。</p>
+      <div v-if="recorderCollapsed" class="workflow-live" role="status"><strong>{{ recorderStatus.phase === 'armed' ? '已准备录制' : '录制进行中' }}</strong><p>使用 {{ recorderStatus.hotkey || 'Ctrl+Shift+F9' }} 开始或结束录制。{{ elapsedRecording }}</p></div>
+      <div class="workflow-screens"><button v-for="display in recorderDisplays" :key="display.id" :disabled="recorderCollapsed || recorderBusy" :class="{ selected: selectedDisplayId === display.id }" @click="selectedDisplayId = display.id"><span>显示器{{ display.index + 1 }} <em v-if="display.primary">主屏幕</em><small>{{ display.width }}×{{ display.height }} / {{ display.deviceName }}</small></span><img :src="display.previewUrl" :alt="`显示器${display.index + 1}预览`" /></button></div>
+      <p v-if="!recorderDisplays.length" class="catalog-feedback">{{ recorderBusy ? '正在检测屏幕…' : '未检测到可录制屏幕，请检测屏幕并检查录制环境。' }}</p>
+      <div class="workflow-footer"><button v-if="rerecord && !recorderCollapsed" class="secondary" @click="rerecord = false">返回录制结果</button><button v-if="!recorderCollapsed" class="secondary" :disabled="recorderBusy" @click="refreshRecorderDisplays">检测屏幕</button><button v-if="!recorderCollapsed" class="primary" :disabled="!canStartRecorder" @click="startRecorder">准备录制</button><button v-else class="secondary" :disabled="recorderBusy || recorderStatus.phase === 'arming' || recorderStatus.phase === 'stopping'" @click="stopRecorder">{{ recorderStatus.phase === 'armed' ? '取消准备' : '结束录制' }}</button></div>
+    </template>
+    <template v-else>
+      <h2 class="workflow-asset-label">视频文件</h2><div class="workflow-asset"><img :src="videoIcon" alt="" /><span><strong>{{ selected.video?.name ?? '视频文件缺失' }}</strong><small>{{ formatSize(selected.video?.size) }}　{{ selected.screen?.width }}×{{ selected.screen?.height }}</small></span><span class="asset-open"><button class="text-button" @click="previewAsset('video')">播放</button><button class="text-button" @click="openFolder">打开文件夹 ↗</button></span></div>
+      <h2 class="workflow-asset-label">事件日志</h2><div class="workflow-asset"><img :src="logIcon" alt="" /><span><strong>{{ selected.eventLog?.name ?? '事件日志缺失' }}</strong><small>{{ formatSize(selected.eventLog?.size) }}</small></span><span class="asset-open"><button class="text-button" @click="previewAsset('log')">查看日志</button><button class="text-button" @click="openFolder">打开文件夹 ↗</button></span></div>
+      <p v-for="problem in selected.errors" :key="problem" class="console-error">{{ problem }}</p>
+      <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">重新录制</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">任务分析</button></div>
+    </template>
+  </template>
+  <template v-else>
   <section class="panel recorder-control" :class="{ collapsed: recorderCollapsed }">
     <template v-if="recorderCollapsed">
       <span class="recorder-live-dot" :class="{ armed: recorderStatus.phase === 'armed' || recorderStatus.phase === 'arming' }"></span>
@@ -437,4 +477,5 @@ onUnmounted(() => {
     @cancel="recordingDeleteOpen = false"
   />
 
+  </template>
 </template>

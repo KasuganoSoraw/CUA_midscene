@@ -1,0 +1,163 @@
+<script setup lang="ts">
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import App from '../App.vue';
+import RecordingWorkspace from './RecordingWorkspace.vue';
+import { api, request } from '../api';
+import { useI18n } from '../i18n';
+import type { RecordingCard } from '../../../shared/recording-cards';
+import type { WorkflowStatus } from '../../../shared/workflow';
+const props = defineProps<{ card: RecordingCard }>();
+const { locale } = useI18n();
+const status = ref<WorkflowStatus>();
+const error = ref('');
+const actionBusy = ref(false);
+const recording = ref(false);
+const result = ref<{ name: string; description: string; content: string }>();
+const copyState = ref('');
+const root = `/api/recording-cards/${encodeURIComponent(props.card.id)}`;
+let poll: ReturnType<typeof setInterval> | undefined;
+let fetching = false;
+let disposed = false;
+const renderedContent = computed(() =>
+  DOMPurify.sanitize(marked.parse((result.value?.content ?? '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, ''), { async: false }) as string),
+);
+const phase = computed(() => (recording.value ? 'idle' : (status.value?.phase ?? 'idle')));
+const activeStep = computed(() => (['idle'].includes(phase.value) ? 1 : phase.value === 'done' ? 3 : 2));
+const running = computed(() => ['analyzing', 'publishing'].includes(phase.value));
+async function refresh(): Promise<void> {
+  if (fetching || disposed) return;
+  fetching = true;
+  try {
+    const next = await request<WorkflowStatus>(`${root}/workflow`);
+    if (disposed) return;
+    status.value = next;
+    if (next.phase === 'done' && !result.value) result.value = await request(`${root}/result`);
+  } catch (cause) {
+    error.value = String(cause instanceof Error ? cause.message : cause);
+  } finally {
+    fetching = false;
+  }
+}
+async function action(name: 'analyze' | 'publish' | 'stop'): Promise<void> {
+  actionBusy.value = true;
+  error.value = '';
+  recording.value = false;
+  try {
+    status.value = await request<WorkflowStatus>(`${root}/${name}`, {
+      method: 'POST',
+      ...(name === 'analyze' ? { body: JSON.stringify({ language: locale.value }) } : {}),
+    });
+    result.value = undefined;
+    await refresh();
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    actionBusy.value = false;
+  }
+}
+async function copy(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(result.value?.content ?? '');
+    copyState.value = '已复制技能内容';
+  } catch {
+    copyState.value = '复制失败，请手动选择内容复制';
+  }
+}
+onMounted(async () => {
+  await refresh();
+  poll = setInterval(() => {
+    if (running.value) void refresh();
+  }, 1000);
+});
+onUnmounted(() => {
+  disposed = true;
+  if (poll) clearInterval(poll);
+});
+</script>
+<template>
+  <section class="recording-workflow">
+    <nav class="workflow-stepper" aria-label="创建技能阶段">
+      <span
+        v-for="(label, index) in ['流程录制', '技能编辑', '技能生成']"
+        :key="label"
+        :class="{ current: activeStep === index + 1, complete: activeStep > index + 1 }"
+        :aria-current="activeStep === index + 1 ? 'step' : undefined"
+        ><i>{{ activeStep > index + 1 ? '✓' : index + 1 }}</i
+        >{{ label }}</span
+      >
+    </nav>
+    <p v-if="error" class="console-error" role="alert">{{ error }}</p>
+    <p v-if="!status" class="catalog-feedback">正在加载流程…</p>
+    <RecordingWorkspace
+      v-else-if="phase === 'idle'"
+      :key="card.id"
+      :card-id="card.id"
+      :recording-id="card.recordingId"
+      :skills-configured="true"
+      @analyze="action('analyze')"
+    />
+    <template v-else-if="running || phase === 'failed' || phase === 'stopped'">
+      <section class="workflow-progress-panel">
+        <h2>任务进度</h2>
+        <div
+          class="workflow-progress-message"
+          :class="{ failed: phase === 'failed', stopped: phase === 'stopped' }"
+          :role="running ? 'status' : 'alert'"
+        >
+          <progress v-if="running" aria-label="处理中"></progress>
+          <h3>
+            {{
+              phase === 'analyzing'
+                ? '正在分析录制并生成步骤'
+                : phase === 'publishing'
+                  ? '正在打包并导入技能'
+                  : phase === 'stopped'
+                    ? '任务已停止'
+                    : '任务失败'
+            }}
+          </h3>
+          <p v-if="running">
+            {{
+              phase === 'analyzing'
+                ? '正在处理录制，请勿关闭服务。完成后进入步骤编辑。'
+                : '正在通过宿主导入编辑后的技能，请等待导入确认。'
+            }}
+          </p>
+          <p v-if="status?.error">{{ status.error }}</p>
+          <pre v-if="status?.log">{{ status.log }}</pre>
+        </div>
+      </section>
+      <div class="workflow-footer">
+        <template v-if="!running"
+          ><button class="secondary" @click="recording = true">返回录制</button
+          ><button v-if="status?.skillName" class="secondary" @click="status.phase = 'editing'">返回编辑</button
+          ><button class="primary" :disabled="actionBusy" @click="action(status?.skillName ? 'publish' : 'analyze')">
+            再次尝试
+          </button></template
+        ><button v-else-if="phase === 'analyzing'" class="secondary" :disabled="actionBusy" @click="action('stop')">
+          停止任务
+        </button>
+      </div>
+    </template>
+    <App v-else-if="phase === 'editing'" :draft-card-id="card.id" @publish="action('publish')" />
+    <template v-else-if="phase === 'done' && result">
+      <div class="workflow-result-copy">
+        <span>技能已生成并导入，可在对话中使用</span><code>{{ result.name }}</code
+        ><button class="secondary" @click="copy">复制技能内容</button><small role="status">{{ copyState }}</small>
+      </div>
+      <article class="workflow-result-card">
+        <span class="card-avatar purple">S</span>
+        <div>
+          <h2>{{ result.name }}</h2>
+          <p>{{ result.description }}</p>
+        </div>
+        <span class="workflow-imported">已导入</span>
+      </article>
+      <h2 class="workflow-asset-label">内容</h2>
+      <article class="workflow-skill-content" v-html="renderedContent"></article>
+      <div class="workflow-footer"><button class="secondary" @click="recording = true">返回录制</button></div>
+    </template>
+  </section>
+</template>
