@@ -101,7 +101,7 @@ test('实际执行设置本次报告目录并在成功后销毁 Agent 和恢复�
           destroy: async () => {
             destroyed = true;
             await mkdir(path.dirname(reportPath), { recursive: true });
-            await writeFile(reportPath, '<html></html>', 'utf8');
+            await writeFile(reportPath, '<html><body><div id="root"></div></body></html>', 'utf8');
           },
         };
       },
@@ -109,6 +109,7 @@ test('实际执行设置本次报告目录并在成功后销毁 Agent 和恢复�
     assert.equal(result.status, 'succeeded');
     assert.deepEqual(result.midsceneResult, { ok: true });
     assert.equal(result.reportPath, reportPath);
+    assert.match(await readFile(reportPath, 'utf8'), /id="midscene-hide-playground"/);
     assert.equal(result.finalScreenshotPath, path.join(fixture.runDirectory, 'final-screenshot.png'));
     assert.deepEqual(await readFile(result.finalScreenshotPath), screenshotContent);
     const persisted = JSON.parse(await readFile(fixture.resultPath, 'utf8'));
@@ -407,7 +408,7 @@ test('Agent 执行失败仍会销毁并恢复环境', async () => {
           destroy: async () => {
             destroyed = true;
             await mkdir(path.dirname(reportPath), { recursive: true });
-            await writeFile(reportPath, '<html>failed run</html>', 'utf8');
+            await writeFile(reportPath, '<html><body>failed run</body></html>', 'utf8');
           },
         }),
       }),
@@ -417,6 +418,7 @@ test('Agent 执行失败仍会销毁并恢复环境', async () => {
     const persisted = JSON.parse(await readFile(fixture.resultPath, 'utf8'));
     assert.equal(persisted.status, 'failed');
     assert.equal(persisted.reportPath, reportPath);
+    assert.match(await readFile(reportPath, 'utf8'), /id="midscene-hide-playground"/);
     assert.equal(process.env.MIDSCENE_RUN_DIR, previousRunDirectory);
   } finally {
     for (const [key, value] of Object.entries(previous)) {

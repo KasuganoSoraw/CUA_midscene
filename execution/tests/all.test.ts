@@ -16,6 +16,7 @@ import './runtime-bridge/workbench-host.test.js';
 import './runtime-bridge/failure-report.test.js';
 import './executors/keyboard-type-action.test.js';
 import './executors/ai-act-runner.test.js';
+import './executors/midscene-report.test.js';
 import './executors/yaml-runner.test.js';
 import './executors/midscene-progress.test.js';
 import './executors/midscene-final-screenshot.test.js';

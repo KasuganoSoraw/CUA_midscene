@@ -3,6 +3,14 @@ import path from 'node:path';
 
 export const midsceneReportFileName = 'execution-report';
 
+const hidePlaygroundStyle = [
+  '<style id="midscene-hide-playground">',
+  '.detail-panel .view-switcher-actions > button:has(.anticon-play-circle),',
+  '.detail-panel .view-switcher-actions > .ant-tooltip-disabled-compatible-wrapper:has(.anticon-play-circle)',
+  '{ display: none !important; }',
+  '</style>',
+].join('\n');
+
 export async function existingMidsceneHtmlReport(
   reportFile: string | null | undefined,
 ): Promise<string | undefined> {
@@ -61,7 +69,7 @@ export async function extractShotSizeFromReport(
 }
 
 /**
- * 向 report HTML 注入截图缩放信息 banner（放在 React 挂载点 #root 之外）。
+ * 向 report HTML 注入报告展示样式及截图缩放信息 banner（放在 React 挂载点 #root 之外）。
  *
  * shrinkFactor > 1 时展示：缩放倍数 + 缩放前(原始)尺寸 → 缩放后(实际发送)尺寸。
  * 原始尺寸 = 缩放后尺寸 × shrinkFactor（截图是等比缩小的）。
@@ -70,34 +78,37 @@ export async function injectShrinkBannerIntoReport(
   reportPath: string,
   shrinkFactor: number,
 ): Promise<void> {
-  if (shrinkFactor <= 1) return;
   let content: string;
   try {
     content = await readFile(reportPath, 'utf8');
   } catch {
     return;
   }
-  if (content.includes('midscene-shrink-banner')) return;
+  const injectPlaygroundStyle = !content.includes('id="midscene-hide-playground"');
+  const showBanner = shrinkFactor > 1 && !content.includes('id="midscene-shrink-banner"');
+  if (!injectPlaygroundStyle && !showBanner) return;
 
-  const shotSize = await extractShotSizeFromReport(reportPath);
+  const shotSize = showBanner ? await extractShotSizeFromReport(reportPath) : undefined;
   const original = shotSize
     ? { width: Math.round(shotSize.width * shrinkFactor), height: Math.round(shotSize.height * shrinkFactor) }
     : undefined;
 
-  const bannerHtml = [
+  const bannerHtml = showBanner ? [
     '<div id="midscene-shrink-banner" style="position:fixed;top:12px;right:12px;z-index:99999;padding:10px 14px;border-radius:8px;background:rgba(24,30,50,0.92);color:#fff;font-family:system-ui,sans-serif;font-size:12px;line-height:18px;box-shadow:0 2px 12px rgba(0,0,0,0.25);max-width:340px;pointer-events:none;">',
     `  <div style="font-weight:600;margin-bottom:4px;">Screenshot scaling: &times;${shrinkFactor.toFixed(2)}</div>`,
     original
       ? `  <div>${original.width} &times; ${original.height} &rarr; ${shotSize!.width} &times; ${shotSize!.height} (sent to model)</div>`
       : `  <div>Original size unknown; shot size from dump only.</div>`,
     '</div>',
-  ].join('\n');
+  ].join('\n') : '';
 
   const rootMarker = '<div id="root"';
   const rootIndex = content.indexOf(rootMarker);
   const insertAt = rootIndex >= 0 ? rootIndex : content.indexOf('<body>');
   if (insertAt < 0) return;
-  const newContent = content.slice(0, insertAt) + bannerHtml + '\n' + content.slice(insertAt);
+  const newContent = content.slice(0, insertAt)
+    + [injectPlaygroundStyle ? hidePlaygroundStyle : '', bannerHtml].filter(Boolean).join('\n')
+    + '\n' + content.slice(insertAt);
   try {
     await writeFile(reportPath, newContent, 'utf8');
   } catch {

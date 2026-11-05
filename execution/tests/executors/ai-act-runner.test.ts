@@ -99,7 +99,7 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
           destroy: async () => {
             destroyed = true;
             await mkdir(path.dirname(reportPath), { recursive: true });
-            await writeFile(reportPath, '<html></html>', 'utf8');
+            await writeFile(reportPath, '<html><body><div id="root"></div></body></html>', 'utf8');
           },
         };
       },
@@ -108,6 +108,7 @@ test('原生 aiAct 直接调用 Agent 并在成功后销毁和恢复环境', asy
     assert.equal(result.status, 'succeeded');
     assert.equal(result.midsceneResult, '操作完成');
     assert.equal(result.reportPath, reportPath);
+    assert.match(await readFile(reportPath, 'utf8'), /id="midscene-hide-playground"/);
     assert.equal(result.finalScreenshotPath, path.join(fixture.runDirectory, 'final-screenshot.jpeg'));
     assert.deepEqual(await readFile(result.finalScreenshotPath), screenshotContent);
     const persisted = JSON.parse(await readFile(fixture.resultPath, 'utf8'));
@@ -263,7 +264,7 @@ test('原生 aiAct 执行或销毁失败时保留已生成的 HTML 报告和原�
           },
           destroy: async () => {
             await mkdir(path.dirname(reportPath), { recursive: true });
-            await writeFile(reportPath, '<html>execution report</html>');
+            await writeFile(reportPath, '<html><body>execution report</body></html>');
             if (failure === 'destroy') throw original;
           },
         }),
@@ -271,6 +272,7 @@ test('原生 aiAct 执行或销毁失败时保留已生成的 HTML 报告和原�
       const persisted = JSON.parse(await readFile(fixture.resultPath, 'utf8'));
       assert.equal(persisted.status, 'failed');
       assert.equal(persisted.reportPath, reportPath);
+      assert.match(await readFile(reportPath, 'utf8'), /id="midscene-hide-playground"/);
       assert.equal(persisted.error, original.message);
     }
   } finally {
