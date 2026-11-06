@@ -1,3 +1,4 @@
+import { openWindowsDirectory } from '../foreground-directory.js';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import type { Dirent } from 'node:fs';
@@ -244,9 +245,9 @@ export async function openRecordingDirectory(
   recordingPath: string,
   spawnProcess: typeof spawn = spawn,
 ): Promise<void> {
+  if (process.platform === 'win32') return openWindowsDirectory(recordingPath, spawnProcess);
   let command = 'xdg-open';
-  if (process.platform === 'win32') command = 'explorer.exe';
-  else if (process.platform === 'darwin') command = 'open';
+  if (process.platform === 'darwin') command = 'open';
   await new Promise<void>((resolve, reject) => {
     const child = spawnProcess(command, [recordingPath], {
       detached: true,

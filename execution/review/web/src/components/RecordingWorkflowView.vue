@@ -19,8 +19,14 @@ const error = ref('');
 const actionBusy = ref(false);
 const recording = ref(false);
 const result = ref<WorkflowResult>();
-const copyState = ref('');
-const directoryState = ref('');
+const toast = ref<{ message: string; error: boolean }>();
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function showToast(message: string, error = false): void {
+  if (disposed) return;
+  if (toastTimer) clearTimeout(toastTimer);
+  toast.value = { message, error };
+  toastTimer = setTimeout(() => { toast.value = undefined; }, error ? 4000 : 2500);
+}
 const openingDirectory = ref(false);
 const invocation = computed(() => result.value ? `[${result.value.name}](skill://${result.value.name}) 请执行该任务` : '');
 const root = `/api/recording-cards/${encodeURIComponent(props.card.id)}`;
@@ -69,18 +75,16 @@ async function action(name: 'analyze' | 'publish' | 'stop'): Promise<void> {
 async function copy(): Promise<void> {
   try {
     await navigator.clipboard.writeText(invocation.value);
-    copyState.value = '已复制运行指令';
-  } catch { copyState.value = '复制失败，请手动选择内容复制'; }
+    showToast('已复制运行指令');
+  } catch { showToast('复制失败，请手动选择内容复制', true); }
 }
 async function openInstallDirectory(): Promise<void> {
   if (openingDirectory.value) return;
   openingDirectory.value = true;
-  directoryState.value = '';
   try {
     await request(`${root}/result/open-folder`, { method: 'POST' });
-    directoryState.value = '已请求打开安装目录';
   } catch (cause) {
-    directoryState.value = cause instanceof Error ? cause.message : String(cause);
+    showToast(cause instanceof Error ? cause.message : String(cause), true);
   } finally { openingDirectory.value = false; }
 }
 onMounted(async () => {
@@ -92,10 +96,12 @@ onMounted(async () => {
 onUnmounted(() => {
   disposed = true;
   if (poll) clearInterval(poll);
+  if (toastTimer) clearTimeout(toastTimer);
 });
 </script>
 <template>
   <section class="recording-workflow">
+    <Teleport to="body"><Transition name="workflow-toast"><div v-if="toast" class="workflow-toast" :class="{ error: toast.error }" role="status" aria-live="polite">{{ toast.message }}</div></Transition></Teleport>
     <nav class="workflow-stepper" aria-label="创建技能阶段">
       <span
         v-for="(label, index) in ['流程录制', '技能编辑', '技能生成']"
@@ -164,7 +170,6 @@ onUnmounted(() => {
       <div class="workflow-result-copy">
         <span>复制到对话即可运行</span>
         <div class="workflow-command"><code>{{ invocation }}</code><button class="workflow-copy-icon" aria-label="复制运行指令" title="复制运行指令" @click="copy()"><img :src="copyIcon" alt="" /></button></div>
-        <small role="status">{{ copyState }}</small>
       </div>
       <article class="workflow-result-card">
         <header class="workflow-skill-heading">
@@ -175,7 +180,7 @@ onUnmounted(() => {
         </header>
         <div class="workflow-skill-details">
           <p class="workflow-skill-description">{{ result.description }}</p>
-          <div class="workflow-install-directory"><span>安装目录</span><span class="workflow-install-path" :title="result.installPath">{{ result.installPath }}</span><button class="workflow-copy-icon workflow-install-open" :disabled="openingDirectory" aria-label="打开安装目录" title="打开安装目录" @click="openInstallDirectory"><img :src="folderIcon" alt="" /></button><small role="status">{{ directoryState }}</small></div>
+          <div class="workflow-install-directory"><span>安装目录</span><span class="workflow-install-path" :title="result.installPath">{{ result.installPath }}</span><button class="workflow-copy-icon workflow-install-open" :disabled="openingDirectory" aria-label="打开安装目录" title="打开安装目录" @click="openInstallDirectory"><img :src="folderIcon" alt="" /></button></div>
         </div>
       </article>
       <h2 class="workflow-content-label"><img :src="importantIcon" alt="必填" />内容</h2>

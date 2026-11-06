@@ -243,7 +243,6 @@ async function openFolder(): Promise<void> {
   error.value = '';
   try {
     await api.openRecordingFolder(selected.value.id);
-    message.value = () => t('recording.folderOpened', { id: selected.value?.id ?? '' });
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
   } finally {
