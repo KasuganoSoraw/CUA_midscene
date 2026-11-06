@@ -8,3 +8,12 @@ export interface WorkflowStatus {
   error: string;
   log: string;
 }
+
+export interface WorkflowResult {
+  name: string;
+  description: string;
+  content: string;
+  installPath: string;
+  origin: 'user';
+  version?: string;
+}

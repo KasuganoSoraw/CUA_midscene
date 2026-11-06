@@ -1,5 +1,6 @@
 .recording-workflow {
-  padding: 8px 40px 170px;
+  display: flow-root;
+  padding: 0 40px 170px;
   min-height: calc(100vh - 160px);
 }
 .workflow-stepper {
@@ -364,28 +365,22 @@
 
 .workflow-result-card {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 16px;
   padding: 20px;
   border: 1px solid #f4f4f4;
   border-radius: 16px;
 }
-.workflow-result-card h2 {
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 24px;
-}
-.workflow-result-card p {
-  color: #868686;
-  font-size: 14px;
-  line-height: 22px;
-  margin-top: 12px;
-}
-.workflow-imported {
-  margin-left: auto;
-  color: #008578;
-  white-space: nowrap;
-  font-size: 12px;
-}
+.workflow-skill-heading { display: flex; align-items: center; width: 100%; gap: 8px; min-width: 0; }
+.workflow-skill-heading h2 { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 16px; font-weight: 500; line-height: 24px; }
+.workflow-skill-version, .workflow-skill-origin { flex-shrink: 0; color: #868686; background: #f5f5f5; padding: 0 4px; border-radius: 4px; font-size: 12px; line-height: 20px; }
+.workflow-skill-details { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.workflow-skill-description { color: #868686; font-size: 14px; line-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.workflow-install-directory { display: flex; align-items: center; min-width: 0; gap: 8px; color: #868686; font-size: 14px; line-height: 22px; }
+.workflow-install-directory > span:first-child { flex-shrink: 0; }
+.workflow-install-path { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.workflow-install-directory .workflow-copy-icon img { width: 16px; height: 16px; }
+.workflow-install-directory small { font-size: 12px; }
 .workflow-skill-content {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -397,7 +392,7 @@
 }
 @media (max-width: 1000px) {
   .recording-workflow {
-    padding: 8px 20px 170px;
+    padding: 0 20px 170px;
   }
   .workflow-screens {
     grid-template-columns: 1fr;

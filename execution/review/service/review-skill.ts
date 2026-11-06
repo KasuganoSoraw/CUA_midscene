@@ -1,3 +1,5 @@
+import { parseDocument } from 'yaml';
+import type { WorkflowResult } from '../shared/workflow.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -71,4 +73,18 @@ export async function deleteReviewSkill(skillsRoot: string, name: string): Promi
     await rm(assertContained(actual, trash), { recursive: true });
     return { deleted: true, skillName: name };
   });
+}
+
+export async function loadPublishedSkillResult(skillsRoot: string, name: string): Promise<WorkflowResult> {
+  const asset = await readSkill(skillsRoot, name);
+  const content = await readFile(await safeSkillFile(asset.root, 'SKILL.md'), 'utf8');
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
+  const fields = frontmatter ? parseDocument(frontmatter[1]).toJS() as Record<string, unknown> : {};
+  const metadata = fields.metadata && typeof fields.metadata === 'object'
+    ? fields.metadata as Record<string, unknown> : {};
+  const version = fields.version ?? metadata.version;
+  return { name: asset.skill.name, description: asset.skill.description, content,
+    installPath: asset.root, origin: 'user',
+    ...(typeof version === 'string' && version.trim() ? { version: version.trim() } : {}),
+  };
 }

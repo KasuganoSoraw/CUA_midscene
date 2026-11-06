@@ -82,15 +82,7 @@ function registerDraftReads(app: FastifyInstance, workflow: RecordingWorkflow): 
         .send(await readFile(file));
     },
   );
-  app.get<{ Params: { id: string } }>('/api/recording-cards/:id/result', { schema: { params } }, async (request) => {
-    const status = workflow.draft(request.params.id);
-    const asset = await readSkill(status.draftRoot, status.skillName);
-    return {
-      name: asset.skill.name,
-      description: asset.skill.description,
-      content: await readFile(await safeSkillFile(asset.root, 'SKILL.md'), 'utf8'),
-    };
-  });
+  app.get<{ Params: { id: string } }>('/api/recording-cards/:id/result', { schema: { params } }, request => workflow.result(request.params.id));
 }
 function registerDraftWrites(app: FastifyInstance, workflow: RecordingWorkflow): void {
   app.put<{ Params: { id: string }; Body: SaveReviewTaskRequest<SkillTaskManifest> }>(

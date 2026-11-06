@@ -1,3 +1,5 @@
+import { loadPublishedSkillResult } from './review-skill.js';
+import type { WorkflowResult } from '../shared/workflow.js';
 import Database from 'better-sqlite3';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
@@ -49,6 +51,12 @@ export class RecordingWorkflow {
       error: '',
       log: '',
     };
+  }
+  async result(id: string): Promise<WorkflowResult> {
+    const status = this.status(id);
+    if (status.phase !== 'done') throw new Error('技能尚未完成导入');
+    if (!this.options.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT');
+    return loadPublishedSkillResult(this.options.skillsRoot, status.skillName);
   }
   busyRecording(id: string): boolean {
     return !!this.active && this.status(this.active.id).recordingId === id;

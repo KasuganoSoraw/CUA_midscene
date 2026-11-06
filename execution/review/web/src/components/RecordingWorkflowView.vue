@@ -10,15 +10,16 @@ import RecordingWorkspace from './RecordingWorkspace.vue';
 import { api, request } from '../api';
 import { useI18n } from '../i18n';
 import type { RecordingCard } from '../../../shared/recording-cards';
-import type { WorkflowStatus } from '../../../shared/workflow';
+import type { WorkflowStatus, WorkflowResult } from '../../../shared/workflow';
 const props = defineProps<{ card: RecordingCard }>();
 const { locale } = useI18n();
 const status = ref<WorkflowStatus>();
 const error = ref('');
 const actionBusy = ref(false);
 const recording = ref(false);
-const result = ref<{ name: string; description: string; content: string }>();
+const result = ref<WorkflowResult>();
 const copyState = ref('');
+const installCopyState = ref('');
 const invocation = computed(() => result.value ? `[${result.value.name}](skill://${result.value.name}) 请执行该任务` : '');
 const root = `/api/recording-cards/${encodeURIComponent(props.card.id)}`;
 let poll: ReturnType<typeof setInterval> | undefined;
@@ -63,12 +64,14 @@ async function action(name: 'analyze' | 'publish' | 'stop'): Promise<void> {
     actionBusy.value = false;
   }
 }
-async function copy(): Promise<void> {
+async function copy(kind: 'invocation' | 'installPath' = 'invocation'): Promise<void> {
   try {
-    await navigator.clipboard.writeText(invocation.value);
-    copyState.value = '已复制运行指令';
+    await navigator.clipboard.writeText(kind === 'invocation' ? invocation.value : result.value?.installPath ?? '');
+    if (kind === 'invocation') copyState.value = '已复制运行指令';
+    else installCopyState.value = '已复制安装目录';
   } catch {
-    copyState.value = '复制失败，请手动选择内容复制';
+    if (kind === 'invocation') copyState.value = '复制失败，请手动选择内容复制';
+    else installCopyState.value = '复制失败，请手动选择目录复制';
   }
 }
 onMounted(async () => {
@@ -151,16 +154,20 @@ onUnmounted(() => {
     <template v-else-if="phase === 'done' && result">
       <div class="workflow-result-copy">
         <span>复制到对话即可运行</span>
-        <div class="workflow-command"><code>{{ invocation }}</code><button class="workflow-copy-icon" aria-label="复制运行指令" title="复制运行指令" @click="copy"><img :src="copyIcon" alt="" /></button></div>
+        <div class="workflow-command"><code>{{ invocation }}</code><button class="workflow-copy-icon" aria-label="复制运行指令" title="复制运行指令" @click="copy()"><img :src="copyIcon" alt="" /></button></div>
         <small role="status">{{ copyState }}</small>
       </div>
       <article class="workflow-result-card">
-        <span class="card-avatar purple">S</span>
-        <div>
-          <h2>{{ result.name }}</h2>
-          <p>{{ result.description }}</p>
+        <header class="workflow-skill-heading">
+          <span class="card-avatar purple">S</span>
+          <h2 :title="result.name">{{ result.name }}</h2>
+          <span v-if="result.version" class="workflow-skill-version">{{ result.version.startsWith('v') ? result.version : `v${result.version}` }}</span>
+          <span class="workflow-skill-origin">自定义</span>
+        </header>
+        <div class="workflow-skill-details">
+          <p class="workflow-skill-description">{{ result.description }}</p>
+          <div class="workflow-install-directory"><span>安装目录</span><span class="workflow-install-path" :title="result.installPath">{{ result.installPath }}</span><button class="workflow-copy-icon" aria-label="复制安装目录" title="复制安装目录" @click="copy('installPath')"><img :src="copyIcon" alt="" /></button><small role="status">{{ installCopyState }}</small></div>
         </div>
-        <span class="workflow-imported">已导入</span>
       </article>
       <h2 class="workflow-content-label"><img :src="importantIcon" alt="必填" />内容</h2>
       <article class="workflow-skill-content" v-html="renderedContent"></article>
