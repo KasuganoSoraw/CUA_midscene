@@ -121,6 +121,7 @@ onUnmounted(() => {
       :recording-id="card.recordingId"
       :skills-configured="true"
       @analyze="action('analyze')"
+      @folder-error="showToast($event, true)"
     />
     <template v-else-if="running || phase === 'failed' || phase === 'stopped'">
       <section class="workflow-progress-panel">

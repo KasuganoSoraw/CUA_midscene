@@ -31,6 +31,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   created: [result: CreateRecordingSkillResult];
   analyze: [];
+  folderError: [message: string];
 }>();
 
 const catalog = ref<ReviewRecordingCatalog>({
@@ -238,16 +239,25 @@ async function stopRecorder(): Promise<void> {
 }
 
 async function openFolder(): Promise<void> {
-  if (!selected.value || opening.value || busy.value) return;
+  if (opening.value) return;
+  if (!selected.value) {
+    reportFolderError('未找到当前录制，请刷新后重试');
+    return;
+  }
   opening.value = true;
   error.value = '';
   try {
     await api.openRecordingFolder(selected.value.id);
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : String(caught);
+    reportFolderError(caught instanceof Error ? caught.message : String(caught));
   } finally {
     opening.value = false;
   }
+}
+
+function reportFolderError(message: string): void {
+  if (props.cardId) emit('folderError', message);
+  else error.value = message;
 }
 
 async function createTask(): Promise<void> {
@@ -321,8 +331,8 @@ onUnmounted(() => {
     </template>
     <template v-else>
       <div class="workflow-recording-assets">
-      <h2 class="workflow-asset-label">视频文件</h2><div class="workflow-asset"><img :src="videoIcon" alt="" /><span><strong>{{ selected.video?.name ?? '视频文件缺失' }}</strong><small>{{ formatSize(selected.video?.size) }}　{{ selected.screen?.width }}×{{ selected.screen?.height }}</small></span><span class="asset-open"><button class="workflow-asset-action" aria-label="播放" title="播放" @click="previewAsset('video')"><img :src="playIcon" alt="" /></button><button class="workflow-asset-action" aria-label="打开文件夹" title="打开文件夹" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
-      <h2 class="workflow-asset-label">事件日志</h2><div class="workflow-asset"><img :src="logIcon" alt="" /><span><strong>{{ selected.eventLog?.name ?? '事件日志缺失' }}</strong><small>{{ formatSize(selected.eventLog?.size) }}</small></span><span class="asset-open"><button class="workflow-asset-action" aria-label="查看日志" title="查看日志" @click="previewAsset('log')"><img :src="reportIcon" alt="" /></button><button class="workflow-asset-action" aria-label="打开文件夹" title="打开文件夹" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
+      <h2 class="workflow-asset-label">视频文件</h2><div class="workflow-asset"><img :src="videoIcon" alt="" /><span><strong>{{ selected.video?.name ?? '视频文件缺失' }}</strong><small>{{ formatSize(selected.video?.size) }}　{{ selected.screen?.width }}×{{ selected.screen?.height }}</small></span><span class="asset-open"><button class="workflow-asset-action" aria-label="播放" title="播放" @click="previewAsset('video')"><img :src="playIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" aria-label="打开文件夹" :title="opening ? '正在打开文件夹' : '打开文件夹'" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
+      <h2 class="workflow-asset-label">事件日志</h2><div class="workflow-asset"><img :src="logIcon" alt="" /><span><strong>{{ selected.eventLog?.name ?? '事件日志缺失' }}</strong><small>{{ formatSize(selected.eventLog?.size) }}</small></span><span class="asset-open"><button class="workflow-asset-action" aria-label="查看日志" title="查看日志" @click="previewAsset('log')"><img :src="reportIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" aria-label="打开文件夹" :title="opening ? '正在打开文件夹' : '打开文件夹'" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
       </div>
       <p v-for="problem in selected.errors" :key="problem" class="console-error">{{ problem }}</p>
       <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">重新录制</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">任务分析</button></div>
