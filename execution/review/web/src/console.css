@@ -406,10 +406,10 @@
 .card-dialog {
   width: 400px;
   max-width: calc(100vw - 32px);
-  border: 0.5px solid #e9e9e9;
-  border-radius: 12px;
+  border: 0;
+  border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   color: #1e1e1e;
 }
 .card-dialog::backdrop {
@@ -419,7 +419,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 .card-dialog h2 {
   font-size: 16px;
@@ -431,7 +431,11 @@
   padding: 0;
   background: transparent;
   color: #494949;
-  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
 }
 .card-dialog label {
   display: flex;
@@ -439,42 +443,55 @@
   gap: 8px;
   margin-bottom: 20px;
   font-size: 14px;
-  color: #494949;
-}
-.card-dialog label b {
-  color: #dd3336;
-  margin-right: 2px;
+  color: #626262;
   font-weight: 400;
+  line-height: 22px;
 }
+.card-dialog label > span { display: flex; align-items: center; }
+.card-dialog-required { width: 8px; height: 22px; object-fit: contain; }
 .card-dialog input,
 .card-dialog textarea {
   width: 100%;
-  padding: 5px 12px;
-  border: 1px solid #c6c6c6;
+  padding: 0 12px;
+  height: 32px;
+  border: 1px solid #c9c9c9;
   border-radius: 8px;
   background: #fff;
   color: #1e1e1e;
   font-size: 14px;
-  line-height: 22px;
+  font-weight: 400;
+  line-height: 32px;
 }
+.card-dialog input::placeholder, .card-dialog textarea::placeholder { color: #868686; opacity: 1; }
 .card-dialog textarea {
-  resize: vertical;
-  min-height: 80px;
+  resize: none;
+  height: 80px;
+  padding: 12px 0 0 16px;
+  border-color: #ccc;
+  border-radius: 12px;
+  line-height: 22px;
 }
 .card-dialog footer {
   display: flex;
   justify-content: flex-end;
-  gap: 20px;
+  gap: 16px;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
 }
 .card-dialog footer button {
-  min-width: 80px;
+  width: 80px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 400;
+  line-height: 32px;
 }
+.card-dialog footer .secondary { border: 1px solid #868686; color: #1e1e1e; background: #fff; }
+.card-dialog footer .primary { border: 1px solid #366bfc; color: #fff; background: #366bfc; }
 .recording-console button:focus-visible,
 .card-dialog input:focus-visible,
 .card-dialog textarea:focus-visible {
