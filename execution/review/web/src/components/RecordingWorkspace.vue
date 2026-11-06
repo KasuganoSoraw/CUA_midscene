@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type {
   CreateRecordingSkillResult,
   RecorderDisplay,
@@ -12,6 +12,10 @@ import { api } from '../api';
 import { useI18n } from '../i18n';
 import { shouldDetectDisplays } from '../recording-display';
 import ConfirmDialog from './ConfirmDialog.vue';
+import warningIcon from '../assets/ucd/record-warning.svg';
+import playIcon from '../assets/ucd/record-play.svg';
+import folderIcon from '../assets/ucd/record-floder.svg';
+import reportIcon from '../assets/ucd/record-report.svg';
 import videoIcon from '../assets/ucd/video.svg';
 import logIcon from '../assets/ucd/event-log.svg';
 import refreshIcon from '../assets/ucd/refresh.svg';
@@ -20,10 +24,14 @@ const { locale, t, formatDateTime } = useI18n();
 
 const props = defineProps<{
   skillsConfigured: boolean;
+  cardId?: string;
+  recordingId?: string | null;
 }>();
 
 const emit = defineEmits<{
   created: [result: CreateRecordingSkillResult];
+  analyze: [];
+  folderError: [message: string];
 }>();
 
 const catalog = ref<ReviewRecordingCatalog>({
@@ -31,7 +39,28 @@ const catalog = ref<ReviewRecordingCatalog>({
   envName: 'CUA_RECORDINGS_ROOT',
   recordings: [],
 });
-const selectedId = ref('');
+const rerecord = ref(false);
+const preview = ref<'video' | 'log'>();
+const logPreview = ref('');
+const previewDialog = ref<HTMLDialogElement>();
+watch(preview, async value => {
+  await nextTick();
+  if (value) previewDialog.value?.showModal(); else previewDialog.value?.close();
+});
+async function previewAsset(kind: 'video' | 'log'): Promise<void> {
+  if (!selected.value) return;
+  error.value = '';
+  try {
+    if (kind === 'log') {
+      const response = await fetch(`/api/recordings/${encodeURIComponent(selected.value.id)}/assets/log`);
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error);
+      logPreview.value = value.text + (value.truncated ? '\n…日志较长，仅预览前2MB' : '');
+    }
+    preview.value = kind;
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause); }
+}
+const selectedId = ref(props.recordingId ?? '');
 const actionBusy = ref(false);
 const generation = ref<SkillGenerationStatus>({ phase: 'idle' });
 const busy = computed(() => actionBusy.value || generation.value.phase === 'running');
@@ -50,10 +79,11 @@ let generationPolling = false;
 let disposed = false;
 
 function applyGeneration(next: SkillGenerationStatus, restoreForm = false): void {
+  if (props.cardId && next.recording && next.recording !== selectedId.value) return;
   const wasRunning = generation.value.phase === 'running';
   generation.value = next;
   if (restoreForm && next.request && next.recording) {
-    selectedId.value = next.recording;
+    if (!props.cardId || next.recording === props.recordingId) selectedId.value = next.recording;
   }
   if (next.phase === 'running') message.value = () => t('recording.creating');
   else if (next.phase === 'succeeded' && next.result) {
@@ -120,7 +150,7 @@ function applyCatalog(next: ReviewRecordingCatalog): void {
   }
   selectedId.value = next.recordings.some((item) => item.id === selectedId.value)
     ? selectedId.value
-    : next.recordings[0]?.id ?? '';
+    : props.cardId ? '' : next.recordings[0]?.id ?? '';
   message.value = next.recordings.length
     ? () => t('recording.found', { count: next.recordings.length })
     : () => t('recording.empty');
@@ -129,7 +159,16 @@ function applyCatalog(next: ReviewRecordingCatalog): void {
 async function loadRecordings(): Promise<void> {
   error.value = '';
   try {
-    applyCatalog(await api.recordings());
+    if (props.cardId) {
+      const card = await api.recordingCard(props.cardId);
+      selectedId.value = card.recordingId ?? '';
+    }
+    const next = await api.recordings();
+    const linkedId = selectedId.value;
+    applyCatalog(next);
+    if (props.cardId && linkedId && !next.recordings.some(item => item.id === linkedId)) {
+      error.value = `关联的录制 ${linkedId} 不存在，请检查录制目录或重新录制。`;
+    }
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
   }
@@ -140,7 +179,7 @@ async function loadRecorderStatus(): Promise<void> {
     const wasActive = recorderCollapsed.value;
     const next = await api.recorderStatus();
     recorderStatus.value = next;
-    if (wasActive && next.phase === 'idle') await loadRecordings();
+    if (wasActive && next.phase === 'idle') { await loadRecordings(); rerecord.value = false; }
   } catch (caught) {
     recorderError.value = caught instanceof Error ? caught.message : String(caught);
   }
@@ -172,9 +211,9 @@ async function startRecorder(): Promise<void> {
     outputRoot: recorderStatus.value.outputRoot,
   };
   try {
-    recorderStatus.value = await api.startRecorder({
-      displayId: selectedDisplayId.value,
-    });
+    recorderStatus.value = props.cardId
+      ? await api.startCardRecorder(props.cardId, { displayId: selectedDisplayId.value })
+      : await api.startRecorder({ displayId: selectedDisplayId.value });
     clock.value = Date.now();
   } catch (caught) {
     recorderError.value = caught instanceof Error ? caught.message : String(caught);
@@ -200,17 +239,25 @@ async function stopRecorder(): Promise<void> {
 }
 
 async function openFolder(): Promise<void> {
-  if (!selected.value || opening.value || busy.value) return;
+  if (opening.value) return;
+  if (!selected.value) {
+    reportFolderError('未找到当前录制，请刷新后重试');
+    return;
+  }
   opening.value = true;
   error.value = '';
   try {
     await api.openRecordingFolder(selected.value.id);
-    message.value = () => t('recording.folderOpened', { id: selected.value?.id ?? '' });
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : String(caught);
+    reportFolderError(caught instanceof Error ? caught.message : String(caught));
   } finally {
     opening.value = false;
   }
+}
+
+function reportFolderError(message: string): void {
+  if (props.cardId) emit('folderError', message);
+  else error.value = message;
 }
 
 async function createTask(): Promise<void> {
@@ -257,7 +304,7 @@ onMounted(async () => {
   if (disposed) return;
   await loadGeneration(true);
   if (disposed) return;
-  if (shouldDetectDisplays(recorderStatus.value.phase)) await refreshRecorderDisplays();
+  if (shouldDetectDisplays(recorderStatus.value.phase) && (!props.cardId || !selected.value)) await refreshRecorderDisplays();
   if (disposed) return;
   recorderPoll = setInterval(() => {
     clock.value = Date.now();
@@ -272,6 +319,26 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <template v-if="cardId">
+    <Teleport to="body"><dialog ref="previewDialog" class="asset-preview" :aria-label="preview === 'video' ? '录制视频' : '事件日志'" @cancel.prevent="preview = undefined"><button autofocus class="secondary" @click="preview = undefined">关闭预览</button><video v-if="preview === 'video' && selected" controls autoplay :src="`/api/recordings/${encodeURIComponent(selected.id)}/assets/video`"></video><pre v-else>{{ logPreview }}</pre></dialog></Teleport>
+    <div v-if="recorderError || error" class="console-error" role="alert">{{ recorderError || error }}</div>
+    <template v-if="recorderCollapsed || rerecord || !selected">
+      <p class="workflow-warning"><img :src="warningIcon" alt="" />请将需要录制的窗口放在绿框范围内，并确保后续操作窗口不超出绿框范围。</p>
+      <div v-if="recorderCollapsed" class="workflow-live" role="status"><strong>{{ recorderStatus.phase === 'armed' ? '已准备录制' : '录制进行中' }}</strong><p>使用 {{ recorderStatus.hotkey || 'Ctrl+Shift+F9' }} 开始或结束录制。{{ elapsedRecording }}</p></div>
+      <div class="workflow-screens"><button v-for="display in recorderDisplays" :key="display.id" :disabled="recorderCollapsed || recorderBusy" :class="{ selected: selectedDisplayId === display.id }" @click="selectedDisplayId = display.id"><span>显示器{{ display.index + 1 }} <em v-if="display.primary">主屏幕</em><small>{{ display.width }}×{{ display.height }} / {{ display.deviceName }}</small></span><img :src="display.previewUrl" :alt="`显示器${display.index + 1}预览`" /></button></div>
+      <p v-if="!recorderDisplays.length" class="catalog-feedback">{{ recorderBusy ? '正在检测屏幕…' : '未检测到可录制屏幕，请检测屏幕并检查录制环境。' }}</p>
+      <div class="workflow-footer"><button v-if="rerecord && !recorderCollapsed" class="secondary" @click="rerecord = false">返回录制结果</button><button v-if="!recorderCollapsed" class="secondary" :disabled="recorderBusy" @click="refreshRecorderDisplays">检测屏幕</button><button v-if="!recorderCollapsed" class="primary" :disabled="!canStartRecorder" @click="startRecorder">准备录制</button><button v-else class="secondary" :disabled="recorderBusy || recorderStatus.phase === 'arming' || recorderStatus.phase === 'stopping'" @click="stopRecorder">{{ recorderStatus.phase === 'armed' ? '取消准备' : '结束录制' }}</button></div>
+    </template>
+    <template v-else>
+      <div class="workflow-recording-assets">
+      <h2 class="workflow-asset-label">视频文件</h2><div class="workflow-asset"><img :src="videoIcon" alt="" /><span><strong>{{ selected.video?.name ?? '视频文件缺失' }}</strong><small>{{ formatSize(selected.video?.size) }}　{{ selected.screen?.width }}×{{ selected.screen?.height }}</small></span><span class="asset-open"><button class="workflow-asset-action" aria-label="播放" title="播放" @click="previewAsset('video')"><img :src="playIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" aria-label="打开文件夹" :title="opening ? '正在打开文件夹' : '打开文件夹'" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
+      <h2 class="workflow-asset-label">事件日志</h2><div class="workflow-asset"><img :src="logIcon" alt="" /><span><strong>{{ selected.eventLog?.name ?? '事件日志缺失' }}</strong><small>{{ formatSize(selected.eventLog?.size) }}</small></span><span class="asset-open"><button class="workflow-asset-action" aria-label="查看日志" title="查看日志" @click="previewAsset('log')"><img :src="reportIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" aria-label="打开文件夹" :title="opening ? '正在打开文件夹' : '打开文件夹'" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
+      </div>
+      <p v-for="problem in selected.errors" :key="problem" class="console-error">{{ problem }}</p>
+      <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">重新录制</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">任务分析</button></div>
+    </template>
+  </template>
+  <template v-else>
   <section class="panel recorder-control" :class="{ collapsed: recorderCollapsed }">
     <template v-if="recorderCollapsed">
       <span class="recorder-live-dot" :class="{ armed: recorderStatus.phase === 'armed' || recorderStatus.phase === 'arming' }"></span>
@@ -316,8 +383,8 @@ onUnmounted(() => {
     </template>
   </section>
 
-  <section class="panel recording-browser">
-    <aside class="catalog recording-catalog">
+  <section class="panel recording-browser" :class="{ 'card-recording-browser': cardId }">
+    <aside v-if="!cardId" class="catalog recording-catalog">
       <div class="recording-catalog-heading">
         <h2>{{ t('recording.raw') }}</h2>
         <button class="icon-button" :disabled="actionBusy" :title="t('recording.refreshCatalog')" :aria-label="t('recording.refreshCatalog')" @click="loadRecordings"><img :src="refreshIcon" alt="" /></button>
@@ -425,4 +492,5 @@ onUnmounted(() => {
     @cancel="recordingDeleteOpen = false"
   />
 
+  </template>
 </template>

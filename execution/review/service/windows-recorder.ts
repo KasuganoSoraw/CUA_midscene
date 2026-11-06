@@ -115,6 +115,8 @@ export class WindowsRecorderManager implements RecorderControl {
     previewRoot?: string;
     spawnProcess?: SpawnProcess;
     stopTimeoutMs?: number;
+    onRecordingCompleted?: (recordingId: string) => void;
+    onRecordingCancelled?: () => void;
   }) {
     this.currentStatus = {
       phase: 'idle',
@@ -270,6 +272,8 @@ export class WindowsRecorderManager implements RecorderControl {
     } else if (event.event === 'stopping') {
       this.currentStatus = { ...this.currentStatus, phase: 'stopping' };
     } else if (event.event === 'completed' || event.event === 'cancelled') {
+      if (event.event === 'completed' && event.recording_id) this.options.onRecordingCompleted?.(event.recording_id);
+      if (event.event === 'cancelled') this.options.onRecordingCancelled?.();
       this.currentStatus = { phase: 'idle', outputRoot };
     } else if (event.event === 'error') {
       throw new Error(event.message || '录制 Worker 报告未知错误');

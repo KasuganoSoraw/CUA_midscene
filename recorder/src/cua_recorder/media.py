@@ -117,10 +117,9 @@ def capture_preview(
             timeout=(timeout, timeout),
         )
         frame = next(source.decode(video=0))
-        width = min(480, frame.width)
-        height = max(2, round(frame.height * width / frame.width))
-        height -= height % 2
-        preview = frame.reformat(width=width, height=height, format="rgb24")
+        width = frame.width
+        height = frame.height
+        preview = frame.reformat(format="rgb24")
 
         output = av.open(str(output_path), mode="w", format="image2")
         stream = output.add_stream("png", rate=1)

@@ -38,7 +38,8 @@
     "cua": "tsx cli/main.ts",
     "runtime-bridge": "tsx runtime-bridge/worker.ts",
     "check": "tsx executors/check-env.ts",
-    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p review/web/tsconfig.json"
+    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p review/web/tsconfig.json",
+    "check:sqlite": "node --input-type=module -e \"import Database from 'better-sqlite3'; const db = new Database(':memory:'); db.prepare('SELECT 1').get(); db.close();\""
   },
   "keywords": [],
   "author": "",
@@ -53,7 +54,10 @@
     "fastify": "^5.10.0",
     "fflate": "0.8.3",
     "sharp": "0.34.5",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "better-sqlite3": "^12.11.1",
+    "marked": "^15.0.12",
+    "dompurify": "^3.4.17"
   },
   "devDependencies": {
     "@types/node": "^20.18.0",
@@ -62,6 +66,7 @@
     "typescript": "^5.7.3",
     "vite": "^6.4.1",
     "vue": "^3.5.0",
-    "vue-tsc": "^2.2.12"
+    "vue-tsc": "^2.2.12",
+    "@types/better-sqlite3": "^9.6.0"
   }
 }

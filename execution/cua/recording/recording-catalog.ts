@@ -1,7 +1,8 @@
+import { openWindowsDirectory } from '../foreground-directory.js';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import type { Dirent } from 'node:fs';
-import { access, open, readdir, stat } from 'node:fs/promises';
+import { access, open, readdir, stat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { readEnvironmentValue } from '../environment.js';
 import { packageRoot } from '../package-root.js';
@@ -240,24 +241,40 @@ export async function describeRecording(
   return recordingEntry(path.dirname(target), path.basename(target));
 }
 
+export interface DirectoryOpenResult {
+  directory: string;
+  platform: NodeJS.Platform;
+  opener: 'windows-shell-foreground' | 'open' | 'xdg-open';
+  foregroundConfirmed: boolean;
+  windowVisible?: true;
+}
+
 export async function openRecordingDirectory(
   recordingPath: string,
   spawnProcess: typeof spawn = spawn,
-): Promise<void> {
-  let command = 'xdg-open';
-  if (process.platform === 'win32') command = 'explorer.exe';
-  else if (process.platform === 'darwin') command = 'open';
+): Promise<DirectoryOpenResult> {
+  const directory = await realpath(recordingPath);
+  if (process.platform === 'win32') {
+    const result = await openWindowsDirectory(directory, spawnProcess);
+    return { ...result, platform: process.platform, opener: 'windows-shell-foreground' };
+  }
+  let command: 'open' | 'xdg-open' = 'xdg-open';
+  if (process.platform === 'darwin') command = 'open';
   await new Promise<void>((resolve, reject) => {
-    const child = spawnProcess(command, [recordingPath], {
-      detached: true,
+    const child = spawnProcess(command, [directory], {
       shell: false,
-      stdio: 'ignore',
+      stdio: ['ignore', 'ignore', 'pipe'],
       windowsHide: false,
     });
-    child.once('error', reject);
-    child.once('spawn', () => {
-      child.unref();
-      resolve();
+    let detail = '';
+    const timer = setTimeout(() => { child.kill(); reject(new Error('等待文件管理器响应超时')); }, 15000);
+    child.stderr?.on('data', chunk => { detail = (detail + chunk.toString('utf8')).slice(-4096); });
+    child.once('error', error => { clearTimeout(timer); reject(error); });
+    child.once('close', code => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(detail.trim() || `文件管理器打开失败：exit=${String(code)}`));
     });
   });
+  return { directory, platform: process.platform, opener: command, foregroundConfirmed: false };
 }

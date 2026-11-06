@@ -1,3 +1,8 @@
+import { registerRecordingMedia } from './recording-media.js';
+import { RecordingWorkflow } from '../service/recording-workflow.js';
+import { registerWorkflowRoutes } from './workflow-routes.js';
+import { RecordingCardStore } from '../service/recording-cards.js';
+import { registerRecordingCardRoutes } from './recording-card-routes.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyPluginAsync } from 'fastify';
@@ -228,11 +233,27 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     recordingsRoot: activeRecordingsRoot,
     executionRoot: options.executionRoot,
   });
+  if (!options.layout.data) throw new Error('工作台需要配置 CUA_DATA_ROOT');
+  const cards = new RecordingCardStore(path.join(options.layout.data.root, 'workbench', 'console.sqlite'));
+  cards.clearSession();
+  const workflow = new RecordingWorkflow({ dataRoot: options.layout.data.root,
+    skillsRoot: options.layout.skillsRoot, recordingsRoot: activeRecordingsRoot, executionRoot: options.executionRoot, cards, beforeAnalyze: () => {
+      if (!['idle', 'failed'].includes(recorder.status().phase) || generation.status().phase === 'running' || skillGeneration.status().phase === 'running') throw new Error('录制或生成正在进行，请先结束当前任务');
+    } });
+  registerWorkflowRoutes(app, workflow);
+  registerRecordingMedia(app, recordingOptions());
   const recorder = options.dependencies?.recorder ?? new WindowsRecorderManager({
     executionRoot: path.resolve(options.executionRoot ?? process.cwd()),
     recordingsRoot: activeRecordingsRoot,
+    onRecordingCompleted: id => cards.completeRecording(id),
+    onRecordingCancelled: () => cards.clearSession(),
   });
-  app.addHook('onClose', async () => recorder.close());
+  registerRecordingCardRoutes(app, cards, recorder, async () => {
+    const catalog = await listRecordings(recordingOptions());
+    const active = recorder.status();
+    return { ...catalog, recordings: catalog.recordings.filter(entry => entry.id !== active.recordingId) };
+  }, () => workflow.isBusy());
+  app.addHook('onClose', async () => { await recorder.close(); await workflow.close(); cards.close(); });
 
   if (!options.layout.data) throw new Error('任务运行页面需要配置 CUA_DATA_ROOT');
   const execution = options.dependencies?.execution ?? new TaskExecutionManager({
@@ -244,6 +265,7 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   app.addHook('onClose', async () => execution.close());
   const skillGeneration = registerSkillRoutes(app, {
     layout: options.layout, recordingsRoot: activeRecordingsRoot, executionRoot: options.executionRoot,
+    beforeCreate: () => { if (workflow.isBusy()) throw new Error('录制正在分析或导入，请等待完成'); },
     create: options.dependencies?.createSkill, executionStatus: () => execution.status(),
   });
 
@@ -383,6 +405,7 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   app.delete<{ Params: RecordingParams }>('/api/recordings/:recording', {
     schema: { params: recordingParamsSchema },
   }, async (request) => {
+    if (workflow.busyRecording(request.params.recording)) throw new Error('录制正在分析或导入，不能删除');
     const activeGeneration = generation.status();
     const activeSkillGeneration = skillGeneration.status();
     if (activeSkillGeneration.phase === 'running' && activeSkillGeneration.recording === request.params.recording) {
@@ -401,8 +424,8 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     schema: { params: recordingParamsSchema },
   }, async (request) => {
     const recordingPath = await resolveRecordingDirectory(request.params.recording, recordingOptions());
-    await (options.dependencies?.openDirectory ?? openRecordingDirectory)(recordingPath);
-    return { opened: true, recording: request.params.recording };
+    const result = await (options.dependencies?.openDirectory ?? openRecordingDirectory)(recordingPath);
+    return { opened: true, recording: request.params.recording, ...result, serverPid: process.pid };
   });
 
   app.post<{ Params: RecordingParams; Body: JsonObject }>(
