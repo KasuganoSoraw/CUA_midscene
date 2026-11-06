@@ -7,6 +7,10 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 public static class FolderForeground {
+  [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
+  [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, uint attribute, out int value, uint size);
   [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] static extern bool ShowWindowAsync(IntPtr h, int command);
   [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
@@ -18,10 +22,24 @@ public static class FolderForeground {
   [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from, uint to, bool attach);
   [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int index);
   [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
-  public static bool Activate(IntPtr handle) {
+  static IntPtr Root(IntPtr handle) {
+    if (handle == IntPtr.Zero || !IsWindow(handle)) return IntPtr.Zero;
     IntPtr root = GetAncestor(handle, 2);
-    if (root != IntPtr.Zero) handle = root;
+    return root == IntPtr.Zero ? handle : root;
+  }
+  public static bool IsVisibleForeground(IntPtr handle) {
+    handle = Root(handle);
+    int cloaked;
+    return handle != IntPtr.Zero && IsWindowVisible(handle) && !IsIconic(handle)
+      && MonitorFromWindow(handle, 0) != IntPtr.Zero
+      && DwmGetWindowAttribute(handle, 14, out cloaked, 4) == 0 && cloaked == 0
+      && GetForegroundWindow() == handle;
+  }
+  public static bool Activate(IntPtr handle) {
+    handle = Root(handle);
+    if (handle == IntPtr.Zero) return false;
     if (IsIconic(handle)) ShowWindowAsync(handle, 9);
+    else if (!IsWindowVisible(handle)) ShowWindowAsync(handle, 5);
     uint current = GetCurrentThreadId();
     uint foreground = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero);
     bool attached = foreground != 0 && current != foreground && AttachThreadInput(current, foreground, true);
@@ -33,8 +51,8 @@ public static class FolderForeground {
         finally { SetWindowPos(handle, new IntPtr(-2), 0, 0, 0, 0, 0x43); }
         SetForegroundWindow(handle);
       }
-      return GetForegroundWindow() == handle;
     } finally { if (attached) AttachThreadInput(current, foreground, false); }
+    return IsVisibleForeground(handle);
   }
 }
 '@
@@ -59,29 +77,32 @@ try {
   do {
     $window = Find-FolderWindow $shell $target
     if ($null -ne $window -and [FolderForeground]::Activate([IntPtr]$window.HWND)) {
-      [Console]::Out.WriteLine((@{ directory = $target; foregroundConfirmed = $true } | ConvertTo-Json -Compress))
-      exit 0
+      Start-Sleep -Milliseconds 300
+      if ([FolderForeground]::IsVisibleForeground([IntPtr]$window.HWND)) {
+        [Console]::Out.WriteLine((@{ directory = $target; foregroundConfirmed = $true; windowVisible = $true } | ConvertTo-Json -Compress))
+        exit 0
+      }
     }
     Start-Sleep -Milliseconds 100
   } while ([DateTime]::UtcNow -lt $deadline)
-  throw '文件夹已请求打开，但未能确认窗口置于前台，请检查 Windows 桌面权限'
+  throw '文件夹已请求打开，但未能确认窗口持续可见且位于前台，请检查 Windows 桌面权限或窗口遮挡'
 } catch {
   [Console]::Error.WriteLine($_.Exception.Message)
   exit 1
 }
 `;
 
-export interface WindowsDirectoryResult { directory: string; foregroundConfirmed: true }
+export interface WindowsDirectoryResult { directory: string; foregroundConfirmed: true; windowVisible: true }
 
 function confirmedDirectory(output: string, directory: string): WindowsDirectoryResult {
   let result: Partial<WindowsDirectoryResult>;
   try { result = JSON.parse(output.trim()); }
   catch { throw new Error('打开目录进程未返回窗口前置确认，请检查正在运行的后端版本'); }
-  if (result?.foregroundConfirmed !== true || typeof result.directory !== 'string'
+  if (result?.foregroundConfirmed !== true || result.windowVisible !== true || typeof result.directory !== 'string'
     || result.directory.toLowerCase() !== directory.toLowerCase()) {
     throw new Error('打开目录进程返回的目标路径或窗口前置确认不匹配');
   }
-  return { directory: result.directory, foregroundConfirmed: true };
+  return { directory: result.directory, foregroundConfirmed: true, windowVisible: true };
 }
 
 export function openWindowsDirectory(directory: string, spawnProcess: typeof spawn = spawn): Promise<WindowsDirectoryResult> {

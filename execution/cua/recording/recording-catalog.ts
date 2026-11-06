@@ -246,6 +246,7 @@ export interface DirectoryOpenResult {
   platform: NodeJS.Platform;
   opener: 'windows-shell-foreground' | 'open' | 'xdg-open';
   foregroundConfirmed: boolean;
+  windowVisible?: true;
 }
 
 export async function openRecordingDirectory(
