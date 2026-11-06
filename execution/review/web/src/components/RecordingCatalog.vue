@@ -78,25 +78,25 @@ function date(value: string): string {
             <h2 :title="card.name">{{ card.name }}</h2>
           </div>
           <p class="card-description">{{ card.description }}</p>
-          <div class="card-bottom">
-            <time :datetime="card.updatedAt">{{ date(card.updatedAt) }}</time
-            ><span v-if="!card.recordingId" class="card-pending">待录制</span>
-          </div>
         </button>
-        <div class="card-actions">
-          <button
-            :aria-label="`编辑 ${card.name}`"
-            title="修改名称和描述"
-            @click="emit('edit', card)"
-          >
-            编辑</button
-          ><button
-            :aria-label="`删除 ${card.name}`"
-            title="删除卡片"
-            @click="emit('remove', card)"
-          >
-            <WorkbenchIcon name="trash" />
-          </button>
+        <span v-if="!card.recordingId" class="card-pending">待录制</span>
+        <div class="card-bottom">
+          <button class="card-time" :aria-label="`打开 ${card.name}`" @click="emit('open', card)"><time :datetime="card.updatedAt">{{ date(card.updatedAt) }}</time></button>
+          <div class="card-actions">
+            <button
+              :aria-label="`编辑 ${card.name}`"
+              title="修改名称和描述"
+              @click="emit('edit', card)"
+            >
+              编辑</button
+            ><button
+              :aria-label="`删除 ${card.name}`"
+              title="删除卡片"
+              @click="emit('remove', card)"
+            >
+              <WorkbenchIcon name="trash" />
+            </button>
+          </div>
         </div>
       </article>
     </div>
