@@ -42,6 +42,14 @@ export function registerWorkflowRoutes(app: FastifyInstance, workflow: Recording
   app.post<{ Params: { id: string } }>('/api/recording-cards/:id/stop', { schema: { params } }, (request) =>
     workflow.stop(request.params.id),
   );
+  app.post<{ Params: { id: string } }>('/api/recording-cards/:id/result/open-folder', { schema: { params } }, async request => {
+    const origin = request.headers.origin;
+    if (request.headers['sec-fetch-site'] === 'cross-site'
+      || (origin !== undefined && origin !== `http://${request.headers.host}`)) {
+      throw Object.assign(new Error('不允许从其他站点打开安装目录'), { statusCode: 403 });
+    }
+    return workflow.openInstallDirectory(request.params.id);
+  });
   registerDraftReads(app, workflow);
   registerDraftWrites(app, workflow);
 }

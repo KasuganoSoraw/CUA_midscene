@@ -526,3 +526,5 @@
 .workflow-progress-bar.indeterminate > span { width: 38%; animation: workflow-progress-indeterminate 1.2s ease-in-out infinite; }
 @keyframes workflow-progress-indeterminate { from { transform: translateX(-100%); } to { transform: translateX(365%); } }
 @media (prefers-reduced-motion: reduce) { .workflow-progress-bar > span { transition: none; }.workflow-progress-bar.indeterminate > span { animation: none; } }
+
+.workflow-install-directory .workflow-install-open img { width: 24px; height: 24px; transform: translate(2.5px, 2.25px); }

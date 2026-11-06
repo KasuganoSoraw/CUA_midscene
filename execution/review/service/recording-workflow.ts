@@ -9,7 +9,7 @@ import type { RecordingCardStore } from './recording-cards.js';
 import type { WorkflowStatus } from '../shared/workflow.js';
 import type { GenerationLanguage } from '../shared/types.js';
 import { prepareRecordingSkill, publishRecordingDraft } from '../../cua/skills/create.js';
-import { describeRecording, resolveRecordingDirectory } from '../../cua/recording/recording-catalog.js';
+import { describeRecording, resolveRecordingDirectory, openRecordingDirectory } from '../../cua/recording/recording-catalog.js';
 
 export class RecordingWorkflow {
   private readonly db: Database.Database;
@@ -57,6 +57,11 @@ export class RecordingWorkflow {
     if (status.phase !== 'done') throw new Error('技能尚未完成导入');
     if (!this.options.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT');
     return loadPublishedSkillResult(this.options.skillsRoot, status.skillName);
+  }
+  async openInstallDirectory(id: string, openDirectory = openRecordingDirectory): Promise<{ opened: true }> {
+    const result = await this.result(id);
+    await openDirectory(result.installPath);
+    return { opened: true };
   }
   busyRecording(id: string): boolean {
     return !!this.active && this.status(this.active.id).recordingId === id;

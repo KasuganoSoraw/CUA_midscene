@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { recordingProgress } from '../recording-progress';
+import folderIcon from '../assets/ucd/record-floder.svg';
 import copyIcon from '../assets/ucd/record-copy.svg';
 import importantIcon from '../assets/ucd/record-important.svg';
 import { marked } from 'marked';
@@ -19,7 +20,8 @@ const actionBusy = ref(false);
 const recording = ref(false);
 const result = ref<WorkflowResult>();
 const copyState = ref('');
-const installCopyState = ref('');
+const directoryState = ref('');
+const openingDirectory = ref(false);
 const invocation = computed(() => result.value ? `[${result.value.name}](skill://${result.value.name}) 请执行该任务` : '');
 const root = `/api/recording-cards/${encodeURIComponent(props.card.id)}`;
 let poll: ReturnType<typeof setInterval> | undefined;
@@ -64,15 +66,22 @@ async function action(name: 'analyze' | 'publish' | 'stop'): Promise<void> {
     actionBusy.value = false;
   }
 }
-async function copy(kind: 'invocation' | 'installPath' = 'invocation'): Promise<void> {
+async function copy(): Promise<void> {
   try {
-    await navigator.clipboard.writeText(kind === 'invocation' ? invocation.value : result.value?.installPath ?? '');
-    if (kind === 'invocation') copyState.value = '已复制运行指令';
-    else installCopyState.value = '已复制安装目录';
-  } catch {
-    if (kind === 'invocation') copyState.value = '复制失败，请手动选择内容复制';
-    else installCopyState.value = '复制失败，请手动选择目录复制';
-  }
+    await navigator.clipboard.writeText(invocation.value);
+    copyState.value = '已复制运行指令';
+  } catch { copyState.value = '复制失败，请手动选择内容复制'; }
+}
+async function openInstallDirectory(): Promise<void> {
+  if (openingDirectory.value) return;
+  openingDirectory.value = true;
+  directoryState.value = '';
+  try {
+    await request(`${root}/result/open-folder`, { method: 'POST' });
+    directoryState.value = '已请求打开安装目录';
+  } catch (cause) {
+    directoryState.value = cause instanceof Error ? cause.message : String(cause);
+  } finally { openingDirectory.value = false; }
 }
 onMounted(async () => {
   await refresh();
@@ -166,7 +175,7 @@ onUnmounted(() => {
         </header>
         <div class="workflow-skill-details">
           <p class="workflow-skill-description">{{ result.description }}</p>
-          <div class="workflow-install-directory"><span>安装目录</span><span class="workflow-install-path" :title="result.installPath">{{ result.installPath }}</span><button class="workflow-copy-icon" aria-label="复制安装目录" title="复制安装目录" @click="copy('installPath')"><img :src="copyIcon" alt="" /></button><small role="status">{{ installCopyState }}</small></div>
+          <div class="workflow-install-directory"><span>安装目录</span><span class="workflow-install-path" :title="result.installPath">{{ result.installPath }}</span><button class="workflow-copy-icon workflow-install-open" :disabled="openingDirectory" aria-label="打开安装目录" title="打开安装目录" @click="openInstallDirectory"><img :src="folderIcon" alt="" /></button><small role="status">{{ directoryState }}</small></div>
         </div>
       </article>
       <h2 class="workflow-content-label"><img :src="importantIcon" alt="必填" />内容</h2>
