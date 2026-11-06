@@ -424,8 +424,8 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     schema: { params: recordingParamsSchema },
   }, async (request) => {
     const recordingPath = await resolveRecordingDirectory(request.params.recording, recordingOptions());
-    await (options.dependencies?.openDirectory ?? openRecordingDirectory)(recordingPath);
-    return { opened: true, recording: request.params.recording };
+    const result = await (options.dependencies?.openDirectory ?? openRecordingDirectory)(recordingPath);
+    return { opened: true, recording: request.params.recording, ...result, serverPid: process.pid };
   });
 
   app.post<{ Params: RecordingParams; Body: JsonObject }>(

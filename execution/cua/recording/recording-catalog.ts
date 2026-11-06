@@ -241,25 +241,39 @@ export async function describeRecording(
   return recordingEntry(path.dirname(target), path.basename(target));
 }
 
+export interface DirectoryOpenResult {
+  directory: string;
+  platform: NodeJS.Platform;
+  opener: 'windows-shell-foreground' | 'open' | 'xdg-open';
+  foregroundConfirmed: boolean;
+}
+
 export async function openRecordingDirectory(
   recordingPath: string,
   spawnProcess: typeof spawn = spawn,
-): Promise<void> {
+): Promise<DirectoryOpenResult> {
   const directory = await realpath(recordingPath);
-  if (process.platform === 'win32') return openWindowsDirectory(directory, spawnProcess);
-  let command = 'xdg-open';
+  if (process.platform === 'win32') {
+    const result = await openWindowsDirectory(directory, spawnProcess);
+    return { ...result, platform: process.platform, opener: 'windows-shell-foreground' };
+  }
+  let command: 'open' | 'xdg-open' = 'xdg-open';
   if (process.platform === 'darwin') command = 'open';
   await new Promise<void>((resolve, reject) => {
     const child = spawnProcess(command, [directory], {
-      detached: true,
       shell: false,
-      stdio: 'ignore',
+      stdio: ['ignore', 'ignore', 'pipe'],
       windowsHide: false,
     });
-    child.once('error', reject);
-    child.once('spawn', () => {
-      child.unref();
-      resolve();
+    let detail = '';
+    const timer = setTimeout(() => { child.kill(); reject(new Error('等待文件管理器响应超时')); }, 15000);
+    child.stderr?.on('data', chunk => { detail = (detail + chunk.toString('utf8')).slice(-4096); });
+    child.once('error', error => { clearTimeout(timer); reject(error); });
+    child.once('close', code => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(detail.trim() || `文件管理器打开失败：exit=${String(code)}`));
     });
   });
+  return { directory, platform: process.platform, opener: command, foregroundConfirmed: false };
 }

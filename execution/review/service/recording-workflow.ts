@@ -58,10 +58,10 @@ export class RecordingWorkflow {
     if (!this.options.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT');
     return loadPublishedSkillResult(this.options.skillsRoot, status.skillName);
   }
-  async openInstallDirectory(id: string, openDirectory = openRecordingDirectory): Promise<{ opened: true }> {
+  async openInstallDirectory(id: string, openDirectory = openRecordingDirectory) {
     const result = await this.result(id);
-    await openDirectory(result.installPath);
-    return { opened: true };
+    const opened = await openDirectory(result.installPath);
+    return { opened: true as const, ...opened, serverPid: process.pid };
   }
   busyRecording(id: string): boolean {
     return !!this.active && this.status(this.active.id).recordingId === id;

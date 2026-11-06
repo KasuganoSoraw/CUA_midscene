@@ -58,7 +58,10 @@ try {
   $deadline = [DateTime]::UtcNow.AddSeconds(8)
   do {
     $window = Find-FolderWindow $shell $target
-    if ($null -ne $window -and [FolderForeground]::Activate([IntPtr]$window.HWND)) { exit 0 }
+    if ($null -ne $window -and [FolderForeground]::Activate([IntPtr]$window.HWND)) {
+      [Console]::Out.WriteLine((@{ directory = $target; foregroundConfirmed = $true } | ConvertTo-Json -Compress))
+      exit 0
+    }
     Start-Sleep -Milliseconds 100
   } while ([DateTime]::UtcNow -lt $deadline)
   throw '文件夹已请求打开，但未能确认窗口置于前台，请检查 Windows 桌面权限'
@@ -68,24 +71,42 @@ try {
 }
 `;
 
-export function openWindowsDirectory(directory: string, spawnProcess: typeof spawn = spawn): Promise<void> {
+export interface WindowsDirectoryResult { directory: string; foregroundConfirmed: true }
+
+function confirmedDirectory(output: string, directory: string): WindowsDirectoryResult {
+  let result: Partial<WindowsDirectoryResult>;
+  try { result = JSON.parse(output.trim()); }
+  catch { throw new Error('打开目录进程未返回窗口前置确认，请检查正在运行的后端版本'); }
+  if (result?.foregroundConfirmed !== true || typeof result.directory !== 'string'
+    || result.directory.toLowerCase() !== directory.toLowerCase()) {
+    throw new Error('打开目录进程返回的目标路径或窗口前置确认不匹配');
+  }
+  return { directory: result.directory, foregroundConfirmed: true };
+}
+
+export function openWindowsDirectory(directory: string, spawnProcess: typeof spawn = spawn): Promise<WindowsDirectoryResult> {
   const encoded = Buffer.from(foregroundDirectoryScript, 'utf16le').toString('base64');
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<WindowsDirectoryResult>((resolve, reject) => {
     const child = spawnProcess('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-STA', '-EncodedCommand', encoded], {
-      shell: false, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'],
+      shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, CUA_OPEN_DIRECTORY: directory },
     });
     let detail = '';
+    let output = '';
+    child.stdout?.setEncoding('utf8');
+    child.stderr?.setEncoding('utf8');
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error('等待文件夹窗口置于前台超时'));
     }, 15000);
     child.stderr?.on('data', chunk => { detail = (detail + chunk.toString('utf8')).slice(-4096); });
+    child.stdout?.on('data', chunk => { output = (output + chunk.toString('utf8')).slice(-16384); });
     child.once('error', error => { clearTimeout(timer); reject(new Error(`无法启动目录窗口：${error.message}`)); });
     child.once('close', code => {
       clearTimeout(timer);
-      if (code === 0) resolve();
-      else reject(new Error(detail.trim() || `打开并前置文件夹失败：exit=${String(code)}`));
+      if (code !== 0) { reject(new Error(detail.trim() || `打开并前置文件夹失败：exit=${String(code)}`)); return; }
+      try { resolve(confirmedDirectory(output, directory)); }
+      catch (error) { reject(error); }
     });
   });
 }
