@@ -40,7 +40,7 @@ import actionInfoIcon from './assets/ucd/action-info.svg';
 import waitInfoIcon from './assets/ucd/wait-info.svg';
 
 import type { RecordingCard } from '../../shared/recording-cards';
-const props = defineProps<{ recordingCard?: RecordingCard; draftCardId?: string }>();
+const props = defineProps<{ recordingCard?: RecordingCard; draftCardId?: string; draftTaskTitle?: string }>();
 const emit = defineEmits<{ modeChange: [mode: string]; publish: [] }>();
 const api = props.draftCardId ? draftApi(props.draftCardId) : defaultApi;
 const { locale, t, setLocale } = useI18n();
@@ -704,7 +704,7 @@ onMounted(async () => {
     <main v-else-if="mode === 'review'" class="workspace review-layout">
       <TaskCatalog v-if="!draftCardId" :skills="skills" :skill-name="skillName" :busy="busy" :current-step-count="steps.length" @select="openCatalogTask" @create="mode = 'recordings'" />
       <section class="steps panel">
-        <div class="review-steps-heading"><h2>{{ t('review.workflow') }}</h2><div><span>{{ view?.title ?? t('review.selectTask') }}</span><small>{{ t('common.steps', { count: steps.length }) }}</small></div></div>
+        <div class="review-steps-heading"><h2>{{ t('review.workflow') }}</h2><div><span>{{ props.draftTaskTitle ?? view?.title ?? t('review.selectTask') }}</span><small>{{ t('common.steps', { count: steps.length }) }}</small></div></div>
         <button class="secondary add-step" :disabled="!writable || busy" @click="insertStep"><WorkbenchIcon name="add" />{{ t('review.insert') }}</button>
         <div class="step-list">
           <div v-for="(item, index) in steps" :key="item.id" class="step-row"

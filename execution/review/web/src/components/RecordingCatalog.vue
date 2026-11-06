@@ -3,6 +3,7 @@ import type {
   RecordingCard,
   RecordingCardPage,
 } from '../../../shared/recording-cards';
+import homeRecordIcon from '../assets/ucd/home-record-black.svg';
 import WorkbenchIcon from './WorkbenchIcon.vue';
 defineProps<{
   result: RecordingCardPage;
@@ -40,7 +41,7 @@ function date(value: string): string {
 <template>
   <section class="recording-home" aria-label="录制记录">
     <header class="catalog-heading">
-      <h1><WorkbenchIcon name="workflow" />流程录制</h1>
+      <h1><img :src="homeRecordIcon" alt="" />录制流程</h1>
       <div class="catalog-tools">
         <label class="card-search"
           ><span class="sr-only">搜索流程</span

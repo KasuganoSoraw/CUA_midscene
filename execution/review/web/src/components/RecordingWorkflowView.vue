@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import copyIcon from '../assets/ucd/record-copy.svg';
+import importantIcon from '../assets/ucd/record-important.svg';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
@@ -16,6 +18,7 @@ const actionBusy = ref(false);
 const recording = ref(false);
 const result = ref<{ name: string; description: string; content: string }>();
 const copyState = ref('');
+const invocation = computed(() => result.value ? `[${result.value.name}](skill://${result.value.name}) 请执行该任务` : '');
 const root = `/api/recording-cards/${encodeURIComponent(props.card.id)}`;
 let poll: ReturnType<typeof setInterval> | undefined;
 let fetching = false;
@@ -59,8 +62,8 @@ async function action(name: 'analyze' | 'publish' | 'stop'): Promise<void> {
 }
 async function copy(): Promise<void> {
   try {
-    await navigator.clipboard.writeText(result.value?.content ?? '');
-    copyState.value = '已复制技能内容';
+    await navigator.clipboard.writeText(invocation.value);
+    copyState.value = '已复制运行指令';
   } catch {
     copyState.value = '复制失败，请手动选择内容复制';
   }
@@ -141,11 +144,12 @@ onUnmounted(() => {
         </button>
       </div>
     </template>
-    <App v-else-if="phase === 'editing'" :draft-card-id="card.id" @publish="action('publish')" />
+    <App v-else-if="phase === 'editing'" :draft-card-id="card.id" :draft-task-title="card.name" @publish="action('publish')" />
     <template v-else-if="phase === 'done' && result">
       <div class="workflow-result-copy">
-        <span>技能已生成并导入，可在对话中使用</span><code>{{ result.name }}</code
-        ><button class="secondary" @click="copy">复制技能内容</button><small role="status">{{ copyState }}</small>
+        <span>复制到对话即可运行</span>
+        <div class="workflow-command"><code>{{ invocation }}</code><button class="workflow-copy-icon" aria-label="复制运行指令" title="复制运行指令" @click="copy"><img :src="copyIcon" alt="" /></button></div>
+        <small role="status">{{ copyState }}</small>
       </div>
       <article class="workflow-result-card">
         <span class="card-avatar purple">S</span>
@@ -155,7 +159,7 @@ onUnmounted(() => {
         </div>
         <span class="workflow-imported">已导入</span>
       </article>
-      <h2 class="workflow-asset-label">内容</h2>
+      <h2 class="workflow-content-label"><img :src="importantIcon" alt="必填" />内容</h2>
       <article class="workflow-skill-content" v-html="renderedContent"></article>
       <div class="workflow-footer"><button class="secondary" @click="recording = true">返回录制</button></div>
     </template>

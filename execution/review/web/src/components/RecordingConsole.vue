@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import App from '../App.vue';
+import backIcon from '../assets/ucd/record-back.svg';
 import RecordingWorkflowView from './RecordingWorkflowView.vue';
 import { api } from '../api';
 import type {
@@ -235,18 +236,8 @@ onUnmounted(() => {
         </button>
         <p v-if="!recent.length" class="recent-empty">暂无访问记录</p>
       </div>
-      <nav class="console-secondary-nav" aria-label="工作区">
-        <button
-          :class="{ active: !home && activeMode === 'review' }"
-          @click="navigate('review')"
-        >
-          技能编辑</button
-        ><button
-          :class="{ active: !home && activeMode === 'execution' }"
-          @click="navigate('execution')"
-        >
-          任务执行
-        </button>
+      <nav v-if="devEnabled" class="console-secondary-nav" aria-label="工作区">
+
         <button
           v-if="devEnabled"
           :class="{ active: !home && activeMode === 'agent' }"
@@ -279,11 +270,9 @@ onUnmounted(() => {
               class="detail-back"
               aria-label="返回首页"
               @click="navigate('home')"
-            >
-              ←
-            </button>
+            ><img :src="backIcon" alt="" /></button>
             <h1>{{ card.name }}</h1>
-            <button class="text-button" @click="showDialog(card)">编辑</button>
+
           </div>
           <p>{{ card.description }}</p>
         </header>
