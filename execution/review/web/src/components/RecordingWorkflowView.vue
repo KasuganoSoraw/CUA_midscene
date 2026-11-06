@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { recordingProgress } from '../recording-progress';
 import copyIcon from '../assets/ucd/record-copy.svg';
 import importantIcon from '../assets/ucd/record-important.svg';
 import { marked } from 'marked';
@@ -28,6 +29,8 @@ const renderedContent = computed(() =>
 );
 const phase = computed(() => (recording.value ? 'idle' : (status.value?.phase ?? 'idle')));
 const activeStep = computed(() => (['idle'].includes(phase.value) ? 1 : phase.value === 'done' ? 3 : 2));
+const displayLog = computed(() => (status.value?.log ?? '').replace(/^CUA_TRACE_PROGRESS .*\r?\n?/gm, ''));
+const progress = computed(() => recordingProgress(status.value?.log ?? ''));
 const running = computed(() => ['analyzing', 'publishing'].includes(phase.value));
 async function refresh(): Promise<void> {
   if (fetching || disposed) return;
@@ -109,11 +112,11 @@ onUnmounted(() => {
           :class="{ failed: phase === 'failed', stopped: phase === 'stopped' }"
           :role="running ? 'status' : 'alert'"
         >
-          <progress v-if="running" aria-label="处理中"></progress>
+          <div v-if="running" class="workflow-progress-bar" :class="{ indeterminate: !progress || phase !== 'analyzing' }" role="progressbar" aria-label="任务生成进度" :aria-valuemin="0" :aria-valuemax="progress?.total" :aria-valuenow="phase === 'analyzing' ? progress?.completed : undefined"><span :style="progress && phase === 'analyzing' ? { width: `${progress.completed / progress.total * 100}%` } : undefined"></span></div>
           <h3>
             {{
               phase === 'analyzing'
-                ? '正在分析录制并生成步骤'
+                ? '正在生成任务'
                 : phase === 'publishing'
                   ? '正在打包并导入技能'
                   : phase === 'stopped'
@@ -124,12 +127,12 @@ onUnmounted(() => {
           <p v-if="running">
             {{
               phase === 'analyzing'
-                ? '正在处理录制，请勿关闭服务。完成后进入步骤编辑。'
+                ? '正在处理录制并创建可运行任务，请勿关闭页面。'
                 : '正在通过宿主导入编辑后的技能，请等待导入确认。'
             }}
           </p>
           <p v-if="status?.error">{{ status.error }}</p>
-          <pre v-if="status?.log">{{ status.log }}</pre>
+          <pre v-if="displayLog">{{ displayLog }}</pre>
         </div>
       </section>
       <div class="workflow-footer">
@@ -161,7 +164,6 @@ onUnmounted(() => {
       </article>
       <h2 class="workflow-content-label"><img :src="importantIcon" alt="必填" />内容</h2>
       <article class="workflow-skill-content" v-html="renderedContent"></article>
-      <div class="workflow-footer"><button class="secondary" @click="recording = true">返回录制</button></div>
     </template>
   </section>
 </template>

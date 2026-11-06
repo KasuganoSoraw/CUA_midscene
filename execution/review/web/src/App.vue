@@ -238,7 +238,7 @@ function populateEditor(): void {
   advancedEditing.value = false;
   advancedFlowText.value = JSON.stringify(step.flow, null, 2);
   advancedInputText.value = JSON.stringify(inputPreview(step.id, step.input), null, 2);
-  evidenceMode.value = resolveEvidenceMode('crop', editor.operation, step.evidence);
+  evidenceMode.value = resolveEvidenceMode('full', editor.operation, step.evidence);
   hydratingEditor = false;
 }
 
@@ -930,6 +930,6 @@ onMounted(async () => {
     />
 
     <div v-if="draftCardId" class="workflow-footer"><button class="primary" :disabled="busy || conflict || advancedEditing" @click="publishDraft">保存并生成Skill</button></div>
-    <footer v-if="mode === 'review' && skills.length"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
+    <footer v-if="mode === 'review' && skills.length && (!draftCardId || status() !== t('review.ready'))"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
   </div>
 </template>

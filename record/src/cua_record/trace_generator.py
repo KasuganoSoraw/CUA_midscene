@@ -450,6 +450,10 @@ Overall Task: {overall_task}
         r.raise_for_status()
         return r.json()["content"][0]["text"]
 
+    @staticmethod
+    def _report_progress(completed: int, total: int) -> None:
+        print("CUA_TRACE_PROGRESS " + json.dumps({"completed": completed, "total": total}), flush=True)
+
     def generate_trace(self, recording_json_path: str,
                        screenshots_dir: str,
                        output_trace_path: str,
@@ -465,18 +469,18 @@ Overall Task: {overall_task}
             raise ValueError(f"录制 JSON 包含非对象步骤：{invalid_indexes}")
         by_ts = {float(it["timestamp"]): it for it in items if "timestamp" in it}
 
+        actions = [it for it in items if (it.get("action") or "").strip().upper() != "CONFIG"
+                   and not (it.get("action") or "").strip().startswith("Active Window")]
+        total = len(actions) + int(generate_skill_metadata)
+        self._report_progress(0, total)
         traj, step_idx = [], 1
 
-        for it in items:
+        for it in actions:
             act_str = (it.get("action") or "").strip()
-            if act_str.upper() == "CONFIG":
-                continue
-            if act_str.startswith("Active Window"):
-                continue
-
             ts = float(it.get("timestamp") or 0.0)
             cap = self._trace_step(it, by_ts.get(ts, it), screenshots_dir, overall_task, traj, step_idx, ts, act_str)
             traj.append({"step_idx": step_idx, "caption": cap})
+            self._report_progress(step_idx, total)
             step_idx += 1
             time.sleep(0.1)
 
@@ -485,6 +489,7 @@ Overall Task: {overall_task}
         trace = {"trajectory": traj}
         if generate_skill_metadata:
             trace["skill"] = self.summarize_skill(traj)
+            self._report_progress(total, total)
         with open(output_trace_path, "w", encoding="utf-8") as f:
             json.dump(trace, f, ensure_ascii=False, indent=2)
 
