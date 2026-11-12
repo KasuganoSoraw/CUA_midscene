@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Literal, TypeAlias, cast
@@ -27,6 +28,7 @@ from .model import (
     ModelStreamComplete,
     ModelToolCall,
 )
+from .openai_compatible import ModelRequestError
 from .runtime_client import (
     CancellationCheck,
     ManagedRuntimeClientProtocol,
@@ -42,6 +44,7 @@ EventSinkResult: TypeAlias = Awaitable[None] | None
 EventSink: TypeAlias = Callable[[AgentEvent], EventSinkResult]
 RuntimeClientFactory: TypeAlias = Callable[[], ManagedRuntimeClientProtocol]
 FinalResponseMode: TypeAlias = Literal["structured", "plain"]
+logger = logging.getLogger(__name__)
 
 FINAL_RESPONSE_PROTOCOL = """
 ## 最终响应协议
@@ -173,6 +176,16 @@ class CuaAgent:
                 status=InvocationStatus.CANCELLED,
                 reply=str(error),
                 error=str(error),
+            )
+        except ModelRequestError as error:
+            logger.exception("CUA Agent 模型请求失败：%s", error)
+            message = error.user_message
+            await _emit(event_sink, AgentEvent(invocation_id, "failed", message))
+            return InvocationResult(
+                invocation_id=invocation_id,
+                status=InvocationStatus.FAILED,
+                reply=message,
+                error=message,
             )
         except Exception as error:
             message = str(error) or error.__class__.__name__

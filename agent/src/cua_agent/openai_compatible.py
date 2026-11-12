@@ -31,7 +31,25 @@ class ModelConfigurationError(RuntimeError):
 
 
 class ModelRequestError(RuntimeError):
-    pass
+    def __init__(
+        self, diagnostic: str, *, http_status: int | None = None,
+        connection_failure: bool = False,
+    ) -> None:
+        super().__init__(diagnostic)
+        self.http_status = http_status
+        self.connection_failure = connection_failure
+
+    @property
+    def user_message(self) -> str:
+        if self.connection_failure:
+            return "模型请求失败，请检查模型服务地址、网络连接及服务运行状态。"
+        if self.http_status == 404:
+            return "模型请求失败，模型不存在或无法访问，请检查模型名称及模型服务地址。"
+        if self.http_status == 413:
+            return "模型请求失败，请求内容超过服务端限制，请检查请求内容大小或模型服务限制。"
+        if self.http_status == 429:
+            return "模型请求受限，当前请求频率或可用额度已达到服务限制，请稍后重试。"
+        return "模型请求失败，暂时无法确定失败原因，请检查模型服务状态。"
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,10 +163,13 @@ class OpenAICompatibleModelClient(ModelClient):
         except urllib.error.HTTPError as error:
             response_body = error.read().decode("utf-8", errors="replace")
             raise ModelRequestError(
-                f"Agent model HTTP {error.code}：{response_body[:2000]}"
+                f"Agent model HTTP {error.code}：{response_body[:2000]}",
+                http_status=error.code,
             ) from error
         except OSError as error:
-            raise ModelRequestError(f"Agent model 请求失败：{error}") from error
+            raise ModelRequestError(
+                f"Agent model 请求失败：{error}", connection_failure=True,
+            ) from error
         except (ValueError, KeyError, TypeError) as error:
             raise ModelRequestError(f"Agent model 返回了无效响应：{error}") from error
         finally:
