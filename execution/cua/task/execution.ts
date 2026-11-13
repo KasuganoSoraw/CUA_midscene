@@ -181,16 +181,27 @@ function renderKeyboardTypeText(parameters: JsonObject, context: string): Record
   };
 }
 
+const minGuidedRecordedIntervalMs = 2000;
+
+function recordedIntervalMs(task: JsonObject): number {
+  const firstAction = (task.flow as JsonObject[])[0];
+  return typeof firstAction?.sleep === 'number' ? firstAction.sleep : 0;
+}
+
 export function buildRecordedTaskAiActPrompt(document: JsonObject): RecordedTaskAiActPrompt {
   validateYamlDocument(document, 'recorded task aiAct prompt');
   const lines = ['请严格按以下步骤顺序完成电脑操作：'];
-  if ((document.tasks as JsonObject[]).some(task => (task.flow as JsonObject[])
+  const tasks = document.tasks as JsonObject[];
+  if (tasks.some((task, index) => index > 0 && recordedIntervalMs(task) > minGuidedRecordedIntervalMs)) {
+    lines.push('标注的录制间隔仅供判断界面是否就绪；根据当前画面决定是否等待，不必机械复现时长。');
+  }
+  if (tasks.some(task => (task.flow as JsonObject[])
     .some(action => Object.hasOwn(action, 'aiAsk')))) {
     lines.push('获取信息步骤须在对应位置读取当时的界面；保留每次读取的结果及对应步骤，继续完成后续操作，并在最终回答中分别返回。无法确认的信息须说明，不得猜测。');
   }
   const images = new Map<string, string>();
   let convertHttpImage2Base64 = false;
-  for (const task of document.tasks as JsonObject[]) {
+  for (const [taskIndex, task] of tasks.entries()) {
     const taskName = String(task.name).trim();
     const rendered = (task.flow as JsonObject[])
       .map((action, index) => renderAction(action, `${taskName} 的 flow[${index + 1}]`))
@@ -206,7 +217,10 @@ export function buildRecordedTaskAiActPrompt(document: JsonObject): RecordedTask
         images.set(image.name, image.url);
       }
     }
-    lines.push(`${taskName}:`, ...rendered.map((item, index) => `  ${index + 1}. ${item.prompt}`));
+    const intervalMs = taskIndex > 0 ? recordedIntervalMs(task) : 0;
+    const intervalHint = intervalMs > minGuidedRecordedIntervalMs
+      ? `（录制时距上一步约 ${Number((intervalMs / 1000).toFixed(2))} 秒）` : '';
+    lines.push(`${taskName}${intervalHint}:`, ...rendered.map((item, index) => `  ${index + 1}. ${item.prompt}`));
   }
   return {
     prompt: `${lines.join('\n')}\n`,
