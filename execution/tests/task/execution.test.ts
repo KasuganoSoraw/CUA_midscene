@@ -30,7 +30,7 @@ async function fakeExecutor(options: MidsceneYamlExecutionOptions): Promise<Exec
   };
 }
 
-test('整体 aiAct prompt 保留步骤和动作并忽略 sleep', () => {
+test('整体 aiAct prompt 保留步骤和动作且不呈现短间隔', () => {
   const document = {
     tasks: [
       { name: 'step-001 | click', flow: [{ sleep: 500 }, { aiTap: '点击 Chrome 顶部地址栏' }] },
@@ -56,6 +56,30 @@ test('整体 aiAct prompt 保留步骤和动作并忽略 sleep', () => {
   assert.match(result.prompt, /在 "当前焦点输入框" 中追加输入 "中文 text"/);
   assert.doesNotMatch(result.prompt, /500|timeout/);
   assert.deepEqual(result.images, []);
+});
+
+test('Guided 仅将超过两秒的步骤间隔作为画面就绪参考', () => {
+  const result = buildRecordedTaskAiActPrompt({ tasks: [
+    { name: 'step-001 | click', flow: [{ aiTap: '打开列表' }] },
+    { name: 'step-002 | click', flow: [{ sleep: 1999 }, { aiTap: '选择条目' }] },
+    { name: 'step-003 | click', flow: [{ sleep: 2000 }, { aiTap: '打开页签' }] },
+    { name: 'step-004 | click', flow: [{ sleep: 2001 }, { aiTap: '选择选项' }] },
+    { name: 'step-005 | click', flow: [{ sleep: 3500 }, { aiTap: '确认内容' }] },
+  ] });
+  assert.match(result.prompt, /根据当前画面决定是否等待，不必机械复现时长/);
+  assert.doesNotMatch(result.prompt, /step-002[^\n]*录制时距上一步/);
+  assert.doesNotMatch(result.prompt, /step-003[^\n]*录制时距上一步/);
+  assert.match(result.prompt, /step-004[^\n]*录制时距上一步约/);
+  assert.match(result.prompt, /step-005[^\n]*录制时距上一步约 3\.5 秒/);
+  assert.doesNotMatch(result.prompt, /1999|2000|2001|3500|sleep/);
+});
+
+test('Guided 无较长录制间隔时不添加等待建议', () => {
+  const result = buildRecordedTaskAiActPrompt({ tasks: [
+    { name: 'step-001 | click', flow: [{ sleep: 4000 }, { aiTap: '打开列表' }] },
+    { name: 'step-002 | click', flow: [{ sleep: 2000 }, { aiTap: '选择条目' }] },
+  ] });
+  assert.doesNotMatch(result.prompt, /录制间隔|录制时距上一步|机械复现/);
 });
 
 test('Guided 按原步骤位置读取信息并在最终回答中保留各次结果', () => {
