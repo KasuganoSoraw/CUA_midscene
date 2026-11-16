@@ -157,29 +157,7 @@ class OpenAICompatibleModelClient(ModelClient):
         messages: tuple[ModelMessage, ...],
         tools: tuple[ToolDefinition, ...],
     ) -> AsyncIterator[ModelStreamItem]:
-        payload: dict[str, JsonValue] = {
-            "model": self._config.model,
-            "messages": [_message_payload(message) for message in messages],
-            "stream": True,
-        }
-        if tools:
-            payload["tools"] = [_tool_payload(tool) for tool in tools]
-            payload["tool_choice"] = "auto"
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        headers: dict[str, str] = {
-            "Authorization": f"Bearer {self._config.api_key}",
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-        }
-        # custom_headers 覆盖默认头（如网关鉴权 X-HW-ID / X-HW-APPKEY）
-        if self._config.custom_headers:
-            headers.update(self._config.custom_headers)
-        request = urllib.request.Request(
-            self._config.chat_completions_url,
-            data=body,
-            headers=headers,
-            method="POST",
-        )
+        request = _model_request(self._config, messages, tools)
         response: object | None = None
         assembler = _StreamAssembler(self._config.language)
         try:
@@ -211,6 +189,35 @@ class OpenAICompatibleModelClient(ModelClient):
         finally:
             if response is not None:
                 response.close()  # type: ignore[attr-defined]
+
+
+def _model_request(
+    config: OpenAICompatibleConfig,
+    messages: tuple[ModelMessage, ...],
+    tools: tuple[ToolDefinition, ...],
+) -> urllib.request.Request:
+    payload: dict[str, JsonValue] = {
+        "model": config.model,
+        "messages": [_message_payload(message) for message in messages],
+        "stream": True,
+    }
+    if tools:
+        payload["tools"] = [_tool_payload(tool) for tool in tools]
+        payload["tool_choice"] = "auto"
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {config.api_key}",
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+    }
+    # custom_headers 覆盖默认头（如网关鉴权 X-HW-ID / X-HW-APPKEY）
+    if config.custom_headers:
+        headers.update(config.custom_headers)
+    return urllib.request.Request(
+        config.chat_completions_url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
 
 
 async def _read_stream(
