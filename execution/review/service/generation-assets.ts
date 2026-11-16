@@ -15,7 +15,12 @@ async function checkedDraft(dataRoot: string, draftRoot: string): Promise<string
   const parent = path.join(dataRoot, 'workbench', 'drafts');
   const target = path.resolve(draftRoot);
   if (path.dirname(target) !== path.resolve(parent)) throw new Error('旧生成资产越出工作流草稿目录');
-  const canonicalParent = assertContained(await realpath(dataRoot), await realpath(parent));
+  let canonicalParent: string;
+  try { canonicalParent = assertContained(await realpath(dataRoot), await realpath(parent)); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return target;
+    throw error;
+  }
   try {
     const entry = await lstat(target);
     if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error('生成资产目录必须是普通目录');
@@ -82,7 +87,7 @@ async function removeDerivedRecording(options: AssetOptions, recordingId: string
   }
 }
 
-async function removeOwnedSkill(skillsRoot: string, skillName: string): Promise<void> {
+export async function removeOwnedSkill(skillsRoot: string, skillName: string): Promise<void> {
   try { await lstat(path.join(skillsRoot, requireSkillName(skillName))); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
@@ -103,4 +108,21 @@ export async function cleanupPreviousGeneration(options: AssetOptions, draftRoot
     await saveOwnership(draftRoot, entries.slice(entries.indexOf(entry) + 1));
   }
   return entries.length;
+}
+
+
+export async function generationAssetsForDeletion(dataRoot: string, status?: WorkflowStatus): Promise<{ draftRoots: string[]; skillNames: string[] }> {
+  const entries: GenerationAssets[] = [];
+  if (status?.draftRoot) {
+    await checkedDraft(dataRoot, status.draftRoot);
+    entries.push(...await previousAssets(status.draftRoot));
+  }
+  if (status) entries.push(status);
+  const draftRoots = new Set<string>();
+  const skillNames = new Set<string>();
+  for (const entry of entries) {
+    if (entry.draftRoot) draftRoots.add(await checkedDraft(dataRoot, entry.draftRoot));
+    if (entry.skillName) skillNames.add(requireSkillName(entry.skillName));
+  }
+  return { draftRoots: [...draftRoots], skillNames: [...skillNames] };
 }

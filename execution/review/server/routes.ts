@@ -238,7 +238,12 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   const cards = new RecordingCardStore(path.join(options.layout.data.root, 'workbench', 'cards.json'));
   cards.clearSession();
   const workflow = new RecordingWorkflow({ dataRoot: options.layout.data.root,
-    skillsRoot: options.layout.skillsRoot, recordingsRoot: activeRecordingsRoot, executionRoot: options.executionRoot, cards, beforeAnalyze: () => {
+    skillsRoot: options.layout.skillsRoot, recordingsRoot: activeRecordingsRoot, executionRoot: options.executionRoot, cards, beforeDelete: skillNames => {
+      const active = execution.status();
+      if (active.skillName && skillNames.includes(active.skillName) && ['preparing', 'running', 'stopping'].includes(active.phase)) {
+        throw Object.assign(new Error('关联 Skill 正在执行，暂时不能删除'), { statusCode: 409 });
+      }
+    }, beforeAnalyze: () => {
       if (!['idle', 'failed'].includes(recorder.status().phase) || generation.status().phase === 'running' || skillGeneration.status().phase === 'running') throw new Error('录制或生成正在进行，请先结束当前任务');
     } }, options.dependencies?.workflow);
   registerWorkflowRoutes(app, workflow);
@@ -253,13 +258,7 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     const catalog = await listRecordings(recordingOptions());
     const active = recorder.status();
     return { ...catalog, recordings: catalog.recordings.filter(entry => entry.id !== active.recordingId) };
-  }, () => workflow.isBusy(), async (recordingId) => {
-    try {
-      await deleteRecording(recordingId, recordingOptions());
-    } catch (error) {
-      if (!(error instanceof Error && (error as { statusCode?: number }).statusCode === 404)) throw error;
-    }
-  });
+  }, () => workflow.isBusy(), id => workflow.remove(id));
   app.addHook('onClose', async () => { await recorder.close(); await workflow.close(); cards.close(); });
 
   if (!options.layout.data) throw new Error('任务运行页面需要配置 CUA_DATA_ROOT');
