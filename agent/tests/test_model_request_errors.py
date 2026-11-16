@@ -107,3 +107,50 @@ def test_non_model_failure_keeps_existing_error_handling() -> None:
 
     assert result.status is InvocationStatus.FAILED
     assert result.reply == "runtime setup failed"
+
+
+@pytest.mark.parametrize(
+    ("fault", "expected"),
+    [
+        (
+            urllib.error.URLError("connection refused"),
+            "Model request failed. Check the model service address, network connection, "
+            "and service status.",
+        ),
+        (
+            _http_error(404),
+            "Model request failed. The model was not found or is inaccessible. "
+            "Check its name and service address.",
+        ),
+        (
+            _http_error(413),
+            "Model request failed. The request exceeds the server limit. "
+            "Check its size or the model service limit.",
+        ),
+        (_http_error(429), "Model request is limited by rate or quota. Please try again later."),
+        (
+            _http_error(500),
+            "Model request failed. The cause is unknown. Check the model service status.",
+        ),
+    ],
+)
+def test_english_model_error_reaches_reply_and_failed_event(
+    monkeypatch: pytest.MonkeyPatch, fault: Exception, expected: str,
+) -> None:
+    def reject(*_args: object, **_kwargs: object) -> None:
+        raise fault
+
+    monkeypatch.setattr("urllib.request.urlopen", reject)
+    model = OpenAICompatibleModelClient(
+        OpenAICompatibleConfig("https://example.test/v1", "model", "secret", language="en-US")
+    )
+    events: list[AgentEvent] = []
+    result = asyncio.run(CuaAgent(model, lambda: IdleRuntime()).invoke(  # type: ignore[arg-type]
+        InvocationRequest("Use the computer"), event_sink=events.append,
+    ))
+
+    assert result.status is InvocationStatus.FAILED
+    assert result.reply == expected
+    assert result.error == expected
+    assert [event.message for event in events if event.type == "failed"] == [expected]
+    assert "Agent model" not in str(result.to_dict())

@@ -32,6 +32,27 @@ def test_model_config_builds_chat_completions_url_without_exposing_key() -> None
     assert "secret-value" not in repr(config)
 
 
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [("en", "en"), ("en-US", "en"), ("zh-CN", "zh"), ("", "zh"), ("fr", "zh")],
+)
+def test_model_config_normalizes_error_language(language: str, expected: str) -> None:
+    config = OpenAICompatibleConfig("https://example.test/v1", "model", language=language)
+    assert config.language == expected
+
+
+def test_model_config_defaults_to_chinese_error_language(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CUA_AGENT_MODEL_LANGUAGE", raising=False)
+    assert OpenAICompatibleConfig("https://example.test/v1", "model").language == "zh"
+    monkeypatch.setenv("CUA_AGENT_MODEL_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("CUA_AGENT_MODEL_NAME", "model")
+    assert OpenAICompatibleConfig.from_env().language == "zh"
+    monkeypatch.setenv("CUA_AGENT_MODEL_LANGUAGE", "en-US")
+    assert OpenAICompatibleConfig.from_env().language == "en"
+
+
 def test_model_config_can_disable_tls_verification_explicitly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
