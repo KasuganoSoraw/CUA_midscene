@@ -29,6 +29,7 @@ test('三种执行策略失败时均从实际运行产物返回报告，错误�
         const reportFile = path.join(process.env.MIDSCENE_RUN_DIR!, 'report', 'execution-report.html');
         return {
           reportFile,
+          getActionSpace: async () => [],
           runYaml: async (): Promise<never> => { throw original; },
           aiAct: async (): Promise<never> => { throw original; },
           destroy: async () => {
@@ -58,14 +59,19 @@ test('三种执行策略失败时均从实际运行产物返回报告，错误�
         payload: { strategy, scene: 'browser-demo', task: 'search-demo', goal: '测试目标', dataRoot: root },
       }, handlers);
       assert.equal(response.ok, false);
-      assert.equal(calls, 1, '失败不重试或切换执行方式');
+      assert.equal(calls, 1, '同一次执行只创建一个 Agent');
       assert.equal(response.requestId, strategy);
       if (response.ok) throw new Error('执行失败不能返回成功响应');
       const persisted = JSON.parse(await readFile(resultPath, 'utf8'));
       assert.equal(persisted.status, 'failed');
       assert.equal(response.error.code, 'RUNTIME_METHOD_FAILED');
-      assert.equal(response.error.message, original.message);
-      assert.equal(response.error.details?.stack, original.stack);
+      if (strategy === 'replay') {
+        assert.match(response.error.message, /unknown flowItem in yaml/);
+        assert.equal(persisted.fallback, undefined);
+      } else {
+        assert.equal(response.error.message, original.message);
+        assert.equal(response.error.details?.stack, original.stack);
+      }
       assert.equal(response.error.details?.reportPath, await realpath(persisted.reportPath));
       assert.ok((await stat(String(response.error.details?.reportPath))).isFile());
     }

@@ -73,9 +73,15 @@ test('YAML 执行结果接受可选 HTML 报告路径', async () => {
     dryRun: false,
     reportPath: path.join(root, 'midscene', 'report', 'execution-report.html'),
     finalScreenshotPath: path.join(root, 'final-screenshot.jpeg'),
+    fallback: {
+      triggered: true, from: 'replay', to: 'adaptive', completedSteps: ['step-001'],
+      failedStep: 'step-002', pendingSteps: ['step-003'], uncertainSteps: ['step-002'],
+      recoveryStatus: 'succeeded',
+    },
     finishedAt: new Date().toISOString(),
   }), 'utf8');
   const result = await readExecutorResult(source);
+  assert.equal(result.fallback?.failedStep, 'step-002');
   assert.match(result.reportPath ?? '', /execution-report\.html$/);
   assert.match(result.finalScreenshotPath ?? '', /final-screenshot\.jpeg$/);
 });

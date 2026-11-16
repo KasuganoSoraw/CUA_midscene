@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { parseYamlScript } from '@midscene/core/yaml';
+import { parseYamlScript, ScriptPlayer } from '@midscene/core/yaml';
+import type { Agent } from '@midscene/core';
 import type { ExecutorResult } from '../cua/contracts/types.js';
 import { createMidsceneExecutionObserver } from './midscene-final-screenshot.js';
 import type { ExecutionProgressSink } from './midscene-progress.js';
@@ -15,6 +16,7 @@ import {
   injectShrinkBannerIntoReport,
   midsceneReportFileName,
 } from './midscene-report.js';
+import { recoveryPrompt, replayFailure, type ReplayRecoveryOptions } from './midscene-replay-recovery.js';
 
 interface AgentLike {
   runYaml(content: string): Promise<{ result: Record<string, unknown> }>;
@@ -32,6 +34,7 @@ export interface MidsceneYamlExecutionOptions {
   runDirectory: string;
   dryRun: boolean;
   captureAiActOutput?: boolean;
+  replayFallback?: ReplayRecoveryOptions;
   abortSignal?: AbortSignal;
   onProgress?: ExecutionProgressSink;
   agentFactory?: (options: ComputerAgentOptions) => Promise<AgentLike>;
@@ -77,7 +80,7 @@ function readQuestions(
   return questions;
 }
 
-type YamlArtifacts = Pick<ExecutorResult, 'midsceneResult' | 'reportPath' | 'finalScreenshotPath'>;
+type YamlArtifacts = Pick<ExecutorResult, 'midsceneResult' | 'reportPath' | 'finalScreenshotPath' | 'fallback'>;
 
 function yamlAgentOptions(script: ReturnType<typeof parseYamlScript>): ComputerAgentOptions {
   return {
@@ -95,6 +98,34 @@ function restoreYamlEnvironment(runDirectory?: string, cacheDirectory?: string):
   else process.env.MIDSCENE_RUN_DIR = runDirectory;
   if (cacheDirectory === undefined) delete process.env.MIDSCENE_CACHE_DIR;
   else process.env.MIDSCENE_CACHE_DIR = cacheDirectory;
+}
+
+function setYamlEnvironment(runDirectory: string): void {
+  process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(runDirectory), 'midscene');
+  process.env.MIDSCENE_CACHE_DIR = path.join(
+    path.resolve(runDirectory), '..', '..', 'midscene-cache',
+  );
+}
+
+function emitRecoveryProgress(
+  options: MidsceneYamlExecutionOptions, taskIndex: number,
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled', message: string,
+): void {
+  options.onProgress?.({
+    type: 'execution.progress', message,
+    data: { source: 'midscene', taskIndex, taskId: 'adaptive-recovery',
+      action: 'Adaptive', status, phase: 'adaptive' },
+  });
+}
+
+function emitReplayFailureProgress(
+  options: MidsceneYamlExecutionOptions, taskIndex: number, taskId: string,
+): void {
+  options.onProgress?.({
+    type: 'execution.progress', message: '录制步骤未完成，准备接续电脑操作',
+    data: { source: 'midscene', taskIndex, taskId,
+      action: 'Replay', status: 'failed', phase: 'replay' },
+  });
 }
 
 async function cleanupYamlAgent(
@@ -124,6 +155,64 @@ async function cleanupYamlAgent(
   }
 }
 
+function replayRecoveryError(step: string, replayReason: string, error: unknown): Error {
+  const recoveryReason = error instanceof Error ? error.message : String(error);
+  return new Error(
+    `Replay 步骤 ${step} 失败：${replayReason}\nAdaptive 接续失败：${recoveryReason}`,
+    { cause: error },
+  );
+}
+
+async function runReplayWithFallback(
+  agent: AgentLike, script: ReturnType<typeof parseYamlScript>, options: MidsceneYamlExecutionOptions,
+  artifacts: YamlArtifacts, onRecoveryStart: () => void,
+): Promise<void> {
+  const player = new ScriptPlayer(script, async () => ({ agent: agent as Agent, freeFn: [] }));
+  await player.run();
+  if (player.status === 'done') {
+    const questions = readQuestions(script, player.result);
+    artifacts.midsceneResult = {
+      ...player.result,
+      ...(Object.keys(questions).length ? { readQuestions: questions } : {}),
+    };
+    return;
+  }
+  const failure = replayFailure(player.taskStatusList);
+  if (!failure || player.errorInSetup || options.abortSignal?.aborted || !agent.aiAct) {
+    throw player.errorInSetup
+      ?? player.taskStatusList.find(task => task.status === 'error')?.error
+      ?? new Error('Replay 执行未完成');
+  }
+  artifacts.fallback = failure.fallback;
+  const questions = readQuestions(script, player.result);
+  artifacts.midsceneResult = {
+    ...player.result,
+    ...(Object.keys(questions).length ? { readQuestions: questions } : {}),
+  };
+  emitReplayFailureProgress(options, player.currentTaskIndex ?? 0, failure.fallback.failedStep);
+  onRecoveryStart();
+  emitRecoveryProgress(options, player.currentTaskIndex ?? 0, 'running', '正在接续电脑操作');
+  const prompt = recoveryPrompt(options.replayFallback!, failure.fallback, failure.reason, player.result);
+  let answer: unknown;
+  try {
+    answer = await agent.aiAct(prompt, { abortSignal: options.abortSignal });
+    if (options.abortSignal?.aborted) throw new Error('电脑操作已取消');
+  } catch (error) {
+    emitRecoveryProgress(
+      options, player.currentTaskIndex ?? 0,
+      options.abortSignal?.aborted ? 'cancelled' : 'failed', '接续执行未完成',
+    );
+    if (options.abortSignal?.aborted) throw error;
+    throw replayRecoveryError(failure.fallback.failedStep, failure.reason, error);
+  }
+  artifacts.fallback = { ...failure.fallback, recoveryStatus: 'succeeded' };
+  artifacts.midsceneResult = {
+    ...artifacts.midsceneResult,
+    ...(typeof answer === 'string' && answer.trim() ? { aiActOutput: answer } : {}),
+  };
+  emitRecoveryProgress(options, player.currentTaskIndex ?? 0, 'succeeded', '接续执行完成');
+}
+
 async function runMidsceneScript(
   content: string, script: ReturnType<typeof parseYamlScript>, options: MidsceneYamlExecutionOptions,
   artifacts: YamlArtifacts,
@@ -134,17 +223,14 @@ async function runMidsceneScript(
   const previousCacheDirectory = process.env.MIDSCENE_CACHE_DIR;
   let agent: AgentLike | undefined;
   let removeDumpListener: (() => void) | undefined;
-  const observer = createMidsceneExecutionObserver(options.onProgress);
+  let phase: 'replay' | 'adaptive' = 'replay';
+  const progress = options.replayFallback && options.onProgress
+    ? (event: Parameters<ExecutionProgressSink>[0]) => options.onProgress?.({
+      ...event, data: { ...event.data, phase },
+    }) : options.onProgress;
+  const observer = createMidsceneExecutionObserver(progress);
   try {
-    process.env.MIDSCENE_RUN_DIR = path.join(path.resolve(options.runDirectory), 'midscene');
-    // 缓存目录固定到 runsRoot 同级（dataRoot/midscene-cache），避免随每次
-    // 运行的随机 run 目录漂移，保证跨运行 plan 缓存可命中。
-    process.env.MIDSCENE_CACHE_DIR = path.join(
-      path.resolve(options.runDirectory),
-      '..',
-      '..',
-      'midscene-cache',
-    );
+    setYamlEnvironment(options.runDirectory);
     agent = await (options.agentFactory ?? createKeyboardEnabledComputerAgent)(yamlAgentOptions(script));
     if (agent.addDumpUpdateListener) {
       removeDumpListener = agent.addDumpUpdateListener(observer.listener);
@@ -153,16 +239,24 @@ async function runMidsceneScript(
     }
     const capturedOutput = prepareAiAct(agent, options.captureAiActOutput === true, options.abortSignal);
     if (options.abortSignal?.aborted) throw new Error('电脑操作已取消');
-    const yamlResult = (await agent.runYaml(content)).result;
-    const aiActOutput = capturedOutput();
-    const questions = readQuestions(script, yamlResult);
-    artifacts.midsceneResult = {
-      ...yamlResult,
-      ...(Object.keys(questions).length ? { readQuestions: questions } : {}),
-      ...(aiActOutput === undefined ? {} : { aiActOutput }),
-    };
+    if (options.replayFallback) {
+      await runReplayWithFallback(agent, script, options, artifacts, () => { phase = 'adaptive'; });
+    } else {
+      const yamlResult = (await agent.runYaml(content)).result;
+      const aiActOutput = capturedOutput();
+      const questions = readQuestions(script, yamlResult);
+      artifacts.midsceneResult = {
+        ...yamlResult,
+        ...(Object.keys(questions).length ? { readQuestions: questions } : {}),
+        ...(aiActOutput === undefined ? {} : { aiActOutput }),
+      };
+    }
     artifacts.finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory);
   } finally {
+    if (artifacts.fallback && !artifacts.finalScreenshotPath) {
+      try { artifacts.finalScreenshotPath = await observer.persistFinalScreenshot(options.runDirectory); }
+      catch { /* 保留执行失败的原始原因 */ }
+    }
     await cleanupYamlAgent(agent, removeDumpListener, previousRunDirectory, previousCacheDirectory, artifacts);
   }
 }
@@ -173,7 +267,7 @@ export async function executeMidsceneYaml(
   const yamlPath = path.resolve(options.yamlPath);
   const resultPath = path.resolve(options.resultPath);
   let taskCount: number | undefined;
-  const artifacts: Pick<ExecutorResult, 'midsceneResult' | 'reportPath' | 'finalScreenshotPath'> = {};
+  const artifacts: YamlArtifacts = {};
   try {
     let content: string;
     try {

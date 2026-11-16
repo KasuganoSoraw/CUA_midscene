@@ -101,6 +101,8 @@ test('Guided 按原步骤位置读取信息并在最终回答中保留各次结�
 
 test('逐 task 执行与 inspect 使用相同 resolved YAML', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'cua-run-task-'));
+  let recoveryGoal: string | undefined;
+  let recoveryPrompt: string | undefined;
   const run = await runTask({
     scene: 'browser-demo',
     task: 'air-tickets-demo',
@@ -108,12 +110,18 @@ test('逐 task 执行与 inspect 使用相同 resolved YAML', async () => {
     runsRoot: root,
     inputs: { 'step-002-input': 'GOOGLE' },
     dryRun: true,
-    executor: fakeExecutor,
+    executor: async options => {
+      recoveryGoal = options.replayFallback?.goal;
+      recoveryPrompt = options.replayFallback?.taskPrompt.prompt;
+      return fakeExecutor(options);
+    },
   });
   const document = await readYamlDocument(run.resolvedTaskPath);
   assert.deepEqual(document, run.resolved.document);
   assert.equal(((document.tasks as Array<Record<string, any>>)[1].flow[1].KeyboardTypeText as any).value, 'GOOGLE');
   assert.equal(run.executorResult.taskCount, 16);
+  assert.equal(recoveryGoal, run.resolved.manifest.goal);
+  assert.match(recoveryPrompt ?? '', /GOOGLE/);
 });
 
 test('录制任务整体 aiAct 复用 resolved 输入并保存临时投影', async () => {

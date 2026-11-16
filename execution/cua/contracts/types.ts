@@ -121,6 +121,16 @@ export interface ExecutorResult {
   dryRun: boolean;
   taskCount?: number | null;
   midsceneResult?: Record<string, unknown> | null;
+  fallback?: {
+    triggered: true;
+    from: 'replay';
+    to: 'adaptive';
+    completedSteps: string[];
+    failedStep: string;
+    pendingSteps: string[];
+    uncertainSteps: string[];
+    recoveryStatus: 'succeeded' | 'failed';
+  };
   reportPath?: string | null;
   finalScreenshotPath?: string | null;
   finishedAt: string;
