@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import type { JsonObject, SkillCatalogItem, SkillTaskManifest } from '../../../cua/contracts/types';
 import type {
   ReviewChange,
@@ -21,7 +21,9 @@ import {
   type StepEditorModel,
 } from '../../shared/step-editor';
 import { sourceStepsForBinding } from '../../shared/step-bindings';
-import { ApiError, api } from './api';
+import { ApiError, api as defaultApi, draftApi } from './api';
+import { MemoryReferenceImages } from './memory-reference-images';
+import { applyReviewMutation } from '../../shared/task-mutations';
 import { ReviewDraftStorage } from './draft-storage';
 import { resolveEvidenceMode, type EvidenceMode } from './evidence-mode';
 import { referenceImageMaxBytes, referenceImageMimeTypes } from '../../shared/reference-upload';
@@ -39,15 +41,22 @@ import uploadPlaceholder from './assets/ucd/IllHdEmptyNoRecord.svg';
 import actionInfoIcon from './assets/ucd/action-info.svg';
 import waitInfoIcon from './assets/ucd/wait-info.svg';
 
+import type { RecordingCard } from '../../shared/recording-cards';
+const props = defineProps<{ recordingCard?: RecordingCard; draftCardId?: string; draftTaskTitle?: string; installedSkillName?: string }>();
+const emit = defineEmits<{ modeChange: [mode: string]; saved: [] }>();
+const embedded = Boolean(props.draftCardId || props.installedSkillName);
+const memoryReferences = new MemoryReferenceImages();
+const api = props.draftCardId ? draftApi(props.draftCardId) : defaultApi;
 const { locale, t, setLocale } = useI18n();
 
 const initialParams = new URLSearchParams(window.location.search);
 const requestedMode = initialParams.get('mode');
 const requestedDevMode = initialParams.get('dev') === '1';
 let initialMode: 'review' | 'recordings' | 'execution' = 'review';
-if (requestedMode === 'recording') initialMode = 'recordings';
+if (embedded) initialMode = 'review';
+else if (requestedMode === 'recording') initialMode = 'recordings';
 else if (requestedMode === 'execution') initialMode = 'execution';
-const initialSkillName = initialParams.get('skillName')?.trim() ?? '';
+const initialSkillName = props.installedSkillName ?? initialParams.get('skillName')?.trim() ?? '';
 
 const mode = ref<'review' | 'recordings' | 'execution' | 'agent'>(initialMode);
 const devMode = ref(false);
@@ -105,7 +114,7 @@ const draftStorageError = ref('');
 const baseRevision = ref('');
 
 function persistDraft(): void {
-  if (!draft.value || !view.value?.writable || !dirty.value || hydratingEditor || loadingDraft) return;
+  if (props.installedSkillName || !draft.value || !view.value?.writable || !dirty.value || hydratingEditor || loadingDraft) return;
   try {
     if (!draftStorage) throw new Error(t('review.autoSaveUnavailable'));
     draftStorage.write('skill', view.value.skillName, {
@@ -122,6 +131,8 @@ function persistDraft(): void {
 }
 
 watch(mode, (next) => {
+  if (embedded) return;
+  emit('modeChange', next);
   const url = new URL(window.location.href);
   url.searchParams.set('mode', next === 'recordings' ? 'recording' : next);
   window.history.replaceState(null, '', url);
@@ -231,7 +242,7 @@ function populateEditor(): void {
   advancedEditing.value = false;
   advancedFlowText.value = JSON.stringify(step.flow, null, 2);
   advancedInputText.value = JSON.stringify(inputPreview(step.id, step.input), null, 2);
-  evidenceMode.value = resolveEvidenceMode('crop', editor.operation, step.evidence);
+  evidenceMode.value = resolveEvidenceMode('full', editor.operation, step.evidence);
   hydratingEditor = false;
 }
 
@@ -257,7 +268,10 @@ async function loadSkills(): Promise<void> {
     skillsConfigured.value = result.configured;
     catalogError.value = result.error ?? '';
     const ready = skills.value.filter(item => item.status === 'ready');
-    if (!ready.some(item => item.skillName === skillName.value)) skillName.value = ready[0]?.skillName ?? '';
+    if (props.installedSkillName) {
+      skills.value = result.skills.filter(item => item.skillName === props.installedSkillName);
+      skillName.value = props.installedSkillName;
+    } else if (!ready.some(item => item.skillName === skillName.value)) skillName.value = ready[0]?.skillName ?? '';
     if (skillName.value) await loadTask();
     else {
       clearTaskView();
@@ -316,6 +330,7 @@ async function loadTask(restoreDraft = true): Promise<void> {
   conflict.value = false;
   try {
     const loaded = await api.skill(skillName.value);
+    memoryReferences.clear();
     view.value = loaded;
     editorDrafts = {};
     baseRevision.value = loaded.revision;
@@ -332,8 +347,8 @@ async function loadTask(restoreDraft = true): Promise<void> {
     populateEditor();
     draftStorageState.value = 'idle';
     draftStorageError.value = '';
-    if (loaded.writable && restoreDraft) restoreStoredDraft(loaded);
-    if (mode.value === 'review') {
+    if (!props.installedSkillName && loaded.writable && restoreDraft) restoreStoredDraft(loaded);
+    if (mode.value === 'review' && !embedded) {
       const url = new URL(window.location.href);
       url.searchParams.delete('scene');
       url.searchParams.delete('task');
@@ -357,7 +372,9 @@ async function mutate(mutation: ReviewMutation): Promise<boolean> {
   else if (mutation.type === 'move') candidates.splice(mutation.to, 0, ...candidates.splice(mutation.from, 1));
   busy.value = true;
   try {
-    const result = await api.mutateSkill(skillName.value, draft.value, mutation);
+    const result = props.installedSkillName
+      ? applyReviewMutation(clone(draft.value), mutation)
+      : await api.mutateSkill(skillName.value, draft.value, mutation);
     editorDrafts = {};
     draft.value = result.draft;
     changes.value.push(result.change);
@@ -497,7 +514,10 @@ async function save(): Promise<boolean> {
   const selectedIndex = selected.value;
   busy.value = true;
   try {
-    const result = await api.saveSkill(skillName.value, baseRevision.value, clone(draft.value));
+    const next = props.installedSkillName
+      ? await memoryReferences.materialize(draft.value, file => api.uploadSkillReferenceImage(skillName.value, baseRevision.value, file))
+      : clone(draft.value);
+    const result = await api.saveSkill(skillName.value, baseRevision.value, next);
     try { draftStorage?.remove('skill', view.value.skillName); } catch { /* Saved task files remain authoritative. */ }
     changes.value = [];
     await loadTask(false);
@@ -507,6 +527,7 @@ async function save(): Promise<boolean> {
     selected.value = Math.min(selectedIndex, steps.value.length - 1);
     populateEditor();
     status.value = () => t('review.saved', { files: result.changed.join(', ') || t('review.noChanges') });
+    emit('saved');
     return true;
   } catch (error) {
     conflict.value = error instanceof ApiError && error.status === 409;
@@ -570,7 +591,7 @@ function evidencePath(step: ReviewStep | undefined): string | undefined {
 }
 
 function referenceImageUrl(image: ReviewReferenceImage): string {
-  return /^(?:https?:|data:)/i.test(image.url)
+  return /^(?:https?:|data:|blob:)/i.test(image.url)
     ? image.url
     : api.skillEvidenceUrl(skillName.value, image.url);
 }
@@ -612,7 +633,9 @@ async function uploadReference(event: Event): Promise<void> {
   busy.value = true;
   referenceUploading.value = true;
   try {
-    const result = await api.uploadSkillReferenceImage(targetSkill, baseRevision.value, file);
+    const result = props.installedSkillName
+      ? { image: memoryReferences.add(file) }
+      : await api.uploadSkillReferenceImage(targetSkill, baseRevision.value, file);
     if (skillName.value !== targetSkill || current.value?.id !== targetStep) {
       throw new Error(t('review.referenceTargetChanged'));
     }
@@ -623,7 +646,9 @@ async function uploadReference(event: Event): Promise<void> {
     hydratingEditor = false;
     syncSemanticDraft();
     evidenceMode.value = 'reference';
-    status.value = () => t('review.referenceUploaded');
+    status.value = props.installedSkillName
+      ? () => t('review.referenceInMemory')
+      : () => t('review.referenceUploaded');
   } catch (error) {
     conflict.value = error instanceof ApiError && error.status === 409;
     referenceUploadError.value = error instanceof Error ? error.message : String(error);
@@ -638,7 +663,7 @@ onMounted(async () => {
   try {
     const identity = await api.reviewIdentity();
     devMode.value = requestedDevMode && identity.devMode;
-    draftStorage = new ReviewDraftStorage<SkillTaskManifest>(window.localStorage, `${identity.dataRootKey}:${identity.skillsRootKey ?? 'unconfigured'}`);
+    if (!props.installedSkillName) draftStorage = new ReviewDraftStorage<SkillTaskManifest>(window.localStorage, `${identity.dataRootKey}:${identity.skillsRootKey ?? 'unconfigured'}:${props.draftCardId ?? 'formal'}`);
   } catch (error) {
     draftStorageState.value = 'error';
     draftStorageError.value = error instanceof Error ? error.message : String(error);
@@ -646,10 +671,11 @@ onMounted(async () => {
   await loadSkills();
   if (devMode.value && requestedMode === 'agent') mode.value = 'agent';
 });
+onUnmounted(() => memoryReferences.clear());
 </script>
 
 <template>
-  <div class="shell">
+  <div class="shell" :class="{ 'workflow-editor': embedded }">
     <header class="topbar">
       <h1 class="sr-only">{{ t('app.title') }}</h1>
     <nav class="mode-tabs" :aria-label="t('app.navLabel')">
@@ -663,7 +689,7 @@ onMounted(async () => {
           <button :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">中文</button>
           <button :class="{ active: locale === 'en-US' }" @click="setLocale('en-US')">EN</button>
         </div>
-        <div v-if="mode === 'review'" class="top-actions">
+        <div v-if="mode === 'review' && !embedded" class="top-actions">
           <span v-if="view" class="status-chip" :class="{ readonly: !writable }">{{ writable ? t('review.writable') : t('review.readonly') }}</span>
           <button class="secondary" :disabled="busy || !view" @click="runCurrentTask">{{ dirty && writable ? t('review.saveAndRun') : t('review.runTask') }}</button>
           <button v-if="view?.writable" class="destructive" :disabled="busy" @click="requestTaskDeletion">{{ t('review.deleteTask') }}</button>
@@ -690,9 +716,9 @@ onMounted(async () => {
     </main>
 
     <main v-else-if="mode === 'review'" class="workspace review-layout">
-      <TaskCatalog :skills="skills" :skill-name="skillName" :busy="busy" :current-step-count="steps.length" @select="openCatalogTask" @create="mode = 'recordings'" />
+      <TaskCatalog v-if="!embedded" :skills="skills" :skill-name="skillName" :busy="busy" :current-step-count="steps.length" @select="openCatalogTask" @create="mode = 'recordings'" />
       <section class="steps panel">
-        <div class="review-steps-heading"><h2>{{ t('review.workflow') }}</h2><div><span>{{ view?.title ?? t('review.selectTask') }}</span><small>{{ t('common.steps', { count: steps.length }) }}</small></div></div>
+        <div class="review-steps-heading"><h2>{{ t('review.workflow') }}</h2><div><span>{{ props.draftTaskTitle ?? view?.title ?? t('review.selectTask') }}</span><small>{{ t('common.steps', { count: steps.length }) }}</small></div></div>
         <button class="secondary add-step" :disabled="!writable || busy" @click="insertStep"><WorkbenchIcon name="add" />{{ t('review.insert') }}</button>
         <div class="step-list">
           <div v-for="(item, index) in steps" :key="item.id" class="step-row"
@@ -876,7 +902,7 @@ onMounted(async () => {
     </main>
 
     <main v-else-if="mode === 'recordings'" class="workspace recording-layout">
-      <RecordingWorkspace :skills-configured="skillsConfigured" @created="openCreatedTask" />
+      <RecordingWorkspace :skills-configured="skillsConfigured" :card-id="props.recordingCard?.id" :recording-id="props.recordingCard?.recordingId" @created="openCreatedTask" />
     </main>
 
     <main v-else-if="mode === 'execution'" class="workspace execution-layout">
@@ -917,6 +943,7 @@ onMounted(async () => {
       @cancel="taskDeleteOpen = false"
     />
 
-    <footer v-if="mode === 'review' && skills.length"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
+    <div v-if="embedded" class="workflow-footer"><span v-if="skills.length && status() !== t('review.ready')" class="workflow-editor-feedback" :class="{ error: conflict }">{{ status() }}</span><button class="primary" :disabled="busy || !dirty || !writable || conflict || advancedEditing" @click="save">{{ t('review.save') }}</button></div>
+    <footer v-if="!embedded && mode === 'review' && skills.length && status() !== t('review.ready')"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
   </div>
 </template>

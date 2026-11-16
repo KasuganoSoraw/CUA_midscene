@@ -13,6 +13,7 @@ export interface PythonWorkerLaunch {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   stdio?: SpawnOptions['stdio'];
+  signal?: AbortSignal;
 }
 
 export interface ResolvePythonExecutableOptions {
@@ -83,11 +84,40 @@ export function spawnPythonWorker(
         PYTHONIOENCODING: 'utf-8',
         ...launch.env,
       },
+      signal: launch.signal,
       shell: false,
       windowsHide: true,
       stdio: launch.stdio ?? ['pipe', 'pipe', 'pipe'],
     },
   );
+}
+
+// Maps a language-agnostic marker (present in every localized trace error) to a
+// user-facing message. The raw Python exception is intentionally not shown: it
+// is a technical stack trace that carries no value for end users.
+const FRIENDLY_ERRORS: Record<string, readonly [RegExp, string][]> = {
+  'zh-CN': [
+    [/no executable action steps/i, '录制中没有可生成技能的操作步骤，请至少录制一个有效操作后重试。'],
+    [/skill directory already exists/i, '该技能已存在，可打开技能编辑器查看。'],
+  ],
+  'en-US': [
+    [/no executable action steps/i, 'The recording has no executable action steps to generate a skill. Please record at least one effective operation and try again.'],
+    [/skill directory already exists/i, 'The skill already exists. Open the skill editor to review it.'],
+  ],
+};
+const FRIENDLY_FALLBACK = '技能处理失败，请稍后重试。';
+
+function friendlyWorkerMessage(output: string): string {
+  const language = process.env.CUA_LANGUAGE === 'en-US' ? 'en-US' : 'zh-CN';
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const tail = lines.slice(-8).join('\n');
+  for (const [pattern, message] of FRIENDLY_ERRORS[language]) {
+    if (pattern.test(tail)) return message;
+  }
+  return FRIENDLY_FALLBACK;
 }
 
 export async function runPythonWorker(
@@ -107,15 +137,16 @@ export async function runPythonWorker(
     child.stdout?.on('data', forward);
     child.stderr?.on('data', forward);
     child.once('error', (error) => {
+      if (launch.signal?.aborted) return;
       reject(new Error(`无法启动 Python Worker：${error.message}`));
     });
     child.once('close', (code, signal) => {
+      if (launch.signal?.aborted) { reject(new Error('任务已停止')); return; }
       if (code === 0) {
         resolve();
         return;
       }
-      const detail = output.trim() ? `\n${output.trim()}` : '';
-      reject(new Error(`Python Worker 执行失败：exit=${String(code)} signal=${signal ?? '-'}${detail}`));
+      reject(new Error(friendlyWorkerMessage(output)));
     });
   });
 }

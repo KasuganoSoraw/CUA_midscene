@@ -94,31 +94,34 @@ function renderAction(action: JsonObject, context: string): RecordedTaskAiActPro
       throw new Error(`${context} 使用 locate 时 ${name} 的值必须为空`);
     }
     const locatedPrompt = readUserPrompt(hasLocate ? action.locate : value, hasLocate ? 'locate' : name, context);
-    return {
-      ...locatedPrompt,
-      prompt: name === 'aiTap'
-        ? locatedPrompt.prompt
-        : `${name === 'aiRightClick' ? '右键点击' : '双击'}以下描述对应的目标：${JSON.stringify(locatedPrompt.prompt)}`,
-    };
+    let prompt = locatedPrompt.prompt;
+    if (name !== 'aiTap') {
+      const operation = name === 'aiRightClick' ? '右键点击' : '双击';
+      prompt = `${operation}以下描述对应的目标：${JSON.stringify(locatedPrompt.prompt)}`;
+    }
+    return { ...locatedPrompt, prompt };
   }
   if (name === 'ai' || name === 'aiAsk') return renderAiAction(name, value, context);
   if (name === 'aiWaitFor') return { prompt: requiredString(value, name, context), images: [] };
   if (name === 'aiInput') return renderInput(action, context);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${context} 的 ${name} 必须是对象`);
   const parameters = value as JsonObject;
-  if (name === 'KeyboardPress') {
-    const locate = parameters.locate;
-    const target = locate === undefined ? ''
-      : `在 ${JSON.stringify(requiredString(
-        locate && typeof locate === 'object' && !Array.isArray(locate) ? (locate as JsonObject).prompt : locate,
-        'KeyboardPress.locate', context,
-      ))} 中`;
-    return {
-      prompt: `${target}按下 ${JSON.stringify(requiredString(parameters.keyName, 'KeyboardPress.keyName', context))} 键`,
-      images: [],
-    };
-  }
+  if (name === 'KeyboardPress') return renderKeyboardPress(parameters, context);
   return renderKeyboardTypeText(parameters, context);
+}
+
+function renderKeyboardPress(parameters: JsonObject, context: string): RecordedTaskAiActPrompt {
+  const locate = parameters.locate;
+  let target = '';
+  if (locate !== undefined) {
+    const prompt = locate && typeof locate === 'object' && !Array.isArray(locate)
+      ? (locate as JsonObject).prompt : locate;
+    target = `在 ${JSON.stringify(requiredString(prompt, 'KeyboardPress.locate', context))} 中`;
+  }
+  return {
+    prompt: `${target}按下 ${JSON.stringify(requiredString(parameters.keyName, 'KeyboardPress.keyName', context))} 键`,
+    images: [],
+  };
 }
 
 function renderAiAction(name: 'ai' | 'aiAsk', value: unknown, context: string): RecordedTaskAiActPrompt {

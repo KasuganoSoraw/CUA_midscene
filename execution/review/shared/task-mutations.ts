@@ -5,7 +5,7 @@ import type {
   ReviewMutationResult,
   ReviewOperation,
   ReviewTaskDraft,
-} from '../shared/types.js';
+} from './types.js';
 
 const stepNamePattern = /^(step-(\d{3,})) \| (click|doubleClick|rightClick|input|keyboard|wait|aiAct|read)$/;
 

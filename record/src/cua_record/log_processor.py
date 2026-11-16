@@ -605,46 +605,37 @@ class LogProcessor:
         """Main processing function"""
         # Step 1: Parse input log
         actions = self.process_input_log(log_file_path)
-        print(f"Parsed {len(actions)-1} raw actions")
-        
+
         # Step 2: Merge keyboard events with custom time threshold
         actions = self.merge_keyboard_events(actions, time_threshold)
-        print(f"After keyboard merge: {len(actions)-1} actions")
-        
+
         # Step 3: Merge mouse events
         actions = self.merge_mouse_events(actions)
-        print(f"After mouse merge: {len(actions)-1} actions")
 
         # Step 4: Merge drag events
         actions = self.merge_drag_events(actions)
-        print(f"After drag merge: {len(actions)-1} actions")
-        
+
         # Step 5: Process scroll events
         actions = self.process_scroll_events(actions)
-        print(f"After scroll processing: {len(actions)-1} actions")
-        
+
         # Step 6: Merge adjacent typing actions
         actions = self.merge_adjacent_typing(actions, time_threshold)
-        print(f"After typing merge: {len(actions)-1} actions")
 
         # Step 7: Remove single-click directly preceding a nearby double-click
         actions = self.cleanup_preceded_double_clicks(actions, tol=5)
-        print(f"After double-click cleanup: {len(actions)-1} actions")
 
         # Step 8: Remove single-click directly preceding a nearby drag
         actions = self.cleanup_click_before_drag(actions, tol=5)
         if actions:
             actions.pop()
         actions = self.fold_text_paste(actions)
-        print(f"After click-before-drag and final recording cleanup: {len(actions)-1} actions")
-        
+
         # Step 9: Sort and Save processed log
         actions.sort(key=lambda a: a.get("timestamp", 0))
         if output_path:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(actions, f, indent=2, ensure_ascii=False)
-            print(f"Processed log saved to: {output_path}")
-        
+
         return actions
 
 def main():

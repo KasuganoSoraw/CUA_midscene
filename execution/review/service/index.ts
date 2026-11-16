@@ -1,5 +1,5 @@
 export { loadReviewTask, resolveReviewTaskRoot, reviewRevision } from './review-task.js';
-export { applyReviewMutation } from './task-mutations.js';
+export { applyReviewMutation } from '../shared/task-mutations.js';
 export {
   ReviewConflictError,
   ReviewReadonlyError,

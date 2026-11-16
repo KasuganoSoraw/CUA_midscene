@@ -99,6 +99,13 @@ class HotkeyInputFilter:
         self._pending_modifiers: list[RawInputEvent] = []
         self._suppressing = False
 
+    def _modifier_keys(self, key: int) -> set[int] | None:
+        if key in CTRL_KEYS:
+            return self._ctrl
+        if key in SHIFT_KEYS:
+            return self._shift
+        return None
+
     def handle(self, event: RawInputEvent) -> None:
         if event.kind not in ("key_down", "key_up") or event.vk_code is None:
             self._flush_modifiers()
@@ -107,7 +114,7 @@ class HotkeyInputFilter:
 
         key = event.vk_code
         is_down = event.kind == "key_down"
-        modifier_set = self._ctrl if key in CTRL_KEYS else self._shift if key in SHIFT_KEYS else None
+        modifier_set = self._modifier_keys(key)
         if modifier_set is not None:
             if is_down:
                 modifier_set.add(key)

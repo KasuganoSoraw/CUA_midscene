@@ -8,7 +8,7 @@ import { requireSkillName, safeSkillFile } from '../../cua/skills/paths.js';
 import { describeRecording, resolveRecordingDirectory } from '../../cua/recording/recording-catalog.js';
 import { RecordingGenerationManager } from '../service/recording-generation.js';
 import { deleteReviewSkill, loadReviewSkill, saveReviewSkill } from '../service/review-skill.js';
-import { applyReviewMutation } from '../service/task-mutations.js';
+import { applyReviewMutation } from '../shared/task-mutations.js';
 import { uploadSkillReferenceImage } from '../service/reference-images.js';
 import { referenceImageMaxBytes } from '../shared/reference-upload.js';
 import { defaultStepEditor } from '../shared/step-editor.js';
@@ -20,6 +20,7 @@ interface Options {
   recordingsRoot?: string;
   executionRoot?: string;
   create?: typeof createSkillFromRecording;
+  beforeCreate?: () => void;
   executionStatus(): TaskExecutionStatus;
 }
 
@@ -132,6 +133,7 @@ export function registerSkillRoutes(app: FastifyInstance, options: Options): Rec
       body: { type: 'object', properties: { language: { type: 'string', enum: ['zh-CN', 'en-US'] } }, additionalProperties: false },
     },
   }, async (request, reply) => {
+    options.beforeCreate?.();
     const skillsRoot = requireSkillsRoot(options.layout);
     const recordingOptions = { recordingsRoot: options.recordingsRoot, executionRoot: options.executionRoot };
     const entry = await describeRecording(request.params.recording, recordingOptions);

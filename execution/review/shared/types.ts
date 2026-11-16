@@ -223,6 +223,7 @@ export interface RecorderDisplaysResult {
 
 export interface StartRecorderRequest {
   displayId: string;
+  language?: GenerationLanguage;
 }
 
 export type TaskExecutionMode = 'task' | 'act';

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type {
   CreateRecordingSkillResult,
   RecorderDisplay,
@@ -12,6 +12,10 @@ import { api } from '../api';
 import { useI18n } from '../i18n';
 import { shouldDetectDisplays } from '../recording-display';
 import ConfirmDialog from './ConfirmDialog.vue';
+import tipIcon from '../assets/ucd/record-tip-blue.svg';
+import playIcon from '../assets/ucd/record-play.svg';
+import folderIcon from '../assets/ucd/record-floder.svg';
+import reportIcon from '../assets/ucd/record-report.svg';
 import videoIcon from '../assets/ucd/video.svg';
 import logIcon from '../assets/ucd/event-log.svg';
 import refreshIcon from '../assets/ucd/refresh.svg';
@@ -20,10 +24,14 @@ const { locale, t, formatDateTime } = useI18n();
 
 const props = defineProps<{
   skillsConfigured: boolean;
+  cardId?: string;
+  recordingId?: string | null;
 }>();
 
 const emit = defineEmits<{
   created: [result: CreateRecordingSkillResult];
+  analyze: [];
+  folderError: [message: string];
 }>();
 
 const catalog = ref<ReviewRecordingCatalog>({
@@ -31,7 +39,28 @@ const catalog = ref<ReviewRecordingCatalog>({
   envName: 'CUA_RECORDINGS_ROOT',
   recordings: [],
 });
-const selectedId = ref('');
+const rerecord = ref(false);
+const preview = ref<'video' | 'log'>();
+const logPreview = ref('');
+const previewDialog = ref<HTMLDialogElement>();
+watch(preview, async value => {
+  await nextTick();
+  if (value) previewDialog.value?.showModal(); else previewDialog.value?.close();
+});
+async function previewAsset(kind: 'video' | 'log'): Promise<void> {
+  if (!selected.value) return;
+  error.value = '';
+  try {
+    if (kind === 'log') {
+      const response = await fetch(`/api/recordings/${encodeURIComponent(selected.value.id)}/assets/log`);
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error);
+      logPreview.value = value.text + (value.truncated ? '\n' + t('workflow.logTruncated') : '');
+    }
+    preview.value = kind;
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause); }
+}
+const selectedId = ref(props.recordingId ?? '');
 const actionBusy = ref(false);
 const generation = ref<SkillGenerationStatus>({ phase: 'idle' });
 const busy = computed(() => actionBusy.value || generation.value.phase === 'running');
@@ -50,10 +79,11 @@ let generationPolling = false;
 let disposed = false;
 
 function applyGeneration(next: SkillGenerationStatus, restoreForm = false): void {
+  if (props.cardId && next.recording && next.recording !== selectedId.value) return;
   const wasRunning = generation.value.phase === 'running';
   generation.value = next;
   if (restoreForm && next.request && next.recording) {
-    selectedId.value = next.recording;
+    if (!props.cardId || next.recording === props.recordingId) selectedId.value = next.recording;
   }
   if (next.phase === 'running') message.value = () => t('recording.creating');
   else if (next.phase === 'succeeded' && next.result) {
@@ -100,6 +130,19 @@ const elapsedRecording = computed(() => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 });
 
+const recorderPhaseLabel = computed(() => {
+  if (recorderStatus.value.phase === 'arming') return t('recording.preparing');
+  if (recorderStatus.value.phase === 'armed') return t('recording.armed');
+  if (recorderStatus.value.phase === 'starting') return t('recording.starting');
+  if (recorderStatus.value.phase === 'stopping') return t('recording.stopping');
+  return t('recording.active');
+});
+const recorderStopLabel = computed(() => {
+  if (recorderStatus.value.phase === 'stopping') return t('recording.stoppingButton');
+  if (recorderStatus.value.phase === 'armed') return t('recording.cancelReady');
+  return t('recording.stopNow');
+});
+
 function formatSize(size: number | undefined): string {
   if (size === undefined) return t('common.notFound');
   if (size < 1024) return `${size} B`;
@@ -118,9 +161,9 @@ function applyCatalog(next: ReviewRecordingCatalog): void {
     message.value = () => t('recording.notConfigured', { name: next.envName });
     return;
   }
-  selectedId.value = next.recordings.some((item) => item.id === selectedId.value)
-    ? selectedId.value
-    : next.recordings[0]?.id ?? '';
+  if (!next.recordings.some((item) => item.id === selectedId.value)) {
+    selectedId.value = props.cardId ? '' : next.recordings[0]?.id ?? '';
+  }
   message.value = next.recordings.length
     ? () => t('recording.found', { count: next.recordings.length })
     : () => t('recording.empty');
@@ -129,7 +172,16 @@ function applyCatalog(next: ReviewRecordingCatalog): void {
 async function loadRecordings(): Promise<void> {
   error.value = '';
   try {
-    applyCatalog(await api.recordings());
+    if (props.cardId) {
+      const card = await api.recordingCard(props.cardId);
+      selectedId.value = card.recordingId ?? '';
+    }
+    const next = await api.recordings();
+    const linkedId = selectedId.value;
+    applyCatalog(next);
+    if (props.cardId && linkedId && !next.recordings.some(item => item.id === linkedId)) {
+      error.value = t('workflow.relatedMissing', { id: linkedId });
+    }
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
   }
@@ -140,7 +192,7 @@ async function loadRecorderStatus(): Promise<void> {
     const wasActive = recorderCollapsed.value;
     const next = await api.recorderStatus();
     recorderStatus.value = next;
-    if (wasActive && next.phase === 'idle') await loadRecordings();
+    if (wasActive && next.phase === 'idle') { await loadRecordings(); rerecord.value = false; }
   } catch (caught) {
     recorderError.value = caught instanceof Error ? caught.message : String(caught);
   }
@@ -172,9 +224,9 @@ async function startRecorder(): Promise<void> {
     outputRoot: recorderStatus.value.outputRoot,
   };
   try {
-    recorderStatus.value = await api.startRecorder({
-      displayId: selectedDisplayId.value,
-    });
+    recorderStatus.value = props.cardId
+      ? await api.startCardRecorder(props.cardId, { displayId: selectedDisplayId.value, language: locale.value })
+      : await api.startRecorder({ displayId: selectedDisplayId.value, language: locale.value });
     clock.value = Date.now();
   } catch (caught) {
     recorderError.value = caught instanceof Error ? caught.message : String(caught);
@@ -200,17 +252,25 @@ async function stopRecorder(): Promise<void> {
 }
 
 async function openFolder(): Promise<void> {
-  if (!selected.value || opening.value || busy.value) return;
+  if (opening.value) return;
+  if (!selected.value) {
+    reportFolderError(t('workflow.openFolderNotFound'));
+    return;
+  }
   opening.value = true;
   error.value = '';
   try {
     await api.openRecordingFolder(selected.value.id);
-    message.value = () => t('recording.folderOpened', { id: selected.value?.id ?? '' });
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : String(caught);
+    reportFolderError(caught instanceof Error ? caught.message : String(caught));
   } finally {
     opening.value = false;
   }
+}
+
+function reportFolderError(message: string): void {
+  if (props.cardId) emit('folderError', message);
+  else error.value = message;
 }
 
 async function createTask(): Promise<void> {
@@ -257,7 +317,7 @@ onMounted(async () => {
   if (disposed) return;
   await loadGeneration(true);
   if (disposed) return;
-  if (shouldDetectDisplays(recorderStatus.value.phase)) await refreshRecorderDisplays();
+  if (shouldDetectDisplays(recorderStatus.value.phase) && (!props.cardId || !selected.value)) await refreshRecorderDisplays();
   if (disposed) return;
   recorderPoll = setInterval(() => {
     clock.value = Date.now();
@@ -272,21 +332,42 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <div v-if="cardId" class="rw-root">
+    <Teleport to="body"><dialog ref="previewDialog" class="asset-preview" :aria-label="preview === 'video' ? t('workflow.recordedVideo') : t('workflow.eventLog')" @cancel.prevent="preview = undefined"><button autofocus class="secondary" @click="preview = undefined">{{ t('workflow.closePreview') }}</button><video v-if="preview === 'video' && selected" controls autoplay :src="`/api/recordings/${encodeURIComponent(selected.id)}/assets/video`"></video><pre v-else>{{ logPreview }}</pre></dialog></Teleport>
+    <div v-if="recorderError || error" class="console-error" role="alert">{{ recorderError || error }}</div>
+    <template v-if="recorderCollapsed || rerecord || !selected">
+      <div class="rw-scroll">
+      <p class="workflow-warning"><img :src="tipIcon" alt="" />{{ t('workflow.greenBoxTip') }}</p>
+      <div v-if="recorderCollapsed" class="workflow-live" role="status"><strong>{{ recorderStatus.phase === 'armed' ? t('workflow.armed') : t('workflow.recording') }}</strong><p>{{ t('workflow.useHotkey', { hotkey: recorderStatus.hotkey || 'Ctrl+Shift+F9' }) }} {{ elapsedRecording }}</p></div>
+      <div class="workflow-screens"><button v-for="display in recorderDisplays" :key="display.id" :disabled="recorderCollapsed || recorderBusy" :class="{ selected: selectedDisplayId === display.id }" @click="selectedDisplayId = display.id"><span>{{ t('workflow.display', { index: display.index + 1 }) }} <em v-if="display.primary">{{ t('workflow.primary') }}</em><small>{{ display.width }}×{{ display.height }} / {{ display.deviceName }}</small></span><img :src="display.previewUrl" :alt="t('workflow.display', { index: display.index + 1 })" /></button></div>
+      <p v-if="!recorderDisplays.length" class="catalog-feedback">{{ recorderBusy ? t('workflow.detecting') : t('workflow.noScreens') }}</p>
+      </div>
+      <div class="workflow-footer"><button v-if="rerecord && !recorderCollapsed" class="secondary" @click="rerecord = false">{{ t('workflow.backToResult') }}</button><button v-if="!recorderCollapsed" class="secondary" :disabled="recorderBusy" @click="refreshRecorderDisplays">{{ t('workflow.detectScreens') }}</button><button v-if="!recorderCollapsed" class="primary" :disabled="!canStartRecorder" @click="startRecorder">{{ t('workflow.prepareRecord') }}</button><button v-else class="secondary" :disabled="recorderBusy || recorderStatus.phase === 'arming' || recorderStatus.phase === 'stopping'" @click="stopRecorder">{{ recorderStatus.phase === 'armed' ? t('workflow.cancelPrepare') : t('workflow.endRecord') }}</button></div>
+    </template>
+    <template v-else>
+      <div class="rw-scroll">
+      <div class="workflow-recording-assets">
+      <h2 class="workflow-asset-label">{{ t('workflow.recordedVideo') }}</h2><div class="workflow-asset"><img :src="videoIcon" alt="" /><span><strong>{{ selected.video?.name ?? t('workflow.videoMissing') }}</strong><small>{{ formatSize(selected.video?.size) }}　{{ selected.screen?.width }}×{{ selected.screen?.height }}</small></span><span class="asset-open"><button class="workflow-asset-action" :aria-label="t('workflow.play')" :title="t('workflow.play')" @click="previewAsset('video')"><img :src="playIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" :aria-label="t('workflow.openFolder')" :title="opening ? t('workflow.openingFolder') : t('workflow.openFolder')" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
+      <h2 class="workflow-asset-label">{{ t('workflow.eventLog') }}</h2><div class="workflow-asset"><img :src="logIcon" alt="" /><span><strong>{{ selected.eventLog?.name ?? t('workflow.logMissing') }}</strong><small>{{ formatSize(selected.eventLog?.size) }}</small></span><span class="asset-open"><button class="workflow-asset-action" :aria-label="t('workflow.viewLog')" :title="t('workflow.viewLog')" @click="previewAsset('log')"><img :src="reportIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" :aria-label="t('workflow.openFolder')" :title="opening ? t('workflow.openingFolder') : t('workflow.openFolder')" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
+      </div>
+      <p v-for="problem in selected.errors" :key="problem" class="console-error">{{ problem }}</p>
+      </div>
+      <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">{{ t('workflow.reRecord') }}</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">{{ t('workflow.step3') }}</button></div>
+    </template>
+  </div>
+  <template v-else>
   <section class="panel recorder-control" :class="{ collapsed: recorderCollapsed }">
     <template v-if="recorderCollapsed">
       <span class="recorder-live-dot" :class="{ armed: recorderStatus.phase === 'armed' || recorderStatus.phase === 'arming' }"></span>
       <div class="recorder-live-copy">
-        <strong>{{ recorderStatus.phase === 'arming' ? t('recording.preparing')
-          : recorderStatus.phase === 'armed' ? t('recording.armed')
-            : recorderStatus.phase === 'starting' ? t('recording.starting')
-              : recorderStatus.phase === 'stopping' ? t('recording.stopping') : t('recording.active') }}</strong>
+        <strong>{{ recorderPhaseLabel }}</strong>
         <small v-if="recorderStatus.phase === 'armed'">{{ t('recording.switchAndStart', { hotkey: recorderStatus.hotkey || 'Ctrl+Shift+F9' }) }}</small>
         <small v-else-if="recorderStatus.phase === 'recording'">{{ t('recording.stopHint', { id: recorderStatus.recordingId || '', elapsed: elapsedRecording, hotkey: recorderStatus.hotkey || 'Ctrl+Shift+F9' }) }}</small>
         <small v-else>{{ recorderStatus.recordingId || t('recording.registeringHotkey') }}</small>
       </div>
       <button class="destructive recorder-stop" type="button"
         :disabled="recorderBusy || recorderStatus.phase === 'arming' || recorderStatus.phase === 'stopping'"
-        @click="stopRecorder">{{ recorderStatus.phase === 'stopping' ? t('recording.stoppingButton') : recorderStatus.phase === 'armed' ? t('recording.cancelReady') : t('recording.stopNow') }}</button>
+        @click="stopRecorder">{{ recorderStopLabel }}</button>
     </template>
     <template v-else>
       <div class="recorder-heading">
@@ -316,8 +397,8 @@ onUnmounted(() => {
     </template>
   </section>
 
-  <section class="panel recording-browser">
-    <aside class="catalog recording-catalog">
+  <section class="panel recording-browser" :class="{ 'card-recording-browser': cardId }">
+    <aside v-if="!cardId" class="catalog recording-catalog">
       <div class="recording-catalog-heading">
         <h2>{{ t('recording.raw') }}</h2>
         <button class="icon-button" :disabled="actionBusy" :title="t('recording.refreshCatalog')" :aria-label="t('recording.refreshCatalog')" @click="loadRecordings"><img :src="refreshIcon" alt="" /></button>
@@ -425,4 +506,5 @@ onUnmounted(() => {
     @cancel="recordingDeleteOpen = false"
   />
 
+  </template>
 </template>
