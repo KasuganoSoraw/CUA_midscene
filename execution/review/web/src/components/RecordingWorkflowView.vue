@@ -71,7 +71,8 @@ const progressHeading = computed(() => {
   if (phase.value === 'publishing') return t('workflow.packaging');
   if (phase.value === 'stopped') return t('workflow.stopped');
   if (phase.value === 'editing') return t('workflow.waitingSync');
-  return t('workflow.failed');
+  if (phase.value === 'failed' && status.value?.skillName) return t('workflow.syncFailed');
+  return t('workflow.generationFailed');
 });
 async function refresh(): Promise<void> {
   if (fetching || disposed) return;
@@ -174,7 +175,8 @@ onUnmounted(() => {
                 <h3>{{ progressHeading }}</h3>
                 <p v-if="running">{{ phase === 'analyzing' ? t('workflow.generatingHelp') : t('workflow.publishingHelp') }}</p>
                 <p v-if="status.error">{{ status.error }}</p>
-                <pre v-if="displayLog">{{ displayLog }}</pre>
+                <details v-if="phase === 'failed' && displayLog" class="workflow-error-details"><summary>{{ t('workflow.errorDetails') }}</summary><pre>{{ displayLog }}</pre></details>
+                <pre v-else-if="displayLog">{{ displayLog }}</pre>
               </div>
             </section>
           </div>

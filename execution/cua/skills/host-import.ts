@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { readRuntimeEnvironmentValue } from '../environment.js';
 import { packageRoot } from '../package-root.js';
 import { requireSkillName } from './paths.js';
+import { httpImportError, networkImportError, responseImportError, type ImportContext } from './import-failure.js';
+export { SkillImportError } from './import-error.js';
 
 export const gdeclawApiBaseUrlEnv = 'GDECLAW_API_BASE_URL';
 
@@ -24,13 +26,6 @@ export function skillImportUrl(skillName: string, endpoint: URL): URL {
   return url;
 }
 
-export class SkillImportError extends Error {
-  constructor(message: string, readonly zipPath: string, readonly remoteStatus?: number) {
-    super(`${message}\nZIP 产物：${zipPath}`);
-    this.name = 'SkillImportError';
-  }
-}
-
 function responseDetail(body: unknown): string {
   if (!body || typeof body !== 'object') return '';
   const value = body as Record<string, unknown>;
@@ -39,23 +34,26 @@ function responseDetail(body: unknown): string {
   return '';
 }
 
-async function verifyImportResponse(response: Response, zipPath: string): Promise<void> {
+async function verifyImportResponse(response: Response, context: ImportContext, signal: AbortSignal): Promise<void> {
+  let raw: string;
+  try { raw = await response.text(); }
+  catch (error) {
+    if (!response.ok) throw httpImportError(context, response.status, '响应读取失败', error);
+    throw networkImportError(context, error, signal.aborted, response.status);
+  }
   let body: unknown;
-  try { body = await response.json(); }
-  catch {
-    if (response.ok) throw new SkillImportError('GDEClaw 导入响应不是有效 JSON，结果尚未确认，请先核实宿主状态', zipPath);
+  try { body = JSON.parse(raw); }
+  catch (error) {
+    if (!response.ok) throw httpImportError(context, response.status, raw, error);
+    throw responseImportError(context, response.status, 'GDE_RESPONSE_INVALID_JSON', raw, error);
   }
-  if (!response.ok) {
-    const detail = responseDetail(body);
-    const conflict = response.status === 409 ? 'Skill 名称冲突，未覆盖已有 Skill' : 'GDEClaw Skill 导入失败';
-    throw new SkillImportError(`${conflict}（HTTP ${response.status}）${detail ? `：${detail}` : ''}`, zipPath, response.status);
-  }
+  if (!response.ok) throw httpImportError(context, response.status, responseDetail(body) || raw);
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw new SkillImportError('GDEClaw 导入成功响应缺少有效对象，请先核实宿主状态', zipPath);
+    throw responseImportError(context, response.status, 'GDE_RESPONSE_INVALID_OBJECT', raw);
   }
   const result = body as Record<string, unknown>;
   if (result.success === false || result.ok === false || result.status === 'failed' || result.status === 'error' || Boolean(result.error)) {
-    throw new SkillImportError(`GDEClaw 未确认导入成功：${responseDetail(body) || '响应报告失败'}`, zipPath);
+    throw responseImportError(context, response.status, 'GDE_IMPORT_REJECTED', responseDetail(body) || raw);
   }
 }
 
@@ -66,12 +64,11 @@ export async function importSkillArchive(options: {
   const bytes = await readFile(options.zipPath);
   form.append('file', new Blob([new Uint8Array(bytes)], { type: 'application/zip' }), `${requireSkillName(options.skillName)}.zip`);
   const signal = AbortSignal.timeout(dependencies.timeoutMs ?? 60_000);
+  let response: Response;
   try {
-    const response = await (dependencies.fetch ?? fetch)(options.url, { method: 'POST', body: form, signal, redirect: 'error' });
-    await verifyImportResponse(response, options.zipPath);
+    response = await (dependencies.fetch ?? fetch)(options.url, { method: 'POST', body: form, signal, redirect: 'error' });
   } catch (error) {
-    if (error instanceof SkillImportError) throw error;
-    const reason = signal.aborted ? '请求超时' : '网络或响应读取失败';
-    throw new SkillImportError(`${reason}，导入结果不确定；请先核实 GDEClaw 中是否已安装，勿直接换名重传`, options.zipPath);
+    throw networkImportError(options, error, signal.aborted);
   }
+  await verifyImportResponse(response, options, signal);
 }

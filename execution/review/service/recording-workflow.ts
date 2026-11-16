@@ -1,3 +1,4 @@
+import { workflowFailure } from './workflow-error.js';
 import { deleteWorkflowAssets } from './workflow-deletion.js';
 import { deleteRecording } from './asset-deletion.js';
 import { replaceRecordingDraft } from './skill-replacement.js';
@@ -212,8 +213,10 @@ export class RecordingWorkflow {
     try {
       await work();
     } catch (error) {
+      const failure = workflowFailure(error, status.phase === 'publishing');
       status.phase = signal.aborted ? 'stopped' : 'failed';
-      status.error = error instanceof Error ? error.message : String(error);
+      status.error = failure.message;
+      status.log = `${status.log}\n错误详情：\n${failure.diagnostics}\n`.slice(-32768);
     } finally {
       this.write(status);
       this.active = undefined;

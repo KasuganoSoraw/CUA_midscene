@@ -697,3 +697,6 @@
   overflow-wrap: anywhere;
 }
 .workflow-editor-feedback.error { color: #c43546; }
+
+.workflow-error-details { margin-top: 12px; }
+.workflow-error-details summary { cursor: pointer; font-size: 14px; }
