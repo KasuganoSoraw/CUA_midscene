@@ -1,3 +1,4 @@
+import { SkillDeleteError } from '../../cua/skills/host-delete.js';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import type { RuntimeLayout } from '../../cua/contracts/types.js';
@@ -29,9 +30,10 @@ export async function createReviewApp(options: {
   });
 
   app.setErrorHandler((error, _request, reply) => {
-    reply.code(errorStatus(error)).send({
-      error: error instanceof Error ? error.message : String(error),
-    });
+    let message = String(error);
+    if (error instanceof Error) message = error.message;
+    if (error instanceof SkillDeleteError) message = error.userMessage;
+    reply.code(errorStatus(error)).send({ error: message });
   });
 
   app.get('/api/review/identity', async () => options.identity);

@@ -1,3 +1,4 @@
+import type { deleteHostSkill } from '../../cua/skills/host-delete.js';
 import { registerRecordingMedia } from './recording-media.js';
 import { RecordingWorkflow } from '../service/recording-workflow.js';
 import { registerWorkflowRoutes } from './workflow-routes.js';
@@ -59,6 +60,7 @@ interface ReviewRouteOptions {
 export interface ReviewRouteDependencies {
   workflow?: ConstructorParameters<typeof RecordingWorkflow>[1];
   createSkill?: typeof createSkillFromRecording;
+  deleteSkill?: typeof deleteHostSkill;
   createFromRecording?: typeof createTaskFromRecording;
   openDirectory?: typeof openRecordingDirectory;
   openReport?: typeof openExecutionReportFile;
@@ -245,7 +247,7 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
       }
     }, beforeAnalyze: () => {
       if (!['idle', 'failed'].includes(recorder.status().phase) || generation.status().phase === 'running' || skillGeneration.status().phase === 'running') throw new Error('录制或生成正在进行，请先结束当前任务');
-    } }, options.dependencies?.workflow);
+    } }, { deleteSkill: options.dependencies?.deleteSkill, ...options.dependencies?.workflow });
   registerWorkflowRoutes(app, workflow);
   registerRecordingMedia(app, recordingOptions());
   const recorder = options.dependencies?.recorder ?? new WindowsRecorderManager({
@@ -272,7 +274,7 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   const skillGeneration = registerSkillRoutes(app, {
     layout: options.layout, recordingsRoot: activeRecordingsRoot, executionRoot: options.executionRoot,
     beforeCreate: () => { if (workflow.isBusy()) throw new Error('录制正在分析或导入，请等待完成'); },
-    create: options.dependencies?.createSkill, executionStatus: () => execution.status(),
+    create: options.dependencies?.createSkill, deleteSkill: options.dependencies?.deleteSkill, executionStatus: () => execution.status(),
   });
 
   const agent = options.devMode

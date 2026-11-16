@@ -1,3 +1,4 @@
+import type { deleteHostSkill } from '../../cua/skills/host-delete.js';
 import { workflowFailure } from './workflow-error.js';
 import { deleteWorkflowAssets } from './workflow-deletion.js';
 import { deleteRecording } from './asset-deletion.js';
@@ -39,6 +40,7 @@ export class RecordingWorkflow {
       publish?: typeof publishRecordingDraft;
       replace?: typeof replaceRecordingDraft;
       deleteRecording?: typeof deleteRecording;
+      deleteSkill?: typeof deleteHostSkill;
     } = {},
   ) {
     this.store = new JsonStore(
@@ -101,11 +103,18 @@ export class RecordingWorkflow {
     if (this.options.cards.activeCard() === id) throw Object.assign(new Error('该卡片正在录制，请先结束录制'), { statusCode: 409 });
     this.deleting = true;
     try {
-      await deleteWorkflowAssets(this.options, this.storedStatus(id), async () => {
+      await deleteWorkflowAssets({ ...this.options, deleteSkill: this.dependencies.deleteSkill }, this.storedStatus(id), async () => {
         if (card.recordingId) await this.removeRecording(card.recordingId);
       });
       this.options.cards.remove(id);
       this.store.update(state => { delete state.workflows[id]; });
+    } catch (error) {
+      const status = this.storedStatus(id);
+      if (status) {
+        status.log = `${status.log}\n删除失败详情：\n${workflowFailure(error, false).diagnostics}`.slice(-32768);
+        this.write(status);
+      }
+      throw error;
     } finally {
       this.deleting = false;
     }
@@ -204,7 +213,7 @@ export class RecordingWorkflow {
       ...status, skillsRoot: this.options.skillsRoot!, executionRoot: this.options.executionRoot,
     }));
     await loadPublishedSkillResult(this.options.skillsRoot!, status.skillName);
-    const cleaned = await cleanupPreviousGeneration({ ...this.options, skillsRoot: this.options.skillsRoot!, retainedSkillName: status.skillName }, status.draftRoot);
+    const cleaned = await cleanupPreviousGeneration({ ...this.options, skillsRoot: this.options.skillsRoot!, retainedSkillName: status.skillName, deleteSkill: this.dependencies.deleteSkill }, status.draftRoot);
     if (cleaned) status.log += `已清理 ${cleaned} 批旧生成资产，当前 GDE Skill 目录已保留。\n`;
     status.log += `技能 ${status.skillName} 已同步到 GDE，正式 Skill 资源校验完成。\n`;
     status.phase = 'done';

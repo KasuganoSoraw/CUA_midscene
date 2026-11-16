@@ -4,11 +4,11 @@ import { assertContained, requireSkillName } from '../../cua/skills/paths.js';
 import { requireIdentifier } from '../../cua/task/tasks.js';
 import { resolveRecordingDirectory } from '../../cua/recording/recording-catalog.js';
 import type { WorkflowStatus } from '../shared/workflow.js';
-import { deleteReviewSkill } from './review-skill.js';
+import { deleteReviewSkill, type ReviewSkillDeleteOptions } from './review-skill.js';
 import { atomicReplace } from './task-save.js';
 
 interface GenerationAssets { draftRoot: string; skillName: string; recordingId: string }
-interface AssetOptions { dataRoot: string; skillsRoot: string; recordingsRoot?: string; executionRoot?: string; retainedSkillName?: string }
+interface AssetOptions { dataRoot: string; skillsRoot: string; recordingsRoot?: string; executionRoot?: string; retainedSkillName?: string; deleteSkill?: ReviewSkillDeleteOptions['deleteSkill'] }
 const ownershipFile = '.previous-generations.json';
 
 async function checkedDraft(dataRoot: string, draftRoot: string): Promise<string> {
@@ -87,13 +87,8 @@ async function removeDerivedRecording(options: AssetOptions, recordingId: string
   }
 }
 
-export async function removeOwnedSkill(skillsRoot: string, skillName: string): Promise<void> {
-  try { await lstat(path.join(skillsRoot, requireSkillName(skillName))); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
-    throw error;
-  }
-  await deleteReviewSkill(skillsRoot, skillName);
+export async function removeOwnedSkill(skillsRoot: string, skillName: string, options: ReviewSkillDeleteOptions = {}): Promise<void> {
+  await deleteReviewSkill(skillsRoot, skillName, { ...options, allowMissing: true });
 }
 
 export async function cleanupPreviousGeneration(options: AssetOptions, draftRoot: string): Promise<number> {
@@ -102,7 +97,7 @@ export async function cleanupPreviousGeneration(options: AssetOptions, draftRoot
   for (const entry of entries) {
     const target = await checkedDraft(options.dataRoot, entry.draftRoot);
     if (target === path.resolve(draftRoot)) throw new Error('不能清理当前生成资产');
-    if (entry.skillName && entry.skillName !== options.retainedSkillName) await removeOwnedSkill(options.skillsRoot, entry.skillName);
+    if (entry.skillName && entry.skillName !== options.retainedSkillName) await removeOwnedSkill(options.skillsRoot, entry.skillName, options);
     await removeDerivedRecording(options, entry.recordingId);
     await rm(target, { recursive: true, force: true });
     await saveOwnership(draftRoot, entries.slice(entries.indexOf(entry) + 1));

@@ -1,7 +1,8 @@
+import { SkillDeleteError } from '../../cua/skills/host-delete.js';
 import { SkillImportError } from '../../cua/skills/host-import.js';
 
 export function workflowFailure(error: unknown, synchronizing: boolean): { message: string; diagnostics: string } {
-  if (error instanceof SkillImportError) return { message: error.userMessage, diagnostics: error.diagnostics };
+  if (error instanceof SkillImportError || error instanceof SkillDeleteError) return { message: error.userMessage, diagnostics: error.diagnostics };
   const text = error instanceof Error ? error.message : String(error);
   let message = text.split(/\r?\n/)[0].slice(0, 1000);
   if (synchronizing) {

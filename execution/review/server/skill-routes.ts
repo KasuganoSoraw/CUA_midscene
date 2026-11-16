@@ -1,3 +1,4 @@
+import type { deleteHostSkill } from '../../cua/skills/host-delete.js';
 import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import type { JsonObject, RuntimeLayout, SkillTaskManifest } from '../../cua/contracts/types.js';
@@ -20,6 +21,7 @@ interface Options {
   recordingsRoot?: string;
   executionRoot?: string;
   create?: typeof createSkillFromRecording;
+  deleteSkill?: typeof deleteHostSkill;
   beforeCreate?: () => void;
   executionStatus(): TaskExecutionStatus;
 }
@@ -105,7 +107,7 @@ function registerSkillAssets(app: FastifyInstance, options: Options): void {
     if (active.skillName === request.params.skillName && ['preparing', 'running', 'stopping'].includes(active.phase)) {
       throw Object.assign(new Error('Skill 正在执行，暂时不能删除'), { statusCode: 409 });
     }
-    return deleteReviewSkill(requireSkillsRoot(options.layout), request.params.skillName);
+    return deleteReviewSkill(requireSkillsRoot(options.layout), request.params.skillName, options);
   });
   app.post<{ Params: SkillParams; Querystring: { revision: string }; Body: Buffer }>('/api/skills/:skillName/reference-images', {
     bodyLimit: referenceImageMaxBytes, schema: { params: skillParams, querystring: {

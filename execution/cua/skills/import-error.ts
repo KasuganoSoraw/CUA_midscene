@@ -25,7 +25,7 @@ export function errorNodes(error: unknown): ErrorNode[] {
   return nodes;
 }
 
-function requestAddress(url: URL): string {
+export function requestAddress(url: URL): string {
   const safe = new URL(url);
   safe.username = '';
   safe.password = '';

@@ -1,30 +1,24 @@
-import { errorNodes, SkillImportError } from './import-error.js';
+import { classifyGdeNetworkError } from './host-network.js';
+import { SkillImportError } from './import-error.js';
 
 export interface ImportContext { url: URL; zipPath: string }
 const draftRetained = '生成草稿已保留。';
 const uncertain = '是否已安装尚未确认，请先检查 GDE 中的对应技能和服务日志。';
-const certificateCodes = new Set(['CERT_HAS_EXPIRED', 'CERT_NOT_YET_VALID', 'DEPTH_ZERO_SELF_SIGNED_CERT',
-  'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY', 'ERR_TLS_CERT_ALTNAME_INVALID']);
-
 function networkReason(error: unknown, timedOut: boolean): { code: string; message: string } {
-  const nodes = errorNodes(error);
-  const codes = nodes.filter(node => node.terminal).map(node => node.code);
-  const all = (values: Set<string>) => codes.length > 0 && codes.every(code => values.has(code));
-  if (all(new Set(['ECONNREFUSED']))) return { code: 'GDE_CONNECTION_REFUSED', message: '无法连接 GDE 服务，请确认 GDE 服务已启动，并检查服务地址和端口。' };
-  if (all(new Set(['ENOTFOUND', 'EAI_AGAIN']))) return { code: 'GDE_DNS_FAILED', message: '无法解析 GDE 服务地址，请检查服务地址和网络连接。' };
-  if (all(certificateCodes)) return { code: 'GDE_CERTIFICATE_FAILED', message: 'GDE 服务的 HTTPS 证书校验失败，请检查证书和服务地址。' };
-  if (all(new Set(['UND_ERR_CONNECT_TIMEOUT']))) return { code: 'GDE_CONNECT_TIMEOUT', message: '连接 GDE 服务超时，请检查服务地址、端口和网络连接。' };
-  if (all(new Set(['EHOSTUNREACH', 'ENETUNREACH']))) return { code: 'GDE_NETWORK_UNREACHABLE', message: '无法访问 GDE 服务所在网络，请检查网络连接和服务地址。' };
-  if (nodes.some(node => node.message.toLowerCase() === 'unexpected redirect')) {
-    return { code: 'GDE_UNEXPECTED_REDIRECT', message: `GDE 导入请求发生重定向，请检查服务地址。${uncertain}` };
-  }
-  if (timedOut || codes.some(code => ['ETIMEDOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'].includes(code))) {
-    return { code: 'GDE_IMPORT_TIMEOUT', message: `等待 GDE 导入结果超时，${uncertain}` };
-  }
-  if (codes.some(code => ['ECONNRESET', 'EPIPE', 'UND_ERR_SOCKET'].includes(code))) {
-    return { code: 'GDE_CONNECTION_INTERRUPTED', message: `与 GDE 服务的连接中断，${uncertain}` };
-  }
-  return { code: 'GDE_NETWORK_FAILED', message: `未能获取 GDE 的导入结果，${uncertain}` };
+  const kind = classifyGdeNetworkError(error, timedOut);
+  const reasons = {
+    refused: ['GDE_CONNECTION_REFUSED', '无法连接 GDE 服务，请确认 GDE 服务已启动，并检查服务地址和端口。'],
+    dns: ['GDE_DNS_FAILED', '无法解析 GDE 服务地址，请检查服务地址和网络连接。'],
+    certificate: ['GDE_CERTIFICATE_FAILED', 'GDE 服务的 HTTPS 证书校验失败，请检查证书和服务地址。'],
+    connectTimeout: ['GDE_CONNECT_TIMEOUT', '连接 GDE 服务超时，请检查服务地址、端口和网络连接。'],
+    unreachable: ['GDE_NETWORK_UNREACHABLE', '无法访问 GDE 服务所在网络，请检查网络连接和服务地址。'],
+    redirect: ['GDE_UNEXPECTED_REDIRECT', `GDE 导入请求发生重定向，请检查服务地址。${uncertain}`],
+    timeout: ['GDE_IMPORT_TIMEOUT', `等待 GDE 导入结果超时，${uncertain}`],
+    interrupted: ['GDE_CONNECTION_INTERRUPTED', `与 GDE 服务的连接中断，${uncertain}`],
+    unknown: ['GDE_NETWORK_FAILED', `未能获取 GDE 的导入结果，${uncertain}`],
+  };
+  const [code, message] = reasons[kind];
+  return { code, message };
 }
 
 export function networkImportError(context: ImportContext, error: unknown, timedOut: boolean, remoteStatus?: number): SkillImportError {
