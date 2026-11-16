@@ -1,3 +1,4 @@
+import { cleanupPreviousGeneration, trackGenerationAssets } from './generation-assets.js';
 import { loadPublishedSkillResult } from './review-skill.js';
 import type { WorkflowResult } from '../shared/workflow.js';
 import { mkdir, mkdtemp } from 'node:fs/promises';
@@ -46,10 +47,14 @@ export class RecordingWorkflow {
       }
     });
   }
+  private storedStatus(id: string): WorkflowStatus | undefined {
+    const row = this.store.value.workflows[id];
+    if (row) return { ...row };
+  }
   status(id: string): WorkflowStatus {
     const card = this.options.cards.get(id);
-    const row = this.store.value.workflows[id];
-    if (row && row.recordingId === card.recordingId) return { ...row };
+    const row = this.storedStatus(id);
+    if (row && row.recordingId === card.recordingId) return row;
     return {
       cardId: id,
       recordingId: card.recordingId ?? '',
@@ -83,7 +88,7 @@ export class RecordingWorkflow {
     });
   }
   async analyze(id: string, language: GenerationLanguage): Promise<WorkflowStatus> {
-    if (this.active) throw Object.assign(new Error('已有任务正在处理'), { statusCode: 409 });
+    if (this.active) throw Object.assign(new Error('正在生成中，请先终止任务再试。'), { statusCode: 409 });
     this.options.beforeAnalyze?.();
     const card = this.options.cards.get(id);
     if (!card.recordingId || !this.options.skillsRoot) throw new Error('需要完整录制并配置 CUA_SKILLS_ROOT');
@@ -93,7 +98,8 @@ export class RecordingWorkflow {
     const exportRoot = path.join(this.options.dataRoot, 'workbench', 'drafts');
     await mkdir(exportRoot, { recursive: true });
     const draftRoot = await mkdtemp(path.join(exportRoot, 'draft-'));
-    if (this.active) throw Object.assign(new Error('已有任务正在处理'), { statusCode: 409 });
+    const replaceSkillNames = await trackGenerationAssets(this.options.dataRoot, this.storedStatus(id), draftRoot);
+    if (this.active) throw Object.assign(new Error('正在生成中，请先终止任务再试。'), { statusCode: 409 });
     if (this.options.cards.get(id).recordingId !== card.recordingId) throw new Error('录制关联已更新，请重新开始分析');
     const status: WorkflowStatus = {
       cardId: id,
@@ -116,6 +122,7 @@ export class RecordingWorkflow {
           skillsRoot: this.options.skillsRoot!,
           recording,
           draftRoot,
+          replaceSkillNames,
           language,
           progress,
           signal: controller.signal,
@@ -136,7 +143,7 @@ export class RecordingWorkflow {
     } });
   }
   async publish(id: string): Promise<WorkflowStatus> {
-    if (this.active) throw Object.assign(new Error('已有任务正在处理'), { statusCode: 409 });
+    if (this.active) throw Object.assign(new Error('正在生成中，请先终止任务再试。'), { statusCode: 409 });
     const status = this.status(id);
     if (!status.skillName || !['editing', 'failed'].includes(status.phase)) throw new Error('没有可发布的编辑草稿');
     if (!this.options.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT');
@@ -156,6 +163,8 @@ export class RecordingWorkflow {
     status.phase = 'publishing';
     status.log += '\n录制分析完成，正在打包并同步到 GDE Skill，请等待导入确认。\n';
     this.write(status);
+    const cleaned = await cleanupPreviousGeneration({ ...this.options, skillsRoot: this.options.skillsRoot! }, status.draftRoot);
+    if (cleaned) { status.log += `已清理 ${cleaned} 批旧生成资产及对应的 GDE Skill。\n`; this.write(status); }
     await withSkillWriteLock(status.draftRoot, status.skillName, () => (this.dependencies.publish ?? publishRecordingDraft)({
       ...status, skillsRoot: this.options.skillsRoot!, executionRoot: this.options.executionRoot,
     }));

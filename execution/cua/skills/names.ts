@@ -22,7 +22,7 @@ async function declaredName(root: string, directory: string): Promise<string | u
   }
 }
 
-export async function occupiedSkillNames(skillsRoot: string): Promise<Set<string>> {
+export async function occupiedSkillNames(skillsRoot: string, ignoredDirectories: ReadonlySet<string> = new Set()): Promise<Set<string>> {
   let root: string;
   try { root = await canonicalSkillsRoot(skillsRoot); }
   catch (error) {
@@ -31,6 +31,7 @@ export async function occupiedSkillNames(skillsRoot: string): Promise<Set<string
   }
   const names = new Set<string>();
   for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (ignoredDirectories.has(entry.name.toLowerCase())) continue;
     names.add(entry.name.toLowerCase());
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     const name = await declaredName(root, entry.name);

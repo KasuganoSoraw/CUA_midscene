@@ -57,6 +57,7 @@ interface ReviewRouteOptions {
 }
 
 export interface ReviewRouteDependencies {
+  workflow?: ConstructorParameters<typeof RecordingWorkflow>[1];
   createSkill?: typeof createSkillFromRecording;
   createFromRecording?: typeof createTaskFromRecording;
   openDirectory?: typeof openRecordingDirectory;
@@ -239,7 +240,7 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
   const workflow = new RecordingWorkflow({ dataRoot: options.layout.data.root,
     skillsRoot: options.layout.skillsRoot, recordingsRoot: activeRecordingsRoot, executionRoot: options.executionRoot, cards, beforeAnalyze: () => {
       if (!['idle', 'failed'].includes(recorder.status().phase) || generation.status().phase === 'running' || skillGeneration.status().phase === 'running') throw new Error('录制或生成正在进行，请先结束当前任务');
-    } });
+    } }, options.dependencies?.workflow);
   registerWorkflowRoutes(app, workflow);
   registerRecordingMedia(app, recordingOptions());
   const recorder = options.dependencies?.recorder ?? new WindowsRecorderManager({

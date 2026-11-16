@@ -151,7 +151,7 @@ export async function createSkillFromRecording(options: {
 
 export async function prepareRecordingSkill(options: {
   recording: string; skillsRoot: string; draftRoot: string; executionRoot?: string;
-  pythonExecutable?: string; language: GenerationLanguage; progress: import('node:stream').Writable; signal: AbortSignal;
+  replaceSkillNames?: string[]; pythonExecutable?: string; language: GenerationLanguage; progress: import('node:stream').Writable; signal: AbortSignal;
 }, dependencies: { runRecorder?: typeof runRecordingParser } = {}): Promise<string> {
   assertDraftLocation(options.skillsRoot, options.draftRoot);
   const executionRoot = options.executionRoot ?? packageRoot;
@@ -163,7 +163,9 @@ export async function prepareRecordingSkill(options: {
   options.signal.throwIfAborted();
   const assets = await generatedAssets(options.recording);
   const metadata = readGeneratedSkillMetadata(await readShowuiTrace(assets.tracePath));
-  metadata.name = availableSkillName(metadata.name, await occupiedSkillNames(options.skillsRoot));
+  const replacing = new Set((options.replaceSkillNames ?? []).map(name => requireSkillName(name).toLowerCase()));
+  const occupied = await occupiedSkillNames(options.skillsRoot, replacing);
+  metadata.name = availableSkillName(metadata.name, occupied);
   await mkdir(path.join(options.draftRoot, metadata.name), { recursive: true });
   await assembleSkill(path.join(options.draftRoot, metadata.name), options.recording, metadata, assets, options.language);
   return metadata.name;

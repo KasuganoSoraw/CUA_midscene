@@ -42,8 +42,8 @@ import actionInfoIcon from './assets/ucd/action-info.svg';
 import waitInfoIcon from './assets/ucd/wait-info.svg';
 
 import type { RecordingCard } from '../../shared/recording-cards';
-const props = defineProps<{ recordingCard?: RecordingCard; draftCardId?: string; draftTaskTitle?: string; installedSkillName?: string }>();
-const emit = defineEmits<{ modeChange: [mode: string]; saved: [] }>();
+const props = defineProps<{ recordingCard?: RecordingCard; draftCardId?: string; draftTaskTitle?: string; installedSkillName?: string; editorToolbarTarget?: string }>();
+const emit = defineEmits<{ modeChange: [mode: string]; saved: []; saveError: [message: string] }>();
 const embedded = Boolean(props.draftCardId || props.installedSkillName);
 const memoryReferences = new MemoryReferenceImages();
 const api = props.draftCardId ? draftApi(props.draftCardId) : defaultApi;
@@ -533,6 +533,7 @@ async function save(): Promise<boolean> {
     conflict.value = error instanceof ApiError && error.status === 409;
     const text = error instanceof Error ? error.message : String(error);
     status.value = () => text;
+    emit('saveError', text);
     return false;
   } finally { busy.value = false; }
 }
@@ -943,7 +944,10 @@ onUnmounted(() => memoryReferences.clear());
       @cancel="taskDeleteOpen = false"
     />
 
-    <div v-if="embedded" class="workflow-footer"><span v-if="skills.length && status() !== t('review.ready')" class="workflow-editor-feedback" :class="{ error: conflict }">{{ status() }}</span><button class="primary" :disabled="busy || !dirty || !writable || conflict || advancedEditing" @click="save">{{ t('review.save') }}</button></div>
+    <Teleport defer v-if="embedded && editorToolbarTarget" :to="editorToolbarTarget">
+      <button class="primary workflow-save-changes" :disabled="busy || !dirty || !writable || conflict || advancedEditing" @click="save">{{ t('review.saveChanges') }}</button>
+    </Teleport>
+    <div v-else-if="embedded" class="workflow-footer"><span v-if="skills.length && status() !== t('review.ready')" class="workflow-editor-feedback" :class="{ error: conflict }">{{ status() }}</span><button class="primary" :disabled="busy || !dirty || !writable || conflict || advancedEditing" @click="save">{{ t('review.save') }}</button></div>
     <footer v-if="!embedded && mode === 'review' && skills.length && status() !== t('review.ready')"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
   </div>
 </template>
