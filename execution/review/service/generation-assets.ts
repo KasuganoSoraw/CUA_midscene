@@ -8,7 +8,7 @@ import { deleteReviewSkill } from './review-skill.js';
 import { atomicReplace } from './task-save.js';
 
 interface GenerationAssets { draftRoot: string; skillName: string; recordingId: string }
-interface AssetOptions { dataRoot: string; skillsRoot: string; recordingsRoot?: string; executionRoot?: string }
+interface AssetOptions { dataRoot: string; skillsRoot: string; recordingsRoot?: string; executionRoot?: string; retainedSkillName?: string }
 const ownershipFile = '.previous-generations.json';
 
 async function checkedDraft(dataRoot: string, draftRoot: string): Promise<string> {
@@ -97,7 +97,7 @@ export async function cleanupPreviousGeneration(options: AssetOptions, draftRoot
   for (const entry of entries) {
     const target = await checkedDraft(options.dataRoot, entry.draftRoot);
     if (target === path.resolve(draftRoot)) throw new Error('不能清理当前生成资产');
-    if (entry.skillName) await removeOwnedSkill(options.skillsRoot, entry.skillName);
+    if (entry.skillName && entry.skillName !== options.retainedSkillName) await removeOwnedSkill(options.skillsRoot, entry.skillName);
     await removeDerivedRecording(options, entry.recordingId);
     await rm(target, { recursive: true, force: true });
     await saveOwnership(draftRoot, entries.slice(entries.indexOf(entry) + 1));

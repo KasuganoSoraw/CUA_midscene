@@ -165,7 +165,9 @@ export async function prepareRecordingSkill(options: {
   const metadata = readGeneratedSkillMetadata(await readShowuiTrace(assets.tracePath));
   const replacing = new Set((options.replaceSkillNames ?? []).map(name => requireSkillName(name).toLowerCase()));
   const occupied = await occupiedSkillNames(options.skillsRoot, replacing);
-  metadata.name = availableSkillName(metadata.name, occupied);
+  const previousName = options.replaceSkillNames?.[0];
+  if (previousName && occupied.has(previousName)) throw new Error(`技能名称被其他目录占用：${previousName}`);
+  metadata.name = previousName ?? availableSkillName(metadata.name, occupied);
   await mkdir(path.join(options.draftRoot, metadata.name), { recursive: true });
   await assembleSkill(path.join(options.draftRoot, metadata.name), options.recording, metadata, assets, options.language);
   return metadata.name;

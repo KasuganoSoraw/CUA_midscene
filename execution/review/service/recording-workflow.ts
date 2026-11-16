@@ -1,3 +1,4 @@
+import { replaceRecordingDraft } from './skill-replacement.js';
 import { cleanupPreviousGeneration, trackGenerationAssets } from './generation-assets.js';
 import { loadPublishedSkillResult } from './review-skill.js';
 import type { WorkflowResult } from '../shared/workflow.js';
@@ -31,6 +32,7 @@ export class RecordingWorkflow {
     private readonly dependencies: {
       prepare?: typeof prepareRecordingSkill;
       publish?: typeof publishRecordingDraft;
+      replace?: typeof replaceRecordingDraft;
     } = {},
   ) {
     this.store = new JsonStore(
@@ -128,7 +130,7 @@ export class RecordingWorkflow {
           signal: controller.signal,
         });
         controller.signal.throwIfAborted();
-        await this.synchronize(status);
+        await this.synchronize(status, replaceSkillNames.length > 0);
       },
       controller.signal,
     );
@@ -147,28 +149,32 @@ export class RecordingWorkflow {
     const status = this.status(id);
     if (!status.skillName || !['editing', 'failed'].includes(status.phase)) throw new Error('没有可发布的编辑草稿');
     if (!this.options.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT');
+    const replace = status.phase === 'failed';
     status.phase = 'publishing';
     status.error = '';
     this.write(status);
     const controller = new AbortController();
     const completion = this.run(
       status,
-      () => this.synchronize(status),
+      () => this.synchronize(status, replace),
       controller.signal,
     );
     this.active = { id, controller, completion };
     return this.status(id);
   }
-  private async synchronize(status: WorkflowStatus): Promise<void> {
+  private async synchronize(status: WorkflowStatus, replace: boolean): Promise<void> {
     status.phase = 'publishing';
-    status.log += '\n录制分析完成，正在打包并同步到 GDE Skill，请等待导入确认。\n';
+    status.log += replace
+      ? '\n录制分析完成，正在校验新资产并替换 GDE Skill 目录。\n'
+      : '\n录制分析完成，正在打包并同步到 GDE Skill，请等待导入确认。\n';
     this.write(status);
-    const cleaned = await cleanupPreviousGeneration({ ...this.options, skillsRoot: this.options.skillsRoot! }, status.draftRoot);
-    if (cleaned) { status.log += `已清理 ${cleaned} 批旧生成资产及对应的 GDE Skill。\n`; this.write(status); }
-    await withSkillWriteLock(status.draftRoot, status.skillName, () => (this.dependencies.publish ?? publishRecordingDraft)({
+    const synchronize = replace ? this.dependencies.replace ?? replaceRecordingDraft : this.dependencies.publish ?? publishRecordingDraft;
+    await withSkillWriteLock(status.draftRoot, status.skillName, () => synchronize({
       ...status, skillsRoot: this.options.skillsRoot!, executionRoot: this.options.executionRoot,
     }));
     await loadPublishedSkillResult(this.options.skillsRoot!, status.skillName);
+    const cleaned = await cleanupPreviousGeneration({ ...this.options, skillsRoot: this.options.skillsRoot!, retainedSkillName: status.skillName }, status.draftRoot);
+    if (cleaned) status.log += `已清理 ${cleaned} 批旧生成资产，当前 GDE Skill 目录已保留。\n`;
     status.log += `技能 ${status.skillName} 已同步到 GDE，正式 Skill 资源校验完成。\n`;
     status.phase = 'done';
   }
@@ -185,7 +191,7 @@ export class RecordingWorkflow {
   }
   async stop(id: string): Promise<WorkflowStatus> {
     if (this.active?.id !== id) return this.status(id);
-    if (this.status(id).phase !== 'analyzing') throw new Error('宿主导入中不能中止，请等待确认结果');
+    if (this.status(id).phase !== 'analyzing') throw new Error('技能同步中不能中止，请等待确认结果');
     this.active.controller.abort();
     const completion = this.active.completion;
     await completion;
