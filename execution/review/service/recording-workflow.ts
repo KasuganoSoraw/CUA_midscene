@@ -2,7 +2,8 @@ import type { deleteHostSkill } from '../../cua/skills/host-delete.js';
 import { workflowFailure } from './workflow-error.js';
 import { deleteWorkflowAssets } from './workflow-deletion.js';
 import { deleteRecording } from './asset-deletion.js';
-import { replaceRecordingDraft } from './skill-replacement.js';
+import { synchronizeGeneration } from './generation-sync.js';
+import { clearGenerationBackups } from './generation-backup.js';
 import { cleanupPreviousGeneration, trackGenerationAssets } from './generation-assets.js';
 import { loadPublishedSkillResult } from './review-skill.js';
 import type { WorkflowResult } from '../shared/workflow.js';
@@ -11,7 +12,7 @@ import path from 'node:path';
 import { withSkillWriteLock } from '../../cua/skills/lock.js';
 import { Writable } from 'node:stream';
 import type { RecordingCardStore } from './recording-cards.js';
-import type { WorkflowStatus } from '../shared/workflow.js';
+import { generatedSkillName, type WorkflowStatus } from '../shared/workflow.js';
 import type { GenerationLanguage } from '../shared/types.js';
 import { prepareRecordingSkill, publishRecordingDraft } from '../../cua/skills/create.js';
 import { describeRecording, resolveRecordingDirectory, openRecordingDirectory } from '../../cua/recording/recording-catalog.js';
@@ -38,7 +39,6 @@ export class RecordingWorkflow {
     private readonly dependencies: {
       prepare?: typeof prepareRecordingSkill;
       publish?: typeof publishRecordingDraft;
-      replace?: typeof replaceRecordingDraft;
       deleteRecording?: typeof deleteRecording;
       deleteSkill?: typeof deleteHostSkill;
     } = {},
@@ -140,14 +140,16 @@ export class RecordingWorkflow {
     const exportRoot = path.join(this.options.dataRoot, 'workbench', 'drafts');
     await mkdir(exportRoot, { recursive: true });
     const draftRoot = await mkdtemp(path.join(exportRoot, 'draft-'));
-    const replaceSkillNames = await trackGenerationAssets(this.options.dataRoot, this.storedStatus(id), draftRoot);
+    const previous = this.storedStatus(id);
+    const replaceSkillNames = await trackGenerationAssets(this.options.dataRoot, previous, draftRoot);
     this.assertGenerationAvailable();
     if (this.options.cards.get(id).recordingId !== card.recordingId) throw new Error('录制关联已更新，请重新开始分析');
     const status: WorkflowStatus = {
       cardId: id,
       recordingId: card.recordingId,
       phase: 'analyzing',
-      skillName: '',
+      skillName: previous?.skillName ?? '',
+      pendingSkillName: '',
       draftRoot,
       error: '',
       log: '',
@@ -159,7 +161,7 @@ export class RecordingWorkflow {
     const completion = this.run(
       status,
       async () => {
-        status.skillName = await (this.dependencies.prepare ?? prepareRecordingSkill)({
+        status.pendingSkillName = await (this.dependencies.prepare ?? prepareRecordingSkill)({
           ...this.options,
           skillsRoot: this.options.skillsRoot!,
           recording,
@@ -170,7 +172,7 @@ export class RecordingWorkflow {
           signal: controller.signal,
         });
         controller.signal.throwIfAborted();
-        await this.synchronize(status, replaceSkillNames.length > 0);
+        await this.synchronize(status);
       },
       controller.signal,
     );
@@ -187,36 +189,38 @@ export class RecordingWorkflow {
   async publish(id: string): Promise<WorkflowStatus> {
     this.assertGenerationAvailable();
     const status = this.status(id);
-    if (!status.skillName || !['editing', 'failed'].includes(status.phase)) throw new Error('没有可发布的编辑草稿');
+    if (!generatedSkillName(status) || !['editing', 'failed'].includes(status.phase)) throw new Error('没有可发布的编辑草稿');
     if (!this.options.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT');
-    const replace = status.phase === 'failed';
     status.phase = 'publishing';
     status.error = '';
     this.write(status);
     const controller = new AbortController();
     const completion = this.run(
       status,
-      () => this.synchronize(status, replace),
+      () => this.synchronize(status),
       controller.signal,
     );
     this.active = { id, controller, completion };
     return this.status(id);
   }
-  private async synchronize(status: WorkflowStatus, replace: boolean): Promise<void> {
+  private async synchronize(status: WorkflowStatus): Promise<void> {
     status.phase = 'publishing';
-    status.log += replace
-      ? '\n录制分析完成，正在校验新资产并替换 GDE Skill 目录。\n'
-      : '\n录制分析完成，正在打包并同步到 GDE Skill，请等待导入确认。\n';
     this.write(status);
-    const synchronize = replace ? this.dependencies.replace ?? replaceRecordingDraft : this.dependencies.publish ?? publishRecordingDraft;
-    await withSkillWriteLock(status.draftRoot, status.skillName, () => synchronize({
-      ...status, skillsRoot: this.options.skillsRoot!, executionRoot: this.options.executionRoot,
-    }));
-    await loadPublishedSkillResult(this.options.skillsRoot!, status.skillName);
-    const cleaned = await cleanupPreviousGeneration({ ...this.options, skillsRoot: this.options.skillsRoot!, retainedSkillName: status.skillName, deleteSkill: this.dependencies.deleteSkill }, status.draftRoot);
-    if (cleaned) status.log += `已清理 ${cleaned} 批旧生成资产，当前 GDE Skill 目录已保留。\n`;
-    status.log += `技能 ${status.skillName} 已同步到 GDE，正式 Skill 资源校验完成。\n`;
-    status.phase = 'done';
+    await withSkillWriteLock(status.draftRoot, generatedSkillName(status), async () => {
+      const name = await synchronizeGeneration({ ...this.options, skillsRoot: this.options.skillsRoot!, log: message => {
+        status.log = `${status.log}\n${message}\n`.slice(-32768);
+        this.write(status);
+      } }, status, this.dependencies);
+      status.skillName = name;
+      this.write(status);
+      await loadPublishedSkillResult(this.options.skillsRoot!, name);
+      const cleaned = await cleanupPreviousGeneration({ ...this.options, skillsRoot: this.options.skillsRoot! }, status.draftRoot);
+      await clearGenerationBackups(status.draftRoot);
+      if (cleaned) status.log += `已清理 ${cleaned} 批旧生成资产，原始录制视频和事件日志已保留。\n`;
+      status.log += `技能 ${name} 已同步到 GDE，正式 Skill 资源校验完成。\n`;
+      status.pendingSkillName = '';
+      status.phase = 'done';
+    });
   }
   private async run(status: WorkflowStatus, work: () => Promise<void>, signal: AbortSignal): Promise<void> {
     try {
@@ -241,9 +245,10 @@ export class RecordingWorkflow {
   }
   draft(id: string, writable = false): WorkflowStatus {
     const status = this.status(id);
-    if (!status.skillName || !status.draftRoot) throw new Error('草稿尚未就绪');
+    const name = generatedSkillName(status);
+    if ((!name && status.phase !== 'done') || !status.draftRoot) throw new Error('草稿尚未就绪');
     if (writable && !['editing', 'failed'].includes(status.phase)) throw new Error('当前状态不能编辑草稿');
-    return status;
+    return { ...status, skillName: name || status.skillName };
   }
   async close(): Promise<void> {
     if (this.active && this.status(this.active.id).phase === 'analyzing') this.active.controller.abort();

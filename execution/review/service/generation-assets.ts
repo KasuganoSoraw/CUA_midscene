@@ -1,3 +1,4 @@
+import { readGenerationSync } from './generation-sync-state.js';
 import { lstat, readFile, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { assertContained, requireSkillName } from '../../cua/skills/paths.js';
@@ -7,11 +8,11 @@ import type { WorkflowStatus } from '../shared/workflow.js';
 import { deleteReviewSkill, type ReviewSkillDeleteOptions } from './review-skill.js';
 import { atomicReplace } from './task-save.js';
 
-interface GenerationAssets { draftRoot: string; skillName: string; recordingId: string }
+interface GenerationAssets { draftRoot: string; skillName: string; recordingId: string; pendingSkillName?: string }
 interface AssetOptions { dataRoot: string; skillsRoot: string; recordingsRoot?: string; executionRoot?: string; retainedSkillName?: string; deleteSkill?: ReviewSkillDeleteOptions['deleteSkill'] }
 const ownershipFile = '.previous-generations.json';
 
-async function checkedDraft(dataRoot: string, draftRoot: string): Promise<string> {
+export async function checkedDraft(dataRoot: string, draftRoot: string): Promise<string> {
   const parent = path.join(dataRoot, 'workbench', 'drafts');
   const target = path.resolve(draftRoot);
   if (path.dirname(target) !== path.resolve(parent)) throw new Error('旧生成资产越出工作流草稿目录');
@@ -42,6 +43,7 @@ async function previousAssets(draftRoot: string): Promise<GenerationAssets[]> {
       if (!item || typeof item.draftRoot !== 'string' || !item.draftRoot
         || typeof item.skillName !== 'string' || typeof item.recordingId !== 'string') throw new Error('生成资产归属记录不完整');
       if (item.skillName) requireSkillName(item.skillName);
+      if (item.pendingSkillName) requireSkillName(item.pendingSkillName);
       if (item.recordingId) requireIdentifier(item.recordingId, 'recording');
     }
     return value;
@@ -61,7 +63,7 @@ export async function trackGenerationAssets(dataRoot: string, previous: Workflow
   if (previous?.draftRoot) {
     await checkedDraft(dataRoot, previous.draftRoot);
     entries.push(...await previousAssets(previous.draftRoot));
-    entries.push({ draftRoot: previous.draftRoot, skillName: previous.skillName, recordingId: previous.recordingId });
+    entries.push({ draftRoot: previous.draftRoot, skillName: previous.skillName, recordingId: previous.recordingId, pendingSkillName: previous.pendingSkillName });
   }
   const unique = [...new Map(entries.map(entry => [path.resolve(entry.draftRoot), entry])).values()];
   for (const entry of unique) {
@@ -70,7 +72,7 @@ export async function trackGenerationAssets(dataRoot: string, previous: Workflow
     if (entry.recordingId) requireIdentifier(entry.recordingId, 'recording');
   }
   await saveOwnership(draftRoot, unique);
-  return [...new Set(unique.flatMap(entry => entry.skillName ? [entry.skillName] : []))];
+  return (await generationAssetsForDeletion(dataRoot, previous)).skillNames;
 }
 
 async function removeDerivedRecording(options: AssetOptions, recordingId: string): Promise<void> {
@@ -97,7 +99,10 @@ export async function cleanupPreviousGeneration(options: AssetOptions, draftRoot
   for (const entry of entries) {
     const target = await checkedDraft(options.dataRoot, entry.draftRoot);
     if (target === path.resolve(draftRoot)) throw new Error('不能清理当前生成资产');
-    if (entry.skillName && entry.skillName !== options.retainedSkillName) await removeOwnedSkill(options.skillsRoot, entry.skillName, options);
+  }
+  if (!(await readGenerationSync(draftRoot))?.confirmed) throw new Error('GDE 尚未确认导入，不能清理旧生成资产');
+  for (const entry of entries) {
+    const target = await checkedDraft(options.dataRoot, entry.draftRoot);
     await removeDerivedRecording(options, entry.recordingId);
     await rm(target, { recursive: true, force: true });
     await saveOwnership(draftRoot, entries.slice(entries.indexOf(entry) + 1));
@@ -106,7 +111,7 @@ export async function cleanupPreviousGeneration(options: AssetOptions, draftRoot
 }
 
 
-export async function generationAssetsForDeletion(dataRoot: string, status?: WorkflowStatus): Promise<{ draftRoots: string[]; skillNames: string[] }> {
+export async function generationAssetsForDeletion(dataRoot: string, status?: WorkflowStatus): Promise<{ draftRoots: string[]; skillNames: string[]; pending: { draftRoot: string; skillName: string }[] }> {
   const entries: GenerationAssets[] = [];
   if (status?.draftRoot) {
     await checkedDraft(dataRoot, status.draftRoot);
@@ -115,9 +120,17 @@ export async function generationAssetsForDeletion(dataRoot: string, status?: Wor
   if (status) entries.push(status);
   const draftRoots = new Set<string>();
   const skillNames = new Set<string>();
+  const pending: { draftRoot: string; skillName: string }[] = [];
   for (const entry of entries) {
     if (entry.draftRoot) draftRoots.add(await checkedDraft(dataRoot, entry.draftRoot));
     if (entry.skillName) skillNames.add(requireSkillName(entry.skillName));
+    if (entry.draftRoot && entry.pendingSkillName) {
+      const sync = await readGenerationSync(entry.draftRoot);
+      if (sync?.attempted) {
+        skillNames.add(requireSkillName(entry.pendingSkillName));
+        if (!sync.confirmed) pending.push({ draftRoot: entry.draftRoot, skillName: entry.pendingSkillName });
+      }
+    }
   }
-  return { draftRoots: [...draftRoots], skillNames: [...skillNames] };
+  return { draftRoots: [...draftRoots], skillNames: [...skillNames], pending };
 }

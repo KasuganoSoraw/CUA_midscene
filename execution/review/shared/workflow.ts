@@ -4,6 +4,7 @@ export interface WorkflowStatus {
   recordingId: string;
   phase: WorkflowPhase;
   skillName: string;
+  pendingSkillName?: string;
   draftRoot: string;
   error: string;
   log: string;
@@ -16,4 +17,9 @@ export interface WorkflowResult {
   installPath: string;
   origin: 'user';
   version?: string;
+}
+
+
+export function generatedSkillName(status?: WorkflowStatus): string {
+  return status?.pendingSkillName ?? status?.skillName ?? '';
 }

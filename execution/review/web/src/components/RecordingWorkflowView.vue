@@ -11,7 +11,7 @@ import RecordingWorkspace from './RecordingWorkspace.vue';
 import { api, request } from '../api';
 import { useI18n } from '../i18n';
 import type { RecordingCard } from '../../../shared/recording-cards';
-import type { WorkflowStatus, WorkflowResult } from '../../../shared/workflow';
+import { generatedSkillName, type WorkflowStatus, type WorkflowResult } from '../../../shared/workflow';
 const props = defineProps<{ card: RecordingCard }>();
 const { locale, t } = useI18n();
 const status = ref<WorkflowStatus>();
@@ -66,12 +66,13 @@ async function generateSkill(): Promise<void> {
 const displayLog = computed(() => (status.value?.log ?? '').replace(/^CUA_TRACE_PROGRESS .*\r?\n?/gm, ''));
 const progress = computed(() => skillGenerationProgress(status.value?.log ?? '', phase.value));
 const running = computed(() => ['analyzing', 'publishing'].includes(phase.value));
+const preparedName = computed(() => generatedSkillName(status.value));
 const progressHeading = computed(() => {
   if (phase.value === 'analyzing') return t('workflow.generatingTask');
   if (phase.value === 'publishing') return t('workflow.packaging');
   if (phase.value === 'stopped') return t('workflow.stopped');
   if (phase.value === 'editing') return t('workflow.waitingSync');
-  if (phase.value === 'failed' && status.value?.skillName) return t('workflow.syncFailed');
+  if (phase.value === 'failed' && preparedName.value) return t('workflow.syncFailed');
   return t('workflow.generationFailed');
 });
 async function refresh(): Promise<void> {
@@ -183,7 +184,7 @@ onUnmounted(() => {
           <div class="workflow-footer">
             <template v-if="!running">
               <button class="secondary" @click="selectStep(1)">{{ t('workflow.backToRecording') }}</button>
-              <button class="primary" :disabled="actionBusy" @click="action(status.skillName ? 'publish' : 'analyze')">{{ t('workflow.retry') }}</button>
+              <button class="primary" :disabled="actionBusy" @click="action(preparedName ? 'publish' : 'analyze')">{{ t('workflow.retry') }}</button>
             </template>
             <button v-else-if="phase === 'analyzing'" class="secondary" :disabled="actionBusy" @click="action('stop')">{{ t('workflow.stopTask') }}</button>
           </div>

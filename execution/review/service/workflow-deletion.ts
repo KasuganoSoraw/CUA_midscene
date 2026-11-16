@@ -1,3 +1,4 @@
+import { assertPendingSkillMatches } from './generation-sync.js';
 import type { deleteHostSkill } from '../../cua/skills/host-delete.js';
 import { lstat, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -22,6 +23,7 @@ export async function deleteWorkflowAssets(options: {
   const assets = await generationAssetsForDeletion(options.dataRoot, status);
   if (assets.skillNames.length && !options.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT 后再删除关联技能');
   if (assets.skillNames.length) await validateOwnedSkills(options.skillsRoot!, assets.skillNames);
+  for (const pending of assets.pending) await assertPendingSkillMatches(options.skillsRoot!, pending.draftRoot, pending.skillName);
   options.beforeDelete?.(assets.skillNames);
   for (const name of assets.skillNames) await removeOwnedSkill(options.skillsRoot!, name, options);
   await removeRecording();
