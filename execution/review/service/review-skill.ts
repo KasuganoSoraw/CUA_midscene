@@ -74,7 +74,13 @@ async function checkedSkillDeletion(skillsRoot: string, name: string, options: R
     if (!options.allowMissing || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     exists = false;
   }
-  if (exists) await readSkill(skillsRoot, name);
+  if (exists) {
+    try { await readSkill(skillsRoot, name); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { deleted: true, skillName: name };
+      throw error;
+    }
+  }
   await (options.deleteSkill ?? deleteHostSkill)({ skillName: name, executionRoot: options.executionRoot });
   try { await lstat(path.join(skillsRoot, name)); }
   catch (error) {

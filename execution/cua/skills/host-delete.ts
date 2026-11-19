@@ -58,6 +58,30 @@ function confirmsMissingSkill(body: unknown): boolean {
   return typeof message === 'string' && /\bskill\b.*\bnot found\b|技能.*(?:不存在|未找到)/i.test(message);
 }
 
+function isRejectedResult(result: Record<string, unknown>): boolean {
+  return (
+    result.success === false
+    || result.ok === false
+    || result.deleted === false
+    || result.status === 'error'
+    || result.status === 'failed'
+    || Boolean(result.error)
+  );
+}
+
+function verifyDeletionBody(response: Response, body: unknown, raw: string, url: URL): void {
+  if (response.status !== 200 || !body || typeof body !== 'object' || Array.isArray(body)) {
+    throw responseDeleteError(url, response.status, raw, 'GDE_DELETE_INVALID_RESPONSE');
+  }
+  const result = body as Record<string, unknown>;
+  if (['pending', 'running', 'accepted', 'processing'].includes(String(result.status))) {
+    throw responseDeleteError(url, response.status, raw, 'GDE_DELETE_PENDING');
+  }
+  if (isRejectedResult(result)) {
+    throw responseDeleteError(url, response.status, raw, 'GDE_DELETE_REJECTED');
+  }
+}
+
 async function verifyDeletion(response: Response, url: URL, signal: AbortSignal): Promise<void> {
   if (response.status === 204 || response.status === 205) return;
   let raw: string;
@@ -70,16 +94,7 @@ async function verifyDeletion(response: Response, url: URL, signal: AbortSignal)
   catch { throw responseDeleteError(url, response.status, raw, 'GDE_DELETE_INVALID_RESPONSE'); }
   if (response.status === 404 && confirmsMissingSkill(body)) return;
   if (!response.ok) throw responseDeleteError(url, response.status, raw);
-  if (response.status !== 200 || !body || typeof body !== 'object' || Array.isArray(body)) {
-    throw responseDeleteError(url, response.status, raw, 'GDE_DELETE_INVALID_RESPONSE');
-  }
-  const result = body as Record<string, unknown>;
-  if (['pending', 'running', 'accepted', 'processing'].includes(String(result.status))) {
-    throw responseDeleteError(url, response.status, raw, 'GDE_DELETE_PENDING');
-  }
-  if (result.success === false || result.ok === false || result.deleted === false || result.status === 'error' || result.status === 'failed' || result.error) {
-    throw responseDeleteError(url, response.status, raw, 'GDE_DELETE_REJECTED');
-  }
+  verifyDeletionBody(response, body, raw, url);
 }
 
 export async function deleteHostSkill(options: { skillName: string; executionRoot?: string },

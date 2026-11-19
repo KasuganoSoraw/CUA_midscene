@@ -1,19 +1,17 @@
 import { assertPendingSkillMatches } from './generation-sync.js';
 import type { deleteHostSkill } from '../../cua/skills/host-delete.js';
-import { lstat, rm } from 'node:fs/promises';
-import path from 'node:path';
+import { rm } from 'node:fs/promises';
 import { readSkill } from '../../cua/skills/assets.js';
 import type { WorkflowStatus } from '../shared/workflow.js';
 import { generationAssetsForDeletion, removeOwnedSkill } from './generation-assets.js';
 
 async function validateOwnedSkills(skillsRoot: string, names: string[]): Promise<void> {
   for (const name of names) {
-    try { await lstat(path.join(skillsRoot, name)); }
+    try { await readSkill(skillsRoot, name); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
       throw error;
     }
-    await readSkill(skillsRoot, name);
   }
 }
 

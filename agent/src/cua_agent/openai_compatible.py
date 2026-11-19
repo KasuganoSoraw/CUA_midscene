@@ -30,8 +30,55 @@ class ModelConfigurationError(RuntimeError):
     pass
 
 
+_ERROR_MESSAGES = {
+    "zh": (
+        "模型请求失败，请检查模型服务地址、网络连接及服务运行状态。",
+        "模型请求失败，模型不存在或无法访问，请检查模型名称及模型服务地址。",
+        "模型请求失败，请求内容超过服务端限制，请检查请求内容大小或模型服务限制。",
+        "模型请求受限，当前请求频率或可用额度已达到服务限制，请稍后重试。",
+        "模型请求失败，暂时无法确定失败原因，请检查模型服务状态。",
+    ),
+    "en": (
+        "Model request failed. Check the model service address, network connection, "
+        "and service status.",
+        "Model request failed. The model was not found or is inaccessible. "
+        "Check its name and service address.",
+        "Model request failed. The request exceeds the server limit. "
+        "Check its size or the model service limit.",
+        "Model request is limited by rate or quota. Please try again later.",
+        "Model request failed. The cause is unknown. Check the model service status.",
+    ),
+}
+
+
+def _error_language(value: str | None) -> str:
+    primary = (value or "").strip().replace("_", "-").split("-", 1)[0].lower()
+    return primary if primary in _ERROR_MESSAGES else "zh"
+
+
 class ModelRequestError(RuntimeError):
-    pass
+    def __init__(
+        self, diagnostic: str, *, http_status: int | None = None,
+        connection_failure: bool = False,
+        language: str = "zh",
+    ) -> None:
+        super().__init__(diagnostic)
+        self.http_status = http_status
+        self.connection_failure = connection_failure
+        self.language = _error_language(language)
+
+    @property
+    def user_message(self) -> str:
+        messages = _ERROR_MESSAGES[self.language]
+        if self.connection_failure:
+            return messages[0]
+        if self.http_status == 404:
+            return messages[1]
+        if self.http_status == 413:
+            return messages[2]
+        if self.http_status == 429:
+            return messages[3]
+        return messages[4]
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +89,7 @@ class OpenAICompatibleConfig:
     timeout_seconds: float = 120.0
     verify_tls: bool = True
     custom_headers: dict[str, str] = field(default_factory=dict, repr=False)
+    language: str = "zh"
 
     def __post_init__(self) -> None:
         if not self.base_url.strip():
@@ -51,6 +99,7 @@ class OpenAICompatibleConfig:
         if self.timeout_seconds <= 0:
             raise ModelConfigurationError("Agent model timeout 必须大于 0")
         _validate_headers(self.custom_headers)
+        object.__setattr__(self, "language", _error_language(self.language))
 
     @classmethod
     def from_env(cls) -> OpenAICompatibleConfig:
@@ -77,6 +126,7 @@ class OpenAICompatibleConfig:
             timeout_seconds=timeout,
             verify_tls=_boolean_env("CUA_AGENT_MODEL_TLS_VERIFY", default=True),
             custom_headers=_headers_from_env(),
+            language=os.environ.get("CUA_AGENT_MODEL_LANGUAGE", "zh"),
         )
 
     @property
@@ -99,7 +149,7 @@ class OpenAICompatibleModelClient(ModelClient):
             if isinstance(item, ModelStreamComplete):
                 result = item.response
         if result is None:
-            raise ModelRequestError("Agent model 流缺少完整响应")
+            raise ModelRequestError("Agent model 流缺少完整响应", language=self._config.language)
         return result
 
     async def stream(
@@ -107,31 +157,9 @@ class OpenAICompatibleModelClient(ModelClient):
         messages: tuple[ModelMessage, ...],
         tools: tuple[ToolDefinition, ...],
     ) -> AsyncIterator[ModelStreamItem]:
-        payload: dict[str, JsonValue] = {
-            "model": self._config.model,
-            "messages": [_message_payload(message) for message in messages],
-            "stream": True,
-        }
-        if tools:
-            payload["tools"] = [_tool_payload(tool) for tool in tools]
-            payload["tool_choice"] = "auto"
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        headers: dict[str, str] = {
-            "Authorization": f"Bearer {self._config.api_key}",
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-        }
-        # custom_headers 覆盖默认头（如网关鉴权 X-HW-ID / X-HW-APPKEY）
-        if self._config.custom_headers:
-            headers.update(self._config.custom_headers)
-        request = urllib.request.Request(
-            self._config.chat_completions_url,
-            data=body,
-            headers=headers,
-            method="POST",
-        )
+        request = _model_request(self._config, messages, tools)
         response: object | None = None
-        assembler = _StreamAssembler()
+        assembler = _StreamAssembler(self._config.language)
         try:
             async with asyncio.timeout(self._config.timeout_seconds):
                 response = await asyncio.to_thread(
@@ -145,15 +173,51 @@ class OpenAICompatibleModelClient(ModelClient):
         except urllib.error.HTTPError as error:
             response_body = error.read().decode("utf-8", errors="replace")
             raise ModelRequestError(
-                f"Agent model HTTP {error.code}：{response_body[:2000]}"
+                f"Agent model HTTP {error.code}：{response_body[:2000]}",
+                http_status=error.code,
+                language=self._config.language,
             ) from error
         except OSError as error:
-            raise ModelRequestError(f"Agent model 请求失败：{error}") from error
+            raise ModelRequestError(
+                f"Agent model 请求失败：{error}", connection_failure=True,
+                language=self._config.language,
+            ) from error
         except (ValueError, KeyError, TypeError) as error:
-            raise ModelRequestError(f"Agent model 返回了无效响应：{error}") from error
+            raise ModelRequestError(
+                f"Agent model 返回了无效响应：{error}", language=self._config.language,
+            ) from error
         finally:
             if response is not None:
                 response.close()  # type: ignore[attr-defined]
+
+
+def _model_request(
+    config: OpenAICompatibleConfig,
+    messages: tuple[ModelMessage, ...],
+    tools: tuple[ToolDefinition, ...],
+) -> urllib.request.Request:
+    payload: dict[str, JsonValue] = {
+        "model": config.model,
+        "messages": [_message_payload(message) for message in messages],
+        "stream": True,
+    }
+    if tools:
+        payload["tools"] = [_tool_payload(tool) for tool in tools]
+        payload["tool_choice"] = "auto"
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {config.api_key}",
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+    }
+    # custom_headers 覆盖默认头（如网关鉴权 X-HW-ID / X-HW-APPKEY）
+    if config.custom_headers:
+        headers.update(config.custom_headers)
+    return urllib.request.Request(
+        config.chat_completions_url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
 
 
 async def _read_stream(
@@ -188,9 +252,10 @@ async def _read_stream(
 
 
 class _StreamAssembler:
-    def __init__(self) -> None:
+    def __init__(self, language: str = "zh") -> None:
         self.content: list[str] = []
         self.calls: dict[int, dict[str, str]] = {}
+        self.language = language
 
     def accept(self, data: str) -> list[ModelContentDelta]:
         payload: object = json.loads(data)
@@ -199,7 +264,9 @@ class _StreamAssembler:
         if "error" in payload:
             error = payload["error"]
             message = error.get("message") if isinstance(error, dict) else error
-            raise ModelRequestError(f"Agent model 流错误：{str(message)[:500]}")
+            raise ModelRequestError(
+                f"Agent model 流错误：{str(message)[:500]}", language=self.language,
+            )
         choices = payload.get("choices")
         if not isinstance(choices, list):
             raise ValueError("SSE data 缺少 choice")
