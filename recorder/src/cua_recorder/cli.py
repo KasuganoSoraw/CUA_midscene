@@ -5,6 +5,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from .console_window import ConsoleWindowReturn
 from .media import capture_preview, inspect_media, require_recording_capabilities
 from .overlay_win32 import RecorderOverlay
 from .protocol import RecorderError, write_diagnostic, write_event
@@ -70,7 +71,14 @@ def _select_display(raw: str):
     raise RecorderError(f"显示器不存在或拓扑已变化：{raw}；当前显示器：{choices}")
 
 
+def _record_status(event: str, **payload: object) -> None:
+    # 完成事件在录制资源关闭和控制台窗口恢复后发布。
+    if event != "completed":
+        write_event(event, **payload)
+
+
 def _record(args: argparse.Namespace) -> int:
+    console = ConsoleWindowReturn.capture()
     capabilities = inspect_media()
     require_recording_capabilities(capabilities)
     session = RecordingSession(
@@ -83,7 +91,9 @@ def _record(args: argparse.Namespace) -> int:
         language=args.language,
     )
     try:
-        session.run(sys.stdin, write_event)
+        result = session.run(sys.stdin, _record_status)
+        if not result.get("cancelled"):
+            write_event("completed", **result, **console.restore())
     except KeyboardInterrupt:
         session.stop()
         raise

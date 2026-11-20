@@ -161,7 +161,7 @@ onUnmounted(() => {
       <p v-if="!status" class="catalog-feedback">{{ t('workflow.loading') }}</p>
       <div v-if="status && recordingVisited" v-show="activeStep === 1" class="branch-fill">
         <RecordingWorkspace :key="card.id" :card-id="card.id" :recording-id="card.recordingId" :skills-configured="true"
-          @analyze="generateSkill" @folder-error="showToast($event, true)" />
+          @analyze="generateSkill" @folder-error="showToast($event, true)" @focus-warning="showToast($event, true)" />
       </div>
       <div v-if="status" v-show="activeStep === 2" class="branch-fill">
         <template v-if="running || phase === 'failed' || phase === 'stopped' || phase === 'editing'">

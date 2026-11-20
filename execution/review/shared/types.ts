@@ -201,6 +201,7 @@ export interface RecorderStatus {
   startedAt?: string;
   hotkey?: string;
   error?: string;
+  focusWarning?: string;
 }
 
 export interface RecorderDisplay {

@@ -32,6 +32,7 @@ const emit = defineEmits<{
   created: [result: CreateRecordingSkillResult];
   analyze: [];
   folderError: [message: string];
+  focusWarning: [message: string];
 }>();
 
 const catalog = ref<ReviewRecordingCatalog>({
@@ -68,6 +69,11 @@ const opening = ref(false);
 const error = ref('');
 const message = ref(() => t('recording.loading'));
 const recorderStatus = ref<RecorderStatus>({ phase: 'idle' });
+watch(() => recorderStatus.value.focusWarning, warning => {
+  if (!warning) return;
+  if (props.cardId) emit('focusWarning', warning);
+  else recorderError.value = warning;
+});
 const recorderDisplays = ref<RecorderDisplay[]>([]);
 const selectedDisplayId = ref('');
 const recorderBusy = ref(false);

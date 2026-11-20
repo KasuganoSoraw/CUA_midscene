@@ -14,6 +14,7 @@ export interface RecorderStatus {
   startedAt?: string;
   hotkey?: string;
   error?: string;
+  focusWarning?: string;
 }
 
 export interface RecorderDisplay {
@@ -279,6 +280,9 @@ export class WindowsRecorderManager implements RecorderControl {
       if (event.event === 'completed' && event.recording_id) this.options.onRecordingCompleted?.(event.recording_id);
       if (event.event === 'cancelled') this.options.onRecordingCancelled?.();
       this.currentStatus = { phase: 'idle', outputRoot };
+      if (event.event === 'completed' && typeof event.focus_warning === 'string') {
+        this.currentStatus.focusWarning = event.focus_warning;
+      }
     } else if (event.event === 'error') {
       throw new Error(event.message || '录制 Worker 报告未知错误');
     }
