@@ -67,7 +67,7 @@ def normalize_execution(value: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
     """校验与 cua_execute 共用的参数形态，不接受宿主路径或 Skill 目录。"""
     if not isinstance(value, Mapping):
         raise ValueError("execution 必须是 JSON object")
-    strategy = value.get("strategy", "guided" if "skillName" in value else None)
+    strategy = value.get("strategy", "replay" if "skillName" in value else None)
     if strategy not in ("replay", "guided", "freeform"):
         raise ValueError("execution.strategy 必须为 replay、guided 或 freeform")
     allowed = {"strategy", "goal", "displayId"} if strategy == "freeform" else {

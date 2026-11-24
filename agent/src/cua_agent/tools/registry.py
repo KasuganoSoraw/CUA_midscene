@@ -35,7 +35,8 @@ EXECUTE_TOOL = ToolDefinition(
     name="cua_execute",
     description=(
         "执行调用方绑定的完整电脑操作任务。结构化任务使用 skillName 和 inputs，"
-        "默认 guided；明确严格回放时使用 replay。无 Skill 绑定时使用 freeform 和完整 goal。"
+        "默认 replay；调用方显式指定 guided 时从任务开始整体规划。"
+        "无 Skill 绑定时使用 freeform 和完整 goal。"
         "不得自行发现或更换 Skill，成功后停止。"
     ),
     input_schema={

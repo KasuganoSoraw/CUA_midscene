@@ -1,5 +1,6 @@
 export type JsonObject = Record<string, unknown>;
 export type GenerationLanguage = 'zh-CN' | 'en-US';
+export const defaultRecordedSkillStrategy = 'replay';
 
 export interface SceneManifest {
   schemaVersion: '0.1';

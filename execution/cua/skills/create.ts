@@ -1,7 +1,10 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { stringify } from 'yaml';
-import type { CuaSkillManifest, GenerationLanguage, JsonObject, ShowuiTrace, SkillTaskManifest } from '../contracts/types.js';
+import {
+  defaultRecordedSkillStrategy, type CuaSkillManifest, type GenerationLanguage, type JsonObject,
+  type ShowuiTrace, type SkillTaskManifest,
+} from '../contracts/types.js';
 import { readProcessedLog, readShowuiTrace, writeJsonFile } from '../contracts/validation.js';
 import { buildRecordedSteps } from '../conversion/showui-trace.js';
 import { packageRoot } from '../package-root.js';
@@ -36,7 +39,7 @@ export function skillMarkdown(metadata: GeneratedSkillMetadata, language: Genera
     ? ['<parameter-id-from-task.json>', '<user-value-or-nonempty-default>']
     : ['<task.json 中的参数 ID>', '<用户提供值或非空默认值>'];
   const example = JSON.stringify({ execution: {
-    skillName: metadata.name, strategy: 'guided', inputs: { [exampleInput[0]]: exampleInput[1] },
+    skillName: metadata.name, strategy: defaultRecordedSkillStrategy, inputs: { [exampleInput[0]]: exampleInput[1] },
   } }, null, 2);
   const instructions = language === 'en-US'
     ? `Before each execution, read the adjacent \`task.json\`. Its \`inputs\` object defines the current
@@ -46,9 +49,10 @@ delegating. Do not guess a value or treat the example as the parameter list.
 
 Delegate the complete task and resolved inputs to the Computer-Use SubAgent. Bind
 \`execution.skillName\` to \`${metadata.name}\` and pass \`execution.inputs\` as an object mapping
-parameter IDs to string values, not as a serialized JSON string. Use \`guided\` by default; use
-\`replay\` only when strict replay is explicitly requested. Do not search for another task or pass
-file paths to the SubAgent.
+parameter IDs to string values, not as a serialized JSON string. Use \`${defaultRecordedSkillStrategy}\` by default
+to run the recorded steps and allow adaptive recovery after a recoverable failure. Use \`guided\` only
+when the user explicitly asks for adaptive execution from the start. Do not search for another task
+or pass file paths to the SubAgent.
 
 Example binding (replace the placeholders using \`task.json.inputs\`; use \`{}\` when there are no inputs):
 
@@ -63,7 +67,8 @@ ${example}
 
 将完整任务和确定的参数委派给 Computer-Use SubAgent。\`execution.skillName\` 使用
 \`${metadata.name}\`，\`execution.inputs\` 是以参数 ID 为键、字符串值为值的对象，
-不是序列化后的 JSON 字符串。默认使用 \`guided\`；仅在明确要求严格回放时使用 \`replay\`。
+不是序列化后的 JSON 字符串。默认使用 \`${defaultRecordedSkillStrategy}\`，按录制步骤运行，并在可恢复的失败后自适应接续。
+仅在用户明确要求从开始使用自适应运行时指定 \`guided\`。
 不要重新搜索任务或把文件路径交给子 Agent。
 
 调用绑定示例（参数 ID 和值以执行前读取的 \`task.json.inputs\` 为准；无参数时使用 \`{}\`）：
