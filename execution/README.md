@@ -35,7 +35,7 @@ TypeScript 内部不建立与持久化契约重复的运行时模型类。Ajv �
 
 ## Python Agent 与 Runtime Bridge
 
-唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 提交完整 task 及可选 execution 绑定；模型工具只有 cua_execute，结构化任务直接执行指定绑定，自由目标直接 freeform。GUI 微观规划交给 Midscene。Catalog 保留给 CLI 和非模型 Runtime 调用方；workbench Runtime 方法供 Keeper 和设置入口直接调用，返回 URL 与 reused，不依赖模型或默认打开系统浏览器。模型工具不由 GDEClaw 注册。正式 Skill 从 CUA_SKILLS_ROOT 按合法标记和规范 skillName 解析，默认 guided。详见 [Skill 集成契约](../docs/gdeclaw-skill-integration.md)。
+唯一 canonical Computer-Use Subagent 位于仓库顶层 `agent/`。GDEClaw 提交完整 task 及可选 execution 绑定；模型工具只有 cua_execute，结构化任务直接执行指定绑定，自由目标直接 freeform。GUI 微观规划交给 Midscene。Catalog 保留给 CLI 和非模型 Runtime 调用方；workbench Runtime 方法供 Keeper 和设置入口直接调用，返回 URL 与 reused，不依赖模型或默认打开系统浏览器。模型工具不由 GDEClaw 注册。正式 Skill 从 CUA_SKILLS_ROOT 按合法标记和规范 skillName 解析，默认 replay。详见 [Skill 集成契约](../docs/gdeclaw-skill-integration.md)。
 
 GDEClaw 专用 Adapter 属于 Host 产品边界。本仓库提供 Python API、一次一进程的 `cua-agent invoke` 和 Review 开发调用。`execution/SKILL.md` 面向 CLI 维护；正式任务 SKILL.md 用于 GDEClaw Skill 选择与 CUA 身份校验，Python Agent 不自行读取这些 Markdown，`cua_catalog` 只返回结构化 catalog/manifest/YAML 摘要。
 
@@ -96,7 +96,7 @@ TypeScript Runtime 的配置优先级为进程环境、仓库根 `.env.local`、
 
 ## CLI
 
-正式 Skill 使用以下命令；默认 guided，明确要求严格回放时传 --strategy replay。create-from-recording 在独立临时目录组装、校验并打包 ZIP，经 GDECLAW_API_BASE_URL 的原生接口导入后读取正式目录验证；不直接安装到 CUA_SKILLS_ROOT。名称占用时在打包前追加安全随机后缀，HTTP 409 或超时不自动重传：
+正式 Skill 默认按 replay 运行，支持在可恢复的步骤失败后自适应接续。需要从任务开始整体规划时传 --strategy guided。create-from-recording 在独立临时目录组装、校验并打包 ZIP，经 GDECLAW_API_BASE_URL 的原生接口导入后读取正式目录验证；不直接安装到 CUA_SKILLS_ROOT。名称占用时在打包前追加安全随机后缀，HTTP 409 或超时不自动重传：
 
 ```powershell
 npm.cmd run cua -- skill list --json

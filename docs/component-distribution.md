@@ -102,7 +102,7 @@ $env:CUA_PYTHON_EXECUTABLE = $python
 
 ## GDEClaw 适配
 
-GDEClaw Main Agent 选择原生 Skill，提交完整任务及可选 `execution: { skillName, inputs, strategy }` 绑定并接收事件与结果。Skill 策略缺省为 guided，明确严格回放时为 replay；没有 Skill 绑定时直接 freeform。Host Adapter 负责组件安装、用户 Session、任务取消、真实 computer use 串行化和运行时路径注入，不注册 CUA 的私有 Tool。
+GDEClaw Main Agent 选择原生 Skill，提交完整任务及可选 `execution: { skillName, inputs, strategy }` 绑定并接收事件与结果。Skill 策略缺省为 replay，用户明确要求从任务开始自适应运行时传 guided。没有 Skill 绑定时直接 freeform。Host Adapter 负责组件安装、用户 Session、任务取消、真实 computer use 串行化和运行时路径注入，不注册 CUA 的私有 Tool。
 
 Agent 与 Runtime 必须整体升级到支持 `skillName` 的组件。JSONL envelope 为 1.0，Skill 资产契约由 Runtime 导出 `skillAssetContractVersion=1.0`；不能仅凭 envelope 版本判定旧组件支持 Skill 绑定。
 

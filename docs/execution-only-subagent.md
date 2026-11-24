@@ -4,7 +4,7 @@ GDEClaw Main Agent 选择 Skill，CUA SubAgent 执行指定电脑操作，不重
 
 | 配置 | 模型可见工具 | 结构化绑定 |
 | --- | --- | --- |
-| 执行专用 | cua_execute | skillName，默认 guided，显式 replay |
+| 执行专用 | cua_execute | skillName，默认 replay，支持显式 guided |
 | freeform_only=True | cua_execute | 仅 freeform，拒绝 Skill 绑定 |
 
 Agent 不提供 cua_catalog 或 cua_workbench 模型 Tool，未知调用在 Registry 被拒绝。GDEClaw 使用 CuaAgent(...) 和 load_agent_definition()；底层 Catalog、CLI 和宿主 Workbench 调用不经过模型工具注册表。
@@ -15,7 +15,7 @@ Agent 不提供 cua_catalog 或 cua_workbench 模型 Tool，未知调用在 Regi
 {"task":"执行已选定的告警查询","execution":{"skillName":"network-alarm-search","inputs":{}}}
 ```
 
-execution 与模型调用严格比较；策略缺省归一化为 guided。Skill 由 Runtime 在 CUA_SKILLS_ROOT 中校验与解析，不接受模型文件路径。旧 scene/task 绑定不适用于执行专用 Agent。
+execution 与模型调用严格比较；策略缺省归一化为 replay。Skill 由 Runtime 在 CUA_SKILLS_ROOT 中校验与解析，不接受模型文件路径。旧 scene/task 绑定不适用于执行专用 Agent。
 
 自由目标示例：
 

@@ -6,7 +6,7 @@
 
 task.yaml 保存唯一长期执行流程，task.json 保存目标、inputs 和 source 引用。所有本地图片和证据引用必须位于当前 Skill 内，不接受符号链接越界、绝对路径或网络图片。录制模型自动归纳名称、描述、goal；生成无需场景或命名表单，并直接安装正式目录。
 
-使用 skill list、skill describe --skill-name、skill create-from-recording --recording、skill validate --skill-name 和 skill run --skill-name。执行默认 guided，显式 --strategy replay 严格回放；freeform 不绑定 Skill。
+使用 skill list、skill describe --skill-name、skill create-from-recording --recording、skill validate --skill-name 和 skill run --skill-name。录制 Skill 默认 replay，支持在可恢复的步骤失败后自适应接续。显式 --strategy guided 从任务开始整体规划。freeform 不绑定 Skill。
 
 默认 SubAgent 仅提供 cua_execute，结构化 execution 使用 skillName、可选 strategy 和 inputs，拒绝模型路径参数与绑定篡改。Workbench 使用 /api/skills/:skillName，保存直接写正式资产，revision 冲突保留草稿。宿主设置入口调用 Runtime workbench，负责打开 URL 并保持 worker 存活。
 

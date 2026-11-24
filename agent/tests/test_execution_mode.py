@@ -54,11 +54,11 @@ def test_plain_task_is_freeform_and_cannot_invent_recorded_binding() -> None:
     assert runtime.calls == [("execute", parameters)]
 
 
-def test_skill_binding_defaults_to_guided_and_terminal_execution_ignores_extra_tools() -> None:
+def test_skill_binding_defaults_to_replay_and_terminal_execution_ignores_extra_tools() -> None:
     request = InvocationRequest(
         "执行告警查询", execution={"skillName": "alarm-query", "inputs": {}},
     )
-    arguments = {"strategy": "guided", "skillName": "alarm-query", "inputs": {}}
+    arguments = {"strategy": "replay", "skillName": "alarm-query", "inputs": {}}
     assert request.execution == arguments
     model = FakeModelClient([
         ModelResponse(tool_calls=(

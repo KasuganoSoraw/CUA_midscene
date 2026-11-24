@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { requireDataPaths, requireSkillsRoot } from '../data-paths.js';
-import type { RuntimeLayout } from '../contracts/types.js';
+import { defaultRecordedSkillStrategy, type RuntimeLayout } from '../contracts/types.js';
 import { runRecordedTaskAiAct, runTask } from '../task/execution.js';
 import { loadRuntimeInputs } from '../task/inputs.js';
 import { describeSkill, listSkills, readSkill, resolveSkillTask } from './assets.js';
@@ -23,7 +23,7 @@ export async function runSkillCommand(command: string, options: Record<string, s
     const resolved = await resolveSkillTask({ skillsRoot: root, skillName: name, inputs });
     return `${JSON.stringify({ valid: true, skillName: name, inputs: resolved.inputs }, null, 2)}\n`;
   }
-  const strategy = options.strategy ?? 'guided';
+  const strategy = options.strategy ?? defaultRecordedSkillStrategy;
   if (strategy !== 'guided' && strategy !== 'replay') throw new Error('--strategy 仅支持 guided 或 replay');
   const data = await requireDataPaths(layout);
   const execution = { skillName: name, skillsRoot: root, inputs, runsRoot: data.runsRoot, dryRun: options['dry-run'] === true };

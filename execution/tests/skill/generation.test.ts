@@ -24,7 +24,7 @@ test('生成的 Skill 说明按 task.json 当前参数委派，并提供对象�
     assert.ok(example);
     const binding = JSON.parse(example[1]);
     assert.equal(binding.execution.skillName, 'alarm-query');
-    assert.equal(binding.execution.strategy, 'guided');
+    assert.equal(binding.execution.strategy, 'replay');
     assert.equal(typeof binding.execution.inputs, 'object');
     assert.equal(Object.keys(binding.execution.inputs).length, 1);
   }

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { requireSkillsRoot } from '../../cua/data-paths.js';
 import { requireSkillName } from '../../cua/skills/paths.js';
-import type { TaskCatalogRoots } from '../../cua/contracts/types.js';
+import { defaultRecordedSkillStrategy, type TaskCatalogRoots } from '../../cua/contracts/types.js';
 import type { ExecutionOptions } from '../../cua/task/execution.js';
 import {
   requireDataPaths,
@@ -152,7 +152,7 @@ async function executeSkillRequest(
 ): Promise<CuaExecuteResult> {
   const allowed = new Set(['skillName', 'strategy', 'inputs', 'dryRun', 'dataRoot']);
   if (Object.keys(request).some(key => !allowed.has(key))) throw new Error('Skill 执行包含不支持的字段或任意路径');
-  const strategy = request.strategy ?? 'guided';
+  const strategy = request.strategy ?? defaultRecordedSkillStrategy;
   if (strategy !== 'guided' && strategy !== 'replay') throw new Error('Skill 仅支持 guided 或 replay');
   const skillName = requireSkillName(request.skillName);
   const api = { ...defaultDependencies, ...dependencies };

@@ -1,4 +1,4 @@
-import type { JsonObject } from '../cua/contracts/types.js';
+import { defaultRecordedSkillStrategy, type JsonObject } from '../cua/contracts/types.js';
 import type { ExecutionProgressSink } from '../executors/midscene-progress.js';
 import {
   runtimeBridgeSchemaVersion,
@@ -84,7 +84,8 @@ function errorDetails(error: unknown): JsonObject {
 async function runtimeMethodErrorDetails(request: RuntimeBridgeRequest, error: unknown): Promise<JsonObject> {
   const details = errorDetails(error);
   if (request.method !== 'execute') return details;
-  const strategy = request.payload.strategy ?? (request.payload.skillName === undefined ? undefined : 'guided');
+  const strategy = request.payload.strategy
+    ?? (request.payload.skillName === undefined ? undefined : defaultRecordedSkillStrategy);
   const reportPath = await failedExecutionReport(error, strategy);
   if (reportPath !== undefined) details.reportPath = reportPath;
   return details;

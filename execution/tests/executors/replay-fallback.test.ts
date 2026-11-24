@@ -29,7 +29,7 @@ tasks:
 }
 
 function modelEnvironment(): () => void {
-  const keys = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY'];
+  const keys = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY', 'MIDSCENE_MODEL_API_KEY'];
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   for (const key of keys) process.env[key] = 'test';
   return () => {

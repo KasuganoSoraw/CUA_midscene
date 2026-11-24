@@ -101,7 +101,7 @@ CUA Agent 每次接收一项完整 GUI 任务，在一次调用内执行模型 T
 | Guided | 将解析后的录制步骤及选定参考图投影为整体指导，由 Midscene 统一执行 | 有匹配录制知识、需要对当前界面进行适应 |
 | Freeform | 将完整自然语言目标直接交给 Midscene 原生 `aiAct()` | 无匹配录制任务或临时性任务 |
 
-三种策略共用 Midscene Computer Use。Replay 保留流程顺序；Guided 使用录制知识提供执行指导；Freeform 不依赖录制任务或预生成 YAML。策略由宿主绑定确定，默认 guided，明确要求严格回放时 replay，失败后不自动切换或重试。
+三种策略共用 Midscene Computer Use。录制技能默认 Replay，保留流程顺序，遇到可恢复的步骤失败时由同一个 Agent 自适应接续一次。宿主可显式绑定 Guided，从任务开始使用录制知识整体规划。Freeform 不依赖录制任务或预生成 YAML。
 
 ### 3.5 Workbench 可视化工作台
 
@@ -121,15 +121,15 @@ Workbench 提供任务检查、流程录制和任务调试三个常规入口。�
 
 ### 4.2 GUI 任务执行
 
-调用方选定 Skill 后提供明确的身份、输入与策略，CUA 只验证并执行该绑定；省略策略时使用 Guided。无 Skill 绑定的完整自然语言任务直接使用 Freeform。只有缺少必要业务目标、输入或约束时，才请求补充。
+调用方选定 Skill 后提供身份、输入和可选策略，CUA 验证并执行该绑定。省略策略时使用 Replay。无 Skill 绑定的完整自然语言任务直接使用 Freeform。只有缺少必要业务目标、输入或约束时，才请求补充。
 
 ```mermaid
 flowchart TD
     Request[完整任务请求] --> Binding{是否绑定 Skill}
     Binding -->|是| Validate[校验身份、输入与资产]
     Validate --> Strategy{绑定策略}
-    Strategy -->|默认 guided| Guided[录制指导自适应执行]
-    Strategy -->|显式 replay| Replay[按保存步骤严格回放]
+    Strategy -->|默认 replay| Replay[按录制步骤回放，支持自适应接续]
+    Strategy -->|显式 guided| Guided[从任务开始整体规划]
     Binding -->|否| Freeform[完整自然语言自适应执行]
     Guided --> Runtime[Execution Runtime / Midscene]
     Replay --> Runtime

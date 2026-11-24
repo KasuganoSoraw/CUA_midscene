@@ -20,7 +20,7 @@ GDEClaw Main Agent
   -> Midscene
 ```
 
-GDEClaw 不注册内部 Tool；Main Agent 选定 Skill 并传入 skillName 与 inputs，缺省 guided，明确严格回放时指定 replay。Host Adapter 负责用户会话、任务 ID、后台生命周期和取消；本包只保存一次 invocation 内的 messages 和 Tool result，结束后即释放，不实现长期 Memory、持久 Session、scheduler 或多 Agent routing。Tool 名称和输入/输出摘要可以作为受控诊断数据返回，但不构成 Host 可调用 Tool。
+GDEClaw 不注册内部 Tool；Main Agent 选定 Skill 并传入 skillName 与 inputs，缺省 replay，用户明确要求从任务开始自适应执行时指定 guided。Host Adapter 负责用户会话、任务 ID、后台生命周期和取消；本包只保存一次 invocation 内的 messages 和 Tool result，结束后即释放，不实现长期 Memory、持久 Session、scheduler 或多 Agent routing。Tool 名称和输入/输出摘要可以作为受控诊断数据返回，但不构成 Host 可调用 Tool。
 
 ## 开发
 
@@ -47,7 +47,7 @@ $env:CUA_DATA_ROOT = 'C:\path\to\cua-data'
 
 Agent 只向模型暴露 `cua_execute`，支持 replay、guided、freeform；宿主选择 Skill，SubAgent 不再次发现任务。`cua_catalog` 和 `cua_workbench` 不属于模型 Tool；底层 Catalog 与 Workbench Runtime 方法保留给非模型调用方。
 
-GDEClaw 使用 `CuaAgent(...)` 和 `load_agent_definition()`。结构化请求通过 `InvocationRequest.execution` 传入 skillName、inputs 与可选 strategy（默认 guided）；无绑定时将完整 task 直接作为 freeform 目标。每次调用均拒绝模型更换绑定参数，不接受任意 Skill 路径。`freeform_only=True` 和环境变量 `CUA_AGENT_FREEFORM_ONLY=true` 只允许 freeform，不支持结构化绑定。完整资产契约、宿主 Workbench 调用及集成边界见 [执行专用集成](../docs/execution-only-subagent.md)。
+GDEClaw 使用 `CuaAgent(...)` 和 `load_agent_definition()`。结构化请求通过 `InvocationRequest.execution` 传入 skillName、inputs 与可选 strategy（默认 replay）；无绑定时将完整 task 直接作为 freeform 目标。每次调用均拒绝模型更换绑定参数，不接受任意 Skill 路径。`freeform_only=True` 和环境变量 `CUA_AGENT_FREEFORM_ONLY=true` 只允许 freeform，不支持结构化绑定。完整资产契约、宿主 Workbench 调用及集成边界见 [执行专用集成](../docs/execution-only-subagent.md)。
 
 ## 调用结果与取消
 

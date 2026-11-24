@@ -148,7 +148,7 @@ Python 宿主可使用已有 JsonlRuntimeClient.request("workbench", payload)，
 }
 ```
 
-省略 strategy 归一化为 guided；明确严格回放时传 replay。执行专用模型只获得 cua_execute，必须与绑定身份、策略、输入完全一致。Runtime 从可信根解析实际 Skill 并验证输入；不存在、非法或普通宿主 Skill 直接失败，不寻找替代任务。无参数任务可省略 inputs，使用已保存默认值时仍由调用方确认其适用性。
+省略 strategy 时使用 replay，按录制步骤运行并支持在可恢复的步骤失败后自适应接续。用户明确要求从任务开始自适应运行时，宿主传 guided。执行专用模型只获得 cua_execute，必须与绑定身份、策略、输入完全一致。Runtime 从可信根解析实际 Skill 并验证输入；不存在、非法或普通宿主 Skill 直接失败，不寻找替代任务。无参数任务可省略 inputs，使用已保存默认值时仍由调用方确认其适用性。
 
 ```json
 {"task":"打开系统并导出本月销售报表","invocationId":"run-2"}
@@ -173,7 +173,7 @@ npm.cmd run cua -- skill list --json
 npm.cmd run cua -- skill create-from-recording --recording D:\CUA\recordings\Recording_1
 npm.cmd run cua -- skill validate --skill-name network-alarm-search
 npm.cmd run cua -- skill run --skill-name network-alarm-search --dry-run
-npm.cmd run cua -- skill run --skill-name network-alarm-search --strategy replay
+npm.cmd run cua -- skill run --skill-name network-alarm-search --strategy guided
 ```
 
 移除 dry-run 会产生真实桌面副作用。宿主须串行协调电脑操作。

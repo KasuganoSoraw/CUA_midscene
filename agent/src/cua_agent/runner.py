@@ -70,8 +70,8 @@ FINALIZATION_PROTOCOL = """
 - 如果任务仅涉及电脑操作，没有信息读取结果，正常简要说明执行结果。
 
 ### 2. 观察与读取结果
-- 检查 Tool Result 中的 `executor.midsceneResult`，包括 guided 的
-  `aiActOutput`、replay 的 `read-step-*` 等实际读取结果。
+- 检查 Tool Result 中的 `executor.midsceneResult`，包括 Replay 的
+  `read-step-*` 和自适应执行返回的 `aiActOutput`。
 - 凡是 Tool 已直接返回的界面观察、查询或读取信息，必须在最终 `reply`
   中忠实反馈，不得仅以“任务已完成”或操作摘要代替。
 - 文件名、列表项目、参数名称、数值、单位及其对应关系等具体信息，

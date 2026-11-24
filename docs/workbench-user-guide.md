@@ -53,7 +53,7 @@ npm.cmd run cua -- skill validate --skill-name network-alarm-search
 npm.cmd run cua -- skill run --skill-name network-alarm-search --dry-run
 ```
 
-默认 guided，显式 --strategy replay 严格回放。dry-run 只校验并保存本次运行产物，不操作电脑。真实操作必须由宿主串行协调。
+Skill CLI 默认 replay，可在可恢复的步骤失败后自适应接续。显式 --strategy guided 从任务开始整体规划。dry-run 只校验并保存本次运行产物，不操作电脑。真实操作必须由宿主串行协调。
 
 CUA_DATA_ROOT/runs 保存报告、状态、截图与本次输入，运行历史按空间策略清理，不触碰 Skill 和原始录制。失败时保留真实诊断和可用报告，不自动重试或换任务。
 
