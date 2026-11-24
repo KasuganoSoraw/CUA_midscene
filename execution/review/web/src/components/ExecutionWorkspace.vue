@@ -34,6 +34,16 @@ const reportOpening = ref(false);
 const reportOpenError = ref('');
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle');
 const copying = ref(false);
+const copyMessage = computed(() => {
+  if (copyState.value === 'copied') return t('execution.copied');
+  if (copyState.value === 'failed') return t('execution.copyFailed');
+  return t('execution.copyHelp');
+});
+const stopLabel = computed(() => {
+  if (status.value.phase === 'preparing') return t('execution.cancelPrepare');
+  if (status.value.phase === 'stopping') return t('execution.stopping');
+  return t('execution.stop');
+});
 const instructionField = ref<HTMLInputElement>();
 const clock = ref(Date.now());
 let poll: ReturnType<typeof setInterval> | undefined;
@@ -200,7 +210,7 @@ onUnmounted(() => { disposed = true; selectionVersion += 1; if (poll) clearInter
             <input id="execution-instruction" ref="instructionField" :value="instruction" readonly @focus="instructionField?.select()" />
             <button type="button" :disabled="copying || !instruction" :title="t('execution.copyInstruction')" :aria-label="t('execution.copyInstruction')" @click="copyInstruction"><img :src="copyIcon" alt="" /></button>
           </div>
-          <p class="execution-copy-message" role="status" aria-live="polite">{{ t(copyState === 'copied' ? 'execution.copied' : copyState === 'failed' ? 'execution.copyFailed' : 'execution.copyHelp') }}</p>
+          <p class="execution-copy-message" role="status" aria-live="polite">{{ copyMessage }}</p>
         </div>
         <section class="execution-parameters">
           <header><h3>{{ t('execution.debugInputs') }}</h3><span>{{ t('execution.inputsEphemeral') }}</span></header>
@@ -217,7 +227,7 @@ onUnmounted(() => { disposed = true; selectionVersion += 1; if (poll) clearInter
       </template>
       <div v-else class="execution-selection-empty"><h2>{{ t(busy ? 'review.loading' : 'execution.choose') }}</h2><p>{{ t('execution.selectFirst') }}</p></div>
       <div v-if="selectedTask || active" class="execution-actions">
-        <button v-if="active" class="execution-stop" :disabled="busy || status.phase === 'stopping'" @click="stop">{{ status.phase === 'preparing' ? t('execution.cancelPrepare') : status.phase === 'stopping' ? t('execution.stopping') : t('execution.stop') }}</button>
+        <button v-if="active" class="execution-stop" :disabled="busy || status.phase === 'stopping'" @click="stop">{{ stopLabel }}</button>
         <button v-else class="primary execution-start" :disabled="!canStart" @click="start"><img :src="runIcon" alt="" />{{ t('execution.debugTask') }}</button>
         <p>{{ t('execution.warning') }}</p>
       </div>

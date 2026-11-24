@@ -14,6 +14,7 @@ export interface RecorderStatus {
   startedAt?: string;
   hotkey?: string;
   error?: string;
+  focusWarning?: string;
 }
 
 export interface RecorderDisplay {
@@ -57,7 +58,7 @@ export interface RecorderControl {
   status(): RecorderStatus;
   refreshDisplays(): Promise<{ displays: RecorderDisplay[]; revision: string }>;
   preview(index: number): Promise<string>;
-  start(displayId: string): Promise<RecorderStatus>;
+  start(displayId: string, language?: string): Promise<RecorderStatus>;
   stop(): Promise<RecorderStatus>;
   close(): Promise<void>;
 }
@@ -115,6 +116,8 @@ export class WindowsRecorderManager implements RecorderControl {
     previewRoot?: string;
     spawnProcess?: SpawnProcess;
     stopTimeoutMs?: number;
+    onRecordingCompleted?: (recordingId: string) => void;
+    onRecordingCancelled?: () => void;
   }) {
     this.currentStatus = {
       phase: 'idle',
@@ -171,7 +174,7 @@ export class WindowsRecorderManager implements RecorderControl {
     return previewPath;
   }
 
-  async start(displayId: string): Promise<RecorderStatus> {
+  async start(displayId: string, language?: string): Promise<RecorderStatus> {
     if (isActive(this.currentStatus.phase)) {
       throw Object.assign(new Error(`已有录制会话正在运行：${this.currentStatus.phase}`), { statusCode: 409 });
     }
@@ -180,10 +183,14 @@ export class WindowsRecorderManager implements RecorderControl {
     this.diagnostics = [];
     const pythonExecutable = await this.pythonExecutable();
     const spawnProcess = this.options.spawnProcess ?? spawn;
+    const args = ['record', '--display-id', displayId, '--output-root', outputRoot];
+    if (language === 'zh-CN' || language === 'en-US') {
+      args.push('--language', language);
+    }
     const child = spawnPythonWorker({
       pythonExecutable,
       module: 'cua_recorder',
-      args: ['record', '--display-id', displayId, '--output-root', outputRoot],
+      args,
       stdio: ['pipe', 'pipe', 'pipe'],
     }, spawnProcess) as ChildProcessWithoutNullStreams;
     this.child = child;
@@ -270,7 +277,12 @@ export class WindowsRecorderManager implements RecorderControl {
     } else if (event.event === 'stopping') {
       this.currentStatus = { ...this.currentStatus, phase: 'stopping' };
     } else if (event.event === 'completed' || event.event === 'cancelled') {
+      if (event.event === 'completed' && event.recording_id) this.options.onRecordingCompleted?.(event.recording_id);
+      if (event.event === 'cancelled') this.options.onRecordingCancelled?.();
       this.currentStatus = { phase: 'idle', outputRoot };
+      if (event.event === 'completed' && typeof event.focus_warning === 'string') {
+        this.currentStatus.focusWarning = event.focus_warning;
+      }
     } else if (event.event === 'error') {
       throw new Error(event.message || '录制 Worker 报告未知错误');
     }

@@ -201,6 +201,7 @@ export interface RecorderStatus {
   startedAt?: string;
   hotkey?: string;
   error?: string;
+  focusWarning?: string;
 }
 
 export interface RecorderDisplay {
@@ -223,6 +224,7 @@ export interface RecorderDisplaysResult {
 
 export interface StartRecorderRequest {
   displayId: string;
+  language?: GenerationLanguage;
 }
 
 export type TaskExecutionMode = 'task' | 'act';

@@ -68,12 +68,6 @@ def run_pipeline(project_name: str, *, language: str = "zh-CN") -> Path:
 
     out_trace = _generate_skill_trace(project_dir, screenshots_dir, language)
 
-    print("=== Pipeline Complete ===")
-    print(f"Project: {project_dir.name}")
-    print(f"Processed log: {processed_log_path.name}")
-    print(f"Screenshots dir: {Path(screenshots_dir).name}")
-    print(f"Processed log (+screens): {project_dir.name}_processed_log_sc.json")
-    print(f"Trace: {out_trace.name}")
     return out_trace
 
 

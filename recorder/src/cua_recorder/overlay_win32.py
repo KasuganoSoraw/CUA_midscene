@@ -11,6 +11,7 @@ from typing import Any
 
 from .models import DisplayInfo
 from .overlay import ToolbarState
+from .overlay_guidance import RecordingGuidance
 from .protocol import RecorderError
 
 WM_PAINT = 0x000F
@@ -102,6 +103,8 @@ API_SIGNATURES = [
         ],
     ),
     ("user", "SetWindowDisplayAffinity", wt.BOOL, [wt.HWND, wt.DWORD]),
+    ("user", "SetLayeredWindowAttributes", wt.BOOL, [wt.HWND, wt.DWORD, wt.BYTE, wt.DWORD]),
+    ("user", "FillRect", ctypes.c_int, [wt.HDC, ctypes.POINTER(wt.RECT), wt.HBRUSH]),
     ("user", "SetWindowRgn", ctypes.c_int, [wt.HWND, wt.HANDLE, wt.BOOL]),
     ("user", "WindowFromPoint", wt.HWND, [wt.POINT]),
     ("user", "GetAncestor", wt.HWND, [wt.HWND, wt.UINT]),
@@ -141,6 +144,8 @@ API_SIGNATURES = [
     ("gdi", "CreateSolidBrush", wt.HBRUSH, [wt.DWORD]),
     ("gdi", "CreatePen", wt.HANDLE, [ctypes.c_int, ctypes.c_int, wt.DWORD]),
     ("gdi", "CreateRoundRectRgn", wt.HANDLE, [ctypes.c_int] * 6),
+    ("gdi", "CreateRectRgn", wt.HANDLE, [ctypes.c_int] * 4),
+    ("gdi", "CombineRgn", ctypes.c_int, [wt.HANDLE, wt.HANDLE, wt.HANDLE, ctypes.c_int]),
     ("gdi", "SelectObject", wt.HANDLE, [wt.HDC, wt.HANDLE]),
     ("gdi", "DeleteObject", wt.BOOL, [wt.HANDLE]),
     ("gdi", "RoundRect", wt.BOOL, [wt.HDC] + [ctypes.c_int] * 6),
@@ -234,9 +239,10 @@ def _window_class_type(procedure_type: Any) -> type[ctypes.Structure]:
 class RecorderOverlay:
     """录制 Worker 拥有的非激活、捕获排除桌面工具窗。"""
 
-    def __init__(self, display: DisplayInfo, command: Callable[[str], None]) -> None:
+    def __init__(self, display: DisplayInfo, command: Callable[[str], None], language: str = "zh-CN") -> None:
         self._display = display
         self._command = command
+        self._language = language
         self._state = ToolbarState()
         self._scale = display.scale_factor
         self._ready = threading.Event()
@@ -251,6 +257,7 @@ class RecorderOverlay:
         self._user: Any = None
         self._gdi: Any = None
         self._procedure: Any = None
+        self._guidance: RecordingGuidance | None = None
 
     def start(self, timeout: float = 5.0) -> None:
         if sys.platform != "win32" or sys.getwindowsversion().build < 19041:
@@ -307,6 +314,8 @@ class RecorderOverlay:
             instance = self._register_window_class(class_name, kernel)
             registered = True
             self._create_window(class_name, instance)
+            self._guidance = RecordingGuidance(self._display, user, gdi, PaintStruct, self._language)
+            self._guidance.create(class_name, instance)
             self._show_window()
             self._message_loop()
         except Exception as error:
@@ -388,6 +397,9 @@ class RecorderOverlay:
             self._user.DispatchMessageW(ctypes.byref(message))
 
     def _release_window(self, class_name: str, instance: int, registered: bool) -> None:
+        if self._guidance:
+            self._guidance.close()
+            self._guidance = None
         if self._hwnd:
             self._user.DestroyWindow(self._hwnd)
         if self._font:
@@ -432,6 +444,11 @@ class RecorderOverlay:
 
     def _window_proc(self, hwnd: int, message: int, wparam: int, lparam: int) -> int:
         try:
+            if self._guidance and hwnd == self._guidance.hwnd:
+                result = self._guidance.handle_message(message)
+                return int(self._user.DefWindowProcW(hwnd, message, wparam, lparam)) if result is None else result
+            if hwnd != self._hwnd:
+                return int(self._user.DefWindowProcW(hwnd, message, wparam, lparam))
             return self._handle_message(hwnd, message, wparam, lparam)
         except Exception as error:
             self._error = error
@@ -455,6 +472,8 @@ class RecorderOverlay:
                 self._user.ReleaseCapture()
                 self._user.SetTimer(hwnd, 1, 250, None)
         if message in (WM_UPDATE, WM_TIMER):
+            if self._guidance:
+                self._guidance.update(self._state.snapshot().phase)
             self._user.InvalidateRect(hwnd, None, False)
             return 0
         if message in (WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP):

@@ -325,14 +325,19 @@ function buildClickAction(model: StepEditorModel): JsonObject {
   };
 }
 
-function buildStepAction(model: StepEditorModel, stepId: string): JsonObject {
-  if (model.operation === 'click' || model.operation === 'doubleClick' || model.operation === 'rightClick') return buildClickAction(model);
-  if (model.operation === 'read') return { aiAsk: model.target.trim(), name: `read-${stepId}` };
-  if (model.operation === 'aiAct') return { ai: model.referenceImages.length ? {
+function buildAiActAction(model: StepEditorModel): JsonObject {
+  if (!model.referenceImages.length) return { ai: model.target };
+  return { ai: {
     prompt: model.target,
     images: clone(model.referenceImages),
     ...(model.convertHttpImage2Base64 ? { convertHttpImage2Base64: true } : {}),
-  } : model.target };
+  } };
+}
+
+function buildStepAction(model: StepEditorModel, stepId: string): JsonObject {
+  if (model.operation === 'click' || model.operation === 'doubleClick' || model.operation === 'rightClick') return buildClickAction(model);
+  if (model.operation === 'read') return { aiAsk: model.target.trim(), name: `read-${stepId}` };
+  if (model.operation === 'aiAct') return buildAiActAction(model);
   if (model.operation === 'input') {
     if (model.inputAction === 'aiInput') {
       return {
