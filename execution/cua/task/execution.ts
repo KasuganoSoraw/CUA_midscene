@@ -253,6 +253,7 @@ async function execute(
   onProgress?: ExecutionProgressSink,
   captureAiActOutput = false,
   abortSignal?: AbortSignal,
+  replayFallback?: MidsceneYamlExecutionOptions['replayFallback'],
 ): Promise<ExecutorResult> {
   const options: MidsceneYamlExecutionOptions = {
     yamlPath,
@@ -262,12 +263,22 @@ async function execute(
     ...(captureAiActOutput ? { captureAiActOutput: true } : {}),
     ...(onProgress === undefined ? {} : { onProgress }),
     ...(abortSignal === undefined ? {} : { abortSignal }),
+    ...(replayFallback === undefined ? {} : { replayFallback }),
   };
   return executor(options);
 }
 
 export async function runTask(options: ExecutionOptions): Promise<TaskRun> {
   const resolved = await resolveExecutionTask(options);
+  let replayFallback: MidsceneYamlExecutionOptions['replayFallback'];
+  try {
+    replayFallback = {
+      goal: resolved.manifest.goal,
+      taskPrompt: buildRecordedTaskAiActPrompt(resolved.document),
+    };
+  } catch {
+    // 无法转换为 aiAct 指令的 YAML 仅执行 Replay。
+  }
   return withRunDirectory(options.runsRoot, async (runDirectory) => {
     const resolvedTaskPath = path.join(runDirectory, 'resolved-task.yaml');
     await writeYamlDocument(resolvedTaskPath, resolved.document);
@@ -279,6 +290,7 @@ export async function runTask(options: ExecutionOptions): Promise<TaskRun> {
       options.onProgress,
       false,
       options.abortSignal,
+      replayFallback,
     );
     return { resolved, resolvedTaskPath, executorResult };
   });

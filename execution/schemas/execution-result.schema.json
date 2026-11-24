@@ -35,6 +35,21 @@
       "default": null,
       "title": "Finalscreenshotpath"
     },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "triggered": { "const": true },
+        "from": { "const": "replay" },
+        "to": { "const": "adaptive" },
+        "completedSteps": { "type": "array", "items": { "type": "string" } },
+        "failedStep": { "type": "string" },
+        "pendingSteps": { "type": "array", "items": { "type": "string" } },
+        "uncertainSteps": { "type": "array", "items": { "type": "string" } },
+        "recoveryStatus": { "enum": ["succeeded", "failed"] }
+      },
+      "required": ["triggered", "from", "to", "completedSteps", "failedStep", "pendingSteps", "uncertainSteps", "recoveryStatus"]
+    },
     "midsceneResult": {
       "anyOf": [
         {
