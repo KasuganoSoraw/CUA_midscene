@@ -443,6 +443,7 @@ class JsonlRuntimeClient:
             "description",
             "status",
             "executionId",
+            "phase",
         }:
             raise RuntimeProtocolError("Runtime event data 包含无效字段")
         if not isinstance(data, dict) or data.get("source") != "midscene":
@@ -465,6 +466,8 @@ class JsonlRuntimeClient:
     def _validate_event_details(self, data: dict[str, JsonValue]) -> None:
         description = data.get("description")
         status = data.get("status")
+        if "phase" in data and data["phase"] not in ("replay", "adaptive"):
+            raise RuntimeProtocolError("Runtime event phase 无效")
         if description is not None and (
             not isinstance(description, str)
             or not description.strip()

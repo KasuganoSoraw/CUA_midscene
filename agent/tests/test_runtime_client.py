@@ -152,6 +152,21 @@ def test_client_rejects_mismatched_and_uncontrolled_progress() -> None:
     asyncio.run(scenario("progress-leak"))
     asyncio.run(scenario("progress-bad-task-id"))
     asyncio.run(scenario("progress-long-description"))
+    asyncio.run(scenario("progress-bad-phase"))
+
+
+def test_client_delivers_replay_and_adaptive_phases_before_result() -> None:
+    async def scenario() -> None:
+        events: list[RuntimeProgressEvent] = []
+        async with JsonlRuntimeClient(config()) as client:
+            result = await client.request(
+                "execute", {"action": "progress-replay-adaptive"}, on_event=events.append
+            )
+            assert result["method"] == "execute"
+            assert [event.data["phase"] for event in events] == ["replay", "adaptive"]
+            assert client.running
+
+    asyncio.run(scenario())
 
 
 def test_client_preserves_total_timeout_and_cancellation_after_progress() -> None:

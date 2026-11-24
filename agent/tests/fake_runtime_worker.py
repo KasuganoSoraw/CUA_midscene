@@ -45,6 +45,12 @@ for raw_line in sys.stdin:
             event["event"]["data"]["description"] = "x" * 301
         if action == "progress-leak":
             event["event"]["data"]["screenshot"] = "private-image"
+        if action == "progress-replay-adaptive":
+            event["event"]["data"]["phase"] = "replay"
+            print(json.dumps(event, ensure_ascii=False), flush=True)
+            event["event"]["data"]["phase"] = "adaptive"
+        if action == "progress-bad-phase":
+            event["event"]["data"]["phase"] = "unknown"
         if action == "progress-continuous":
             while True:
                 print(json.dumps(event, ensure_ascii=False), flush=True)
