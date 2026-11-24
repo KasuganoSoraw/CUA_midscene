@@ -56,6 +56,10 @@ export class RecordingCardStore {
     return { ...card };
   }
 
+  all(): RecordingCard[] {
+    return this.store.value.cards.map(card => ({ ...card }));
+  }
+
   create(input: RecordingCardInput): RecordingCard {
     const now = new Date().toISOString();
     const card: RecordingCard = {

@@ -1,8 +1,17 @@
 import type { FastifyInstance } from 'fastify';
 import type { RecordingCardStore } from '../service/recording-cards.js';
-import type { RecordingCardInput } from '../shared/recording-cards.js';
+import type { RecordingCard, RecordingCardInput, RecordingCardSyncResult } from '../shared/recording-cards.js';
 import type { RecorderControl } from '../service/windows-recorder.js';
 import type { RecordingCatalog } from '../../cua/recording/recording-catalog.js';
+
+interface SkillCardLinks {
+  synchronize?: () => Promise<RecordingCardSyncResult>;
+  skillName?: (id: string) => string | undefined;
+}
+
+function cardView<T extends RecordingCard>(card: T, links: SkillCardLinks): T {
+  return { ...card, skillName: links.skillName?.(card.id) };
+}
 
 const textFields = {
   name: { type: 'string', minLength: 1, maxLength: 120, pattern: '\\S' },
@@ -27,8 +36,9 @@ export function registerRecordingCardRoutes(
   recordings: () => Promise<RecordingCatalog>,
   busy: () => boolean = () => false,
   removeCard: (id: string) => Promise<void> = async id => { store.remove(id); },
+  links: SkillCardLinks = {},
 ): void {
-  registerCardQueries(app, store, recordings);
+  registerCardQueries(app, store, recordings, links);
   registerCardWrites(app, store);
   registerCardVisitsAndDeletion(app, store, recorder, busy, removeCard);
   registerCardRecording(app, store, recorder, busy);
@@ -139,6 +149,7 @@ function registerCardQueries(
   app: FastifyInstance,
   store: RecordingCardStore,
   recordings: () => Promise<RecordingCatalog>,
+  links: SkillCardLinks,
 ): void {
   app.get<{
     Querystring: { query?: string; page?: number; pageSize?: number };
@@ -158,31 +169,34 @@ function registerCardQueries(
       },
     },
     async (request) => {
-      return store.list(
+      const result = store.list(
         request.query.query ?? '',
         request.query.page ?? 1,
         request.query.pageSize ?? 16,
       );
+      return { ...result, cards: result.cards.map(card => cardView(card, links)) };
     },
   );
-  registerCardLookup(app, store, recordings);
+  registerCardLookup(app, store, recordings, links);
 }
 
 function registerCardLookup(
   app: FastifyInstance,
   store: RecordingCardStore,
   recordings: () => Promise<RecordingCatalog>,
+  links: SkillCardLinks,
 ): void {
   app.post('/api/recording-cards/sync', async () => {
     store.importRecordings((await recordings()).recordings);
-    return { synced: true };
+    if (links.synchronize) return links.synchronize();
+    return { synced: true, importedSkills: 0, warnings: [] };
   });
   app.get('/api/recording-cards/recent', async () => ({
-    cards: store.recent(),
+    cards: store.recent().map(card => cardView(card, links)),
   }));
   app.get<{ Params: { id: string } }>(
     '/api/recording-cards/:id',
     { schema: { params } },
-    async (request) => store.get(request.params.id),
+    async (request) => cardView(store.get(request.params.id), links),
   );
 }

@@ -45,12 +45,17 @@ let navigation = 0;
 const selectedId = computed(() => card.value?.id);
 
 async function synchronize(): Promise<void> {
+  loading.value = true;
+  error.value = '';
+  let warning = '';
   try {
-    await api.syncRecordingCards();
-    await load();
+    const result = await api.syncRecordingCards();
+    warning = result.warnings.join('\n');
   } catch (cause) {
-    error.value = message(cause);
+    warning = message(cause);
   }
+  await load();
+  error.value = [warning, error.value].filter(Boolean).join('\n');
 }
 async function load(page = result.value.page): Promise<void> {
   const request = ++sequence;
@@ -126,6 +131,7 @@ async function restore(): Promise<void> {
     activeMode.value = mode ?? 'recording';
     workspaceKey.value++;
   }
+  if (home.value) await synchronize();
 }
 async function showDialog(target?: RecordingCard): Promise<void> {
   try {
@@ -193,8 +199,8 @@ onMounted(async () => {
   } catch (cause) {
     error.value = message(cause);
   }
-  await synchronize();
   await restore();
+  if (!home.value) await load();
 });
 onUnmounted(() => {
   window.removeEventListener('popstate', restore);

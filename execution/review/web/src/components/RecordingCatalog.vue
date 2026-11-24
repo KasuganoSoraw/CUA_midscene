@@ -75,7 +75,7 @@ function date(value: string): string {
             </div>
             <p class="card-description">{{ card.description }}</p>
           </button>
-          <span v-if="!card.recordingId" class="card-pending">{{ t('card.pending') }}</span>
+          <span v-if="!card.recordingId && !card.skillName" class="card-pending">{{ t('card.pending') }}</span>
           <div class="card-bottom">
             <button class="card-time" :aria-label="`${t('card.nav')} ${card.name}`" @click="emit('open', card)"><time :datetime="card.updatedAt">{{ date(card.updatedAt) }}</time></button>
             <div class="card-actions">

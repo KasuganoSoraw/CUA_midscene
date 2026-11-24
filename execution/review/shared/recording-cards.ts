@@ -3,6 +3,7 @@ export interface RecordingCard {
   name: string;
   description: string;
   recordingId: string | null;
+  skillName?: string;
   createdAt: string;
   updatedAt: string;
   version: number;
@@ -19,4 +20,10 @@ export interface RecordingCardPage {
 export interface RecordingCardInput {
   name: string;
   description: string;
+}
+
+export interface RecordingCardSyncResult {
+  synced: true;
+  importedSkills: number;
+  warnings: string[];
 }
