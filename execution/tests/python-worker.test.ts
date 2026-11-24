@@ -89,7 +89,7 @@ test('Python Worker 使用模块入口、无 shell 环境并转发诊断', async
   assert.match(forwarded, /warning/);
 });
 
-test('Python Worker 拒绝非法 module 并保留非零退出诊断', async () => {
+test('Python Worker 拒绝非法 module，并将退出错误与进度诊断分开', async () => {
   assert.throws(() => spawnPythonWorker({
     pythonExecutable: 'python',
     module: 'cua_record;exit',
@@ -106,8 +106,13 @@ test('Python Worker 拒绝非法 module 并保留非零退出诊断', async () =
     return child;
   }) as unknown as typeof spawn;
 
+  const progress = new PassThrough();
+  let diagnostics = '';
+  progress.on('data', chunk => { diagnostics += chunk.toString(); });
   await assert.rejects(runPythonWorker({
     pythonExecutable: 'E:\\runtime\\python.exe',
     module: 'cua_record',
-  }, fakeSpawn), /exit=3[\s\S]*module missing/);
+    progress,
+  }, fakeSpawn), { message: '技能处理失败，请稍后重试。' });
+  assert.match(diagnostics, /module missing/);
 });

@@ -50,9 +50,11 @@ export async function runCliCommand(
     dev: options.dev,
   });
   if (!options.noOpen) (dependencies.openBrowser ?? openSystemBrowser)(started.url);
-  return options.json
-    ? `${JSON.stringify({ url: started.url, host: '127.0.0.1', reused: started.reused, dev: options.dev }, null, 2)}\n`
-    : `${started.reused ? '复核页面已复用' : '复核页面已启动'}：${started.url}\n`;
+  if (options.json) {
+    return `${JSON.stringify({ url: started.url, host: '127.0.0.1', reused: started.reused, dev: options.dev }, null, 2)}\n`;
+  }
+  const message = started.reused ? '复核页面已复用' : '复核页面已启动';
+  return `${message}：${started.url}\n`;
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {

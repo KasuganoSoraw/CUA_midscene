@@ -163,7 +163,7 @@ test('原生 aiAct 在保留执行结果的同时展示截图缩放信息', asyn
   const fixture = await executionFixture();
   const reportPath = path.join(fixture.runDirectory, 'midscene', 'report', 'execution-report.html');
   const required = [
-    'MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY',
+    'MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_API_KEY', 'MIDSCENE_MODEL_FAMILY',
     'MIDSCENE_SCREENSHOT_SHRINK_FACTOR',
   ];
   const previous = Object.fromEntries(required.map(key => [key, process.env[key]]));

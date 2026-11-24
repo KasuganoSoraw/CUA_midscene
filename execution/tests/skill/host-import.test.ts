@@ -92,13 +92,18 @@ test('网络错误或超时明确说明结果不确定，保留 ZIP 并且不换
     await assert.rejects(importSkillArchive(value.options, { fetch: async () => {
       calls += 1;
       throw new TypeError('network unavailable');
-    } }), /结果不确定/);
+    } }), error => error instanceof SkillImportError
+      && error.code === 'GDE_NETWORK_FAILED'
+      && /是否已安装尚未确认/.test(error.userMessage));
     assert.equal(calls, 1);
     const fetchMock: typeof fetch = (_url, init) => new Promise((_resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('test deadline')), 1000);
       init?.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(init.signal?.reason); }, { once: true });
     });
-    await assert.rejects(importSkillArchive(value.options, { fetch: fetchMock, timeoutMs: 5 }), /请求超时.*结果不确定/);
+    await assert.rejects(importSkillArchive(value.options, { fetch: fetchMock, timeoutMs: 5 }),
+      error => error instanceof SkillImportError
+        && error.code === 'GDE_IMPORT_TIMEOUT'
+        && /是否已安装尚未确认/.test(error.userMessage));
     assert.equal(await readFile(value.options.zipPath, 'utf8'), 'ZIP fixture');
   } finally { await value.close(); }
 });

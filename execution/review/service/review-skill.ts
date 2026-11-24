@@ -1,10 +1,13 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, readFile, realpath, rename, rm } from 'node:fs/promises';
+import { deleteHostSkill } from '../../cua/skills/host-delete.js';
+import { parseDocument } from 'yaml';
+import type { WorkflowResult } from '../shared/workflow.js';
+import { createHash } from 'node:crypto';
+import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { SkillTaskManifest } from '../../cua/contracts/types.js';
 import { readSkill, validateSkillDraft, type SkillAsset } from '../../cua/skills/assets.js';
 import { withSkillWriteLock } from '../../cua/skills/lock.js';
-import { assertContained, safeSkillFile } from '../../cua/skills/paths.js';
+import { requireSkillName, safeSkillFile } from '../../cua/skills/paths.js';
 import { dumpYamlDocument } from '../../cua/task/yaml-task.js';
 import type { ReviewSkillView, SaveReviewTaskRequest, SaveReviewTaskResult } from '../shared/types.js';
 import { buildReviewSteps } from './review-task.js';
@@ -58,17 +61,57 @@ export async function saveReviewSkill(skillsRoot: string, name: string,
   });
 }
 
-export async function deleteReviewSkill(skillsRoot: string, name: string): Promise<{ deleted: true; skillName: string }> {
-  return withSkillWriteLock(skillsRoot, name, async () => {
-    const asset = await readSkill(skillsRoot, name);
-    const root = await realpath(skillsRoot);
-    const staging = path.join(root, '.cua-staging');
-    await mkdir(staging, { recursive: true });
-    if ((await lstat(staging)).isSymbolicLink()) throw new Error('Skill 暂存目录不能是符号链接');
-    const actual = assertContained(root, await realpath(staging));
-    const trash = path.join(actual, `trash-${randomUUID()}`);
-    await rename(assertContained(root, asset.root), trash);
-    await rm(assertContained(actual, trash), { recursive: true });
-    return { deleted: true, skillName: name };
-  });
+export interface ReviewSkillDeleteOptions {
+  executionRoot?: string;
+  deleteSkill?: typeof deleteHostSkill;
+  allowMissing?: boolean;
+}
+
+async function checkedSkillDeletion(skillsRoot: string, name: string, options: ReviewSkillDeleteOptions): Promise<{ deleted: true; skillName: string }> {
+  let exists = true;
+  try { await lstat(path.join(skillsRoot, name)); }
+  catch (error) {
+    if (!options.allowMissing || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    exists = false;
+  }
+  if (exists) {
+    try { await readSkill(skillsRoot, name); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { deleted: true, skillName: name };
+      throw error;
+    }
+  }
+  await (options.deleteSkill ?? deleteHostSkill)({ skillName: name, executionRoot: options.executionRoot });
+  try { await lstat(path.join(skillsRoot, name)); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { deleted: true, skillName: name };
+    throw error;
+  }
+  throw new Error('GDE 已响应删除，但对应 Skill 目录仍存在，请检查宿主工作区和 CUA_SKILLS_ROOT 配置。');
+}
+
+export async function deleteReviewSkill(skillsRoot: string, name: string, options: ReviewSkillDeleteOptions = {}): Promise<{ deleted: true; skillName: string }> {
+  requireSkillName(name);
+  let rootExists = true;
+  try { await lstat(skillsRoot); }
+  catch (error) {
+    if (!options.allowMissing || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    rootExists = false;
+  }
+  if (!rootExists) return checkedSkillDeletion(skillsRoot, name, options);
+  return withSkillWriteLock(skillsRoot, name, () => checkedSkillDeletion(skillsRoot, name, options));
+}
+
+export async function loadPublishedSkillResult(skillsRoot: string, name: string): Promise<WorkflowResult> {
+  const asset = await readSkill(skillsRoot, name);
+  const content = await readFile(await safeSkillFile(asset.root, 'SKILL.md'), 'utf8');
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
+  const fields = frontmatter ? parseDocument(frontmatter[1]).toJS() as Record<string, unknown> : {};
+  const metadata = fields.metadata && typeof fields.metadata === 'object'
+    ? fields.metadata as Record<string, unknown> : {};
+  const version = fields.version ?? metadata.version;
+  return { name: asset.skill.name, description: asset.skill.description, content,
+    installPath: asset.root, origin: 'user',
+    ...(typeof version === 'string' && version.trim() ? { version: version.trim() } : {}),
+  };
 }

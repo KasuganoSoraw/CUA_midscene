@@ -68,6 +68,21 @@ export async function extractShotSizeFromReport(
   }
 }
 
+function shrinkBannerHtml(shrinkFactor: number, shotSize: { width: number; height: number } | undefined): string {
+  const original = shotSize
+    ? { width: Math.round(shotSize.width * shrinkFactor), height: Math.round(shotSize.height * shrinkFactor) }
+    : undefined;
+
+  return [
+    '<div id="midscene-shrink-banner" style="position:fixed;top:12px;right:12px;z-index:99999;padding:10px 14px;border-radius:8px;background:rgba(24,30,50,0.92);color:#fff;font-family:system-ui,sans-serif;font-size:12px;line-height:18px;box-shadow:0 2px 12px rgba(0,0,0,0.25);max-width:340px;pointer-events:none;">',
+    `  <div style="font-weight:600;margin-bottom:4px;">Screenshot scaling: &times;${shrinkFactor.toFixed(2)}</div>`,
+    original
+      ? `  <div>${original.width} &times; ${original.height} &rarr; ${shotSize!.width} &times; ${shotSize!.height} (sent to model)</div>`
+      : `  <div>Original size unknown; shot size from dump only.</div>`,
+    '</div>',
+  ].join('\n');
+}
+
 /**
  * 向 report HTML 注入报告展示样式及截图缩放信息 banner（放在 React 挂载点 #root 之外）。
  *
@@ -89,18 +104,7 @@ export async function injectShrinkBannerIntoReport(
   if (!injectPlaygroundStyle && !showBanner) return;
 
   const shotSize = showBanner ? await extractShotSizeFromReport(reportPath) : undefined;
-  const original = shotSize
-    ? { width: Math.round(shotSize.width * shrinkFactor), height: Math.round(shotSize.height * shrinkFactor) }
-    : undefined;
-
-  const bannerHtml = showBanner ? [
-    '<div id="midscene-shrink-banner" style="position:fixed;top:12px;right:12px;z-index:99999;padding:10px 14px;border-radius:8px;background:rgba(24,30,50,0.92);color:#fff;font-family:system-ui,sans-serif;font-size:12px;line-height:18px;box-shadow:0 2px 12px rgba(0,0,0,0.25);max-width:340px;pointer-events:none;">',
-    `  <div style="font-weight:600;margin-bottom:4px;">Screenshot scaling: &times;${shrinkFactor.toFixed(2)}</div>`,
-    original
-      ? `  <div>${original.width} &times; ${original.height} &rarr; ${shotSize!.width} &times; ${shotSize!.height} (sent to model)</div>`
-      : `  <div>Original size unknown; shot size from dump only.</div>`,
-    '</div>',
-  ].join('\n') : '';
+  const bannerHtml = showBanner ? shrinkBannerHtml(shrinkFactor, shotSize) : '';
 
   const rootMarker = '<div id="root"';
   const rootIndex = content.indexOf(rootMarker);

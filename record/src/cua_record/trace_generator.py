@@ -450,6 +450,26 @@ Overall Task: {overall_task}
         r.raise_for_status()
         return r.json()["content"][0]["text"]
 
+    @staticmethod
+    def _report_progress(completed: int, total: int) -> None:
+        print("CUA_TRACE_PROGRESS " + json.dumps({"completed": completed, "total": total}), flush=True)
+
+    def _msg_total_actions(self, total: int) -> str:
+        if self.language == "en-US":
+            return f"Total actions to process: {total}"
+        return f"总共需要处理的动作：{total}"
+
+    def _msg_step(self, step_idx: int, description: str) -> str:
+        desc = (description or "").strip() or ("(no description)" if self.language == "en-US" else "（无描述）")
+        if self.language == "en-US":
+            return f"Step {step_idx}: {desc}"
+        return f"步骤{step_idx}：{desc}"
+
+    def _msg_no_action_steps(self) -> str:
+        if self.language == "en-US":
+            return "The recording has no executable action steps to generate a skill."
+        return "录制中没有可生成技能的操作步骤"
+
     def generate_trace(self, recording_json_path: str,
                        screenshots_dir: str,
                        output_trace_path: str,
@@ -465,26 +485,28 @@ Overall Task: {overall_task}
             raise ValueError(f"录制 JSON 包含非对象步骤：{invalid_indexes}")
         by_ts = {float(it["timestamp"]): it for it in items if "timestamp" in it}
 
+        actions = [it for it in items if (it.get("action") or "").strip().upper() != "CONFIG"
+                   and not (it.get("action") or "").strip().startswith("Active Window")]
+        total = len(actions) + int(generate_skill_metadata)
+        self._report_progress(0, total)
+        print(self._msg_total_actions(total), flush=True)
         traj, step_idx = [], 1
 
-        for it in items:
+        for it in actions:
             act_str = (it.get("action") or "").strip()
-            if act_str.upper() == "CONFIG":
-                continue
-            if act_str.startswith("Active Window"):
-                continue
-
             ts = float(it.get("timestamp") or 0.0)
             cap = self._trace_step(it, by_ts.get(ts, it), screenshots_dir, overall_task, traj, step_idx, ts, act_str)
             traj.append({"step_idx": step_idx, "caption": cap})
+            self._report_progress(step_idx, total)
             step_idx += 1
             time.sleep(0.1)
 
         if not traj:
-            raise RuntimeError("录制中没有可生成 trace 的操作步骤")
+            raise RuntimeError(self._msg_no_action_steps())
         trace = {"trajectory": traj}
         if generate_skill_metadata:
             trace["skill"] = self.summarize_skill(traj)
+            self._report_progress(total, total)
         with open(output_trace_path, "w", encoding="utf-8") as f:
             json.dump(trace, f, ensure_ascii=False, indent=2)
 
@@ -540,13 +562,11 @@ Overall Task: {overall_task}
             isinstance(item.get("path"), list) and len(item["path"]) >= 2
         ):
             raise RuntimeError(f"trace step {step_idx} 缺少完整拖拽路径")
-        coords = item.get("coords")
-        coord_str = ", ".join(f"({c.get('x')},{c.get('y')})" for c in coords) if coords and isinstance(coords, list) else ""
-        print(f"parsing Step {step_idx}: {act} {coord_str}", flush=True)
         recent = self._recent_captions(traj)
         prompt = self._prompt(item, overall_task, step_idx, recent)
         cap = self._request_caption(prompt, crop_b64, full_b64)
         self._set_paste_value(cap, item)
+        print(self._msg_step(step_idx, self._val(cap, "Action", "action") or act_str), flush=True)
         if self._caption_needs_retry(cap, expected_operation_type):
             operation_error = self._operation_error(cap.get("operation"), expected_operation_type)
             if self.language == "en-US":

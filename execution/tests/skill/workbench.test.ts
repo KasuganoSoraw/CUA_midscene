@@ -23,6 +23,7 @@ async function setup(configured = true) {
   await mkdir(path.join(skillsRoot, 'ordinary'));
   await writeFile(path.join(skillsRoot, 'ordinary', 'SKILL.md'), 'ordinary skill');
   const starts: unknown[] = [];
+  const deletedSkills: string[] = [];
   const generatedRequests: Array<{ language?: string }> = [];
   const recorder: RecorderControl = {
     status: () => ({ phase: 'idle' }), close: async () => {},
@@ -34,6 +35,11 @@ async function setup(configured = true) {
     layout: { catalog: {}, data: dataPaths(path.join(root, 'data')), skillsRoot: configured ? skillsRoot : undefined },
     staticRoot: root, recordingsRoot, identity: { service: 'test', protocolVersion: 4, dataRootKey: root, devMode: false },
     dependencies: {
+      deleteSkill: async ({ skillName }) => {
+        deletedSkills.push(skillName);
+        assert.equal(skillName, 'alarm-query');
+        await rm(path.join(skillsRoot, 'alarm-query'), { recursive: true });
+      },
       recorder, execution: { status: () => ({ phase: 'idle' }), close: async () => {},
         stop: async () => ({ phase: 'idle' }), start: async request => { starts.push(request); return { phase: 'preparing' }; } },
       createSkill: async options => {
@@ -44,7 +50,7 @@ async function setup(configured = true) {
       },
     },
   });
-  return { app, root, skillsRoot, starts, generatedRequests,
+  return { app, root, skillsRoot, starts, generatedRequests, deletedSkills,
     close: async () => { await app.close(); await rm(root, { recursive: true, force: true }); } };
 }
 
@@ -66,6 +72,7 @@ test('Skill Workbench 平铺发现、直接保存与重新加载，不管理普�
     assert.equal((await app.inject({ method: 'DELETE', url: '/api/skills/ordinary' })).statusCode, 400);
     assert.equal(await readFile(path.join(skillsRoot, 'ordinary', 'SKILL.md'), 'utf8'), 'ordinary skill');
     assert.equal((await app.inject({ method: 'DELETE', url: '/api/skills/alarm-query' })).statusCode, 200);
+    assert.deepEqual(setupValue.deletedSkills, ['alarm-query']);
   } finally { await setupValue.close(); }
 });
 

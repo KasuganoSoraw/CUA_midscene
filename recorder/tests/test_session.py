@@ -60,7 +60,7 @@ class WaitingHotkey(ToggleHotkey):
 
 
 class FakeOverlay:
-    def __init__(self, _display: object, command: object) -> None:
+    def __init__(self, _display: object, command: object, _language: str = "zh-CN") -> None:
         self.command = command
         self.stopped = False
         self.events: list[str] = []
@@ -227,7 +227,7 @@ class RecordingSessionTest(unittest.TestCase):
             def start(self) -> None:
                 raise RecorderError("无法将录制悬浮条排除出画面")
 
-        def factory(display: object, command: object) -> FailedStartOverlay:
+        def factory(display: object, command: object, _language: str) -> FailedStartOverlay:
             overlay = FailedStartOverlay(display, command)
             overlays.append(overlay)
             return overlay
@@ -252,7 +252,7 @@ class RecordingSessionTest(unittest.TestCase):
                 if phase == "armed":
                     self.command("stop")  # type: ignore[operator]
 
-        def factory(display: object, command: object) -> CancelOverlay:
+        def factory(display: object, command: object, _language: str) -> CancelOverlay:
             overlay = CancelOverlay(display, command)
             overlays.append(overlay)
             return overlay
@@ -275,7 +275,7 @@ class RecordingSessionTest(unittest.TestCase):
             def stop(self) -> None:
                 raise RecorderError("快捷键清理失败")
 
-        def factory(display: object, command: object) -> FakeOverlay:
+        def factory(display: object, command: object, _language: str) -> FakeOverlay:
             overlay = FakeOverlay(display, command)
             overlays.append(overlay)
             return overlay
@@ -292,7 +292,7 @@ class RecordingSessionTest(unittest.TestCase):
 
     def test_toolbar_uses_same_session_states_and_is_closed_after_publish(self) -> None:
         overlays: list[FakeOverlay] = []
-        def factory(display: object, command: object) -> FakeOverlay:
+        def factory(display: object, command: object, _language: str) -> FakeOverlay:
             overlay = FakeOverlay(display, command)
             overlays.append(overlay)
             return overlay

@@ -10,7 +10,7 @@ import { copyGeneratedAssets, generatedAssets, runRecordingParser } from '../rec
 import { writeYamlDocument } from '../task/yaml-task.js';
 import { resolveSkillExportRoot } from '../data-paths.js';
 import { readSkill } from './assets.js';
-import { createSkillArchive } from './archive.js';
+import { createSkillArchive, ensureSkillArchive } from './archive.js';
 import { availableSkillName, occupiedSkillNames } from './names.js';
 import { importSkillArchive, resolveSkillImportEndpoint, skillImportUrl, SkillImportError } from './host-import.js';
 import { assertContained, requireSkillName, safeSkillFile } from './paths.js';
@@ -147,4 +147,44 @@ export async function createSkillFromRecording(options: {
     throw new SkillImportError(`GDEClaw 已报告导入成功，但正式目录中的 Skill 无法读取；请检查 CUA_SKILLS_ROOT 与 default workspace 配置及资产完整性：${detail}`, zipPath);
   }
   return { created: true, valid: true, skillName: metadata.name, goal: metadata.goal, zipPath };
+}
+
+export async function prepareRecordingSkill(options: {
+  recording: string; skillsRoot: string; draftRoot: string; executionRoot?: string;
+  replaceSkillNames?: string[]; pythonExecutable?: string; language: GenerationLanguage; progress: import('node:stream').Writable; signal: AbortSignal;
+}, dependencies: { runRecorder?: typeof runRecordingParser } = {}): Promise<string> {
+  assertDraftLocation(options.skillsRoot, options.draftRoot);
+  const executionRoot = options.executionRoot ?? packageRoot;
+  const pythonExecutable = await resolvePythonExecutable(options.pythonExecutable, {
+    executionRoot, devProjectRoot: path.resolve(executionRoot, '..', 'record'),
+  });
+  await (dependencies.runRecorder ?? runRecordingParser)({ pythonExecutable, recordingPath: options.recording,
+    language: options.language, progress: options.progress, signal: options.signal });
+  options.signal.throwIfAborted();
+  const assets = await generatedAssets(options.recording);
+  const metadata = readGeneratedSkillMetadata(await readShowuiTrace(assets.tracePath));
+  const replacing = new Set((options.replaceSkillNames ?? []).map(name => requireSkillName(name).toLowerCase()));
+  const occupied = await occupiedSkillNames(options.skillsRoot, replacing);
+  metadata.name = availableSkillName(metadata.name, occupied);
+  await mkdir(path.join(options.draftRoot, metadata.name), { recursive: true });
+  await assembleSkill(path.join(options.draftRoot, metadata.name), options.recording, metadata, assets, options.language);
+  return metadata.name;
+}
+
+export async function publishRecordingDraft(options: {
+  draftRoot: string; skillName: string; skillsRoot: string; executionRoot?: string;
+}, dependencies: { fetch?: typeof fetch; timeoutMs?: number } = {}): Promise<void> {
+  const asset = await readSkill(options.draftRoot, options.skillName);
+  const endpoint = await resolveSkillImportEndpoint(options.executionRoot);
+  const zipPath = path.join(options.draftRoot, `${options.skillName}.zip`);
+  await ensureSkillArchive(asset.root, options.skillName, zipPath);
+  await importSkillArchive({ url: skillImportUrl(options.skillName, endpoint), skillName: options.skillName, zipPath }, dependencies);
+  await readSkill(options.skillsRoot, options.skillName);
+}
+
+function assertDraftLocation(skillsRoot: string, draftRoot: string): void {
+  const relative = path.relative(path.resolve(skillsRoot), path.resolve(draftRoot));
+  if (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
+    throw new Error('分析草稿必须位于正式 Skill 根目录之外');
+  }
 }

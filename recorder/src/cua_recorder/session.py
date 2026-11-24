@@ -54,9 +54,11 @@ class RecordingSession:
         hook_factory: Callable[..., Win32HookRecorder] = Win32HookRecorder,
         hotkey_factory: Callable[..., GlobalHotkeyToggle] = GlobalHotkeyToggle,
         overlay_factory: Callable[..., RecorderOverlay] | None = None,
+        language: str = "zh-CN",
     ) -> None:
         self._capabilities = capabilities
         self._display = display
+        self._language = language
         self._output_root = require_output_root(output_root)
         self._framerate = framerate
         self._include_injected = include_injected
@@ -76,7 +78,7 @@ class RecordingSession:
         self._hotkey = self._hotkey_factory(lambda: signals.put("toggle"))
         try:
             if self._overlay_factory:
-                self._overlay = self._overlay_factory(self._display, signals.put)
+                self._overlay = self._overlay_factory(self._display, signals.put, self._language)
                 self._overlay.start()
             self._hotkey.start()
             self._emit(status, "armed", hotkey=HOTKEY_LABEL)

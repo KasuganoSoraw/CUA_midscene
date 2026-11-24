@@ -90,14 +90,12 @@ class OverlayStructureTest(unittest.TestCase):
         overlay._create_window = create_window
         overlay._show_window = Mock(side_effect=RecorderError("窗口显示失败"))
         overlay._message_loop = Mock()
-        with patch.object(
-            overlay_win32.ctypes,
-            "WinDLL",
-            create=True,
-            side_effect=[user, gdi, object()],
+        with (
+            patch.object(overlay_win32.ctypes, "WinDLL", create=True, side_effect=[user, gdi, object()]),
+            patch.object(overlay_win32, "_configure_api"),
+            patch.object(overlay_win32, "RecordingGuidance") as guidance,
         ):
-            with patch.object(overlay_win32, "_configure_api"):
-                overlay._run()
+            overlay._run()
         self.assertEqual(["overlay-error"], commands)
         self.assertIsInstance(overlay._error, RecorderError)
         user.DestroyWindow.assert_called_once_with(11)
@@ -106,6 +104,7 @@ class OverlayStructureTest(unittest.TestCase):
         self.assertIsNone(overlay._procedure)
         self.assertTrue(overlay._ready.is_set())
         overlay._message_loop.assert_not_called()
+        guidance.return_value.close.assert_called_once_with()
 
 
 if __name__ == "__main__":

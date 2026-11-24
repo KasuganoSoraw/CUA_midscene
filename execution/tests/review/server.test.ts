@@ -132,7 +132,13 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
     recordingsRoot,
     staticRoot,
     dependencies: {
-      openDirectory: async (recordingPath) => { openedPath = recordingPath; },
+      openDirectory: async (recordingPath) => {
+        openedPath = recordingPath;
+        return {
+          directory: recordingPath, platform: 'win32', opener: 'windows-shell-foreground',
+          foregroundConfirmed: true, windowVisible: true,
+        };
+      },
       recorder,
       execution,
       agent: {
@@ -295,6 +301,7 @@ test('review server 在 loopback 随机端口暴露 catalog，并安全提供静
       method: 'POST',
     });
     assert.equal(opened.status, 200);
+    assert.equal((await opened.json() as { foregroundConfirmed: boolean }).foregroundConfirmed, true);
     assert.equal(openedPath, path.join(recordingsRoot, 'Recording_demo'));
 
     const created = await fetch(new URL('/api/recordings/Recording_demo/tasks', base), {

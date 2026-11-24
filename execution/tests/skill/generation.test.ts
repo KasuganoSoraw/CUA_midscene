@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createSkillFromRecording, skillMarkdown } from '../../cua/skills/create.js';
+import { SkillImportError } from '../../cua/skills/host-import.js';
 import { readSkill } from '../../cua/skills/assets.js';
 import { requireSkillsRoot, resolveRuntimeLayout, resolveSkillsRoot } from '../../cua/data-paths.js';
 import { installImportedFixture, recordingSkillFixture } from '../helpers/skill-import-fixture.js';
@@ -170,7 +171,10 @@ test('导入 409 不覆盖已存在资产、不换名重传，ZIP 保留用于�
         await installImportedFixture(init!.body as FormData, options.skillsRoot);
         return Response.json({ detail: 'name exists' }, { status: 409 });
       },
-    }), /名称冲突.*HTTP 409/);
+    }), error => error instanceof SkillImportError
+      && error.remoteStatus === 409
+      && /名称冲突/.test(error.userMessage)
+      && /name exists/.test(error.diagnostics));
     assert.equal(calls, 1);
     assert.equal((await readSkill(options.skillsRoot, 'network-alarm-search')).skill.name, 'network-alarm-search');
     assert.deepEqual(await readdir(options.skillsRoot), ['network-alarm-search']);

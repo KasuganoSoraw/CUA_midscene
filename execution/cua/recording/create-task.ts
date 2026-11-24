@@ -26,6 +26,7 @@ export interface RecordProcessorRunRequest {
   pythonExecutable: string;
   recordingPath: string;
   progress: Writable;
+  signal?: AbortSignal;
   language?: GenerationLanguage;
 }
 
@@ -84,7 +85,9 @@ export async function runRecordingParser(
     pythonExecutable: request.pythonExecutable,
     module: 'cua_record',
     args: ['process', request.recordingPath, ...(request.language ? ['--language', request.language] : [])],
+    env: { CUA_LANGUAGE: request.language ?? 'zh-CN' },
     progress: request.progress,
+    signal: request.signal,
   }, spawnProcess);
 }
 

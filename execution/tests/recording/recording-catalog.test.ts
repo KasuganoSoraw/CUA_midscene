@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import type { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -115,31 +115,34 @@ test('录制详情与目录解析拒绝越界和不存在目标', async () => {
   await assert.rejects(resolveRecordingDirectory('missing', { recordingsRoot: root }), /录制目录不存在/);
 });
 
-test('打开录制目录使用无 shell 系统命令', async () => {
-  const child = new EventEmitter() as EventEmitter & { unref(): void };
-  child.unref = () => undefined;
-  let invocation: {
-    command: string;
-    args: readonly string[];
-    shell: unknown;
-    windowsHide: unknown;
-  } | undefined;
-  const fakeSpawn = ((
-    command: string,
-    args: readonly string[],
-    options: { shell?: boolean; windowsHide?: boolean },
-  ) => {
-    invocation = {
-      command,
-      args,
-      shell: options.shell,
-      windowsHide: options.windowsHide,
-    };
-    setImmediate(() => child.emit('spawn'));
+test('打开录制目录使用无 shell 系统命令并返回打开结果', async () => {
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'cua-open-folder-')));
+  const windows = process.platform === 'win32';
+  let calls = 0;
+  const fakeSpawn = ((command: string, args: readonly string[], options: {
+    shell?: boolean;
+    env?: NodeJS.ProcessEnv;
+  }) => {
+    calls++;
+    assert.equal(options.shell, false);
+    const child = Object.assign(new EventEmitter(), {
+      stdout: Object.assign(new EventEmitter(), { setEncoding() {} }),
+    });
+    if (windows) {
+      assert.equal(command, 'powershell.exe');
+      assert.equal(options.env?.CUA_OPEN_DIRECTORY, directory);
+    } else {
+      assert.equal(command, process.platform === 'darwin' ? 'open' : 'xdg-open');
+      assert.deepEqual(args, [directory]);
+    }
+    setImmediate(() => {
+      child.stdout.emit('data', JSON.stringify({ directory, foregroundConfirmed: true, windowVisible: true }));
+      child.emit('close', 0);
+    });
     return child;
   }) as unknown as typeof spawn;
-  await openRecordingDirectory('E:\\recordings\\demo', fakeSpawn);
-  assert.equal(invocation?.shell, false);
-  assert.equal(invocation?.windowsHide, false);
-  assert.deepEqual(invocation?.args, ['E:\\recordings\\demo']);
+  const result = await openRecordingDirectory(directory, fakeSpawn);
+  assert.equal(result.directory, directory);
+  assert.equal(result.foregroundConfirmed, windows);
+  assert.equal(calls, 1);
 });

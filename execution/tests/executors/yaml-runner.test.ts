@@ -142,7 +142,7 @@ tasks:
             - name: reference
               url: C:/reference.png
 `);
-  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY'];
+  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_API_KEY', 'MIDSCENE_MODEL_FAMILY'];
   const previous = Object.fromEntries(required.map((key) => [key, process.env[key]]));
   for (const key of required) process.env[key] = 'test';
   const events: string[] = [];
@@ -211,7 +211,7 @@ tasks:
 
 test('guided 的空 aiAct 回答不生成 aiActOutput', async () => {
   const fixture = await yamlFixture('tasks:\n  - name: guided\n    flow:\n      - ai: 执行操作\n');
-  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY'];
+  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_API_KEY', 'MIDSCENE_MODEL_FAMILY'];
   const previous = Object.fromEntries(required.map((key) => [key, process.env[key]]));
   for (const key of required) process.env[key] = 'test';
   try {
@@ -241,7 +241,7 @@ test('guided 的空 aiAct 回答不生成 aiActOutput', async () => {
 });
 
 test('Guided 与 Replay 中的 aiAct 接收取消信号并停止后续动作', async () => {
-  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY'];
+  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_API_KEY', 'MIDSCENE_MODEL_FAMILY'];
   const previous = Object.fromEntries(required.map(key => [key, process.env[key]]));
   for (const key of required) process.env[key] = 'test';
   try {
@@ -307,7 +307,7 @@ tasks:
       - aiAsk: 读取详情数值
         name: read-step-004
 `);
-  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_FAMILY'];
+  const required = ['MIDSCENE_MODEL_BASE_URL', 'MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_API_KEY', 'MIDSCENE_MODEL_FAMILY'];
   const previous = Object.fromEntries(required.map(key => [key, process.env[key]]));
   for (const key of required) process.env[key] = 'test';
   const order: string[] = [];
