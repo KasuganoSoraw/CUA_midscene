@@ -55,9 +55,5 @@ export function associateSkillCard(options: AssociationOptions): { created: bool
     if (!existing) options.cards.remove(card.id);
     throw error;
   }
-  const warnings: string[] = [];
-  if (row?.recordingId && !options.recordings.has(row.recordingId)) {
-    warnings.push(`关联录制 ${row.recordingId} 不在当前录制目录，已保留历史映射`);
-  }
-  return { created: !existing, warnings };
+  return { created: !existing, warnings: [] };
 }
