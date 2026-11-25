@@ -60,10 +60,10 @@ export class RecordingCardStore {
     return this.store.value.cards.map(card => ({ ...card }));
   }
 
-  create(input: RecordingCardInput): RecordingCard {
+  create(input: RecordingCardInput, id: string = randomUUID()): RecordingCard {
     const now = new Date().toISOString();
     const card: RecordingCard = {
-      id: randomUUID(),
+      id,
       name: input.name.trim(),
       description: input.description.trim(),
       recordingId: null,
@@ -75,6 +75,22 @@ export class RecordingCardStore {
       state.cards.push(card);
     });
     return { ...card };
+  }
+
+  associateRecording(id: string, recordingId: string): void {
+    const card = this.get(id);
+    if (card.recordingId === recordingId) return;
+    if (card.recordingId) throw failure('卡片已有其他录制，不能覆盖当前关联', 409);
+    if (this.store.value.cards.some(item => item.recordingId === recordingId)) {
+      throw failure('录制资产已关联其他卡片', 409);
+    }
+    this.store.update(state => {
+      const target = state.cards.find(item => item.id === id)!;
+      target.recordingId = recordingId;
+      target.updatedAt = new Date().toISOString();
+      target.version += 1;
+      if (!state.imports.includes(recordingId)) state.imports.push(recordingId);
+    });
   }
 
   update(
@@ -154,11 +170,11 @@ export class RecordingCardStore {
     });
   }
 
-  importRecordings(entries: RecordingEntry[]): void {
+  importRecordings(entries: RecordingEntry[], restoreMissingCards = false): void {
     this.store.update((state) => {
       for (const entry of entries) {
-        if (state.imports.includes(entry.id)) continue;
-        state.imports.push(entry.id);
+        if (state.imports.includes(entry.id) && !restoreMissingCards) continue;
+        if (!state.imports.includes(entry.id)) state.imports.push(entry.id);
         if (state.cards.some((card) => card.recordingId === entry.id)) continue;
         const now = new Date().toISOString();
         const createdAt = recordingDate(entry, now);

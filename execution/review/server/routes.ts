@@ -261,7 +261,7 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     const active = recorder.status();
     return { ...catalog, recordings: catalog.recordings.filter(entry => entry.id !== active.recordingId) };
   }, () => workflow.isBusy(), id => workflow.remove(id), {
-    synchronize: () => workflow.synchronizeSkills(),
+    synchronize: recordings => workflow.synchronizeSkills(recordings),
     skillName: id => workflow.status(id).skillName || undefined,
   });
   app.addHook('onClose', async () => { await recorder.close(); await workflow.close(); cards.close(); });

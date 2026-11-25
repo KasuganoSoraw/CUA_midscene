@@ -5,7 +5,7 @@ import type { RecorderControl } from '../service/windows-recorder.js';
 import type { RecordingCatalog } from '../../cua/recording/recording-catalog.js';
 
 interface SkillCardLinks {
-  synchronize?: () => Promise<RecordingCardSyncResult>;
+  synchronize?: (recordings: () => Promise<RecordingCatalog>) => Promise<RecordingCardSyncResult>;
   skillName?: (id: string) => string | undefined;
 }
 
@@ -187,8 +187,8 @@ function registerCardLookup(
   links: SkillCardLinks,
 ): void {
   app.post('/api/recording-cards/sync', async () => {
+    if (links.synchronize) return links.synchronize(recordings);
     store.importRecordings((await recordings()).recordings);
-    if (links.synchronize) return links.synchronize();
     return { synced: true, importedSkills: 0, warnings: [] };
   });
   app.get('/api/recording-cards/recent', async () => ({
