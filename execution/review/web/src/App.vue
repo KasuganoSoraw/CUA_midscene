@@ -26,6 +26,7 @@ import { MemoryReferenceImages } from './memory-reference-images';
 import { applyReviewMutation } from '../../shared/task-mutations';
 import { ReviewDraftStorage } from './draft-storage';
 import { resolveEvidenceMode, type EvidenceMode } from './evidence-mode';
+import { useUnsavedChanges } from './unsaved-changes';
 import { referenceImageMaxBytes, referenceImageMimeTypes } from '../../shared/reference-upload';
 import { useI18n, type MessageKey } from './i18n';
 import AgentWorkspace from './components/AgentWorkspace.vue';
@@ -199,6 +200,13 @@ const parameterPreview = computed(() => JSON.stringify(
   null,
   2,
 ));
+const hasUnsavedChanges = computed(() => {
+  if (!writable.value || !view.value || !draft.value) return false;
+  if (dirty.value) return true;
+  return advancedEditing.value
+    && (advancedFlowText.value !== flowPreview.value || advancedInputText.value !== parameterPreview.value);
+});
+useUnsavedChanges(() => hasUnsavedChanges.value, window);
 
 function rebuildSteps(): void {
   if (!draft.value) return;

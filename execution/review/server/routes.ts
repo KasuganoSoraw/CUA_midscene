@@ -260,7 +260,10 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     const catalog = await listRecordings(recordingOptions());
     const active = recorder.status();
     return { ...catalog, recordings: catalog.recordings.filter(entry => entry.id !== active.recordingId) };
-  }, () => workflow.isBusy(), id => workflow.remove(id));
+  }, () => workflow.isBusy(), id => workflow.remove(id), {
+    synchronize: recordings => workflow.synchronizeSkills(recordings),
+    skillName: id => workflow.status(id).skillName || undefined,
+  });
   app.addHook('onClose', async () => { await recorder.close(); await workflow.close(); cards.close(); });
 
   if (!options.layout.data) throw new Error('任务运行页面需要配置 CUA_DATA_ROOT');

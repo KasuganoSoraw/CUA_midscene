@@ -1,4 +1,4 @@
-import type { RecordingCard, RecordingCardInput, RecordingCardPage, RecentRecordingCard } from '../../shared/recording-cards.js';
+import type { RecordingCard, RecordingCardInput, RecordingCardPage, RecordingCardSyncResult, RecentRecordingCard } from '../../shared/recording-cards.js';
 import type {
   ReviewSkillCatalogResponse,
   ReviewSkillView,
@@ -107,7 +107,7 @@ export async function request<T>(pathname: string, init: RequestInit = {}): Prom
 }
 
 export const api = {
-  syncRecordingCards: () => request<{ synced: true }>('/api/recording-cards/sync', { method: 'POST' }),
+  syncRecordingCards: () => request<RecordingCardSyncResult>('/api/recording-cards/sync', { method: 'POST' }),
   recordingCards: (query = '', page = 1, pageSize = 20) => request<RecordingCardPage>(`/api/recording-cards?${new URLSearchParams({ query, page: String(page), pageSize: String(pageSize) })}`),
   recordingCard: (id: string) => request<RecordingCard>(`/api/recording-cards/${encodeURIComponent(id)}`),
   recentRecordingCards: () => request<{ cards: RecentRecordingCard[] }>('/api/recording-cards/recent'),

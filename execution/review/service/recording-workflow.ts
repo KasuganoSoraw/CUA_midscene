@@ -7,6 +7,9 @@ import { clearGenerationBackups } from './generation-backup.js';
 import { cleanupPreviousGeneration, trackGenerationAssets } from './generation-assets.js';
 import { loadPublishedSkillResult } from './review-skill.js';
 import type { WorkflowResult } from '../shared/workflow.js';
+import { synchronizeSkillCards } from './skill-card-sync.js';
+import { associateSkillCard } from './skill-card-association.js';
+import type { RecordingCardInput, RecordingCardSyncResult } from '../shared/recording-cards.js';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 import { withSkillWriteLock } from '../../cua/skills/lock.js';
@@ -15,7 +18,7 @@ import type { RecordingCardStore } from './recording-cards.js';
 import { generatedSkillName, type WorkflowStatus } from '../shared/workflow.js';
 import type { GenerationLanguage } from '../shared/types.js';
 import { prepareRecordingSkill, publishRecordingDraft } from '../../cua/skills/create.js';
-import { describeRecording, resolveRecordingDirectory, openRecordingDirectory } from '../../cua/recording/recording-catalog.js';
+import { describeRecording, listRecordings, resolveRecordingDirectory, openRecordingDirectory, type RecordingCatalog } from '../../cua/recording/recording-catalog.js';
 import { JsonStore } from './json-store.js';
 
 interface WorkflowState {
@@ -25,6 +28,7 @@ interface WorkflowState {
 export class RecordingWorkflow {
   private readonly store: JsonStore<WorkflowState>;
   private deleting = false;
+  private skillSync?: Promise<RecordingCardSyncResult>;
   private active?: { id: string; controller: AbortController; completion: Promise<void> };
   constructor(
     private readonly options: {
@@ -64,7 +68,7 @@ export class RecordingWorkflow {
   status(id: string): WorkflowStatus {
     const card = this.options.cards.get(id);
     const row = this.storedStatus(id);
-    if (row && row.recordingId === card.recordingId) return row;
+    if (row && (!card.recordingId || row.recordingId === card.recordingId)) return row;
     return {
       cardId: id,
       recordingId: card.recordingId ?? '',
@@ -90,11 +94,42 @@ export class RecordingWorkflow {
     return !!this.active && this.status(this.active.id).recordingId === id;
   }
   isBusy(): boolean {
-    return !!this.active || this.deleting;
+    return !!this.active || this.deleting || !!this.skillSync;
   }
   private write(value: WorkflowStatus): void {
     this.store.update((state) => {
       state.workflows[value.cardId] = { ...value };
+    });
+  }
+
+  private storedStatuses(): WorkflowStatus[] {
+    return Object.values(this.store.value.workflows).map(row => ({ ...row }));
+  }
+
+  private linkedRecordings(names: Set<string>): Set<string> {
+    return new Set(this.storedStatuses()
+      .filter(row => names.has(row.skillName) || names.has(row.pendingSkillName ?? ''))
+      .map(row => row.recordingId).filter(Boolean));
+  }
+
+  synchronizeSkills(recordings: () => Promise<RecordingCatalog> = () => listRecordings(this.options)): Promise<RecordingCardSyncResult> {
+    if (this.skillSync) return this.skillSync;
+    if (this.deleting) return Promise.reject(new Error('正在删除任务，请稍后同步首页'));
+    this.skillSync = synchronizeSkillCards({
+      skillsRoot: this.options.skillsRoot,
+      recordings,
+      linkedRecordings: names => this.linkedRecordings(names),
+      importSkill: (input, ids) => this.importSkillCard(input, ids),
+      importRecordings: entries => this.options.cards.importRecordings(entries, true),
+    }).finally(() => { this.skillSync = undefined; });
+    return this.skillSync;
+  }
+
+  private importSkillCard(input: RecordingCardInput, recordings: Set<string>) {
+    if (this.deleting) throw new Error('正在删除任务，请稍后重新同步技能列表');
+    return associateSkillCard({ input, recordings, cards: this.options.cards,
+      workflows: this.storedStatuses(), write: status => this.write(status),
+      removeWorkflow: id => { this.store.update(state => { delete state.workflows[id]; }); },
     });
   }
   async remove(id: string): Promise<void> {
@@ -126,6 +161,7 @@ export class RecordingWorkflow {
     }
   }
   private assertGenerationAvailable(): void {
+    if (this.skillSync) throw Object.assign(new Error('正在同步首页任务，请稍后再试'), { statusCode: 409 });
     if (this.deleting) throw Object.assign(new Error('正在删除流程，请稍后再试'), { statusCode: 409 });
     if (this.active) throw Object.assign(new Error('正在生成中，请先终止任务再试。'), { statusCode: 409 });
   }
@@ -253,5 +289,6 @@ export class RecordingWorkflow {
   async close(): Promise<void> {
     if (this.active && this.status(this.active.id).phase === 'analyzing') this.active.controller.abort();
     await this.active?.completion;
+    await this.skillSync;
   }
 }
