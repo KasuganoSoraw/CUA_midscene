@@ -46,16 +46,13 @@ const selectedId = computed(() => card.value?.id);
 
 async function synchronize(): Promise<void> {
   loading.value = true;
-  error.value = '';
-  let warning = '';
   try {
     const result = await api.syncRecordingCards();
-    warning = result.warnings.join('\n');
+    if (result.warnings.length) console.warn('历史资产和 Skill 同步诊断', result.warnings);
   } catch (cause) {
-    warning = message(cause);
+    console.warn('历史资产和 Skill 自动同步失败', cause);
   }
   await load();
-  error.value = [warning, error.value].filter(Boolean).join('\n');
 }
 async function load(page = result.value.page): Promise<void> {
   const request = ++sequence;
