@@ -163,6 +163,26 @@ function replayRecoveryError(step: string, replayReason: string, error: unknown)
   );
 }
 
+async function runRecoveryAiAct(
+  aiAct: NonNullable<AgentLike['aiAct']>,
+  prompt: ReturnType<typeof recoveryPrompt>,
+  options: MidsceneYamlExecutionOptions,
+  taskIndex: number,
+  failure: NonNullable<ReturnType<typeof replayFailure>>,
+): Promise<unknown> {
+  try {
+    const answer = await aiAct(prompt, { abortSignal: options.abortSignal });
+    if (options.abortSignal?.aborted) throw new Error('电脑操作已取消');
+    return answer;
+  } catch (error) {
+    emitRecoveryProgress(
+      options, taskIndex, options.abortSignal?.aborted ? 'cancelled' : 'failed', '接续执行未完成',
+    );
+    if (options.abortSignal?.aborted) throw error;
+    throw replayRecoveryError(failure.fallback.failedStep, failure.reason, error);
+  }
+}
+
 async function runReplayWithFallback(
   agent: AgentLike, script: ReturnType<typeof parseYamlScript>, options: MidsceneYamlExecutionOptions,
   artifacts: YamlArtifacts, onRecoveryStart: () => void,
@@ -189,28 +209,18 @@ async function runReplayWithFallback(
     ...player.result,
     ...(Object.keys(questions).length ? { readQuestions: questions } : {}),
   };
-  emitReplayFailureProgress(options, player.currentTaskIndex ?? 0, failure.fallback.failedStep);
+  const taskIndex = player.currentTaskIndex ?? 0;
+  emitReplayFailureProgress(options, taskIndex, failure.fallback.failedStep);
   onRecoveryStart();
-  emitRecoveryProgress(options, player.currentTaskIndex ?? 0, 'running', '正在接续电脑操作');
+  emitRecoveryProgress(options, taskIndex, 'running', '正在接续电脑操作');
   const prompt = recoveryPrompt(options.replayFallback!, failure.fallback, failure.reason, player.result);
-  let answer: unknown;
-  try {
-    answer = await agent.aiAct(prompt, { abortSignal: options.abortSignal });
-    if (options.abortSignal?.aborted) throw new Error('电脑操作已取消');
-  } catch (error) {
-    emitRecoveryProgress(
-      options, player.currentTaskIndex ?? 0,
-      options.abortSignal?.aborted ? 'cancelled' : 'failed', '接续执行未完成',
-    );
-    if (options.abortSignal?.aborted) throw error;
-    throw replayRecoveryError(failure.fallback.failedStep, failure.reason, error);
-  }
+  const answer = await runRecoveryAiAct(agent.aiAct.bind(agent), prompt, options, taskIndex, failure);
   artifacts.fallback = { ...failure.fallback, recoveryStatus: 'succeeded' };
   artifacts.midsceneResult = {
     ...artifacts.midsceneResult,
     ...(typeof answer === 'string' && answer.trim() ? { aiActOutput: answer } : {}),
   };
-  emitRecoveryProgress(options, player.currentTaskIndex ?? 0, 'succeeded', '接续执行完成');
+  emitRecoveryProgress(options, taskIndex, 'succeeded', '接续执行完成');
 }
 
 async function runMidsceneScript(
