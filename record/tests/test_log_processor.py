@@ -21,7 +21,62 @@ def hotkey(timestamp, value):
     }
 
 
+def backspace(press, release):
+    return [
+        key_press(press, "BACKSPACE"),
+        {**key_press(release, "BACKSPACE"), "action": "Key Release: BACKSPACE"},
+    ]
+
+
 class LogProcessorKeyboardMergeTest(unittest.TestCase):
+    def test_continuous_typing_uses_ten_second_default(self):
+        actions = [key_press(1.0, "a"), key_press(9.0, "b"), key_press(9.5, "c")]
+        merged = LogProcessor().merge_keyboard_events(actions)
+        self.assertEqual(["Type: abc"], [item["action"] for item in merged])
+
+    def test_repeated_backspaces_keep_input_in_one_session(self):
+        actions = [
+            key_press(3.082, "c"), key_press(3.342, "e"), key_press(3.579, "s"),
+            key_press(3.739, "h"), key_press(3.982, "i"),
+            *backspace(4.602, 4.675), *backspace(4.796, 4.879), *backspace(6.043, 6.110),
+            key_press(9.911, "l"), key_press(10.118, "i"), key_press(10.273, "a"),
+            key_press(10.378, "n"), key_press(10.575, "g"), key_press(13.018, "1"),
+            key_press(14.306, "ENTER"),
+        ]
+
+        for threshold in (5.0, 10.0):
+            with self.subTest(threshold=threshold):
+                merged = LogProcessor().merge_keyboard_events(actions, time_threshold=threshold)
+                self.assertEqual(
+                    ["Type: celiang1", "Press ENTER"], [item["action"] for item in merged]
+                )
+
+    def test_backspace_pause_is_measured_from_release(self):
+        for next_time, expected in (
+            (4.0, ["Type: ac"]),
+            (13.25, ["Type: ac"]),
+            (13.251, ["Type: a", "Type: c"]),
+        ):
+            with self.subTest(next_time=next_time):
+                actions = [
+                    key_press(1.0, "a"), key_press(2.0, "b"),
+                    *backspace(3.1875, 3.25), key_press(next_time, "c"),
+                ]
+                merged = LogProcessor().merge_keyboard_events(actions)
+                self.assertEqual(expected, [item["action"] for item in merged])
+                if len(merged) == 2:
+                    self.assertEqual(3.25, merged[0]["timestamp"])
+
+    def test_backspace_can_clear_the_buffer_without_an_empty_type(self):
+        actions = [key_press(1.0, "a"), *backspace(2.0, 2.0625), key_press(20.0, "b")]
+        merged = LogProcessor().merge_keyboard_events(actions)
+        self.assertEqual(["Type: b"], [item["action"] for item in merged])
+
+    def test_enter_ends_typing_even_within_ten_seconds(self):
+        actions = [key_press(1.0, "a"), key_press(2.0, "ENTER"), key_press(3.0, "b")]
+        merged = LogProcessor().merge_keyboard_events(actions)
+        self.assertEqual(["Type: a", "Press ENTER", "Type: b"], [item["action"] for item in merged])
+
     def test_paste_without_text_fails_before_task_generation(self):
         with self.assertRaisesRegex(ValueError, "缺少可用的剪贴板文本"):
             LogProcessor().fold_text_paste([hotkey(1.0, "CTRL+V")])

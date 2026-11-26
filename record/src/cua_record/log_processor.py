@@ -4,6 +4,9 @@ import os
 import argparse
 import glob
 
+DEFAULT_TYPING_DELAY_SECONDS = 10.0
+
+
 class LogProcessor:
     def __init__(self):
         self.actions = []
@@ -114,7 +117,7 @@ class LogProcessor:
             return key[-1]
         return key
 
-    def merge_keyboard_events(self, actions, time_threshold=5.0):
+    def merge_keyboard_events(self, actions, time_threshold=DEFAULT_TYPING_DELAY_SECONDS):
         """Merge consecutive keyboard events into typing actions with backspace handling"""
         merged_actions = []
         buffer = []
@@ -144,7 +147,7 @@ class LogProcessor:
             # Handle backspace events (including with modifiers)
             if ("BACKSPACE" in message and 
                 ("Key Press:" in message or "Hotkey:" in message)):
-                i, buffer = self._consume_backspace(actions, i, buffer)
+                i, buffer, last_timestamp = self._consume_backspace(actions, i, buffer)
                 continue
             
             # Handle regular key press events
@@ -261,7 +264,7 @@ class LogProcessor:
                 buffer = []
             else:
                 buffer = buffer[:-chars_to_delete]
-        return next_index, buffer
+        return next_index, buffer, backspace_end
 
     
     def merge_mouse_events(self, actions):
@@ -406,7 +409,7 @@ class LogProcessor:
             "scroll_count": scroll_count,
         }
     
-    def merge_adjacent_typing(self, actions, time_threshold=5.0):
+    def merge_adjacent_typing(self, actions, time_threshold=DEFAULT_TYPING_DELAY_SECONDS):
         """Merge adjacent typing actions that are close in time and location"""
         if not actions:
             return actions
@@ -601,7 +604,9 @@ class LogProcessor:
         return out
 
 
-    def process_log_file(self, log_file_path, output_path=None, time_threshold=5.0):
+    def process_log_file(
+        self, log_file_path, output_path=None, time_threshold=DEFAULT_TYPING_DELAY_SECONDS,
+    ):
         """Main processing function"""
         # Step 1: Parse input log
         actions = self.process_input_log(log_file_path)
@@ -684,8 +689,8 @@ Examples:
     parser.add_argument(
         '--typing-delay', '-t',
         type=float,
-        default=5.0,
-        help='Maximum time gap (seconds) between keystrokes to consider them as one typing action (default: 5.0)'
+        default=DEFAULT_TYPING_DELAY_SECONDS,
+        help='Maximum time gap in seconds for merging typing actions (default: %(default)s)',
     )
     
     parser.add_argument(
