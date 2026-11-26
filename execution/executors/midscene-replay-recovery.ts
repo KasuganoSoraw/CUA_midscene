@@ -66,6 +66,48 @@ export function replayFailure(
   };
 }
 
+const serializationFailed = '[Serialization Failed]';
+
+function stringifyReadingResult(value: unknown): string {
+  const ancestors: object[] = [];
+  return JSON.stringify(value, function (this: object, _key, current: unknown) {
+    if (current === undefined) return '[Undefined]';
+    if (typeof current === 'function') return '[Function]';
+    if (typeof current === 'symbol') return `[Symbol: ${String(current)}]`;
+    if (typeof current === 'bigint') return `${current.toString()}n`;
+    if (current === null || typeof current !== 'object') return current;
+
+    while (ancestors.length && ancestors.at(-1) !== this) ancestors.pop();
+    if (ancestors.includes(current)) return '[Circular Reference]';
+    ancestors.push(current);
+    return current;
+  }) ?? serializationFailed;
+}
+
+function stringifyReadingField(results: Record<string, unknown>, key: string): string {
+  try {
+    return stringifyReadingResult(results[key]);
+  } catch {
+    return JSON.stringify(serializationFailed);
+  }
+}
+
+function safeStringify(results: Record<string, unknown>): string | undefined {
+  try {
+    const keys = Object.keys(results);
+    if (!keys.length) return undefined;
+    try {
+      return stringifyReadingResult(results);
+    } catch {
+      // 单个读取结果无法序列化时，保留其他读取结果。
+      const fields = keys.map(key => `${JSON.stringify(key)}:${stringifyReadingField(results, key)}`);
+      return `{${fields.join(',')}}`;
+    }
+  } catch {
+    return serializationFailed;
+  }
+}
+
 export function recoveryPrompt(
   options: ReplayRecoveryOptions,
   fallback: NonNullable<ExecutorResult['fallback']>,
@@ -74,6 +116,7 @@ export function recoveryPrompt(
 ): ReplayRecoveryOptions['taskPrompt'] {
   const completed = fallback.completedSteps.join('、') || '无';
   const pending = fallback.pendingSteps.join('、') || '无';
+  const readingResults = safeStringify(results);
   return {
     ...options.taskPrompt,
     prompt: [
@@ -83,7 +126,7 @@ export function recoveryPrompt(
       `失败且结果待确认的步骤：${fallback.failedStep}`,
       `尚未执行步骤：${pending}`,
       `失败原因：${reason.slice(0, 500)}`,
-      ...(Object.keys(results).length ? [`已获得的读取结果：${JSON.stringify(results)}`] : []),
+      ...(readingResults === undefined ? [] : [`已获得的读取结果：${readingResults}`]),
       '先确认失败步骤是否已经产生效果；创建、提交、发送、删除或保存等操作在无法确认时不得重复。',
       '按当前画面完成剩余步骤，保留读取结果；无法确认时说明原因，不猜测，也不盲目操作。',
       '以下是完整步骤，仅供核对进度与定位剩余操作，已完成的步骤不可重复：',
