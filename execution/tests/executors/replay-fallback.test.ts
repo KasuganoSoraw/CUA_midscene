@@ -274,6 +274,58 @@ test('失败步骤保持不确定且恢复提示不要求重复已完成操作',
   assert.deepEqual(prompt.images, images);
 });
 
+function readingResultsInPrompt(results: Record<string, unknown>): string | undefined {
+  const failure = replayFailure([{ name: 'step-001', status: 'error' }]);
+  assert.ok(failure);
+  const { prompt } = recoveryPrompt({ goal: '查询', taskPrompt }, failure.fallback, failure.reason, results);
+  const prefix = '已获得的读取结果：';
+  return prompt.split('\n').find(line => line.startsWith(prefix))?.slice(prefix.length);
+}
+
+test('回退提示保持正常读取结果的 JSON 格式，空对象不添加读取结果', () => {
+  const results = { text: '列表\n内容', rows: [{ enabled: true, count: 2 }, null] };
+  assert.equal(readingResultsInPrompt(results), JSON.stringify(results));
+  assert.equal(readingResultsInPrompt({}), undefined);
+});
+
+test('回退提示保留正常字段和共享对象并替换异常值', () => {
+  const shared = { value: '可用' };
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+  const results = {
+    rows: [shared, circular, shared],
+    count: 9007199254740993n,
+    handler: () => 'unused',
+    token: Symbol('标记'),
+    missing: undefined,
+  };
+  assert.deepEqual(JSON.parse(readingResultsInPrompt(results)!), {
+    rows: [shared, { self: '[Circular Reference]' }, shared],
+    count: '9007199254740993n',
+    handler: '[Function]',
+    token: '[Symbol: Symbol(标记)]',
+    missing: '[Undefined]',
+  });
+});
+
+test('单个读取字段抛出序列化异常时保留其他字段', () => {
+  const results = {
+    normal: '已读取',
+    broken: { toJSON() { throw new Error('不可序列化'); } },
+    get inaccessible() { throw new Error('无法读取'); },
+  };
+  assert.deepEqual(JSON.parse(readingResultsInPrompt(results)!), {
+    normal: '已读取',
+    broken: '[Serialization Failed]',
+    inaccessible: '[Serialization Failed]',
+  });
+});
+
+test('无法枚举读取结果时回退提示使用兜底文本', () => {
+  const results = new Proxy({}, { ownKeys() { throw new Error('无法枚举'); } });
+  assert.equal(readingResultsInPrompt(results), '[Serialization Failed]');
+});
+
 test('模型服务与连接错误不触发 Adaptive', () => {
   const httpError = Object.assign(new Error('请求受限'), { status: 413 });
   const connectionError = Object.assign(new Error('连接失败'), { code: 'ECONNREFUSED' });
