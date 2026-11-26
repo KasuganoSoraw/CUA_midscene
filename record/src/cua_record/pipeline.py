@@ -57,8 +57,7 @@ def run_pipeline(project_name: str, *, language: str = "zh-CN") -> Path:
     processed_log_path = project_dir / f"{project_dir.name}_processed_log.json"
 
     lp = LogProcessor()
-    # keep default typing-delay behavior (5.0s) to align with existing logic
-    lp.process_log_file(str(raw_log), str(processed_log_path), time_threshold=5.0)
+    lp.process_log_file(str(raw_log), str(processed_log_path))
 
     # ---------- Step 2: screenshots + scaled coords -> *_processed_log_sc.json ----------
     vse = VideoScreenshotExtractor()
